@@ -1,0 +1,60 @@
+﻿AUDIT LOCAL MYIRO — 6 octobre 2026
+
+871 fichiers sources archivés, 633,825,615 octets. Copie contrôlée SHA-256.
+84 exécutables/bibliothèques analysés statiquement (installateur archivé mais non exécuté).
+Aucune fonction SDK appelée. Aucune modification des installations ni du spectrophotomètre.
+
+DÉCOUVERTES CONFIRMÉES
+- collecte\MY-CT1\FDXSDK.dll : 1.0.1.0, x86, 91 exports.
+- collecte\Ergosoft\FDXSDK.dll : 1.0.1.0, x64, 91 exports.
+- collecte\EIZO\plugins\exports\win.x86_64\FDXSDK.dll : 1.0.3.0, x64, 91 exports.
+- Les noms exportés des trois FDXSDK sont identiques : True. Cela ne prouve pas une compatibilité parfaite des structures ou comportements.
+- MY-CT1 complet : application native, DLL, dépendances Qt, manuels anglais/japonais et licences.
+- FD-S2w complet : application, bibliothèques, pilote USB, mires XML et .s2chart, manuels dont français, licences et runtimes.
+- FD9SDK : 1.3.2.3 x86 dans FD-S2w et 1.3.1.5 x64 dans Ergosoft, 125 exports chacune. Ne pas confondre FD9SDK et FDXSDK.
+- Instrument.lst de FD-S2w déclare FD-9 et FD-5 BT / FD-5 BT2. Compatibilité MYIRO-1 non établie.
+- Installateur FD-S2w retrouvé sur le Bureau, avec IMPORTANT_PATCH_FOR_WIN et guide : tous archivés, aucun lancé.
+- EIZO : libmeasurementdevice.dll (x86) et libmeasurementdevice_x64.dll (x64) contiennent FDX_Connect ; candidats pour étudier un chargement dynamique. Leur présence ne démontre pas un chemin exécuté sur ce poste.
+- MYIROtools : cinq fichiers résiduels ProgramData archivés. Un export CGATS.17 comprend deux mesures Lab et annonce MYIRO-1, géométrie 45/0, D50, observateur 2°. Les valeurs CMJN nulles ne constituent pas une mire de caractérisation exploitable.
+- Aucun exécutable MYIROtools retrouvé dans les emplacements inspectés. Des fichiers résiduels ne prouvent pas que le logiciel est encore installé.
+
+CE QUE LES DLL PERMETTENT DÉJÀ DE RÉCUPÉRER
+- Exports, ordinaux et adresses RVA ; imports Windows ; architectures ; versions ; chemins PDB ; chaînes ASCII/UTF-16 avec positions dans les fichiers.
+- Noms de classes et méthodes internes : CCalibration, CMeasurement, CPatchRecog, CCommunicationUSB et CCommunicationSocket. Messages d’erreur liés aux calibrations, aux scans et aux données brutes.
+- Noms de sources ccommand_0x01.cpp, ccommand_0x02.cpp et autres : indices de commandes internes, sans preuve suffisante du format des paquets ni de leur signification.
+- Chaînes USB VID_132B et PID_210D/PID_210F dans FDXSDK. Ne pas attribuer chaque PID à un modèle/mode sans corroboration matérielle.
+- Imports CFGMGR32, SETUPAPI, WS2_32 et KERNEL32 : indices de découverte matérielle, USB et sockets. Ils ne donnent pas les ports réseau ni le protocole applicatif.
+- Chaîne /FDX_SDKLog : piste pour chercher un mécanisme de journalisation, aucun journal SDK trouvé/activé par cet audit.
+- Chemins de compilation PDB présents ; les fichiers PDB eux-mêmes et les sources correspondantes ne sont pas contenus dans ces seuls chemins.
+
+INTERFACES À ÉTUDIER EN PRIORITÉ
+- FDX_GetSDKVersion, FDX_GetDevicePortList, FDX_Connect, FDX_GetDeviceInfo, FDX_RegisterDeviceEventHandler, FDX_GetError.
+- FDX_Calibration, FDX_GetMeasureCondition, FDX_SetMeasureCondition, FDX_StartMeasurement, FDX_StopMeasurement, FDX_CancelScanMeasurement.
+- FDX_GetRAWData, FDX_GetMeasureData, FDX_GetMeasureDataFromRawData, FDX_CalculateMeasureData.
+- Les noms suggèrent leur rôle ; signatures, conventions d’appel x86, tailles/alignements des structures, unités, codes d’erreur, propriété mémoire et callbacks restent à reconstituer.
+
+POUR ALLER PLUS LOIN
+1. Désassembler les exports et les sites appelants de MY-CT1/EIZO. Documenter chaque signature avec preuves d’arguments et accès mémoire, en distinguant confirmé et supposé.
+2. Comparer les versions x86/x64 et 1.0.1/1.0.3 : le même nom exporté ne garantit pas le même contrat.
+3. Étudier les séquences calibration/mesure dans les programmes existants ; observer ensuite une session fonctionnelle avec journalisation et capture USB/réseau si nécessaire.
+4. Écrire un petit adaptateur isolé seulement quand les signatures sont établies ; valider détection puis calibration et mesure sur appareil, avant la lecture de bandes.
+5. Utiliser les exports CGATS comme pont vers un moteur de profilage séparé. Cet audit n’a identifié aucun export de création de profil ICC dans FDXSDK.
+Les exports JIG comprennent explicitement InitializeEEProm, SetFactoryCalib et UpdateProgram. Ce sont des surfaces de maintenance à écarter des essais de mesure ; aucune n’a été appelée.
+
+PÉRIMÈTRE ET LIMITES
+- Recherche par noms dans Program Files, Program Files (x86), ProgramData, Documents, Downloads, Desktop, AppData Local/Roaming ; inspection ciblée de C:/temp, C:/tmp, C:/Shiraz, Users/Public et D:/Ergosoft.
+- Recherche non exhaustive du disque physique : emplacements inaccessibles, corbeilles, sauvegardes D:/backup-codex-urgent, Windows et partages réseau non explorés intégralement. Les erreurs d’accès des recherches de découverte n’ont pas été journalisées ; une absence de résultat n’est pas une preuve d’absence globale.
+- Registre de désinstallation et raccourcis pertinents inspectés. Aucun en-tête ou symbole PDB SDK identifié dans les installations collectées.
+- Analyse statique uniquement : pas de décompilation détaillée, reconstruction ABI ni capture de trafic réalisée à ce stade. Les chaînes lisibles ne remplacent pas la documentation API.
+- L’arrêt du support signalé par l’utilisateur n’a pas été vérifié auprès du fabricant ; cet audit porte sur les fichiers locaux.
+- Les licences présentes ont été conservées ; aucun droit de redistribution n’est déduit de la possession des DLL.
+
+CONTENU DU DOSSIER
+- collecte/ : copies des sources, classées par provenance ; inclut des données et licences locales, destiné à cet archivage local.
+- analyse/inventaire.csv et manifest.json : provenance, tailles et empreintes des 857 fichiers de collecte principale.
+- analyse/installateur-inventaire.csv : 14 fichiers de l’installateur et du correctif.
+- analyse/binaires.json : inventaire des 84 binaires analysés.
+- analyse/comparaison-FDX.json : versions et comparaison des noms exportés.
+- analyse/indices-techniques.txt : indices filtrés avec offsets ; détails dans les .json et .strings.tsv par composant.
+- analyse/erreurs.json : erreurs de collecte/analyse principale (vide à l’issue de cette exécution).
+- outils/ : scripts reproductibles et copie locale de pefile ; aucune installation globale de dépendance.

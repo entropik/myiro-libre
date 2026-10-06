@@ -1,0 +1,24 @@
+# Copies d'installations et binaires Konica Minolta : licence fabricant, jamais versionnés
+**/collecte/
+SDK/
+*.dll
+*.exe
+*.pdf
+*.s2chart
+# Désassemblages volumineux régénérables par outils/desassemble.py
+Audit-MYIRO/retroanalyse/*/code.asm.txt
+# Dépendances Python locales
+Audit-MYIRO/outils/python-libs/
+__pycache__/
+# Rust
+target/
+
+# Désassemblages et ressources extraites, volumineux et régénérables
+**/code.asm.txt
+*.resources/
+
+# Travaux de rétro-analyse : contenu dérivé de binaires propriétaires, gardé en local (branche prive / codex), jamais publié
+Audit-ColorGPS/
+Audit-MYIRO/analyse/
+Audit-MYIRO/retroanalyse/
+.scratch/
