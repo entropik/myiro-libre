@@ -8,12 +8,17 @@ Convention : **[confirmé]** = vérifié dans les fichiers du dossier (chemin ci
 
 ## 1. Objectif
 
-Remplacer Myiro Tool par une application autonome qui :
+Remplacer Myiro Tool par une application **complète et autonome** (Windows) qui :
 
-1. pilote le **MYIRO-1** (`FDXSDK.dll`) et le **FD-9** (`FD9SDK.dll`) ;
-2. mesure des chartes (bandes au MYIRO-1, feuilles au FD-9), des couleurs ponctuelles et des densités ;
-3. calcule des profils ICC imprimante à partir des mesures ;
-4. n'appelle jamais les surfaces de maintenance usine des instruments.
+1. pilote le **MYIRO-1** (`FDXSDK.dll`) et le **FD-9** (`FD9SDK.dll`) ; le FD-5 BT n'est pas promis mais rien ne l'exclut ;
+2. crée, met en page (bandes MYIRO-1, feuille FD-9) et exporte des mires à imprimer sans gestion des couleurs (TIFF en priorité, PDF) ;
+3. mesure des tirages de mires, des mesures ponctuelles comparées à des couleurs de référence, et calcule des densités ;
+4. fait du **contrôle d'impression** : comparaison à une référence (tirage validé ou norme), tolérances ΔE00 par famille de plages et densité des aplats, verdict, historique par condition d'impression, rapport PDF ;
+5. calcule des **linéarisations** (courbes et limite d'encre par canal) et des **profils ICC CMJN et RVB**, et vérifie les profils ;
+6. range tout dans une bibliothèque locale organisée par **condition d'impression** et par **instrument** ;
+7. n'appelle jamais les surfaces de maintenance usine des instruments.
+
+Le vocabulaire est fixé dans `GLOSSARY.md` et les décisions structurantes dans `docs/adr/`.
 
 ---
 
@@ -71,10 +76,10 @@ Remplacer Myiro Tool par une application autonome qui :
 
 ```
 ┌─────────────────────────────── Application (64 bits) ───────────────────────────────┐
-│ Interface : mesure de charte · couleur ponctuelle · densité · profil · rapports      │
-│ Cœur : mires (XML FD-S2w, CGATS) · colorimétrie (spectre→XYZ/Lab, M0/M1/M2,          │
-│        densités ISO 5-3, ΔE00) · stockage des mesures · export CGATS.17 / .ti3       │
-│ Profilage : ArgyllCMS colprof (processus externe) → profil ICC · contrôle profcheck   │
+│ Interface (Tauri 2, FR/EN) : mires · mesure · contrôle · linéarisation · profil      │
+│ Cœur : mires (XML FD-S2w, CGATS, génération, TIFF/PDF) · colorimétrie (spectre→XYZ/  │
+│        Lab, M0/M1/M2, densités ISO 5-3, ΔE00) · bibliothèque locale · CGATS.17/.ti3  │
+│ Profilage : ArgyllCMS inclus, processus externe → profils ICC, linéarisations       │
 └──────────────┬──────────────────────────────────────────────┬──────────────────────┘
                │ JSON sur stdin/stdout (ou tube nommé)        │
      ┌─────────▼─────────┐                          ┌─────────▼─────────┐
@@ -94,11 +99,13 @@ Choix et raisons :
   - `pont-myiro1` et `pont-fd9` : exécutables ponts, compilables pour `i686-pc-windows-msvc` (DLL x86) et `x86_64-pc-windows-msvc` (DLL x64), avec la liste blanche ; protocole JSON (`serde`) sur stdin/stdout ;
   - `colorimetrie` : spectre → XYZ/Lab, densités, ΔE, sans dépendance native, testable sur toutes plateformes ;
   - `mires` : lecture XML FD-S2w (`quick-xml`) et CGATS.17 / `.ti3`, génération de mises en page ;
-  - `profilage` : pilotage d'ArgyllCMS en processus externe ;
-  - `app` : interface moderne. Recommandation : **Tauri 2** (interface web, cœur Rust, paquets Windows/macOS/Linux) ; alternatives natives : Slint ou egui. À trancher en phase 8, le cœur n'en dépend pas.
+  - `profilage` : pilotage d'ArgyllCMS en processus externe (profils, linéarisations) ;
+  - `bibliotheque` : stockage local des conditions d'impression, instruments, mesures (tous spectres conservés), références, profils et linéarisations ; import/export CGATS, sauvegarde/restauration (ADR 0001) ;
+  - `app` : **Tauri 2 — tranché** (ADR 0003), interface bilingue FR/EN.
+  - `colorimetrie`, `mires` et les formats d'échange sont aussi destinés au futur RIP libre : ils restent indépendants de l'application, des ponts et de Windows (ADR 0004).
   - Les ponts Windows sont la seule partie liée à Windows ; tout le reste peut tourner ailleurs (utile pour exploiter des fichiers de mesure sur Mac/Linux).
   - Outillage d'audit et de désassemblage : les scripts Python existants restent tels quels, ils ne font pas partie de l'application.
-- **Profilage par ArgyllCMS `colprof`** en processus externe, alimenté en `.ti3` (CGATS) : moteur éprouvé, contrôle de GCR/TAC/intentions. Licence AGPL : sans contrainte pour un usage personnel, à revoir si l'application doit être distribuée. Un moteur maison basé sur LittleCMS reste possible plus tard.
+- **Profilage par ArgyllCMS**, inclus dans l'installateur en version figée et appelé en processus externe, alimenté en `.ti3` (CGATS) : moteur éprouvé, contrôle de GCR/TAC/intentions. AGPL-3.0 compatible avec la GPL-3.0 ; les sources de la version incluse sont fournies avec chaque publication (ADR 0002). Un moteur maison basé sur LittleCMS reste possible plus tard.
 - **Aucune redistribution des DLL KM** : l'application les cherche dans les installations du poste ou dans un dossier désigné par l'utilisateur.
 
 ---
@@ -113,7 +120,7 @@ Chaque phase a un critère de sortie. Les phases 1 à 3 se font **sans instrumen
 - Initialiser un dépôt git ; exclure `Audit-MYIRO/collecte/` et toutes les DLL/PDF du suivi (licences, 634 Mo) ; suivre seulement scripts, analyses textuelles et documentation.
 - Mettre à jour `CLAUDE.md` : `retroanalyse/`, `desassemble.py`, Capstone, ce plan.
 - Archiver les dépendances x64 de FD9SDK depuis `C:/Program Files/Ergosoft 16` (DIColor, FD9BarcodeManager, OpenCV 2.4.7, VCOMP110) avec empreintes, via `audit.py`.
-- Espace de travail Cargo : `crates/fdx-sys`, `crates/fd9-sys`, `crates/pont-myiro1`, `crates/pont-fd9`, `crates/colorimetrie`, `crates/mires`, `crates/profilage`, `app/` ; plus `docs/abi/` (fiches par fonction). Installer la cible `i686-pc-windows-msvc` ; intégration continue `cargo fmt`, `clippy`, `cargo test` (crates indépendantes de Windows).
+- Espace de travail Cargo : `crates/fdx-sys`, `crates/fd9-sys`, `crates/pont-myiro1`, `crates/pont-fd9`, `crates/colorimetrie`, `crates/mires`, `crates/profilage`, `crates/bibliotheque`, `app/` ; plus `docs/abi/` (fiches par fonction). Installer la cible `i686-pc-windows-msvc` ; intégration continue `cargo fmt`, `clippy`, `cargo test` (crates indépendantes de Windows).
 
 *Sortie : dépôt versionné, documentation à jour, archive FD9 x64 complète.*
 
@@ -154,7 +161,7 @@ Une étape à la fois, avec journal de chaque appel et accord avant de passer à
 
 1. détection (`GetDevicePortList`) ;
 2. connexion et informations (`Connect`, `GetDeviceInfo`) : vérifier le n° de série ;
-3. calibration blanc (`Calibration`) ;
+3. étalonnage blanc (`Calibration`) ;
 4. mesure ponctuelle : comparer à l'export MYIROtools de référence ou à une mesure faite avec un autre logiciel sur la même plage (écart ΔE00 attendu < 0,3 en répétabilité **[supposé]**) ;
 5. lecture de bande seulement ensuite.
 
@@ -174,26 +181,31 @@ En attendant, **FD-S2w reste le chemin de secours pour le FD-9** : ses exports C
 
 - Spectre → XYZ → Lab (D50, 2°, et autres illuminants/observateurs), M0/M1/M2 selon ce que l'instrument fournit.
 - Densités ISO 5-3 (statut T, E, I), engraissement / taux de couverture apparent (Murray-Davies, Yule-Nielsen), trapping (Preucil), gris G7 : la liste des fonctions de `libcalcolor.dll` sert de cahier des charges. Les tables de pondération ISO 5-3 sont à sourcer proprement.
-- ΔE76, ΔE94, ΔE00 ; moyennage de plusieurs feuilles ; détection de plages aberrantes.
+- ΔE76, ΔE94, ΔE00 ; moyennage de plusieurs mesures d'une même mire dans une même condition d'impression ; détection de plages aberrantes.
 - Validation croisée : mêmes spectres traités par l'application et par FD-S2w / DIColor, écarts tolérés documentés.
+- Crate `bibliotheque` : conditions d'impression, instruments (modèle, n° de série, micrologiciel, dernier étalonnage), mesures avec tous leurs spectres, couleurs de référence ; import CGATS, exports FD-S2w et historique MYIROtools (format à étudier) ; sauvegarde/restauration.
 
-*Sortie : bibliothèque testée, résultats concordants avec la référence KM.*
+*Sortie : colorimétrie et bibliothèque testées, résultats concordants avec la référence KM.*
 
-### Phase 7 — Mires et profilage ICC
+### Phase 7 — Mires, contrôle d'impression, linéarisation et profilage ICC
 
-- Import des mires XML FD-S2w (valeurs CMJN + géométrie) et des fichiers CGATS ; génération de mires nouvelles (ArgyllCMS `targen`) mises en page pour le FD-9 (XML FD-S2w) et pour les bandes du MYIRO-1 (taille minimale de plage et longueur de bande à établir en phase 4).
-- Export `.ti3` puis `colprof` : réglages exposés (TAC, GCR/génération du noir, intentions, qualité) ; contrôle `profcheck` et rapport ΔE de l'auto-cohérence.
+- **Mires** : import des mires XML FD-S2w (valeurs + géométrie) et des fichiers CGATS ; génération de mires (ArgyllCMS `targen`) mises en page pour la feuille FD-9 et les bandes MYIRO-1 (taille minimale de plage et longueur de bande à établir en phase 4) ; export TIFF non balisé (priorité) et PDF, CMJN ou RVB. Une barre de contrôle est une mire comme une autre.
+- **Contrôle d'impression** : références issues d'un tirage validé (en premier) ou de jeux de valeurs normatifs importables ; tolérances ΔE00 par famille de plages (aplats, gris, autres) et densité des aplats, seuils modifiables ; verdict, historique par condition d'impression, rapport PDF.
+- **Linéarisation** (ArgyllCMS `printcal`) : mire de linéarisation incluse, courbes et limite d'encre par canal ; format maison ouvert plus export `.cal`. En v1 les courbes sont exportées pour un RIP, pas appliquées aux mires de profilage (ADR 0004).
+- **Profilage** CMJN et RVB : export `.ti3` puis `colprof` ; préréglages et panneau expert (TAC, GCR, intentions, qualité, azurants) ; contrôle `profcheck`.
+- **Vérification de profil** : mire imprimée à travers le profil, mesurée et comparée à la référence calculée depuis le profil ; même chaîne que le contrôle d'impression.
 - Validation : profil comparé à un profil de référence (par exemple FOGRA39 sur une impression certifiée, ou un profil produit par un autre outil à partir des mêmes mesures).
 
-*Sortie : profil ICC CMJN produit de bout en bout à partir de mesures MYIRO-1 et FD-9.*
+*Sortie : de la mire au profil vérifié, de bout en bout, à partir de mesures MYIRO-1 et FD-9.*
 
 ### Phase 8 — Application et livraison
 
-- Interface : assistant de mesure de charte, mesure ponctuelle, densitométrie, création de profil, historique et rapports.
-- Configuration : emplacement des DLL KM du poste, choix x86/x64 du pont.
-- Documentation utilisateur en français ; procédure de sauvegarde des mesures.
+- Interface Tauri 2, bilingue FR/EN (catalogue de textes dès le départ) : mires, mesure (tirage et ponctuelle), contrôle d'impression, linéarisation, profil, bibliothèque, rapports.
+- Configuration : emplacement des DLL KM du poste, choix x86/x64 du pont ; message d'aide si aucune DLL n'est trouvée.
+- Livraison : installateur Windows (Tauri) et version portable, publiés dans les Releases GitHub ; ArgyllCMS inclus avec ses sources ; aucune connexion réseau sortante non demandée.
+- Documentation utilisateur en français et en anglais ; procédure de sauvegarde de la bibliothèque.
 
-*Sortie : application utilisable sans Myiro Tool pour le flux complet charte → profil.*
+*Sortie : application utilisable sans Myiro Tool pour le flux complet mire → mesure → contrôle / linéarisation / profil.*
 
 ---
 
@@ -206,21 +218,24 @@ En attendant, **FD-S2w reste le chemin de secours pour le FD-9** : ses exports C
 | Clé de licence exigée par FD9SDK | Trancher en phase 2 ; à défaut, rester sur FD-S2w pour le FD-9 |
 | Dépendances x64 FD9 absentes de l'archive | Archivage en phase 0 |
 | Licences KM (aucun droit de redistribution) | Utiliser les DLL installées du poste ; ne rien publier qui les contienne |
-| Licence AGPL d'ArgyllCMS | Processus externe ; usage personnel ; revoir si distribution |
-| Calibration blanc et état de l'instrument inconnus | Vérifier l'état de la céramique et l'historique ; comparer avec la mesure MYIROtools de référence |
+| Licence AGPL d'ArgyllCMS | Compatible GPL-3.0 ; processus externe ; sources de la version incluse fournies à chaque publication |
+| Utilisateur sans aucune installation KM | v1 : l'application exige une DLL présente et indique où la trouver ; en parallèle, obtenir l'accord écrit de KM |
+| Étalonnage blanc et état de l'instrument inconnus | Vérifier l'état de la céramique et l'historique ; comparer avec la mesure MYIROtools de référence |
 
 ---
 
 ## 6. Décisions à prendre
 
 1. **Priorité d'instrument — tranché** : MYIRO-1 d'abord ; FD-9 étudié et développé en parallèle.
-2. **Langage — tranché** : Rust ; reste à choisir le cadre d'interface (Tauri 2 recommandé).
+2. **Langage — tranché** : Rust ; interface **Tauri 2**, bilingue FR/EN (ADR 0003).
 3. **Usage — tranché le 6 octobre 2026** : projet **libre, open source, non commercial**, destiné aux imprimeurs et utilisateurs privés d'outil par l'arrêt du support Konica. Conséquences :
    - licence recommandée : **GPL-3.0** (ou AGPL-3.0), compatible avec ArgyllCMS appelé en processus externe ou même intégré ;
    - le code public ne contient que du travail original : ponts, en-têtes reconstitués, documentation d'ABI, cœur colorimétrique ;
    - l'utilisateur indique que Konica Minolta ne fait plus valoir de licence sur ces SDK (réponse obtenue par l'utilisateur, non vue dans ce dossier). Tant que cette réponse n'est pas **écrite et archivée** dans le dépôt, l'application ne redistribue pas les DLL ni les manuels KM et les trouve dans les installations existantes de chaque utilisateur (FD-S2w, Ergosoft, EIZO…) ; avec un accord écrit, un paquet incluant les DLL devient envisageable ;
    - les mires XML FD-S2w et les tables ISO 5-3 suivent la même règle : on les lit chez l'utilisateur, on ne les copie pas dans le dépôt sans droit établi.
 4. **FD-S2w — tranché** : FD-S2w pilote encore le FD-9 sur ce poste, **en réseau** (FD-9 sur le réseau local, adresse MAC au préfixe Konica Minolta 00:20:6B), avec mesure M0/M1/M2, données spectrales, densité statut E, D50/2°. Il sert de référence et de secours.
+5. **Périmètre v1 — tranché le 6 octobre 2026** : application complète et autonome, Windows seulement pour l'instant : mires (création, mise en page, TIFF/PDF), mesure, densités, contrôle d'impression, linéarisation, profils CMJN et RVB, vérification de profil. Bibliothèque locale mono-poste (ADR 0001), ArgyllCMS inclus (ADR 0002). FD-5 BT non promis mais non exclu.
+6. **Futur RIP — tranché** : projet distinct, qui partage avec myiro-libre les crates `colorimetrie`, `mires` et les formats d'échange (ADR 0004).
 
 ---
 

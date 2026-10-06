@@ -2,9 +2,9 @@
 
 Outil libre de mesure et de profilage ICC pour les spectrophotomètres Konica Minolta **MYIRO-1** et **FD-9**, dont le logiciel Myiro Tool n'est plus maintenu.
 
-Objectif : permettre aux imprimeurs et utilisateurs de continuer à mesurer des chartes, des couleurs ponctuelles et des densités, et à calculer des profils ICC, avec une application autonome et open source écrite en Rust.
+Objectif : permettre aux imprimeurs et utilisateurs de continuer à créer et mesurer des mires, contrôler leurs impressions, mesurer des couleurs ponctuelles et des densités, linéariser et calculer des profils ICC, avec une application autonome et open source écrite en Rust.
 
-**État : conception.** Aucune application utilisable pour l'instant. Le plan de travail est dans [PLAN-ACTION.md](PLAN-ACTION.md).
+**État : conception.** Aucune application utilisable pour l'instant. Le plan de travail est dans [PLAN-ACTION.md](PLAN-ACTION.md), le vocabulaire dans [GLOSSARY.md](GLOSSARY.md) et les décisions d'architecture dans [docs/adr/](docs/adr/).
 
 ## Principes
 

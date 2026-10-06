@@ -1,0 +1,78 @@
+# myiro-libre
+
+Application libre de mesure, de densitométrie et de profilage ICC pour les spectrophotomètres Konica Minolta MYIRO-1 et FD-9.
+
+## Langage
+
+### Mires et mesures
+
+**Mire** :
+Définition d'un ensemble de plages à imprimer puis mesurer : valeurs de chaque plage et mise en page. Une mire est indépendante du papier et de l'imprimante.
+_Éviter_ : charte, chart, cible, target
+
+**Tirage** :
+Réalisation physique d'une mire, imprimée dans une condition d'impression donnée ; c'est ce que l'instrument mesure.
+_Éviter_ : épreuve, impression, feuille (au sens d'objet mesuré)
+
+**Mesure** :
+Une passe complète de l'instrument sur un tirage, conservant tous les spectres obtenus ; un même tirage peut être mesuré plusieurs fois.
+_Éviter_ : lecture, scan, relevé
+
+**Mesure ponctuelle** :
+Mesure d'une seule plage ou couleur, hors mire.
+_Éviter_ : spot, mesure spot
+
+**Couleur de référence** :
+Couleur nommée, saisie ou mesurée par l'utilisateur, à laquelle on compare une mesure ponctuelle.
+_Éviter_ : ton direct, spot color, nuancier
+
+**Feuille** :
+Géométrie de lecture du FD-9 : le tirage entier est lu en une passe.
+
+**Bande** :
+Géométrie de lecture du MYIRO-1 : une rangée de plages lue en un balayage.
+_Éviter_ : strip, rangée
+
+**Instrument** :
+Un spectrophotomètre précis (modèle, n° de série, micrologiciel), enregistré avec chaque mesure qu'il produit.
+_Éviter_ : appareil, device, spectro
+
+**Étalonnage** :
+Mise à zéro de l'instrument sur son blanc de référence avant mesure.
+_Éviter_ : calibration (ambigu avec la linéarisation)
+
+**Condition de mesure** :
+Condition d'éclairage de l'instrument selon l'ISO 13655 (M0, M1, M2…) sous laquelle un spectre est obtenu.
+_Éviter_ : mode de mesure, filtre
+
+### Impression
+
+**Condition d'impression** :
+Combinaison caractérisée d'une machine, d'un papier, d'encres et de réglages ; elle porte les tirages, les profils et les références de contrôle.
+_Éviter_ : setup, configuration, preset
+
+**Linéarisation** :
+Courbes par canal ramenant la réponse de chaque encre à une progression visuellement régulière, avant le profilage.
+_Éviter_ : calibration (réservé à l'étalonnage de l'instrument), courbes de transfert
+
+**Limite d'encre** :
+Quantité maximale utile d'un canal d'encre, au-delà de laquelle la couleur ne progresse plus ; déterminée avec la linéarisation.
+_Éviter_ : ink limit, saturation
+
+**Vérification de profil** :
+Contrôle d'impression d'un tirage imprimé à travers un profil, dont la référence est calculée à partir de ce profil.
+_Éviter_ : validation de profil, test de profil
+
+### Densitométrie et contrôle
+
+**Densité** :
+Valeur densitométrique (statut T, E, I…) calculée à partir du spectre d'une plage mesurée.
+_Éviter_ : D, valeur densito
+
+**Contrôle d'impression** :
+Comparaison d'un tirage mesuré à une référence, avec verdict selon des tolérances, et suivi dans le temps pour une condition d'impression.
+_Éviter_ : QC, validation
+
+**Référence** :
+Ensemble de valeurs cibles et de tolérances servant au contrôle d'impression, issu d'une norme ou d'un tirage validé mesuré par l'utilisateur.
+_Éviter_ : cible, target, standard
