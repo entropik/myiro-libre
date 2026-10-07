@@ -5,7 +5,9 @@
 
 pub mod dll;
 
-use fdx_sys::{lire_infos_instrument, InfosInstrument, Port, Version, TAILLE_TAMPON_INFOS};
+use fdx_sys::{
+    lire_infos_instrument, InfosInstrument, Port, Version, TAILLE_INFOS, TAILLE_TAMPON_INFOS,
+};
 use pont_protocole::{ErreurPont, Palier};
 
 /// Délai passé à `FDX_Connect`, en secondes : valeur des logiciels officiels
@@ -34,6 +36,9 @@ pub struct Connexion {
     /// La DLL n'a pas pu lire ou poser la date initiale de l'instrument
     /// (bit 4 du code de `FDX_Connect`) : à journaliser, pas bloquant.
     pub anomalie_date_initiale: bool,
+    /// Les 40 octets écrits par `FDX_GetDeviceInfo`, à archiver pour pouvoir
+    /// réinterpréter plus tard les champs encore inconnus.
+    pub identite_brute: Vec<u8>,
 }
 
 pub struct Session<S: SdkMyiro1> {
@@ -92,6 +97,7 @@ impl<S: SdkMyiro1> Session<S> {
         let tampon = self.sdk.infos().map_err(traduire)?;
         Ok(Connexion {
             infos: lire_infos_instrument(&tampon),
+            identite_brute: tampon[..TAILLE_INFOS].to_vec(),
             anomalie_date_initiale: code & BIT_ANOMALIE_DATE_INITIALE != 0,
         })
     }

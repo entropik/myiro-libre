@@ -67,3 +67,66 @@ fn palier_version_avec_la_vraie_dll() {
         "le plafond doit empêcher la détection"
     );
 }
+
+/// Palier 1 : liste les instruments vus par la DLL (USB et réseau), sans
+/// se connecter. Lancé seulement à la demande, comme le palier 0.
+#[test]
+#[ignore = "charge la DLL Konica Minolta du poste et cherche les instruments"]
+fn palier_detection_avec_la_vraie_dll() {
+    let dll = FdxDll::charger(dll_du_poste()).expect("chargement de FDXSDK.dll");
+    let mut session = Session::new(dll, Palier::Detection);
+    session.version().expect("FDX_GetSDKVersion");
+    let ports = session.detecter().expect("FDX_GetDevicePortList");
+    println!("{} instrument(s) détecté(s)", ports.len());
+    for port in &ports {
+        println!(
+            "  liaison {:?}, port {:?}, n° de série {}",
+            port.liaison(),
+            port.nom(),
+            port.numero_serie()
+        );
+    }
+    assert_eq!(
+        session.connecter(0),
+        Err(ErreurPont::PalierNonAutorise {
+            demande: Palier::Connexion,
+            plafond: Palier::Detection
+        }),
+        "le plafond doit empêcher la connexion"
+    );
+}
+
+/// Palier 2 : se connecte au premier instrument détecté, lit son identité,
+/// puis se déconnecte (à la fermeture de l'adapter). Aucun étalonnage ni
+/// mesure. Vérifier l'horloge de l'ordinateur avant le premier lancement
+/// (docs/abi/FDX_Connect.md).
+#[test]
+#[ignore = "se connecte au MYIRO-1 branché sur le poste"]
+fn palier_connexion_avec_le_vrai_instrument() {
+    let dll = FdxDll::charger(dll_du_poste()).expect("chargement de FDXSDK.dll");
+    let mut session = Session::new(dll, Palier::Connexion);
+    session.version().expect("FDX_GetSDKVersion");
+    let ports = session.detecter().expect("FDX_GetDevicePortList");
+    assert!(!ports.is_empty(), "aucun instrument détecté");
+    let connexion = session
+        .connecter(0)
+        .expect("FDX_Connect + FDX_GetDeviceInfo");
+    let infos = &connexion.infos;
+    println!("n° de série      : {}", infos.numero);
+    println!("micrologiciel    : {}", infos.micrologiciel);
+    println!("adresse MAC      : {}", infos.adresse_mac);
+    println!("code produit     : {}", infos.code_produit);
+    println!("date initiale    : {:?}", infos.date_initiale);
+    println!("anomalie de date : {}", connexion.anomalie_date_initiale);
+    let hexa: Vec<String> = connexion
+        .identite_brute
+        .iter()
+        .map(|o| format!("{o:02x}"))
+        .collect();
+    println!("identité brute   : {}", hexa.join(" "));
+    assert_eq!(
+        infos.numero,
+        ports[0].numero_serie(),
+        "n° de série incohérent"
+    );
+}

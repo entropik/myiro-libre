@@ -81,6 +81,9 @@ pub struct Version {
 /// autre version écrivait plus loin.
 pub const TAILLE_TAMPON_INFOS: usize = 256;
 
+/// Nombre d'octets réellement écrits par `FDX_GetDeviceInfo` (versions étudiées).
+pub const TAILLE_INFOS: usize = 40;
+
 /// Date initiale d'usine : l'instrument n'a jamais reçu de date de mise en service.
 pub const DATE_INITIALE_USINE: u32 = 20190101;
 

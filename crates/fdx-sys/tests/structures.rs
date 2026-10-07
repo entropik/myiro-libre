@@ -19,7 +19,7 @@ const _: () = assert!(TAILLE_TAMPON_INFOS >= 256);
 
 fn tampon_exemple() -> [u8; TAILLE_TAMPON_INFOS] {
     let mut t = [0u8; TAILLE_TAMPON_INFOS];
-    t[0..4].copy_from_slice(&10002006u32.to_le_bytes());
+    t[0..4].copy_from_slice(&12345678u32.to_le_bytes());
     t[4..8].copy_from_slice(&1u32.to_le_bytes());
     t[8..12].copy_from_slice(&2u32.to_le_bytes());
     t[12..16].copy_from_slice(&3u32.to_le_bytes());
@@ -64,15 +64,15 @@ fn port(liaison: i32, nom: &[u8], numero: u32) -> Port {
 
 #[test]
 fn une_entree_usb_donne_son_port_et_son_numero() {
-    let p = port(1, b"COM3", 10002006);
+    let p = port(1, b"COM3", 12345678);
     assert_eq!(p.liaison(), Liaison::Usb);
     assert_eq!(p.nom(), "COM3");
-    assert_eq!(p.numero_serie(), 10002006);
+    assert_eq!(p.numero_serie(), 12345678);
 }
 
 #[test]
 fn une_entree_reseau_donne_son_adresse() {
-    let p = port(0, b"192.168.1.40", 10002006);
+    let p = port(0, b"192.168.1.40", 12345678);
     assert_eq!(p.liaison(), Liaison::Reseau);
     assert_eq!(p.nom(), "192.168.1.40");
 }
@@ -90,7 +90,7 @@ fn un_nom_de_port_sans_zero_final_ne_deborde_pas_sur_le_numero() {
 
 #[test]
 fn le_numero_est_lu_a_l_octet_0() {
-    assert_eq!(lire_infos_instrument(&tampon_exemple()).numero, 10002006);
+    assert_eq!(lire_infos_instrument(&tampon_exemple()).numero, 12345678);
 }
 
 #[test]

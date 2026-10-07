@@ -48,7 +48,7 @@ impl SdkMyiro1 for SdkSimule {
     fn infos(&mut self) -> Result<[u8; TAILLE_TAMPON_INFOS], i32> {
         self.appels.push("infos".into());
         let mut t = [0u8; TAILLE_TAMPON_INFOS];
-        t[0..4].copy_from_slice(&10002006u32.to_le_bytes());
+        t[0..4].copy_from_slice(&12345678u32.to_le_bytes());
         Ok(t)
     }
 }
@@ -60,7 +60,7 @@ fn la_progression_complete_donne_l_identite_de_l_instrument() {
     let ports = session.detecter().unwrap();
     assert_eq!(ports.len(), 1);
     let connexion = session.connecter(0).unwrap();
-    assert_eq!(connexion.infos.numero, 10002006);
+    assert_eq!(connexion.infos.numero, 12345678);
     assert!(!connexion.anomalie_date_initiale);
 }
 
@@ -197,4 +197,14 @@ fn un_code_negatif_reste_un_echec_meme_avec_le_bit_4() {
         session_qui_echoue_a_la_connexion(-9992 | 4),
         Err(ErreurPont::Sdk { code: -9992 | 4 })
     );
+}
+
+#[test]
+fn la_connexion_garde_les_octets_bruts_de_l_identite() {
+    let mut session = Session::new(SdkSimule::avec_un_myiro1(), Palier::Connexion);
+    session.version().unwrap();
+    session.detecter().unwrap();
+    let connexion = session.connecter(0).unwrap();
+    assert_eq!(connexion.identite_brute.len(), 40);
+    assert_eq!(connexion.identite_brute[0..4], 12345678u32.to_le_bytes());
 }
