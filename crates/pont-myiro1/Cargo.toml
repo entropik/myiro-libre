@@ -9,3 +9,6 @@ repository.workspace = true
 [dependencies]
 fdx-sys = { path = "../fdx-sys" }
 pont-protocole = { path = "../pont-protocole" }
+libloading = "0.8"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+sha2 = "0.10"

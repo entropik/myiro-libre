@@ -165,6 +165,8 @@ Une étape à la fois, avec journal de chaque appel et accord avant de passer à
 4. mesure ponctuelle : comparer à l'export MYIROtools de référence ou à une mesure faite avec un autre logiciel sur la même plage (écart ΔE00 attendu < 0,3 en répétabilité **[supposé]**) ;
 5. lecture de bande seulement ensuite.
 
+Chaque mesure garde ses données brutes (`GetRAWData`) à côté de ses spectres : elles servent à valider le pilote libre (phase 9, ADR 0006).
+
 Si un comportement reste ambigu, observer une session d'un logiciel fonctionnel (EIZO ColorNavigator ou Ergosoft) avec la journalisation SDK (`/FDX_SDKLog`) et une capture USB, sans écrire dans l'instrument.
 
 *Sortie : une bande mesurée de bout en bout et exportée en CGATS.17.*
@@ -207,6 +209,19 @@ En attendant, **FD-S2w reste le chemin de secours pour le FD-9** : ses exports C
 
 *Sortie : application utilisable sans Myiro Tool pour le flux complet mire → mesure → contrôle / linéarisation / profil.*
 
+### Phase 9 — Pilote libre, sans DLL (ADR 0006)
+
+Commence une fois la v1 mesurant par la DLL. Le pilote libre est un adapter de plus derrière les ponts.
+
+1. Protocole : format des trames et somme de contrôle, par observation passive d'une session DLL (port série et réseau) ; liste blanche des couples commande et sous-code, lecture seule d'abord.
+2. Commandes de lecture : version, identité, état, données d'étalonnage d'usine ; résultats comparés à ceux de la DLL.
+3. Calcul : données brutes → spectres M0/M1/M2, validé sur les paires « brut → spectre » collectées en phases 4 et 5, jusqu'à identité.
+4. Étalonnage et mesure ponctuelle par le pilote libre, comparés à la DLL sur les mêmes plages.
+5. Lecture de bande (MYIRO-1), puis reconnaissance de mire et feuille (FD-9).
+6. Construction pour Mac et Linux.
+
+*Sortie : flux complet sans aucune DLL Konica Minolta, résultats identiques à ceux de la DLL sur le jeu de validation.*
+
 ---
 
 ## 5. Risques et parades
@@ -220,6 +235,8 @@ En attendant, **FD-S2w reste le chemin de secours pour le FD-9** : ses exports C
 | Licences KM (aucun droit de redistribution) | Utiliser les DLL installées du poste ; ne rien publier qui les contienne |
 | Licence AGPL d'ArgyllCMS | Compatible GPL-3.0 ; processus externe ; sources de la version incluse fournies à chaque publication |
 | Utilisateur sans aucune installation KM | v1 : l'application exige une DLL présente et indique où la trouver ; en parallèle, obtenir l'accord écrit de KM |
+| DLL Konica Minolta qui cesse de fonctionner (Windows, 32 bits, fin de support) | Pilote libre validé contre la DLL (phase 9, ADR 0006) ; données brutes conservées dès la v1 |
+| Pilote libre qui envoie une commande d'écriture | Liste blanche des couples commande et sous-code ; trames non comprises refusées, jamais rejouées |
 | Étalonnage blanc et état de l'instrument inconnus | Vérifier l'état de la céramique et l'historique ; comparer avec la mesure MYIROtools de référence |
 
 ---
@@ -236,11 +253,15 @@ En attendant, **FD-S2w reste le chemin de secours pour le FD-9** : ses exports C
 4. **FD-S2w — tranché** : FD-S2w pilote encore le FD-9 sur ce poste, **en réseau** (FD-9 sur le réseau local, adresse MAC au préfixe Konica Minolta 00:20:6B), avec mesure M0/M1/M2, données spectrales, densité statut E, D50/2°. Il sert de référence et de secours.
 5. **Périmètre v1 — tranché le 6 octobre 2026** : application complète et autonome, Windows seulement pour l'instant : mires (création, mise en page, TIFF/PDF), mesure, densités, contrôle d'impression, linéarisation, profils CMJN et RVB, vérification de profil. Bibliothèque locale mono-poste (ADR 0001), ArgyllCMS inclus (ADR 0002). FD-5 BT non promis mais non exclu.
 6. **Futur RIP — tranché** : projet distinct, qui partage avec myiro-libre les crates `colorimetrie`, `mires` et les formats d'échange (ADR 0004).
+7. **Dépendance aux DLL — tranché le 7 octobre 2026** : la DLL d'abord pour la v1, puis un pilote libre validé contre elle, pour un projet entièrement libre et multiplateforme (ADR 0006, phase 9).
 
 ---
 
 ## 7. Prochaines actions immédiates
 
-1. Phase 0 : `git init`, `.gitignore`, mise à jour de `CLAUDE.md`, archivage des dépendances x64 FD9.
-2. Phase 1 : désassembler les sites d'appel FDX dans `libmeasurementdevice_x64.dll` et rédiger les six premières fiches (`GetSDKVersion`, `GetDevicePortList`, `Connect`, `GetDeviceInfo`, `GetError`, `Disconnect`).
-3. Phase 2 : ajouter FD9SDK et FD-S2w.exe à `desassemble.py` et trancher la question de `FD-SDK.lic`.
+Mise à jour du 7 octobre 2026, soir. Faits : ADR 0001 à 0006 ; fiches `docs/abi/` du MYIRO-1 (version, détection, connexion, identité, événements, étalonnage, armement, désarmement, lecture) ; phases 1, 3 et 4 du MYIRO-1 menées jusqu'au bout : programme `pont-myiro1` (protocole JSON, plafond, provenance), et sur l'instrument réel version, détection, connexion, étalonnage, mesure ponctuelle et bande, comparées au FD-9 (ΔE00 de 0,2 à 0,6 en ponctuel, 0,6 en moyenne en bande). Sauvegarde des logiciels récupérés : empreintes calculées (`Audit-MYIRO/logiciels/EMPREINTES-SHA256.txt`), copie hors poste à faire par l'utilisateur. La clé de licence FD9 est tranchée : FD9SDK n'en demande pas.
+
+1. Phase 2 et 5 : fiches FD9SDK à partir des symboles de la bibliothèque Mac de FD-S2w, puis pont FD-9 avec les mêmes paliers.
+2. Phase 6 : bibliothèque de mesures et export CGATS.17 alimentés par le programme `pont-myiro1` (provenance comprise).
+3. Phase 9 (ADR 0006) : jeu de validation « données brutes → spectres » à partir des mesures réelles déjà archivées.
+4. Copie hors poste de `Audit-MYIRO/logiciels/`, vérifiée par les empreintes.

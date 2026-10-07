@@ -33,10 +33,17 @@ int32_t __stdcall FDX_GetDeviceInfo(FDX_DeviceInfo *out); /* x86 : ret 4 ; 40 oc
 - Dans la provenance : n° de série, micrologiciel, code produit et date initiale sont **confirmés** ; `+0x10` et `+0x14` restent **inconnus** quant à leur sens.
 - Appeler juste après `FDX_Connect`, avant l'étalonnage.
 
-## À vérifier sur l'instrument
+## Vérifié sur l'instrument
 
-- Que `+0` donne bien 10002006 (n° connu par Windows).
-- La date initiale (attendue : différente de 20190101).
+Le 7 octobre 2026, MYIRO-1 en USB, DLL 1.0.1.0 x64 (test `palier_connexion_avec_le_vrai_instrument`) ; les valeurs d'identification de l'instrument du poste restent dans l'inventaire local :
+
+- `+0` donne le n° de série connu par Windows et par la détection : **confirmé**.
+- Micrologiciel au format `1.02.0005` : 1, 2, 5 dans les trois mots : **confirmé**.
+- Adresse MAC au préfixe Konica Minolta `00:20:6B` : **confirmé**.
+- Code produit `9C1D` : **confirmé** (l'un des deux préfixes attendus).
+- Date initiale déjà posée (2021), différente de 20190101 : la connexion n'a rien écrit.
+- `+0x10` contient **la même valeur que le n° de série** et `+0x14` vaut zéro. Observation compatible avec un identifiant par défaut (référence utilisateur ou adaptateur non enregistré) ; le sens reste inconnu.
+- Les 40 octets sont archivés bruts par le pont.
 
 ## Preuves (locales)
 

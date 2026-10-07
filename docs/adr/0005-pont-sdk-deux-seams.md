@@ -12,6 +12,10 @@ Les DLL du fabricant (`FDXSDK`, `FD9SDK`) ne sont chargées que dans des exécut
 - **Inconnu explicite.** Chaque donnée est confirmée, supposée ou inconnue ; aucune valeur par défaut ni zéro. Le désérialiseur refuse un nombre à la place d'une donnée qualifiée.
 - **M1 inexprimable sur une mesure émissive.** La condition `Emissive` est dérivée de la nature de l'instrument, jamais saisie.
 
+### Complément du 7 octobre 2026
+
+Le contrat de `FDX_SetMeasureCondition` est établi (`docs/abi/FDX_SetMeasureCondition.md`) : elle arme la mesure sans écriture persistante. Elle entre dans la liste blanche comme seule exception nommée aux `FDX_Set*`, un test l'empêchant d'en faire entrer d'autres sans fiche ni accord. La phrase ci-dessus qui l'excluait reste pour l'historique. Même jour : la provenance est en place dans le pont, conforme à cette décision, et vérifiée sur l'instrument réel.
+
 ## Options écartées
 
 - **Commande brute et catalogue dynamique** (appeler un export par son nom). Ils ouvrent un chemin vers des exports arbitraires, contraire à la règle de sécurité matérielle. Un banc d'exploration éventuel serait un binaire séparé, hors build de production.

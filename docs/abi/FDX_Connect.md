@@ -24,6 +24,10 @@ int32_t __stdcall FDX_Connect(const FDX_PortInfo *port,   /* une entrée de la l
 
 - La date initiale sert de date de mise en service (garantie, suivi d'étalonnage) ; elle n'a aucun effet sur la mesure.
 
+## Décision
+
+**Le 7 octobre 2026, le responsable du projet a accepté que `FDX_Connect` reste autorisé** malgré cette écriture possible : elle est prévue par le fabricant, faite par tous les logiciels officiels, limitée à un instrument resté à la date d'usine, et sans effet sur la mesure. Conditions : vérifier l'horloge de l'ordinateur avant la première connexion d'un instrument, et journaliser le bit 4 ainsi que la date initiale lue.
+
 ## Pour le pont
 
 - Passer l'entrée de 44 octets reçue de la détection, sans la modifier.
@@ -33,10 +37,16 @@ int32_t __stdcall FDX_Connect(const FDX_PortInfo *port,   /* une entrée de la l
 - Lire la date initiale dans `FDX_GetDeviceInfo` (`+0x24`) juste après, et l'archiver.
 - Appeler `FDX_RegisterDeviceEventHandler` avant, comme EIZO, pour ne manquer aucun événement (ordre observé chez l'appelant, non exigé par la DLL).
 
-## À vérifier sur l'instrument
+## Vérifié sur l'instrument
 
-- La date initiale lue après connexion (attendue : déjà posée, l'instrument du poste ayant été connecté par MY-CT1 et Ergosoft).
-- La valeur du code de retour en cas de succès.
+Le 7 octobre 2026, MYIRO-1 en USB sur `COM3`, DLL 1.0.1.0 x64, délai 10 s, horloge de l'ordinateur synchronisée par NTP juste avant (test `palier_connexion_avec_le_vrai_instrument`) :
+
+- connexion réussie, code non négatif et **sans bit 4** ;
+- date initiale déjà posée (2021) : **aucune écriture** dans l'instrument ;
+- `FDX_GetDeviceInfo` répond aussitôt après (état 1 atteint), puis `FDX_Disconnect` à la fermeture de l'adapter, sans erreur ;
+- aucun étalonnage ni mesure n'a été lancé.
+
+Reste à observer : le délai réel avant échec, instrument débranché.
 
 ## Preuves (locales)
 

@@ -17,7 +17,94 @@ pub const EXPORTS_AUTORISES: &[&str] = &[
     "FDX_Disconnect",
     "FDX_GetDeviceInfo",
     "FDX_GetError",
+    "FDX_RegisterDeviceEventHandler",
+    // Le pont ne l'appelle qu'avec le type 0 (blanc) : docs/abi/FDX_Calibration.md.
+    "FDX_Calibration",
+    // Arme la mesure, sans écriture persistante : docs/abi/FDX_SetMeasureCondition.md.
+    "FDX_SetMeasureCondition",
+    "FDX_StopMeasurement",
+    "FDX_GetMeasureData",
 ];
+
+/// `FDX_MeasureCondition` (8 octets) : type de mesure à armer.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ConditionMesure {
+    /// 0 = ponctuelle, 1 = bande (réflexion) ; 2 et 3 jamais utilisés.
+    pub type_mesure: i32,
+    /// Nul hors bande.
+    pub option: u32,
+}
+
+pub const MESURE_PONCTUELLE: i32 = 0;
+pub const MESURE_BANDE: i32 = 1;
+
+/// Conditions de mesure ISO 13655, au sens du champ `Illuminant` de la DLL.
+pub const CONDITION_M0: i32 = 0;
+pub const CONDITION_M1: i32 = 1;
+pub const CONDITION_M2: i32 = 2;
+
+/// Valeurs de `DataType` (fiche `docs/abi/FDX_GetMeasureData.md`).
+pub const DONNEES_LAB: i32 = 0;
+pub const DONNEES_SPECTRE: i32 = 10;
+pub const DONNEES_BRUTES: i32 = 11;
+/// Nombre de valeurs par résultat pour ces deux types.
+pub const LONGUEUR_LAB: usize = 3;
+pub const LONGUEUR_SPECTRE: usize = 36;
+pub const LONGUEUR_BRUTES: usize = 152;
+
+const ILLUMINANT_COLORIMETRIQUE_D50: i32 = 2;
+const OBSERVATEUR_2_DEGRES: i32 = 0;
+
+/// `FDX_CalcCondition` (0x31C octets) : ce que `FDX_GetMeasureData` doit rendre.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ConditionCalcul {
+    /// Condition de mesure M0/M1/M2 (et non l'illuminant colorimétrique).
+    pub illuminant: i32,
+    pub illuminant_colorimetrique: i32,
+    pub observateur: i32,
+    pub etat_densite: i32,
+    pub type_donnees: i32,
+    /// Illuminants utilisateur et champs non utilisés, à zéro.
+    pub reste: [u8; 0x308],
+}
+
+impl ConditionCalcul {
+    fn nouvelle(condition: i32, type_donnees: i32) -> Self {
+        ConditionCalcul {
+            illuminant: condition,
+            illuminant_colorimetrique: ILLUMINANT_COLORIMETRIQUE_D50,
+            observateur: OBSERVATEUR_2_DEGRES,
+            etat_densite: 0,
+            type_donnees,
+            reste: [0; 0x308],
+        }
+    }
+
+    /// Spectre de réflexion, 36 valeurs de 380 à 730 nm, sous la condition donnée.
+    pub fn spectre(condition: i32) -> Self {
+        Self::nouvelle(condition, DONNEES_SPECTRE)
+    }
+
+    /// L*a*b* calculé par la DLL (D50, 2°) sous la condition donnée.
+    pub fn lab(condition: i32) -> Self {
+        Self::nouvelle(condition, DONNEES_LAB)
+    }
+
+    /// Données brutes de l'instrument (152 valeurs), indépendantes de la condition.
+    pub fn brutes() -> Self {
+        Self::nouvelle(CONDITION_M1, DONNEES_BRUTES)
+    }
+}
+
+/// `FDX_MeasureData` : un tableau de valeurs préparé par l'appelant.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct DescripteurResultat {
+    pub valeurs: *mut f32,
+    pub longueur: u32,
+}
 
 /// Entrée de `FDX_GetDevicePortList` (44 octets, fiche
 /// `docs/abi/FDX_GetDevicePortList.md`). Le pont la rend telle quelle à
@@ -80,6 +167,9 @@ pub struct Version {
 /// dans les versions étudiées ; la marge protège la mémoire du pont si une
 /// autre version écrivait plus loin.
 pub const TAILLE_TAMPON_INFOS: usize = 256;
+
+/// Nombre d'octets réellement écrits par `FDX_GetDeviceInfo` (versions étudiées).
+pub const TAILLE_INFOS: usize = 40;
 
 /// Date initiale d'usine : l'instrument n'a jamais reçu de date de mise en service.
 pub const DATE_INITIALE_USINE: u32 = 20190101;

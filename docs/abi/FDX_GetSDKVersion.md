@@ -36,9 +36,9 @@ typedef struct { uint32_t part0, part1, part2; } RE_FDX_Version; /* 12 octets */
 - Archiver `part0`, `part1`, `part2` tels quels dans la provenance, plus l'empreinte SHA-256 de la DLL, qui identifie la version sans ambiguïté.
 - Appeler avant `FDX_Connect`.
 
-## À vérifier sur l'instrument
+## Vérifié sur la vraie DLL
 
-- Rien de bloquant : la fonction ne communique pas avec l'appareil. Seul reste à observer le code de retour positif ou nul en cas de succès.
+Le 7 octobre 2026, par le pont (`crates/pont-myiro1/tests/dll.rs`, test `palier_version_avec_la_vraie_dll`) : `FDXSDK.dll` 1.0.1.0 x86 (MY-CT1) et x64 (Ergosoft) renvoient toutes deux `{1, 1, 0}` avec un code non négatif. La convention `__stdcall` x86 est donc validée à l'exécution. Le chargement de la DLL et l'appel n'ont créé aucun fichier dans le dossier de travail.
 
 ## Preuves (locales)
 

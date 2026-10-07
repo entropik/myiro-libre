@@ -10,6 +10,10 @@ Application libre de mesure, de densitométrie et de profilage ICC pour les spec
 Définition d'un ensemble de plages à imprimer puis mesurer : valeurs de chaque plage et mise en page. Une mire est indépendante du papier et de l'imprimante.
 _Éviter_ : charte, chart, cible, target
 
+**Mire de comparaison** :
+Mire servant à comparer deux instruments sur un même tirage (36 plages de 20 mm, lisible en feuille et en bande), produite par `outils/mire_comparaison.py`.
+_Éviter_ : mire de test, charte de contrôle
+
 **Tirage** :
 Réalisation physique d'une mire, imprimée dans une condition d'impression donnée ; c'est ce que l'instrument mesure.
 _Éviter_ : épreuve, impression, feuille (au sens d'objet mesuré)
@@ -54,6 +58,18 @@ _Éviter_ : bridge, wrapper, driver, pilote (réservé au pilote Windows)
 **Palier** :
 Étape de la progression imposée sur instrument réel (version du SDK, détection, connexion, étalonnage, mesure ponctuelle, puis bande ou feuille). Le pont refuse tout palier au-delà du plafond autorisé au lancement ; chaque pont déclare les paliers qui existent pour son instrument.
 _Éviter_ : phase (réservé au plan d'action), niveau, étape
+
+**Plafond** :
+Dernier palier qu'un pont a le droit d'atteindre, fixé à son lancement ; toute demande au-delà est refusée sans toucher à l'instrument.
+_Éviter_ : limite, niveau maximal
+
+**Armement** :
+Mise en attente de l'instrument pour une mesure ponctuelle ou une bande : il attend l'appui sur son bouton. Ne règle rien de permanent dans l'instrument.
+_Éviter_ : réglage, condition (au sens de `SetMeasureCondition`)
+
+**Données brutes** :
+Valeurs rendues par l'instrument avant tout calcul de spectre (152 par plage pour le MYIRO-1), conservées avec chaque mesure pour valider le pilote libre (ADR 0006).
+_Éviter_ : raw, données capteur
 
 **Provenance** :
 Ce que le pont atteste sur une mesure : instrument (modèle, n° de série, micrologiciel), chaîne logicielle (SDK, pont, empreinte de la DLL), date réelle avec fuseau, géométrie de lecture, condition de mesure relue sur l'instrument, illuminant, observateur. Le reste du contexte (support, encres, séchage, chauffe…) relève de la bibliothèque, pas du pont. Elle est posée par le pont, jamais reconstituée par l'application, et aucune mesure n'existe sans elle.

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Objectif du projet
 
-Construire un outil de mesure et de profilage ICC pour deux spectrophotomètres Konica Minolta dont le support logiciel est arrêté : le **MYIRO-1** (piloté par `FDXSDK.dll`) et le **FD-9** (piloté par `FD9SDK.dll`). Aucun code applicatif n'existe encore : le dépôt contient pour l'instant un audit statique des installations du poste (Windows) et les DLL SDK de référence. Dépôt git initialisé le 6 octobre 2026, sans commit à ce stade ; `.gitignore` exclut `collecte/`, `SDK/` et tout binaire ou manuel Konica Minolta. Le plan d'action est dans `PLAN-ACTION.md` (application Rust libre GPL-3.0, MYIRO-1 d'abord, FD-9 en parallèle ; le FD-9 du poste est piloté par FD-S2w en réseau). `Audit-MYIRO/retroanalyse/` contient les désassemblages Capstone produits par `Audit-MYIRO/outils/desassemble.py`.
+Construire un outil de mesure et de profilage ICC pour deux spectrophotomètres Konica Minolta dont le support logiciel est arrêté : le **MYIRO-1** (piloté par `FDXSDK.dll`) et le **FD-9** (piloté par `FD9SDK.dll`). Le dépôt contient un audit statique des installations du poste (Windows) et le code Rust du pont MYIRO-1, qui pilote l'instrument réel de la version du SDK jusqu'à la lecture en bande (7 octobre 2026). `.gitignore` exclut `collecte/`, `SDK/` et tout binaire ou manuel Konica Minolta. Le plan d'action est dans `PLAN-ACTION.md` (application Rust libre GPL-3.0, MYIRO-1 d'abord, FD-9 en parallèle ; le FD-9 du poste est piloté par FD-S2w en réseau). `Audit-MYIRO/retroanalyse/` contient les désassemblages Capstone produits par `Audit-MYIRO/outils/desassemble.py`.
 
 La documentation de l'audit et les scripts sont en français ; garder cette langue pour les rapports et notes.
 
@@ -30,7 +30,20 @@ python Audit-MYIRO/outils/synthese.py  # régénère comparaison, indices-techni
 - `audit.py` lit des chemins absolus du poste (`C:/Program Files (x86)/Configuration Tool MY-CT1`, `.../KONICA MINOLTA/FD-S2w`, `C:/ProgramData/MYIRO`, `C:/Program Files/Ergosoft 16`, `C:/ProgramData/EIZO/ColorNavigator 7`) ; il échoue sur collision de hash dans `collecte/`.
 - `synthese.py` **réécrit entièrement** `LIRE-MOI-AUDIT.txt` à partir de texte codé en dur dans le script : modifier le script, pas le fichier texte. Il dépend aussi de `analyse/installateur-inventaire.csv` (produit hors de ces scripts).
 
-Pas de build, de lint ni de tests à ce stade.
+Code Rust (espace de travail Cargo à la racine) :
+
+- `crates/fdx-sys` : liste blanche des exports de `FDXSDK.dll` et formes binaires ; ne charge jamais la DLL.
+- `crates/pont-protocole` : messages JSON entre l'application et les ponts (requêtes, réponses, provenance) ; indépendant de Windows.
+- `crates/pont-myiro1` : session (paliers, plafond, journal), adapter `FdxDll`, boucle du protocole et exécutable `pont-myiro1 --dll <FDXSDK.dll> [--plafond <palier>]`.
+
+```
+cargo test                                     # tous les tests, contre un instrument simulé
+cargo clippy --all-targets -- -D warnings
+cargo test --target i686-pc-windows-msvc       # même chose en 32 bits (DLL de MY-CT1)
+cargo test -p pont-myiro1 --test dll -- --ignored palier_version   # appels réels à la DLL du poste
+```
+
+Les tests `--ignored` de `crates/pont-myiro1/tests/dll.rs` parlent au vrai MYIRO-1 et, à partir de l'étalonnage, demandent des gestes à l'opérateur : ne les lancer qu'avec son accord, palier par palier. Leurs sorties (mesures) vont dans `Archivage/donnees/`, local et non versionné.
 
 ## Points techniques établis par l'audit
 

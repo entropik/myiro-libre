@@ -36,10 +36,13 @@ int32_t __stdcall FDX_GetDevicePortList(FDX_PortInfo *out_ports,  /* tableau, pe
 - Appeler avant `FDX_Connect` ; ne pas rappeler pendant une mesure.
 - Ne jamais ouvrir un périphérique Konica Minolta de PID `210E` : aucun SDK ne le cherche, il s'agit probablement du mode de mise à jour du micrologiciel (`retroanalyse/logiciels/firmware-fd9.md`).
 
-## À vérifier sur l'instrument
+## Vérifié sur l'instrument
 
-- Le nom de port (`COM3` attendu d'après l'inventaire) et le n° de série 10002006.
-- Le comportement avec deux instruments, ou avec le MYIRO-1 en Wi-Fi.
+Le 7 octobre 2026, MYIRO-1 branché en USB, DLL 1.0.1.0 en x86 et en x64 (test `palier_detection_avec_la_vraie_dll`) : une seule entrée, liaison 1 (USB), port `COM3`, n° de série égal à celui que Windows connaît. L'appel en deux temps et la découpe de l'entrée sont donc **confirmés à l'exécution**. Le FD-9 du réseau n'apparaît pas : FDXSDK ne cherche que la famille MYIRO-1. Aucun fichier n'a été créé.
+
+## Reste à vérifier
+
+- Le comportement instrument débranché (liste vide attendue), avec deux instruments, ou avec le MYIRO-1 en Wi-Fi.
 
 ## Preuves (locales)
 
