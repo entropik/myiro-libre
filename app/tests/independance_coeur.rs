@@ -83,7 +83,14 @@ fn seule_l_application_depend_de_tauri() {
         coeur_avec_tauri.is_empty(),
         "crates du cœur qui dépendent de Tauri : {coeur_avec_tauri:?}"
     );
-    for coeur in ["pont-protocole", "fdx-sys", "pont-myiro1"] {
+    for coeur in [
+        "colorimetrie",
+        "fdx-sys",
+        "fd9-sys",
+        "pont-protocole",
+        "pont-myiro1",
+        "jeu-validation",
+    ] {
         assert_eq!(crates.get(coeur), Some(&false), "{coeur} est examinée");
     }
 }
