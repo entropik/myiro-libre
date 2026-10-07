@@ -22,6 +22,12 @@ pub enum Requete {
     Connecter {
         instrument: u32,
     },
+    /// FD-9 en réseau : connexion directe à une adresse saisie, sans
+    /// détection (paramètre de connexion propre au FD-9, ADR 0005). Un pont
+    /// qui n'a pas de connexion par adresse répond `requete_invalide`.
+    ConnecterAdresse {
+        adresse: AdresseReseau,
+    },
     /// Étalonnage sur le blanc : l'instrument est posé sur son capuchon.
     Etalonner {},
     /// L'instrument attend l'appui sur son bouton, posé sur une plage.
@@ -55,6 +61,18 @@ pub enum Reponse {
     },
     Instruments {
         liste: Vec<InstrumentDetecte>,
+    },
+    /// Version d'une DLL sans fonction publique de version (FD9SDK) : la
+    /// version écrite dans la ressource du fichier et son empreinte SHA-256,
+    /// lues sans appel à la DLL (fiche `docs/abi/FD9_GetLastError.md`).
+    VersionDll {
+        /// `FileVersion` de la ressource : majeur, mineur, révision, build.
+        version_fichier: Info<[u32; 4]>,
+        empreinte: Info<Empreinte>,
+    },
+    /// Détection du FD-9 : son identifiant est un texte, pas un nombre.
+    InstrumentsFd9 {
+        liste: Vec<InstrumentFd9>,
     },
     Connecte {
         identite: Identite,
@@ -121,6 +139,66 @@ pub struct InstrumentDetecte {
     /// `COMn`, `/dev/cu.usbmodem…` ou adresse IP.
     pub port: String,
     pub numero_serie: u32,
+}
+
+/// Un FD-9 vu par `FD9_GetDeviceList` (fiche `docs/abi/FD9_GetDeviceList.md`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InstrumentFd9 {
+    /// « reseau », « usb », ou « inconnue N ».
+    pub liaison: String,
+    /// Adresse IP `a.b.c.d` en réseau, `COMn` en USB.
+    pub adresse: String,
+    /// 8 caractères rendus par la DLL, tels quels : n° de série de
+    /// l'instrument en USB ; en réseau, son sens est supposé.
+    pub identifiant: String,
+}
+
+/// Adresse d'un FD-9 en réseau : adresse IP ou nom d'hôte, 23 caractères
+/// ASCII visibles au plus. La DLL n'en recopie que 24 octets sans ajouter de
+/// zéro final (fiche `docs/abi/FD9_Connect.md`) : plus longue, elle serait lue
+/// au-delà de son texte. Le port (49152) est fixé dans la DLL.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct AdresseReseau(String);
+
+/// Nombre de caractères permis dans une adresse réseau du FD-9.
+pub const LONGUEUR_MAX_ADRESSE: usize = 23;
+
+impl AdresseReseau {
+    pub fn new(texte: impl Into<String>) -> Result<Self, String> {
+        let texte = texte.into();
+        if texte.is_empty() {
+            Err("adresse vide".into())
+        } else if !texte.bytes().all(|o| o.is_ascii_graphic()) {
+            Err(format!(
+                "adresse « {texte} » : caractères ASCII visibles seulement"
+            ))
+        } else if texte.len() > LONGUEUR_MAX_ADRESSE {
+            Err(format!(
+                "adresse « {texte} » : {LONGUEUR_MAX_ADRESSE} caractères au plus"
+            ))
+        } else {
+            Ok(AdresseReseau(texte))
+        }
+    }
+
+    pub fn texte(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for AdresseReseau {
+    type Error = String;
+    fn try_from(texte: String) -> Result<Self, String> {
+        AdresseReseau::new(texte)
+    }
+}
+
+impl From<AdresseReseau> for String {
+    fn from(adresse: AdresseReseau) -> Self {
+        adresse.0
+    }
 }
 
 /// Identité de l'instrument connecté (fiche `docs/abi/FDX_GetDeviceInfo.md`).

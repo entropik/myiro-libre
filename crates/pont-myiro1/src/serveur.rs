@@ -76,6 +76,16 @@ fn traiter<S: SdkMyiro1>(session: &mut Session<S>, requete: Requete) -> (Reponse
                     identite: identite(&connexion),
                 })
         }
+        // Paramètre de connexion du FD-9 : le MYIRO-1 n'a pas de connexion
+        // par adresse. Rien n'est transmis à la DLL.
+        Requete::ConnecterAdresse { .. } => {
+            return (
+                Reponse::RequeteInvalide {
+                    detail: "connecter_adresse : commande du FD-9, inconnue du pont MYIRO-1".into(),
+                },
+                false,
+            )
+        }
         Requete::Etalonner {} => session.etalonner().map(|etalonnage| Reponse::Etalonne {
             date: etalonnage.date,
         }),

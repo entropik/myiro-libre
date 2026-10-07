@@ -144,3 +144,105 @@ fn une_reponse_relue_par_l_application_redonne_la_meme() {
     };
     assert_eq!(lire_reponse(&ecrire_reponse(&reponse)), Ok(reponse));
 }
+
+// --- FD-9 (ticket #13) : paramètre de connexion, version et détection propres.
+
+#[test]
+fn le_fd9_se_designe_par_son_adresse_reseau() {
+    use pont_protocole::AdresseReseau;
+    let requete = lire_requete(r#"{"cmd":"connecter_adresse","adresse":"192.168.1.40"}"#);
+    assert_eq!(
+        requete,
+        Ok(Requete::ConnecterAdresse {
+            adresse: AdresseReseau::new("192.168.1.40").unwrap()
+        })
+    );
+    let texte = serde_json::to_string(&requete.unwrap()).unwrap();
+    assert_eq!(
+        texte,
+        r#"{"cmd":"connecter_adresse","adresse":"192.168.1.40"}"#
+    );
+}
+
+#[test]
+fn une_adresse_que_la_dll_ne_recopierait_pas_en_entier_est_refusee() {
+    // 23 caractères au plus (fiche docs/abi/FD9_Connect.md), ASCII, sans espace.
+    let ligne = |adresse: &str| format!(r#"{{"cmd":"connecter_adresse","adresse":"{adresse}"}}"#);
+    assert!(lire_requete(&ligne("fd9-atelier.exemple.lan")).is_ok());
+    assert!(lire_requete(&ligne("fd9-atelier.exemple.lan2")).is_err());
+    assert!(lire_requete(&ligne("")).is_err());
+    assert!(lire_requete(&ligne("192.168.1.40 ")).is_err());
+    assert!(lire_requete(&ligne("équipe")).is_err());
+    assert!(
+        lire_requete(r#"{"cmd":"connecter_adresse","adresse":"192.168.1.40","port":49152}"#)
+            .is_err()
+    );
+    assert!(lire_requete(r#"{"cmd":"connecter_adresse"}"#).is_err());
+}
+
+#[test]
+fn la_version_du_fd9_vient_du_fichier_de_la_dll() {
+    use pont_protocole::{ecrire_reponse, lire_reponse, Empreinte, Info, Reponse};
+    let reponse = Reponse::VersionDll {
+        version_fichier: Info::Confirmee([1, 3, 2, 3]),
+        empreinte: Info::Confirmee(Empreinte::new("5e".repeat(32)).unwrap()),
+    };
+    let ligne = ecrire_reponse(&reponse);
+    assert_eq!(
+        ligne,
+        format!(
+            r#"{{"rep":"version_dll","version_fichier":{{"statut":"confirmee","valeur":[1,3,2,3]}},"empreinte":{{"statut":"confirmee","valeur":"{}"}}}}"#,
+            "5e".repeat(32)
+        )
+    );
+    assert_eq!(lire_reponse(&ligne), Ok(reponse));
+    let inconnue = r#"{"rep":"version_dll","version_fichier":{"statut":"inconnue"},"empreinte":{"statut":"inconnue"}}"#;
+    assert_eq!(
+        lire_reponse(inconnue),
+        Ok(Reponse::VersionDll {
+            version_fichier: Info::Inconnue,
+            empreinte: Info::Inconnue,
+        })
+    );
+    // Rien n'est deviné : une donnée absente est refusée, pas tenue pour inconnue.
+    assert!(
+        lire_reponse(r#"{"rep":"version_dll","version_fichier":{"statut":"inconnue"}}"#).is_err()
+    );
+}
+
+#[test]
+fn un_fd9_detecte_garde_son_adresse_et_son_identifiant_en_texte() {
+    use pont_protocole::{ecrire_reponse, lire_reponse, InstrumentFd9, Reponse};
+    let reponse = Reponse::InstrumentsFd9 {
+        liste: vec![InstrumentFd9 {
+            liaison: "reseau".into(),
+            adresse: "192.168.1.40".into(),
+            identifiant: "12345678".into(),
+        }],
+    };
+    let ligne = ecrire_reponse(&reponse);
+    assert_eq!(
+        ligne,
+        r#"{"rep":"instruments_fd9","liste":[{"liaison":"reseau","adresse":"192.168.1.40","identifiant":"12345678"}]}"#
+    );
+    assert_eq!(lire_reponse(&ligne), Ok(reponse));
+    assert!(lire_reponse(
+        r#"{"rep":"instruments_fd9","liste":[{"liaison":"reseau","adresse":"192.168.1.40","identifiant":"12345678","port":49152}]}"#
+    )
+    .is_err());
+}
+
+#[test]
+fn les_lignes_du_myiro1_restent_lues_et_ecrites_comme_avant() {
+    use pont_protocole::{ecrire_reponse, lire_reponse};
+    for ligne in [
+        r#"{"rep":"version","parties":[1,0,1]}"#,
+        r#"{"rep":"instruments","liste":[{"liaison":"usb","port":"COM3","numero_serie":12345678}]}"#,
+    ] {
+        assert_eq!(ecrire_reponse(&lire_reponse(ligne).unwrap()), ligne);
+    }
+    assert_eq!(
+        serde_json::to_string(&Requete::Connecter { instrument: 0 }).unwrap(),
+        r#"{"cmd":"connecter","instrument":0}"#
+    );
+}

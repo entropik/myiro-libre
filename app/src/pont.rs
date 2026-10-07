@@ -318,6 +318,12 @@ impl Pont for PontSimule {
             Requete::MesurerPonctuelle {} => Palier::MesurePonctuelle,
             Requete::MesurerBande { .. } => Palier::Bande,
             Requete::Fermer {} => return Ok(Reponse::Ferme {}),
+            // Comme `pont-myiro1` : la connexion par adresse est celle du FD-9.
+            Requete::ConnecterAdresse { .. } => {
+                return Ok(Reponse::RequeteInvalide {
+                    detail: "connecter_adresse : commande du FD-9".into(),
+                })
+            }
         };
         if let Some((reussites, resultat)) = self.echecs.get_mut(&palier) {
             if *reussites == 0 {
