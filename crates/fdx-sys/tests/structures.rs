@@ -109,3 +109,39 @@ fn l_adresse_mac_est_affiche_comme_my_ct1() {
         "00:1A:2B:3C:4D:5E"
     );
 }
+
+#[test]
+fn la_condition_de_mesure_fait_8_octets() {
+    assert_eq!(size_of::<fdx_sys::ConditionMesure>(), 8);
+}
+
+#[test]
+fn la_condition_de_calcul_fait_0x31c_octets() {
+    assert_eq!(size_of::<fdx_sys::ConditionCalcul>(), 0x31c);
+}
+
+#[test]
+fn un_descripteur_de_resultat_fait_8_octets_en_32_bits_et_16_en_64() {
+    let attendu = if cfg!(target_pointer_width = "32") {
+        8
+    } else {
+        16
+    };
+    assert_eq!(size_of::<fdx_sys::DescripteurResultat>(), attendu);
+}
+
+#[test]
+fn la_condition_de_calcul_place_ses_champs_comme_la_dll() {
+    let c = fdx_sys::ConditionCalcul::spectre(fdx_sys::CONDITION_M2);
+    let octets: &[u8] =
+        unsafe { std::slice::from_raw_parts(&c as *const _ as *const u8, size_of_val(&c)) };
+    assert_eq!(
+        octets[0..4],
+        2i32.to_le_bytes(),
+        "Illuminant = condition de mesure"
+    );
+    assert_eq!(octets[4..8], 2i32.to_le_bytes(), "ObsIlluminant = D50");
+    assert_eq!(octets[8..12], 0i32.to_le_bytes(), "Observer = 2°");
+    assert_eq!(octets[16..20], 10i32.to_le_bytes(), "DataType = spectre");
+    assert!(octets[20..].iter().all(|&o| o == 0), "le reste est à zéro");
+}

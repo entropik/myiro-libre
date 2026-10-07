@@ -6,7 +6,9 @@
 pub mod dll;
 
 use fdx_sys::{
-    lire_infos_instrument, InfosInstrument, Port, Version, TAILLE_INFOS, TAILLE_TAMPON_INFOS,
+    lire_infos_instrument, ConditionCalcul, InfosInstrument, Port, Version, CONDITION_M0,
+    CONDITION_M1, CONDITION_M2, LONGUEUR_BRUTES, LONGUEUR_LAB, LONGUEUR_SPECTRE, TAILLE_INFOS,
+    TAILLE_TAMPON_INFOS,
 };
 use pont_protocole::{ErreurPont, Palier};
 use std::time::{Duration, Instant};
@@ -23,7 +25,15 @@ const BIT_ANOMALIE_DATE_INITIALE: i32 = 4;
 /// 10 s ; marge pour un instrument lent (fiche `docs/abi/FDX_Calibration.md`).
 pub const DELAI_ETALONNAGE: Duration = Duration::from_secs(30);
 
+/// Temps laissé à l'opérateur pour poser l'instrument et appuyer sur le bouton.
+pub const DELAI_APPUI: Duration = Duration::from_secs(120);
+
+/// Code -9983 : mesure armée sans étalonnage valable.
+const CODE_NON_ETALONNE: i32 = -9983;
+
 /// Codes d'événement (fiche `docs/abi/FDX_RegisterDeviceEventHandler.md`).
+const EVENEMENT_MESURE_TERMINEE: i32 = 3;
+const EVENEMENT_MESURE_ECHOUEE: i32 = 4;
 const EVENEMENT_DECONNEXION: i32 = 6;
 const EVENEMENT_ETALONNAGE_REUSSI: i32 = 8;
 const EVENEMENT_ETALONNAGE_ECHOUE: i32 = 9;
@@ -48,8 +58,36 @@ pub trait SdkMyiro1 {
     /// `FDX_Calibration(0)` : étalonnage sur le blanc, seul type autorisé.
     /// Le résultat arrive ensuite par les événements.
     fn etalonner_blanc(&mut self) -> Result<i32, i32>;
+    /// `FDX_SetMeasureCondition({0, 0})` : arme une mesure ponctuelle.
+    fn armer_ponctuelle(&mut self) -> Result<i32, i32>;
+    /// `FDX_StopMeasurement` : désarme et ramène l'instrument au repos.
+    fn arreter_mesure(&mut self) -> Result<i32, i32>;
+    /// `FDX_GetMeasureData` en deux temps, chaque résultat préparé à `longueur` valeurs.
+    fn lire(&mut self, condition: &ConditionCalcul, longueur: usize) -> Result<Lecture, i32>;
     /// Prochain événement de l'instrument, ou `None` si le délai expire.
     fn attendre_evenement(&mut self, delai: Duration) -> Option<Evenement>;
+}
+
+/// Ce que rend une lecture de `FDX_GetMeasureData`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Lecture {
+    pub resultats: Vec<Vec<f32>>,
+    /// Sens de passage rendu par la DLL (`FDX_eMeasureDirection`), brut.
+    pub sens: u32,
+}
+
+/// Une mesure ponctuelle : les trois spectres (380 à 730 nm par 10 nm) et les
+/// données brutes de l'instrument, gardées pour le pilote libre (ADR 0006).
+#[derive(Clone, Debug, PartialEq)]
+pub struct MesurePonctuelle {
+    pub m0: Vec<f32>,
+    pub m1: Vec<f32>,
+    pub m2: Vec<f32>,
+    pub brutes: Vec<f32>,
+    /// L*a*b* D50/2° calculés par la DLL pour M0, M1, M2 : référence pour
+    /// valider notre propre colorimétrie.
+    pub lab_dll: [Vec<f32>; 3],
+    pub evenements: Vec<Evenement>,
 }
 
 /// Résultat d'un étalonnage réussi.
@@ -166,6 +204,74 @@ impl<S: SdkMyiro1> Session<S> {
         Ok(Etalonnage { evenements })
     }
 
+    /// Mesure ponctuelle : arme l'instrument, attend l'appui sur son bouton,
+    /// lit M0, M1, M2 et les données brutes, puis désarme dans tous les cas.
+    pub fn mesurer_ponctuelle(&mut self) -> Result<MesurePonctuelle, ErreurPont> {
+        self.autoriser(Palier::MesurePonctuelle, Some(Palier::Etalonnage))?;
+        if let Err(code) = self.sdk.armer_ponctuelle() {
+            if code == CODE_NON_ETALONNE {
+                self.atteint = Some(Palier::Connexion);
+            }
+            return Err(traduire(code));
+        }
+        let resultat = self.attendre_mesure().and_then(|evenements| {
+            Ok(MesurePonctuelle {
+                m0: self.lire_un(&ConditionCalcul::spectre(CONDITION_M0), LONGUEUR_SPECTRE)?,
+                m1: self.lire_un(&ConditionCalcul::spectre(CONDITION_M1), LONGUEUR_SPECTRE)?,
+                m2: self.lire_un(&ConditionCalcul::spectre(CONDITION_M2), LONGUEUR_SPECTRE)?,
+                brutes: self.lire_un(&ConditionCalcul::brutes(), LONGUEUR_BRUTES)?,
+                lab_dll: [
+                    self.lire_un(&ConditionCalcul::lab(CONDITION_M0), LONGUEUR_LAB)?,
+                    self.lire_un(&ConditionCalcul::lab(CONDITION_M1), LONGUEUR_LAB)?,
+                    self.lire_un(&ConditionCalcul::lab(CONDITION_M2), LONGUEUR_LAB)?,
+                ],
+                evenements,
+            })
+        });
+        // Désarmer même après un échec : l'instrument revient au repos.
+        let _ = self.sdk.arreter_mesure();
+        resultat
+    }
+
+    fn attendre_mesure(&mut self) -> Result<Vec<Evenement>, ErreurPont> {
+        let echeance = Instant::now() + DELAI_APPUI;
+        let mut evenements = Vec::new();
+        loop {
+            let reste = echeance.saturating_duration_since(Instant::now());
+            let evenement = self
+                .sdk
+                .attendre_evenement(reste)
+                .ok_or(ErreurPont::Delai)?;
+            evenements.push(evenement);
+            match evenement.code {
+                EVENEMENT_MESURE_TERMINEE => return Ok(evenements),
+                EVENEMENT_MESURE_ECHOUEE => {
+                    return Err(ErreurPont::MesureEchouee {
+                        erreur: evenement.erreur,
+                    })
+                }
+                EVENEMENT_DECONNEXION => return Err(ErreurPont::InstrumentPerdu),
+                _ => {}
+            }
+        }
+    }
+
+    /// Lit un seul résultat de `longueur` valeurs ; toute autre forme est refusée.
+    fn lire_un(
+        &mut self,
+        condition: &ConditionCalcul,
+        longueur: usize,
+    ) -> Result<Vec<f32>, ErreurPont> {
+        let lecture = self.sdk.lire(condition, longueur).map_err(traduire)?;
+        match lecture.resultats.as_slice() {
+            [valeurs] if valeurs.len() == longueur => Ok(valeurs.clone()),
+            autre => Err(ErreurPont::ReponseInattendue(format!(
+                "{} résultat(s) au lieu d'un seul de {longueur} valeurs",
+                autre.len()
+            ))),
+        }
+    }
+
     fn autoriser(&self, demande: Palier, prealable: Option<Palier>) -> Result<(), ErreurPont> {
         if demande > self.plafond {
             return Err(ErreurPont::PalierNonAutorise {
@@ -186,6 +292,7 @@ fn traduire(code: i32) -> ErreurPont {
     match code {
         -9992 => ErreurPont::ParametreRefuse,
         -9986 => ErreurPont::EtatIncompatible,
+        CODE_NON_ETALONNE => ErreurPont::NonEtalonne,
         code => ErreurPont::Sdk { code },
     }
 }

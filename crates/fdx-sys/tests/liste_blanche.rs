@@ -9,13 +9,36 @@ fn aucun_export_de_maintenance_usine_n_est_autorise() {
     }
 }
 
+/// `FDX_Set*` dont le contrat est établi et qui n'écrivent rien de permanent dans
+/// l'instrument. Chaque ajout exige sa fiche docs/abi/ et l'accord du responsable.
+const SET_SANS_ECRITURE: &[&str] = &[
+    // Arme la mesure (docs/abi/FDX_SetMeasureCondition.md).
+    "FDX_SetMeasureCondition",
+];
+
 #[test]
 fn aucun_export_d_ecriture_dans_l_instrument_n_est_autorise() {
     for nom in EXPORTS_AUTORISES {
         assert!(
-            !nom.starts_with("FDX_Set"),
+            !nom.starts_with("FDX_Set") || SET_SANS_ECRITURE.contains(nom),
             "export d'écriture autorisé : {nom}"
         );
+    }
+}
+
+#[test]
+fn les_set_de_reglage_de_l_instrument_restent_interdits() {
+    for nom in [
+        "FDX_SetNetworkInfo",
+        "FDX_SetCalibration",
+        "FDX_SetUserRefData",
+        "FDX_SetShutdownTime",
+        "FDX_SetSoundSetting",
+        "FDX_SetIndicator",
+        "FDX_SetIrradianceAdapter",
+        "FDX_SetOptionIndicatorSetting",
+    ] {
+        assert!(!EXPORTS_AUTORISES.contains(&nom), "autorisé à tort : {nom}");
     }
 }
 
@@ -83,5 +106,16 @@ fn chaque_export_autorise_existe_dans_la_dll_de_reference() {
             exports_de_la_dll.contains(nom),
             "export inconnu de la DLL : {nom}"
         );
+    }
+}
+
+#[test]
+fn les_exports_de_la_mesure_ponctuelle_sont_autorises() {
+    for nom in [
+        "FDX_SetMeasureCondition",
+        "FDX_StopMeasurement",
+        "FDX_GetMeasureData",
+    ] {
+        assert!(EXPORTS_AUTORISES.contains(&nom), "manque : {nom}");
     }
 }

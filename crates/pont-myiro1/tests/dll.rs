@@ -159,3 +159,56 @@ fn palier_etalonnage_avec_le_vrai_instrument() {
     resultat.expect("étalonnage sur le blanc");
     assert_eq!(session.palier_atteint(), Some(Palier::Etalonnage));
 }
+
+/// Palier 4 : étalonnage puis mesures ponctuelles du MYIRO-1 réel, une par plage
+/// de la liste `MYIRO_PLAGES` (par défaut « papier,1A1,1D1,2B1 »). Pour chacune,
+/// l'opérateur pose l'instrument et appuie sur le bouton (120 s au plus). Les
+/// résultats vont dans le fichier `MYIRO_SORTIE` (CSV ; par défaut dans `target/`).
+#[test]
+#[ignore = "étalonne puis mesure avec le MYIRO-1 réel ; demande l'opérateur"]
+fn palier_mesure_ponctuelle_avec_le_vrai_instrument() {
+    use std::io::Write;
+    let plages = std::env::var("MYIRO_PLAGES").unwrap_or("papier,1A1,1D1,2B1".into());
+    let sortie = std::env::var("MYIRO_SORTIE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/mesures-myiro1.csv")
+        });
+    let dll = FdxDll::charger(dll_du_poste()).expect("chargement de FDXSDK.dll");
+    let mut session = Session::new(dll, Palier::MesurePonctuelle);
+    session.version().expect("FDX_GetSDKVersion");
+    session.detecter().expect("FDX_GetDevicePortList");
+    session
+        .connecter(0)
+        .expect("FDX_Connect + FDX_GetDeviceInfo");
+    session.etalonner().expect("étalonnage sur le blanc");
+    println!("étalonnage réussi");
+
+    let mut fichier = std::fs::File::create(&sortie).expect("fichier de sortie");
+    let longueurs: Vec<String> = (0..36).map(|i| format!("nm{}", 380 + 10 * i)).collect();
+    writeln!(fichier, "plage;donnees;L;a;b;{}", longueurs.join(";")).unwrap();
+    let texte = |v: &[f32]| {
+        v.iter()
+            .map(|x| format!("{x}"))
+            .collect::<Vec<_>>()
+            .join(";")
+    };
+    for plage in plages.split(',') {
+        println!("mesure de {plage} : posez l'instrument et appuyez sur le bouton");
+        let mesure = session.mesurer_ponctuelle().expect("mesure ponctuelle");
+        for (nom, spectre, lab) in [
+            ("M0", &mesure.m0, &mesure.lab_dll[0]),
+            ("M1", &mesure.m1, &mesure.lab_dll[1]),
+            ("M2", &mesure.m2, &mesure.lab_dll[2]),
+        ] {
+            writeln!(fichier, "{plage};{nom};{};{}", texte(lab), texte(spectre)).unwrap();
+            println!("  {nom} Lab {lab:?}");
+        }
+        writeln!(fichier, "{plage};brutes;;;;{}", texte(&mesure.brutes)).unwrap();
+        println!(
+            "  événements {:?}",
+            mesure.evenements.iter().map(|e| e.code).collect::<Vec<_>>()
+        );
+    }
+    println!("résultats écrits dans {}", sortie.display());
+}

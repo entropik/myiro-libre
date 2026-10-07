@@ -1,7 +1,7 @@
 //! Comportement de la session du pont MYIRO-1, contre un SDK simulé.
 
-use fdx_sys::{Port, Version, TAILLE_TAMPON_INFOS};
-use pont_myiro1::{Connexion, Evenement, SdkMyiro1, Session};
+use fdx_sys::{ConditionCalcul, Port, Version, TAILLE_TAMPON_INFOS};
+use pont_myiro1::{Connexion, Evenement, Lecture, SdkMyiro1, Session};
 use pont_protocole::{ErreurPont, Palier};
 use std::collections::VecDeque;
 use std::time::Duration;
@@ -12,6 +12,9 @@ struct SdkSimule {
     ports: Vec<Port>,
     code_connexion: i32,
     code_etalonnage: i32,
+    code_armement: i32,
+    /// Nombre de résultats rendus par chaque lecture (1 en ponctuelle).
+    resultats_par_lecture: usize,
     /// Événements que l'instrument simulé émettra, dans l'ordre.
     evenements: VecDeque<Evenement>,
     appels: Vec<String>,
@@ -32,6 +35,7 @@ impl SdkSimule {
                 code_liaison: 0,
                 opaque: [0; 40],
             }],
+            resultats_par_lecture: 1,
             ..Default::default()
         }
     }
@@ -71,6 +75,30 @@ impl SdkMyiro1 for SdkSimule {
         } else {
             Ok(self.code_etalonnage)
         }
+    }
+    fn armer_ponctuelle(&mut self) -> Result<i32, i32> {
+        self.appels.push("armer ponctuelle".into());
+        if self.code_armement < 0 {
+            Err(self.code_armement)
+        } else {
+            Ok(0)
+        }
+    }
+    fn arreter_mesure(&mut self) -> Result<i32, i32> {
+        self.appels.push("arreter".into());
+        Ok(0)
+    }
+    /// Valeurs repérables : condition × 10 + type de données.
+    fn lire(&mut self, condition: &ConditionCalcul, longueur: usize) -> Result<Lecture, i32> {
+        self.appels.push(format!(
+            "lire {} {}",
+            condition.illuminant, condition.type_donnees
+        ));
+        let valeur = (condition.illuminant * 10 + condition.type_donnees) as f32;
+        Ok(Lecture {
+            resultats: vec![vec![valeur; longueur]; self.resultats_par_lecture],
+            sens: 0,
+        })
     }
     /// Sans événement en attente, simule l'expiration du délai.
     fn attendre_evenement(&mut self, _delai: Duration) -> Option<Evenement> {
@@ -336,4 +364,131 @@ fn un_etalonnage_reussi_ouvre_le_palier_suivant() {
     let mut session = session_connectee(sdk_qui_etalonne(&[7, 8]), Palier::Etalonnage);
     session.etalonner().unwrap();
     assert_eq!(session.palier_atteint(), Some(Palier::Etalonnage));
+}
+
+/// Session étalonnée, dont l'instrument émettra ensuite `apres` (codes d'événement).
+fn session_etalonnee(apres: &[i32]) -> Session<SdkSimule> {
+    let mut sdk = sdk_qui_etalonne(&[7, 8]);
+    sdk.evenements.extend(apres.iter().map(|&c| evenement(c)));
+    let mut session = session_connectee(sdk, Palier::MesurePonctuelle);
+    session.etalonner().unwrap();
+    session
+}
+
+#[test]
+fn une_mesure_ponctuelle_donne_m0_m1_m2_et_les_donnees_brutes() {
+    let mut session = session_etalonnee(&[1, 2, 3]);
+    let mesure = session.mesurer_ponctuelle().unwrap();
+    assert_eq!(mesure.m0, vec![10.0; 36]);
+    assert_eq!(mesure.m1, vec![20.0; 36]);
+    assert_eq!(mesure.m2, vec![30.0; 36]);
+    assert_eq!(mesure.brutes, vec![21.0; 152]);
+    assert_eq!(mesure.lab_dll, [vec![0.0; 3], vec![10.0; 3], vec![20.0; 3]]);
+    let codes: Vec<i32> = mesure.evenements.iter().map(|e| e.code).collect();
+    assert_eq!(codes, [1, 2, 3]);
+}
+
+#[test]
+fn la_mesure_arme_lit_puis_desarme() {
+    let mut session = session_etalonnee(&[1, 2, 3]);
+    session.mesurer_ponctuelle().unwrap();
+    let appels = &session.sdk().appels;
+    let fin: Vec<&str> = appels[appels.len() - 9..]
+        .iter()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        fin,
+        [
+            "armer ponctuelle",
+            "lire 0 10",
+            "lire 1 10",
+            "lire 2 10",
+            "lire 1 11",
+            "lire 0 0",
+            "lire 1 0",
+            "lire 2 0",
+            "arreter"
+        ]
+    );
+}
+
+#[test]
+fn mesurer_sans_etalonnage_est_refuse_sans_toucher_la_dll() {
+    let mut session = session_connectee(sdk_qui_etalonne(&[]), Palier::MesurePonctuelle);
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::EtatInvalide {
+            attendu: Palier::Etalonnage
+        })
+    );
+    assert!(!session
+        .sdk()
+        .appels
+        .contains(&"armer ponctuelle".to_string()));
+}
+
+#[test]
+fn le_plafond_etalonnage_interdit_la_mesure() {
+    let mut sdk = sdk_qui_etalonne(&[7, 8]);
+    sdk.evenements.extend([1, 2, 3].map(evenement));
+    let mut session = session_connectee(sdk, Palier::Etalonnage);
+    session.etalonner().unwrap();
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::PalierNonAutorise {
+            demande: Palier::MesurePonctuelle,
+            plafond: Palier::Etalonnage
+        })
+    );
+}
+
+#[test]
+fn une_mesure_echouee_est_signalee_et_l_etalonnage_reste_valable() {
+    let mut session = session_etalonnee(&[1, 2]);
+    session.sdk_mut().evenements.push_back(Evenement {
+        code: 4,
+        nb_donnees_brutes: 0,
+        erreur: -9898,
+    });
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::MesureEchouee { erreur: -9898 })
+    );
+    assert_eq!(session.palier_atteint(), Some(Palier::Etalonnage));
+    assert_eq!(session.sdk().appels.last().unwrap(), "arreter");
+}
+
+#[test]
+fn sans_appui_sur_le_bouton_la_mesure_expire_et_desarme() {
+    let mut session = session_etalonnee(&[1]);
+    assert_eq!(session.mesurer_ponctuelle(), Err(ErreurPont::Delai));
+    assert_eq!(session.sdk().appels.last().unwrap(), "arreter");
+}
+
+#[test]
+fn un_instrument_non_etalonne_renvoie_au_palier_connexion() {
+    let mut session = session_etalonnee(&[]);
+    session.sdk_mut().code_armement = -9983;
+    assert_eq!(session.mesurer_ponctuelle(), Err(ErreurPont::NonEtalonne));
+    assert_eq!(session.palier_atteint(), Some(Palier::Connexion));
+}
+
+#[test]
+fn une_deconnexion_pendant_la_mesure_est_signalee() {
+    let mut session = session_etalonnee(&[1, 6]);
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::InstrumentPerdu)
+    );
+}
+
+#[test]
+fn plusieurs_resultats_pour_une_mesure_ponctuelle_sont_refuses() {
+    let mut session = session_etalonnee(&[1, 2, 3]);
+    session.sdk_mut().resultats_par_lecture = 2;
+    assert!(matches!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::ReponseInattendue(_))
+    ));
 }

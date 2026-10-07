@@ -4,8 +4,11 @@
 //! autre adresse n'est jamais demandée à la DLL. Conventions d'appel :
 //! `__stdcall` en x86, convention Windows en x64 (`extern "system"`).
 
-use crate::{Evenement, SdkMyiro1};
-use fdx_sys::{Port, Version, EXPORTS_AUTORISES, TAILLE_TAMPON_INFOS};
+use crate::{Evenement, Lecture, SdkMyiro1};
+use fdx_sys::{
+    ConditionCalcul, ConditionMesure, DescripteurResultat, Port, Version, EXPORTS_AUTORISES,
+    MESURE_PONCTUELLE, TAILLE_TAMPON_INFOS,
+};
 use libloading::Library;
 use std::collections::VecDeque;
 use std::path::Path;
@@ -14,6 +17,9 @@ use std::time::Duration;
 
 /// Capacité maximale admise par `FDX_GetDevicePortList`.
 const CAPACITE_MAX_PORTS: u32 = 100;
+
+/// Nombre de résultats au plus par lecture : une bande en compte quelques dizaines.
+const CAPACITE_MAX_RESULTATS: u32 = 1000;
 
 /// Type d'étalonnage « blanc » de `FDX_Calibration` ; les types 1 et 2
 /// (lumière ambiante, écran) ne sont jamais transmis.
@@ -64,6 +70,14 @@ type FnInfos = unsafe extern "system" fn(*mut u8) -> i32;
 type FnRappel = extern "C" fn(i32, u32, i32);
 type FnEnregistrer = unsafe extern "system" fn(Option<FnRappel>) -> i32;
 type FnEtalonner = unsafe extern "system" fn(i32) -> i32;
+type FnArmer = unsafe extern "system" fn(*const ConditionMesure) -> i32;
+type FnLire = unsafe extern "system" fn(
+    *mut DescripteurResultat,
+    *mut u32,
+    *mut u32,
+    u32,
+    *const ConditionCalcul,
+) -> i32;
 
 pub struct FdxDll {
     version: FnVersion,
@@ -73,6 +87,9 @@ pub struct FdxDll {
     infos: FnInfos,
     enregistrer: FnEnregistrer,
     etalonner: FnEtalonner,
+    armer: FnArmer,
+    arreter: FnSansArgument,
+    lire: FnLire,
     connecte: bool,
     // Déclarée en dernier : la DLL reste chargée tant que les pointeurs vivent.
     _bibliotheque: Library,
@@ -94,6 +111,9 @@ impl FdxDll {
             infos: resoudre(&bibliotheque, "FDX_GetDeviceInfo")?,
             enregistrer: resoudre(&bibliotheque, "FDX_RegisterDeviceEventHandler")?,
             etalonner: resoudre(&bibliotheque, "FDX_Calibration")?,
+            armer: resoudre(&bibliotheque, "FDX_SetMeasureCondition")?,
+            arreter: resoudre(&bibliotheque, "FDX_StopMeasurement")?,
+            lire: resoudre(&bibliotheque, "FDX_GetMeasureData")?,
             connecte: false,
             _bibliotheque: bibliotheque,
         };
@@ -176,6 +196,62 @@ impl SdkMyiro1 for FdxDll {
     fn etalonner_blanc(&mut self) -> Result<i32, i32> {
         // SAFETY : un entier, toujours le type 0 (fiche FDX_Calibration).
         verifier(unsafe { (self.etalonner)(ETALONNAGE_BLANC) })
+    }
+
+    fn armer_ponctuelle(&mut self) -> Result<i32, i32> {
+        let condition = ConditionMesure {
+            type_mesure: MESURE_PONCTUELLE,
+            option: 0,
+        };
+        // SAFETY : pointeur vers 8 octets (fiche FDX_SetMeasureCondition).
+        verifier(unsafe { (self.armer)(&condition) })
+    }
+
+    fn arreter_mesure(&mut self) -> Result<i32, i32> {
+        // SAFETY : aucun argument (fiche FDX_StopMeasurement).
+        verifier(unsafe { (self.arreter)() })
+    }
+
+    fn lire(&mut self, condition: &ConditionCalcul, longueur: usize) -> Result<Lecture, i32> {
+        // Appel en deux temps, comme MYIRO tools (fiche FDX_GetMeasureData).
+        let mut nombre = 0u32;
+        let mut sens = 0u32;
+        // SAFETY : tableau nul et capacité 0 pour connaître le nombre de résultats.
+        verifier(unsafe {
+            (self.lire)(std::ptr::null_mut(), &mut nombre, &mut sens, 0, condition)
+        })?;
+        let capacite = nombre.min(CAPACITE_MAX_RESULTATS);
+        let mut tampons = vec![vec![0f32; longueur]; capacite as usize];
+        let mut descripteurs: Vec<DescripteurResultat> = tampons
+            .iter_mut()
+            .map(|t| DescripteurResultat {
+                valeurs: t.as_mut_ptr(),
+                longueur: longueur as u32,
+            })
+            .collect();
+        let mut rendus = 0u32;
+        if capacite > 0 {
+            // SAFETY : `capacite` descripteurs, chacun vers `longueur` float alloués ici,
+            // vivants jusqu'à la fin de l'appel.
+            verifier(unsafe {
+                (self.lire)(
+                    descripteurs.as_mut_ptr(),
+                    &mut rendus,
+                    &mut sens,
+                    capacite,
+                    condition,
+                )
+            })?;
+        }
+        // Plus de résultats que de place : la DLL n'a rien copié.
+        if rendus > capacite {
+            tampons.clear();
+        }
+        tampons.truncate(rendus as usize);
+        Ok(Lecture {
+            resultats: tampons,
+            sens,
+        })
     }
 
     fn attendre_evenement(&mut self, delai: Duration) -> Option<Evenement> {

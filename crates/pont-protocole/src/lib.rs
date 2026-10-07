@@ -52,6 +52,12 @@ pub enum ErreurPont {
     /// L'instrument a signalé l'échec de l'étalonnage (événement 9), avec
     /// le code d'erreur de la DLL à cet instant.
     EtalonnageEchoue { erreur: i32 },
+    /// Code -9983 : l'instrument n'est pas (ou plus) étalonné.
+    NonEtalonne,
+    /// L'instrument a signalé l'échec de la mesure (événement 4).
+    MesureEchouee { erreur: i32 },
+    /// La DLL a rendu une réponse de forme imprévue (nombre ou taille de résultats).
+    ReponseInattendue(String),
     /// L'instrument n'a pas répondu dans le délai prévu.
     Delai,
     /// L'instrument s'est déconnecté ou ne répond plus (événement 6).
