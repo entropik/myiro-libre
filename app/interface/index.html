@@ -9,9 +9,10 @@
 <link rel="stylesheet" href="systeme/tokens.css">
 <link rel="stylesheet" href="systeme/components.css">
 <script src="app.js" defer></script>
+<script src="bibliotheque.js" defer></script>
 </head>
 <!-- Les textes viennent du catalogue Rust (data-t) : la page reste masquée tant qu'il n'est pas appliqué. -->
-<body hidden>
+<body class="app" hidden>
 <header class="masthead"><div class="page"><div class="grid">
   <div class="c-1-2 brand">myiro-libre</div>
   <nav class="c-3-9 nav" data-t-aria="nav.libelle">
@@ -32,17 +33,22 @@
 </div></div></header>
 
 <main class="page frame"><div class="grid">
-  <aside class="c-1-2 index">
+  <!-- Bibliothèque : arborescence condition d'impression → mesures, remplie par bibliotheque.js. -->
+  <aside class="c-1-2 index" data-bibliotheque>
     <span class="label zone__title" data-t="bibliotheque.titre"></span>
-    <ol>
-      <li class="l1"><span class="num mute">1</span><span data-t="exemple.condition1"></span><span></span></li>
-      <li><span class="num mute">1.1</span><span data-t="bibliotheque.mires"></span><span class="num">0</span></li>
-      <li class="sel"><span class="num">1.2</span><span data-t="bibliotheque.mesures"></span><span class="num">0</span></li>
-      <li><span class="num mute">1.3</span><span data-t="bibliotheque.profils"></span><span class="num">0</span></li>
-      <li><span class="num mute">1.4</span><span data-t="bibliotheque.controles"></span><span class="num">0</span></li>
-      <li class="l1"><span class="num mute">2</span><span data-t="exemple.condition2"></span><span></span></li>
-    </ol>
-    <p class="why" data-t="bibliotheque.exemple"></p>
+    <div class="field">
+      <label class="label" for="recherche" data-t="bibliotheque.recherche"></label>
+      <input class="input" id="recherche" type="search" autocomplete="off" data-recherche>
+    </div>
+    <ol data-arbre></ol>
+    <p class="why" data-arbre-message hidden></p>
+    <div class="field">
+      <label class="label" for="nouvelle-condition" data-t="bibliotheque.nouvelle"></label>
+      <input class="input" id="nouvelle-condition" autocomplete="off" data-nouvelle-condition>
+      <p class="why" data-nouvelle-erreur hidden></p>
+    </div>
+    <div class="actions"><button class="btn" data-creer-condition data-t="bibliotheque.ajouter"></button></div>
+    <p class="why" data-t="bibliotheque.demonstration" data-demonstration hidden></p>
   </aside>
 
   <div class="c-3-9">
@@ -83,16 +89,20 @@
       <div class="actions"><button class="btn btn--primary" disabled data-t="vide.profiler.action"></button></div>
       <p class="why" data-t="raison.instrument"></p>
     </section>
-    <section class="empty" data-vue="bibliotheque" hidden>
-      <h2 class="empty__text" data-t="vide.bibliotheque.phrase"></h2>
-      <div class="actions"><button class="btn btn--primary" disabled data-t="vide.bibliotheque.action"></button></div>
-      <p class="why" data-t="raison.bientot"></p>
+    <!-- Feuille de la bibliothèque : la mesure ou la condition choisie à gauche (bibliotheque.js). -->
+    <section data-vue="bibliotheque" hidden>
+      <div class="empty" data-centre-vide>
+        <h2 class="empty__text" data-centre-phrase></h2>
+        <div class="actions"><button class="btn btn--primary" data-centre-ajout hidden data-t="vide.bibliotheque.action"></button></div>
+      </div>
+      <div data-centre-choix hidden></div>
     </section>
   </div>
 
   <aside class="c-10-12">
     <span class="label zone__title" data-t="details.titre"></span>
-    <div class="cartouche">
+    <div data-details-choix hidden></div>
+    <div class="cartouche" data-details-vide>
       <div class="cartouche__title"><span class="label" data-t="cartouche.libelle"></span><strong data-t="cartouche.titre"></strong></div>
       <div class="cells">
         <div class="cell"><span class="label" data-t="cartouche.instrument"></span><span data-t="cartouche.aucun"></span></div>
@@ -100,7 +110,7 @@
         <div class="cell"><span class="label" data-t="cartouche.condition_mesure"></span><span data-t="cartouche.inconnue"></span></div>
         <div class="cell"><span class="label" data-t="cartouche.reference"></span><span data-t="cartouche.aucune"></span></div>
       </div>
-      <div class="cartouche__foot"><span>myiro-libre</span><span class="num">0.1.0</span></div>
+      <div class="cartouche__foot"><span>myiro-libre</span><span class="num" data-version></span></div>
     </div>
   </aside>
 </div></main>

@@ -42,3 +42,11 @@ Après un premier essai refusé par l'utilisateur (un champ où coller le chemin
 - **Aucun mot technique à l'écran.** SDK, DLL, pont, palier et chemins n'apparaissent que dans le détail technique replié (composant « Détail replié »). La barre dit l'état de l'instrument en une phrase composée par le catalogue (`{modele}, {etat}`), ou « Logiciel du fabricant absent ».
 - **Rien à saisir.** L'application trouve seule le logiciel du fabricant (ADR 0005). Seulement si elle échoue, une phrase et un bouton « Choisir le dossier… » ouvrent le sélecteur de dossier de Windows (extension Tauri `dialog`, appelée depuis Rust ; la page n'a aucune permission de plus).
 - **Bouton inactif pendant la recherche**, avec sa raison écrite dessous.
+
+## Plein cadre et rôle des zones (7 octobre 2026, ticket #6)
+
+Demandé par le mainteneur à la première revue de la bibliothèque à l'écran :
+
+- L'application remplit exactement la fenêtre : le bandeau reste en place, la page ne défile jamais, et seule une zone trop longue défile à l'intérieur d'elle-même (classe `app` du système graphique). Sous 64 rem de large, les zones s'empilent et la page défile de nouveau.
+- La feuille du centre montre ce qui est choisi : pour une mesure, son en-tête (date, lecture, condition d'impression) puis le tableau des valeurs Lab par plage avec la bascule de condition de mesure, en grand ; l'emplacement de la courbe de spectre est réservé. Sans choix, un état vide juste (« Choisissez une mesure dans la bibliothèque. »), ou l'invitation à ajouter une première condition d'impression, avec une action active, jamais un bouton inactif en double.
+- Les détails, à droite, ne gardent que le cartouche de provenance.

@@ -1,10 +1,12 @@
 //! Application de bureau myiro-libre : cadre de l'interface (ADR 0003).
 //!
-//! Seule cette crate dépend de Tauri ; le cœur (ponts, protocole, et plus tard
-//! colorimétrie, mires, bibliothèque) n'en dépend pas. Dans cette crate, les
+//! Seule cette crate dépend de Tauri ; le cœur (ponts, protocole, colorimétrie,
+//! bibliothèque, et plus tard mires) n'en dépend pas. Dans cette crate, les
 //! modules `instrument` et `pont` n'en dépendent pas non plus : seul ce
 //! fichier fait le lien avec la fenêtre.
 
+pub mod colonne;
+pub mod demonstration;
 pub mod instrument;
 pub mod pont;
 pub mod textes;
@@ -108,16 +110,34 @@ fn choisir_dossier(app: AppHandle, instruments: State<'_, Instruments>) -> Optio
     Some(ouvrir(&app, &instruments, Some(dossier)))
 }
 
+/// Ouvre la bibliothèque du poste, ou celle de démonstration avec `--demo`.
+fn ouvrir_bibliotheque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let ouverte = if std::env::args().any(|a| a == "--demo") {
+        colonne::BibliothequeOuverte::demonstration(&demonstration::dossier())
+    } else {
+        colonne::BibliothequeOuverte::ouvrir(&colonne::emplacement(&app.path().app_data_dir()?))
+    };
+    app.manage(ouverte);
+    Ok(())
+}
+
 /// Ouvre la fenêtre principale.
 pub fn lancer() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Instruments::default())
+        .setup(ouvrir_bibliotheque)
         .invoke_handler(tauri::generate_handler![
             catalogue,
             langue_demandee,
             ouvrir_instrument,
-            choisir_dossier
+            choisir_dossier,
+            colonne::version_application,
+            colonne::bibliotheque_demonstration,
+            colonne::bibliotheque_arborescence,
+            colonne::bibliotheque_detail_mesure,
+            colonne::bibliotheque_creer_condition,
+            colonne::bibliotheque_renommer_condition,
         ])
         .run(tauri::generate_context!())
         .expect("lancement de l'application");
