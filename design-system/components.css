@@ -218,7 +218,8 @@ tr.hl td { background: var(--color-hair); }
 .empty__text { font-size: var(--text-3xl); font-weight: 600; letter-spacing: var(--tracking-snug); line-height: var(--leading-snug); max-width: var(--measure); }
 .empty__text + p { margin-top: var(--space-3); }
 
-@media (max-width: 64rem) {
+/* Strictement sous 64 rem : à 1024 px, largeur minimale de la fenêtre, le plein cadre reste. */
+@media (max-width: 63.99rem) {
   .c-1-2, .c-3-9, .c-10-12, .c-3-7, .c-8-12, .c-1-6, .c-7-12, .c-1-4, .c-5-8, .c-9-12, .c-5-12 { grid-column: 1 / -1; }
   .nav { gap: var(--space-4); flex-wrap: wrap; }
   table { display: block; overflow-x: auto; }

@@ -54,4 +54,5 @@ Demandé par le mainteneur à la première revue de la bibliothèque à l'écran
 ## Bandeau et étalonnage (7 octobre 2026, ticket #4)
 
 - Les tâches occupent cinq colonnes du bandeau (`c-3-7`) et l'instrument avec les réglages les cinq suivantes (`c-8-12`) : le bouton « Étalonner » tient à côté de l'état sans faire grandir le bandeau. Il n'apparaît que lorsque l'état est « étalonnage requis ».
-- L'étalonnage guidé occupe la feuille du centre, sans fenêtre par-dessus : trois étapes (poser sur le blanc, étalonnage, mesure), un schéma au trait maison (composant `schema`), une seule action principale à la fois.
+- L'étalonnage guidé occupe la feuille du centre, sans fenêtre par-dessus : trois étapes (poser sur le blanc, étalonnage, mesure), un schéma au trait maison (composant `schema`), une seule action principale à la fois. Après un échec, l'avis remplace l'explication et la consigne, pour que tout tienne sans défilement.
+- Le passage aux zones empilées se fait strictement sous 64 rem : à 1024 px, largeur minimale de la fenêtre, l'application garde le plein cadre à trois zones. Vérifié par captures sans affichage à 1024×768, 1280×800 et 1440×900.

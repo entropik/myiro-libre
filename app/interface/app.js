@@ -174,8 +174,10 @@ function remplirEtalonnage(section) {
   for (const b of section.querySelectorAll("[data-geste]")) b.disabled = !repondable;
   const avis = section.querySelector("[data-avis]");
   if (phase !== "geste") avis.hidden = true;
-  // Après un échec, l'avis donne déjà le geste à refaire : pas de redite.
+  // Après un échec, l'avis donne déjà le geste à refaire : pas de redite, et
+  // l'explication déjà lue laisse la place à l'avis.
   section.querySelector("[data-geste-texte]").hidden = !avis.hidden;
+  section.querySelector("[data-pourquoi]").hidden = !avis.hidden;
 }
 
 async function lancerEtalonnage(dejaFait) {
