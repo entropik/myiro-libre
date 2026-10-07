@@ -5,7 +5,8 @@
 use crate::{SdkFd9, Session};
 use fd9_sys::Liaison;
 use pont_protocole::{
-    ecrire_reponse, lire_requete, Empreinte, Info, InstrumentFd9, Palier, Reponse, Requete,
+    ecrire_reponse, lire_requete, Empreinte, Info, InstrumentFd9, LiaisonFd9, Palier, Reponse,
+    Requete,
 };
 use std::io::{self, BufRead, Write};
 
@@ -50,13 +51,19 @@ fn traiter<S: SdkFd9>(session: &mut Session<S>, requete: Requete) -> (Reponse, b
             liste: appareils
                 .iter()
                 .map(|appareil| InstrumentFd9 {
+                    // Codes 0 et 1 confirmés ; un autre code reste au journal
+                    // de la session et sort inconnu.
                     liaison: match appareil.liaison() {
-                        Liaison::Reseau => "reseau".into(),
-                        Liaison::Usb => "usb".into(),
-                        Liaison::Inconnue(code) => format!("inconnue {code}"),
+                        Liaison::Reseau => Info::Confirmee(LiaisonFd9::Reseau),
+                        Liaison::Usb => Info::Confirmee(LiaisonFd9::Usb),
+                        Liaison::Inconnue(_) => Info::Inconnue,
                     },
                     adresse: appareil.adresse(),
-                    identifiant: appareil.identifiant(),
+                    // Le texte est celui de la DLL ; qu'il désigne
+                    // l'instrument est supposé (fiche FD9_GetDeviceList).
+                    identifiant: Some(appareil.identifiant())
+                        .filter(|texte| !texte.is_empty())
+                        .map_or(Info::Inconnue, Info::Supposee),
                 })
                 .collect(),
         }),

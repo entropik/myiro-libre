@@ -119,6 +119,12 @@ impl<S: SdkFd9> Session<S> {
                 detail: format!("{trouves} instruments annoncés pour {CAPACITE_DETECTION} places"),
             });
         }
+        for appareil in &tableau[..trouves] {
+            if let fd9_sys::Liaison::Inconnue(code) = appareil.liaison() {
+                self.journal
+                    .push(format!("FD9_GetDeviceList : liaison inconnue {code}"));
+            }
+        }
         self.franchir(Palier::Detection);
         Ok(tableau[..trouves].to_vec())
     }

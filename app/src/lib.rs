@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{mpsc, Mutex};
 
-use instrument::{emplacements_a_essayer, fd9, Accord, Geste, Gestes, Instrument, Vue};
+use instrument::{choix, emplacements_a_essayer, fd9, Accord, Geste, Gestes, Instrument, Vue};
 use pont::{chercher_ponts, chercher_ponts_nommes, PontProcessus};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -88,12 +88,12 @@ fn ouvrir(app: &AppHandle, instruments: &Instruments, choisi: Option<PathBuf>) -
     // MYIRO-1 d'abord ; sans lui, un FD-9 détecté (ticket #13).
     let emplacements_fd9 = fd9::emplacements_fd9(choisi);
     let ponts_fd9 = chercher_ponts_nommes(&dossier_exe, fd9::NOM_PONT_FD9);
-    let instrument = fd9::ouvrir_l_un_ou_l_autre(
-        fd9::Recherche {
+    let instrument = choix::ouvrir_l_un_ou_l_autre(
+        choix::Recherche {
             emplacements: &emplacements,
             ponts: &ponts,
         },
-        fd9::Recherche {
+        choix::Recherche {
             emplacements: &emplacements_fd9,
             ponts: &ponts_fd9,
         },

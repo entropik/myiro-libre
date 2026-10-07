@@ -25,9 +25,9 @@ pub struct Fd9Simule {
 /// Motif répété 32 fois : empreinte SHA-256 fictive de la DLL simulée.
 pub const EMPREINTE_SIMULEE: &str = "5e";
 
-/// FD-9 en réseau à l'adresse fictive 192.168.1.40, identifiant fictif.
+/// FD-9 en réseau à l'adresse fictive 192.0.2.40, identifiant fictif.
 pub fn fd9_reseau() -> Appareil {
-    let mut appareil = Appareil::reseau("192.168.1.40").unwrap();
+    let mut appareil = Appareil::reseau("192.0.2.40").unwrap();
     appareil.identifiant.copy_from_slice(b"12345678");
     appareil
 }

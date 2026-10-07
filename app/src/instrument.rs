@@ -47,7 +47,9 @@ impl<F: FnMut(Geste) -> Accord> Gestes for F {
     }
 }
 
-/// Le FD-9 et le choix entre les deux ponts (ticket #13).
+/// Choix entre le pont MYIRO-1 et le pont FD-9 (ticket #13).
+pub mod choix;
+/// Le FD-9 : son pont et ses paliers (ticket #13).
 pub mod fd9;
 
 /// Nom de la DLL du MYIRO-1 cherchée dans le logiciel du fabricant.
@@ -111,7 +113,7 @@ pub enum Etat {
     /// plus loin pour l'instant (FD-9). `identifiant` : texte rendu par la DLL.
     Detecte {
         modele: String,
-        identifiant: String,
+        identifiant: pont_protocole::Info<String>,
     },
     /// Connecté, sans étalonnage à faire (instrument qui n'en a pas besoin).
     Connecte(Fiche),

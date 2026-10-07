@@ -56,7 +56,7 @@ impl Fd9Dll {
         let bibliotheque = ouvrir(chemin)
             .map_err(|e| ErreurChargement::DllIntrouvable(format!("{}: {e}", chemin.display())))?;
         for nom in EXPORTS_RESOLUS {
-            resoudre::<FnDernierCode>(&bibliotheque, nom)?;
+            verifier_presence(&bibliotheque, nom)?;
         }
         Ok(Fd9Dll {
             dernier_code: resoudre(&bibliotheque, "FD9_GetLastError")?,
@@ -85,6 +85,16 @@ fn ouvrir(chemin: &Path) -> Result<Library, libloading::Error> {
         // SAFETY : idem ; hors Windows, aucune DLL du fabricant n'existe.
         unsafe { Library::new(chemin) }
     }
+}
+
+/// Vérifie qu'un export autorisé existe, sans lui donner de forme d'appel :
+/// son adresse n'est lue que comme une adresse, jamais appelée.
+fn verifier_presence(bibliotheque: &Library, nom: &str) -> Result<(), ErreurChargement> {
+    autoriser_export(nom)?;
+    // SAFETY : le symbole est lu comme une simple adresse, ni appelé ni lu.
+    unsafe { bibliotheque.get::<*const std::ffi::c_void>(nom.as_bytes()) }
+        .map(|_| ())
+        .map_err(|_| ErreurChargement::ExportAbsent(nom.to_string()))
 }
 
 fn resoudre<T: Copy>(bibliotheque: &Library, nom: &str) -> Result<T, ErreurChargement> {

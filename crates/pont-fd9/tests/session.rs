@@ -43,7 +43,7 @@ fn la_detection_rend_le_fd9_du_reseau() {
 
     assert_eq!(appareils.len(), 1);
     assert_eq!(appareils[0].liaison(), Liaison::Reseau);
-    assert_eq!(appareils[0].adresse(), "192.168.1.40");
+    assert_eq!(appareils[0].adresse(), "192.0.2.40");
     assert_eq!(appareils[0].identifiant(), "12345678");
     assert_eq!(
         session.sdk().appels_dll(),

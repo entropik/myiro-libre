@@ -58,7 +58,7 @@ fn la_connexion_par_adresse_du_fd9_est_refusee_sans_appel_a_la_dll() {
     let (lignes, session) = dialoguer_brut(
         SdkSimule::avec_un_myiro1(),
         Palier::Bande,
-        &[r#"{"cmd":"connecter_adresse","adresse":"192.168.1.40"}"#],
+        &[r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#],
     );
     assert_eq!(lignes.len(), 1);
     assert!(matches!(

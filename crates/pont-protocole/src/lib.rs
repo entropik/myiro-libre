@@ -145,13 +145,22 @@ pub struct InstrumentDetecte {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InstrumentFd9 {
-    /// « reseau », « usb », ou « inconnue N ».
-    pub liaison: String,
+    /// Codes 0 et 1 confirmés par la fiche ; tout autre code est inconnu.
+    pub liaison: Info<LiaisonFd9>,
     /// Adresse IP `a.b.c.d` en réseau, `COMn` en USB.
     pub adresse: String,
-    /// 8 caractères rendus par la DLL, tels quels : n° de série de
-    /// l'instrument en USB ; en réseau, son sens est supposé.
-    pub identifiant: String,
+    /// 8 caractères rendus par la DLL, tels quels : fin du n° de série USB, ou
+    /// 4 octets de la réponse réseau. Qu'ils désignent l'instrument est
+    /// supposé ; vide, il est inconnu.
+    pub identifiant: Info<String>,
+}
+
+/// Liaison d'un FD-9 (`tFD9_DeviceData`, fiche `docs/abi/FD9_GetDeviceList.md`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LiaisonFd9 {
+    Reseau,
+    Usb,
 }
 
 /// Adresse d'un FD-9 en réseau : adresse IP ou nom d'hôte, 23 caractères

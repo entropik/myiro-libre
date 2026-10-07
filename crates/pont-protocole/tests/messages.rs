@@ -150,17 +150,17 @@ fn une_reponse_relue_par_l_application_redonne_la_meme() {
 #[test]
 fn le_fd9_se_designe_par_son_adresse_reseau() {
     use pont_protocole::AdresseReseau;
-    let requete = lire_requete(r#"{"cmd":"connecter_adresse","adresse":"192.168.1.40"}"#);
+    let requete = lire_requete(r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#);
     assert_eq!(
         requete,
         Ok(Requete::ConnecterAdresse {
-            adresse: AdresseReseau::new("192.168.1.40").unwrap()
+            adresse: AdresseReseau::new("192.0.2.40").unwrap()
         })
     );
     let texte = serde_json::to_string(&requete.unwrap()).unwrap();
     assert_eq!(
         texte,
-        r#"{"cmd":"connecter_adresse","adresse":"192.168.1.40"}"#
+        r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#
     );
 }
 
@@ -171,11 +171,10 @@ fn une_adresse_que_la_dll_ne_recopierait_pas_en_entier_est_refusee() {
     assert!(lire_requete(&ligne("fd9-atelier.exemple.lan")).is_ok());
     assert!(lire_requete(&ligne("fd9-atelier.exemple.lan2")).is_err());
     assert!(lire_requete(&ligne("")).is_err());
-    assert!(lire_requete(&ligne("192.168.1.40 ")).is_err());
+    assert!(lire_requete(&ligne("192.0.2.40 ")).is_err());
     assert!(lire_requete(&ligne("équipe")).is_err());
     assert!(
-        lire_requete(r#"{"cmd":"connecter_adresse","adresse":"192.168.1.40","port":49152}"#)
-            .is_err()
+        lire_requete(r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40","port":49152}"#).is_err()
     );
     assert!(lire_requete(r#"{"cmd":"connecter_adresse"}"#).is_err());
 }
@@ -211,25 +210,45 @@ fn la_version_du_fd9_vient_du_fichier_de_la_dll() {
 }
 
 #[test]
-fn un_fd9_detecte_garde_son_adresse_et_son_identifiant_en_texte() {
-    use pont_protocole::{ecrire_reponse, lire_reponse, InstrumentFd9, Reponse};
+fn un_fd9_detecte_porte_une_liaison_et_un_identifiant_qualifies() {
+    use pont_protocole::{ecrire_reponse, lire_reponse, Info, InstrumentFd9, LiaisonFd9, Reponse};
     let reponse = Reponse::InstrumentsFd9 {
         liste: vec![InstrumentFd9 {
-            liaison: "reseau".into(),
-            adresse: "192.168.1.40".into(),
-            identifiant: "12345678".into(),
+            liaison: Info::Confirmee(LiaisonFd9::Reseau),
+            adresse: "192.0.2.40".into(),
+            identifiant: Info::Supposee("12345678".into()),
         }],
     };
     let ligne = ecrire_reponse(&reponse);
     assert_eq!(
         ligne,
-        r#"{"rep":"instruments_fd9","liste":[{"liaison":"reseau","adresse":"192.168.1.40","identifiant":"12345678"}]}"#
+        r#"{"rep":"instruments_fd9","liste":[{"liaison":{"statut":"confirmee","valeur":"reseau"},"adresse":"192.0.2.40","identifiant":{"statut":"supposee","valeur":"12345678"}}]}"#
     );
     assert_eq!(lire_reponse(&ligne), Ok(reponse));
     assert!(lire_reponse(
-        r#"{"rep":"instruments_fd9","liste":[{"liaison":"reseau","adresse":"192.168.1.40","identifiant":"12345678","port":49152}]}"#
+        r#"{"rep":"instruments_fd9","liste":[{"liaison":{"statut":"confirmee","valeur":"reseau"},"adresse":"192.0.2.40","identifiant":{"statut":"inconnue"},"port":49152}]}"#
     )
     .is_err());
+}
+
+#[test]
+fn une_liaison_inconnue_est_dite_inconnue_jamais_en_texte_libre() {
+    use pont_protocole::{lire_reponse, Info, Reponse};
+    let ligne = r#"{"rep":"instruments_fd9","liste":[{"liaison":{"statut":"inconnue"},"adresse":"192.0.2.40","identifiant":{"statut":"inconnue"}}]}"#;
+    match lire_reponse(ligne) {
+        Ok(Reponse::InstrumentsFd9 { liste }) => {
+            assert_eq!(liste[0].liaison, Info::Inconnue);
+            assert_eq!(liste[0].identifiant, Info::Inconnue);
+        }
+        autre => panic!("{autre:?}"),
+    }
+    for nue in [
+        r#"{"rep":"instruments_fd9","liste":[{"liaison":"reseau","adresse":"192.0.2.40","identifiant":{"statut":"inconnue"}}]}"#,
+        r#"{"rep":"instruments_fd9","liste":[{"liaison":{"statut":"confirmee","valeur":"inconnue 7"},"adresse":"192.0.2.40","identifiant":{"statut":"inconnue"}}]}"#,
+        r#"{"rep":"instruments_fd9","liste":[{"liaison":{"statut":"inconnue"},"adresse":"192.0.2.40","identifiant":"12345678"}]}"#,
+    ] {
+        assert!(lire_reponse(nue).is_err(), "{nue}");
+    }
 }
 
 #[test]

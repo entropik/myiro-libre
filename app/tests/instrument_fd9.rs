@@ -6,16 +6,15 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use app::instrument::fd9::{
-    emplacements_fd9, ouvrir_l_un_ou_l_autre, Recherche, EMPLACEMENTS_FD9, PLAFOND_FD9,
-};
+use app::instrument::choix::{ouvrir_l_un_ou_l_autre, Recherche};
+use app::instrument::fd9::{emplacements_fd9, EMPLACEMENTS_FD9, PLAFOND_FD9};
 use app::instrument::{Etat, Instrument, Probleme};
 use app::pont::{chercher_ponts_nommes, Architecture, Panne, Pont, PontSimule};
-use pont_protocole::{ErreurPont, Info, InstrumentFd9, Palier, Reponse, Requete};
+use pont_protocole::{ErreurPont, Info, InstrumentFd9, LiaisonFd9, Palier, Reponse, Requete};
 
 /// Identifiant et adresse fictifs : jamais ceux d'un instrument réel.
 const IDENTIFIANT: &str = "12345678";
-const ADRESSE: &str = "192.168.1.40";
+const ADRESSE: &str = "192.0.2.40";
 
 fn dossier_vide(nom: &str) -> PathBuf {
     let dossier = std::env::temp_dir()
@@ -77,9 +76,9 @@ impl PontFd9Simule {
     fn avec_un_fd9() -> Self {
         PontFd9Simule {
             liste: vec![InstrumentFd9 {
-                liaison: "reseau".into(),
+                liaison: Info::Confirmee(LiaisonFd9::Reseau),
                 adresse: ADRESSE.into(),
-                identifiant: IDENTIFIANT.into(),
+                identifiant: Info::Supposee(IDENTIFIANT.into()),
             }],
             ..Default::default()
         }
@@ -135,7 +134,7 @@ fn un_fd9_du_reseau_est_detecte_et_la_barre_le_montre() {
         instrument.etat(),
         &Etat::Detecte {
             modele: "FD-9".into(),
-            identifiant: IDENTIFIANT.into(),
+            identifiant: Info::Supposee(IDENTIFIANT.into()),
         }
     );
     assert_eq!(instrument.probleme(), None);

@@ -6,7 +6,9 @@ mod commun;
 use commun::{Fd9Simule, EMPREINTE_SIMULEE};
 use pont_fd9::serveur::servir;
 use pont_fd9::Session;
-use pont_protocole::{lire_reponse, Empreinte, ErreurPont, Info, InstrumentFd9, Palier, Reponse};
+use pont_protocole::{
+    lire_reponse, Empreinte, ErreurPont, Info, InstrumentFd9, LiaisonFd9, Palier, Reponse,
+};
 
 /// Envoie `requetes` au pont ; rend les lignes écrites et la session.
 fn dialoguer(
@@ -46,12 +48,34 @@ fn version_puis_detection_rendent_le_fd9_du_reseau() {
             },
             Reponse::InstrumentsFd9 {
                 liste: vec![InstrumentFd9 {
-                    liaison: "reseau".into(),
-                    adresse: "192.168.1.40".into(),
-                    identifiant: "12345678".into(),
+                    liaison: Info::Confirmee(LiaisonFd9::Reseau),
+                    adresse: "192.0.2.40".into(),
+                    identifiant: Info::Supposee("12345678".into()),
                 }],
             },
         ]
+    );
+}
+
+#[test]
+fn une_liaison_hors_fiche_et_un_identifiant_vide_sont_inconnus() {
+    let mut sdk = Fd9Simule::avec_un_fd9();
+    sdk.appareils[0].code_liaison = 7;
+    sdk.appareils[0].identifiant = [0; 8];
+    let (lignes, _) = dialoguer(
+        sdk,
+        Palier::Detection,
+        &[r#"{"cmd":"version"}"#, r#"{"cmd":"detecter"}"#],
+    );
+    assert_eq!(
+        reponses(&lignes)[1],
+        Reponse::InstrumentsFd9 {
+            liste: vec![InstrumentFd9 {
+                liaison: Info::Inconnue,
+                adresse: "192.0.2.40".into(),
+                identifiant: Info::Inconnue,
+            }],
+        }
     );
 }
 
@@ -79,7 +103,7 @@ fn la_connexion_est_refusee_par_les_paliers_du_fd9_sans_appel_a_la_dll() {
             r#"{"cmd":"version"}"#,
             r#"{"cmd":"detecter"}"#,
             r#"{"cmd":"connecter","instrument":0}"#,
-            r#"{"cmd":"connecter_adresse","adresse":"192.168.1.40"}"#,
+            r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#,
             r#"{"cmd":"etalonner"}"#,
             r#"{"cmd":"mesurer_ponctuelle"}"#,
             r#"{"cmd":"mesurer_bande"}"#,
