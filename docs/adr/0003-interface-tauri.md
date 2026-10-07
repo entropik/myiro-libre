@@ -30,7 +30,7 @@ La maquette n'est pas du code de production : l'interface est réécrite dans l'
 
 - L'application est la crate `app/` de l'espace de travail Cargo. Elle est la seule à dépendre de Tauri ; un test (`app/tests/independance_coeur.rs`) lit le graphe des dépendances avec `cargo metadata` et échoue si une autre crate tire Tauri.
 - La page est écrite en HTML, CSS et JavaScript simples, sans outil de construction web (pas de npm) : `cargo run -p app` suffit pour compiler et ouvrir l'application.
-- Les textes de l'interface vivent dans un seul catalogue, côté Rust (`app/src/textes.rs`), en français et en anglais. La page le demande au lancement et n'écrit aucun texte en dur. Un test échoue si une clé manque dans une langue, un autre si le français ne suit pas sa typographie (apostrophe courbe, espace fine avant `: ; ! ?`).
+- Les textes de l'interface vivent dans un seul catalogue, côté Rust (`app/src/textes.rs`), en français et en anglais. La page le demande au lancement et n'écrit aucun texte en dur. Un test échoue si une clé manque dans une langue, un autre si le français ne suit pas sa typographie (apostrophe courbe, guillemets français, espace fine avant `: ; ! ?`).
 - La langue se choisit dans la barre ou au lancement (`--langue en`) ; toute la fenêtre change de langue, jamais une partie.
 - Jetons et composants restent dans `design-system/` : la compilation recopie `tokens.css` et `components.css` dans la page sans les modifier. Les composants du cadre (bandeau, en-tête de feuille, état vide, cadre à trois zones) ont été ajoutés à `ui-kit.html`.
 - La fonte Inter (licence SIL Open Font License) est livrée avec l'application, et la politique de sécurité de la page interdit tout chargement extérieur : aucun appel réseau au lancement.
