@@ -15,10 +15,15 @@ int32_t __stdcall FDX_StopMeasurement(void);   /* x86 : ret sans opérande, aucu
 - Commande envoyée : arrêt de mesure (`0x11`) ; les états d'erreur rapportés par l'instrument pendant le démarrage ou l'arrêt deviennent les codes -9793 à -9789.
 - MYIRO tools l'appelle avant chaque armement et avant chaque étalonnage ; EIZO, après la lecture des données.
 
+## Vérifié sur l'instrument
+
+Le 7 octobre 2026 : refusé (-9986) au repos, et aussi **juste après une mesure** (état « mesure réussie »), jusqu'au réarmement automatique de l'instrument (événement 1). Accepté ensuite, suivi de l'événement 0 (retour au repos). Voir `FDX_SetMeasureCondition`.
+
 ## Pour le pont
 
 - Appeler avant de réarmer, avant d'étalonner, et avant `FDX_Disconnect` si une mesure est armée.
-- Un refus -9986 au repos n'est pas grave : rien n'était armé.
+- Un refus -9986 au repos n'est pas grave : rien n'était armé. Juste après une mesure, attendre l'événement suivant et réessayer.
+- À la fermeture d'une session, toujours désarmer ainsi avant `FDX_Disconnect`.
 
 ## Preuves (locales)
 

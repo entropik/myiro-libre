@@ -39,9 +39,14 @@ int32_t __stdcall FDX_SetMeasureCondition(const FDX_MeasureCondition *condition)
 
 Export `FDX_Set*` à contrat désormais établi : **armement de la mesure, sans écriture persistante**. Il entre dans la liste blanche au palier Mesure ponctuelle.
 
-## À vérifier sur l'instrument
+## Vérifié sur l'instrument
 
-- La réception de l'événement 1 et le voyant (bleu fixe attendu : prêt à mesurer).
+Le 7 octobre 2026 (MYIRO-1 en USB, DLL 1.0.1.0 x64) : l'armement rend 0, puis l'événement **1** arrive ; un appui sur le bouton donne les événements **2** (répétés à chaque donnée brute) puis **3**. Juste après, l'instrument **se réarme seul** (nouvel événement 1).
+
+**Piège observé** : dans l'état « mesure réussie » qui suit l'événement 3, `FDX_StopMeasurement` **et** un nouvel armement sont refusés (-9986). Il faut attendre le réarmement automatique (événement 1), puis désarmer (accepté, suivi de l'événement 0, retour au repos), avant de réarmer. Une session fermée sans ce désarmement laisse l'instrument bloqué en « mesure en cours » (voyant blanc fixe), sourd aux connexions suivantes (-9987) jusqu'à son redémarrage.
+
+## Reste à vérifier
+
 - Le refus -9983 si l'on arme sans étalonnage.
 
 ## Preuves (locales)
