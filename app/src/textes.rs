@@ -85,6 +85,7 @@ const FRANCAIS: Catalogue = &[
     ("cartouche.aucun", "Aucun"),
     ("cartouche.aucune", "Aucune"),
     ("cartouche.non_fait", "Non fait"),
+    ("cartouche.inconnue", "Inconnue"),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -135,6 +136,7 @@ const ANGLAIS: Catalogue = &[
     ("cartouche.aucun", "None"),
     ("cartouche.aucune", "None"),
     ("cartouche.non_fait", "Not done"),
+    ("cartouche.inconnue", "Unknown"),
 ];
 
 fn catalogue(langue: Langue) -> Catalogue {
@@ -189,19 +191,20 @@ mod tests {
         assert_eq!(cles_manquantes(), vec![]);
     }
 
-    /// Typographie française : apostrophe courbe, guillemets français, espace
-    /// fine insécable (U+202F) avant `: ; ! ?`, jamais d'espace ordinaire.
+    /// Typographie française : apostrophe courbe, guillemets français « » (ni
+    /// droits ni anglais) avec espace fine insécable (U+202F) à l'intérieur,
+    /// espace fine insécable avant `: ; ! ?`, jamais d'espace ordinaire.
     #[test]
     fn le_francais_suit_la_typographie_francaise() {
         let fautes: Vec<_> = cles()
             .map(|c| (c, texte(Langue::Francais, c)))
             .filter(|(_, t)| {
-                t.contains('\'')
-                    || t.contains('"')
+                t.contains(['\'', '"', '“', '”'])
                     || t.char_indices().any(|(i, ch)| {
-                        matches!(ch, ':' | ';' | '!' | '?')
+                        (matches!(ch, ':' | ';' | '!' | '?' | '»')
                             && i > 0
-                            && !t[..i].ends_with('\u{202f}')
+                            && !t[..i].ends_with('\u{202f}'))
+                            || (ch == '«' && !t[i + ch.len_utf8()..].starts_with('\u{202f}'))
                     })
             })
             .collect();

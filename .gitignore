@@ -12,6 +12,7 @@ Audit-MYIRO/outils/python-libs/
 __pycache__/
 # Rust
 target/
+target-*/
 # Application : schémas générés par Tauri et copie du système graphique faite par build.rs
 app/gen/
 app/interface/systeme/
