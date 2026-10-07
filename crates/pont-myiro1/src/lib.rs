@@ -28,10 +28,14 @@ pub const DELAI_ETALONNAGE: Duration = Duration::from_secs(30);
 /// Temps laissé à l'opérateur pour poser l'instrument et appuyer sur le bouton.
 pub const DELAI_APPUI: Duration = Duration::from_secs(120);
 
+/// Délai maximal du retour au repos après un désarmement.
+pub const DELAI_REPOS: Duration = Duration::from_secs(5);
+
 /// Code -9983 : mesure armée sans étalonnage valable.
 const CODE_NON_ETALONNE: i32 = -9983;
 
 /// Codes d'événement (fiche `docs/abi/FDX_RegisterDeviceEventHandler.md`).
+const EVENEMENT_REPOS: i32 = 0;
 const EVENEMENT_MESURE_TERMINEE: i32 = 3;
 const EVENEMENT_MESURE_ECHOUEE: i32 = 4;
 const EVENEMENT_DECONNEXION: i32 = 6;
@@ -228,9 +232,25 @@ impl<S: SdkMyiro1> Session<S> {
                 evenements,
             })
         });
-        // Désarmer même après un échec : l'instrument revient au repos.
-        let _ = self.sdk.arreter_mesure();
+        // Désarmer même après un échec, puis attendre que l'instrument soit
+        // revenu au repos : sinon un nouvel armement est refusé (-9986).
+        if self.sdk.arreter_mesure().is_ok() {
+            self.attendre_repos();
+        }
         resultat
+    }
+
+    /// Attend l'événement 0 (retour au repos), au plus `DELAI_REPOS`.
+    fn attendre_repos(&mut self) {
+        let echeance = Instant::now() + DELAI_REPOS;
+        while let Some(evenement) = self
+            .sdk
+            .attendre_evenement(echeance.saturating_duration_since(Instant::now()))
+        {
+            if evenement.code == EVENEMENT_REPOS || evenement.code == EVENEMENT_DECONNEXION {
+                break;
+            }
+        }
     }
 
     fn attendre_mesure(&mut self) -> Result<Vec<Evenement>, ErreurPont> {

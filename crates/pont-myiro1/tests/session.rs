@@ -492,3 +492,24 @@ fn plusieurs_resultats_pour_une_mesure_ponctuelle_sont_refuses() {
         Err(ErreurPont::ReponseInattendue(_))
     ));
 }
+
+#[test]
+fn apres_une_mesure_le_pont_attend_le_retour_au_repos() {
+    // L'instrument signale son retour au repos (événement 0) après le désarmement :
+    // le pont doit l'avoir consommé avant de rendre la main.
+    let mut session = session_etalonnee(&[1, 2, 3, 0]);
+    session.mesurer_ponctuelle().unwrap();
+    assert!(
+        session.sdk().evenements.is_empty(),
+        "événement 0 non attendu"
+    );
+}
+
+#[test]
+fn deux_mesures_s_enchainent() {
+    let mut session = session_etalonnee(&[1, 2, 3, 0, 1, 2, 3, 0]);
+    session.mesurer_ponctuelle().unwrap();
+    let seconde = session.mesurer_ponctuelle().unwrap();
+    let codes: Vec<i32> = seconde.evenements.iter().map(|e| e.code).collect();
+    assert_eq!(codes, [1, 2, 3]);
+}
