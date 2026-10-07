@@ -39,7 +39,6 @@ int32_t __stdcall FDX_Calibration(int32_t type);   /* FDX_eCalibType ; x86 : ret
 
 ## Ce qui est supposé
 
-- L'appel rend la main avant la fin de l'étalonnage (asynchrone côté appelant) : déduit des attentes d'EIZO et de MYIRO tools, à confirmer.
 - L'étalonnage du noir est inclus dans le type 0.
 
 ## Vérifié sur l'instrument
