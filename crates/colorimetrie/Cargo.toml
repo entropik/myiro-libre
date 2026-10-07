@@ -1,0 +1,9 @@
+[package]
+name = "colorimetrie"
+version = "0.1.0"
+description = "Calculs de couleur : spectre vers XYZ et Lab (D50, 2°), LCH, ΔE00, ΔC et ΔH (ADR 0004)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
