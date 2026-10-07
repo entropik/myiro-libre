@@ -23,6 +23,9 @@ Audit-MYIRO/analyse/
 Audit-MYIRO/retroanalyse/
 .scratch/
 
+# Espaces de travail des ouvriers du skill /capitaine (worktrees git temporaires)
+.claude/worktrees/
+
 # Inventaire du poste (numéros de série, adresses réseau, machines) et données d'archivage : locaux, jamais publiés
 Inventaire/
 Archivage/donnees/
