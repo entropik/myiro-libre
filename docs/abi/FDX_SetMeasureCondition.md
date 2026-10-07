@@ -45,7 +45,7 @@ Le 7 octobre 2026 (MYIRO-1 en USB, DLL 1.0.1.0 x64) : l'armement rend 0, puis l'
 
 **Piège observé** : dans l'état « mesure réussie » qui suit l'événement 3, `FDX_StopMeasurement` **et** un nouvel armement sont refusés (-9986). Il faut attendre le réarmement automatique (événement 1), puis désarmer (accepté, suivi de l'événement 0, retour au repos), avant de réarmer. Une session fermée sans ce désarmement laisse l'instrument bloqué en « mesure en cours » (voyant blanc fixe), sourd aux connexions suivantes (-9987) jusqu'à son redémarrage.
 
-**Bande** (type 1, option 0), même jour : même enchaînement d'événements ; le bouton est tenu enfoncé pendant le glissement le long de la règle. Une rangée sur trois a donné une plage de trop (le blanc du départ). Piste : passer dans `option` le nombre de plages attendu, que la DLL compare au nombre reconnu (`PatchDetector::IsCorrectPatchNum`) ; non essayé.
+**Bande** (type 1, option 0), même jour : même enchaînement d'événements ; le bouton est tenu enfoncé pendant le glissement le long de la règle. Une rangée sur trois a donné une plage de trop (le blanc du départ). **Nombre de plages attendu, vérifié le même jour** : avec `option` = 12, trois passages sur la même rangée de 12 plages. Les deux passages partis de 2 à 3 cm avant la première plage sont **refusés** : événement 4, erreur **-9897** (« nombre de plages ≠ nombre attendu »), voyant rouge. Le passage parti à 1 cm est accepté avec exactement 12 plages, bien placées. `option` est donc **confirmé** comme nombre de plages attendu, et un départ trop éloigné explique la plage de trop. L'application doit transmettre ce nombre quand la mire est connue, et conseiller un départ à 1 cm environ.
 
 ## Reste à vérifier
 
