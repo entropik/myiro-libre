@@ -26,3 +26,7 @@ Audit-MYIRO/retroanalyse/
 # Inventaire du poste (numéros de série, adresses réseau, machines) et données d'archivage : locaux, jamais publiés
 Inventaire/
 Archivage/donnees/
+
+# Logiciels, mises à jour et manuels Konica Minolta récupérés avant la fermeture, et leurs extractions : licence fabricant, jamais versionnés
+Audit-MYIRO/logiciels/
+Audit-MYIRO/extraits/
