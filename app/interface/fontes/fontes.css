@@ -1,0 +1,9 @@
+/* Inter variable (axes de graisse et de corps optique), embarquée dans l'application :
+   aucun appel réseau au lancement. Licence SIL Open Font License 1.1 (Inter-OFL.txt). */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url("InterVariable.woff2") format("woff2");
+}

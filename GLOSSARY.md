@@ -132,3 +132,13 @@ _Éviter_ : QC, validation
 **Référence** :
 Ensemble de valeurs cibles et de tolérances servant au contrôle d'impression, issu d'une norme ou d'un tirage validé mesuré par l'utilisateur.
 _Éviter_ : cible, target, standard
+
+### Application
+
+**Tâche** :
+L'un des quatre grands travaux proposés dans la barre du haut : Mesurer, Contrôler, Profiler, Bibliothèque. Chaque tâche a sa feuille de travail au centre.
+_Éviter_ : onglet, module, mode
+
+**État vide** :
+Ce qu'affiche une tâche qui n'a encore rien à montrer : une phrase et une seule action (« Aucune mesure. Mesurer une couleur »).
+_Éviter_ : écran blanc, placeholder
