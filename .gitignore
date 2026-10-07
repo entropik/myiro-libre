@@ -15,6 +15,10 @@ target/
 target-*/
 # Application : schémas générés par Tauri et copie du système graphique faite par build.rs
 app/gen/
+# Installateur : ponts compilés et configuration produits par outils/preparer_installateur.py
+# (la configuration peut désigner les DLL du fabricant de SDK/ : jamais versionnée)
+app/binaries/
+app/tauri.installateur.json
 app/interface/systeme/
 
 # Désassemblages et ressources extraites, volumineux et régénérables

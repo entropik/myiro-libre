@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use instrument::{Instrument, Vue, EMPLACEMENTS_CONNUS};
+use instrument::{emplacements_a_essayer, Instrument, Vue};
 use pont::{chercher_ponts, PontProcessus};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -69,20 +69,20 @@ fn retenir_sdk(app: &AppHandle, dll: &std::path::Path) {
     }
 }
 
-/// Ferme l'instrument en cours, puis en ouvre un nouveau : le dossier choisi
-/// par l'opérateur d'abord, puis la DLL retenue, puis les emplacements connus.
+/// Ferme l'instrument en cours, puis en ouvre un nouveau, en essayant les
+/// emplacements dans l'ordre de `emplacements_a_essayer`.
 fn ouvrir(app: &AppHandle, instruments: &Instruments, choisi: Option<PathBuf>) -> Vue {
     let mut courant = instruments.0.lock().unwrap_or_else(|e| e.into_inner());
     *courant = None;
-    let emplacements: Vec<PathBuf> = choisi
-        .into_iter()
-        .chain(sdk_retenu(app))
-        .chain(EMPLACEMENTS_CONNUS.iter().map(PathBuf::from))
-        .collect();
-    let ponts = std::env::current_exe()
+    let dossier_exe = std::env::current_exe()
         .ok()
-        .and_then(|exe| exe.parent().map(chercher_ponts))
+        .and_then(|exe| exe.parent().map(PathBuf::from))
         .unwrap_or_default();
+    // Les ressources du paquet (DLL embarquées) sont installées à côté de
+    // l'exécutable sous Windows.
+    let dossier_app = app.path().resource_dir().unwrap_or(dossier_exe.clone());
+    let emplacements = emplacements_a_essayer(&dossier_app, sdk_retenu(app), choisi);
+    let ponts = chercher_ponts(&dossier_exe);
     let instrument = Instrument::ouvrir(&emplacements, &ponts, PontProcessus::lancer);
     if let Some(dll) = instrument.sdk() {
         retenir_sdk(app, dll);

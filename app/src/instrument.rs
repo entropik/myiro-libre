@@ -28,6 +28,31 @@ pub const EMPLACEMENTS_CONNUS: &[&str] = &[
     "C:/Program Files (x86)/Configuration Tool MY-CT1",
 ];
 
+/// Dossier des DLL embarquées, à côté de l'application installée
+/// (`sdk/x64`, `sdk/x86`) : seulement dans un installateur construit sur le
+/// poste avec le dossier `SDK/` du dépôt, jamais publié (ADR 0005).
+pub const DOSSIER_EMBARQUE: &str = "sdk";
+
+/// Emplacements à essayer, dans l'ordre : le dossier choisi par l'opérateur,
+/// les DLL embarquées à côté de l'application, en développement le dossier
+/// `SDK/` du dépôt, la DLL retenue la fois précédente, puis les emplacements
+/// connus des logiciels du fabricant.
+pub fn emplacements_a_essayer(
+    dossier_application: &Path,
+    retenu: Option<PathBuf>,
+    choisi: Option<PathBuf>,
+) -> Vec<PathBuf> {
+    let depot = cfg!(debug_assertions)
+        .then(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("SDK"));
+    choisi
+        .into_iter()
+        .chain([dossier_application.join(DOSSIER_EMBARQUE)])
+        .chain(depot)
+        .chain(retenu)
+        .chain(EMPLACEMENTS_CONNUS.iter().map(PathBuf::from))
+        .collect()
+}
+
 /// Profondeur de recherche sous un emplacement (ColorNavigator range sa DLL
 /// trois niveaux plus bas).
 const PROFONDEUR: usize = 3;
@@ -271,43 +296,46 @@ impl<P: Pont> Instrument<P> {
     }
 }
 
-/// Choisit la DLL et le pont : la première DLL 64 bits trouvée qui a son
-/// pont, sinon la première 32 bits qui a le sien.
+/// Choisit la DLL et le pont. Les emplacements sont essayés dans l'ordre ;
+/// dans chacun, une DLL 64 bits qui a son pont est préférée, sinon une
+/// 32 bits qui a le sien.
 fn choisir(
     emplacements: &[PathBuf],
     ponts: &[(Architecture, PathBuf)],
 ) -> Result<(PathBuf, PathBuf), Probleme> {
     let mut examines = String::new();
-    let mut trouvees = Vec::new();
+    let mut trouvees = 0;
     for emplacement in emplacements {
         let dlls = chercher_dlls(emplacement);
         if dlls.is_empty() {
             let _ = writeln!(examines, "{} : aucun {NOM_DLL}", emplacement.display());
         }
+        let mut ici = Vec::new();
         for dll in dlls {
             match architecture(&dll) {
                 Some(arch) => {
                     let _ = writeln!(examines, "{} : {}", dll.display(), nom_architecture(arch));
-                    trouvees.push((arch, dll));
+                    ici.push((arch, dll));
                 }
                 None => {
                     let _ = writeln!(examines, "{} : pas une DLL Windows", dll.display());
                 }
             }
         }
-    }
-    for voulue in [Architecture::X64, Architecture::X86] {
-        for (arch, dll) in &trouvees {
-            if *arch != voulue {
-                continue;
-            }
-            if let Some((_, programme)) = ponts.iter().find(|(a, _)| a == arch) {
-                return Ok((programme.clone(), dll.clone()));
+        trouvees += ici.len();
+        for voulue in [Architecture::X64, Architecture::X86] {
+            for (arch, dll) in &ici {
+                if *arch != voulue {
+                    continue;
+                }
+                if let Some((_, programme)) = ponts.iter().find(|(a, _)| a == arch) {
+                    return Ok((programme.clone(), dll.clone()));
+                }
             }
         }
     }
     let examines = examines.trim_end().to_string();
-    if trouvees.is_empty() {
+    if trouvees == 0 {
         return Err(Probleme::LogicielAbsent { examines });
     }
     let disponibles: Vec<_> = ponts.iter().map(|(a, _)| nom_architecture(*a)).collect();

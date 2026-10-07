@@ -97,7 +97,11 @@ fn sans_reponse_dans_le_delai_le_pont_est_arrete_de_force() {
     ));
     // Le processus a été arrêté : la demande suivante échoue aussitôt.
     assert!(pont.demander(&Requete::Detecter {}).is_err());
-    assert!(debut.elapsed() < Duration::from_secs(5), "{:?}", debut.elapsed());
+    assert!(
+        debut.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        debut.elapsed()
+    );
 }
 
 /// Un pont qui ferme sa sortie sans se terminer est arrêté de force, sans
@@ -111,7 +115,11 @@ fn une_sortie_fermee_sans_fin_du_pont_est_bornee() {
         pont.demander(&Requete::Version {}),
         Err(Panne::SansReponse { .. })
     ));
-    assert!(debut.elapsed() < Duration::from_secs(5), "{:?}", debut.elapsed());
+    assert!(
+        debut.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        debut.elapsed()
+    );
 }
 
 /// Fermer un pont bloqué ne bloque pas non plus.
@@ -121,7 +129,11 @@ fn la_fermeture_d_un_pont_bloque_est_bornee() {
     let _ = pont.demander(&Requete::Version {});
     let debut = Instant::now();
     drop(pont);
-    assert!(debut.elapsed() < Duration::from_secs(5), "{:?}", debut.elapsed());
+    assert!(
+        debut.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        debut.elapsed()
+    );
 }
 
 #[test]

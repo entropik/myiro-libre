@@ -4,7 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
-use app::instrument::{Ecran, Etat, Instrument, Probleme, PLAFOND};
+use app::instrument::{
+    emplacements_a_essayer, Ecran, Etat, Instrument, Probleme, EMPLACEMENTS_CONNUS, PLAFOND,
+};
 use app::pont::{Architecture, Panne, PontSimule};
 use app::textes::{texte, Langue};
 use pont_protocole::{ErreurPont, Palier, Requete};
@@ -42,7 +44,10 @@ fn fausse_dll(chemin: &Path, architecture: Architecture) {
 /// Emplacement d'un logiciel du fabricant installé, avec sa DLL 64 bits.
 fn sdk_factice(nom: &str) -> PathBuf {
     let dossier = dossier_vide(nom);
-    fausse_dll(&dossier.join("Logiciel").join("FDXSDK.dll"), Architecture::X64);
+    fausse_dll(
+        &dossier.join("Logiciel").join("FDXSDK.dll"),
+        Architecture::X64,
+    );
     dossier
 }
 
@@ -59,7 +64,10 @@ fn ouvrir(simule: PontSimule, sdk: &Path) -> Instrument<PontSimule> {
 }
 
 /// Programme et DLL avec lesquels le pont a été lancé.
-fn lancement(emplacements: &[PathBuf], ponts: &[(Architecture, PathBuf)]) -> Option<(PathBuf, PathBuf)> {
+fn lancement(
+    emplacements: &[PathBuf],
+    ponts: &[(Architecture, PathBuf)],
+) -> Option<(PathBuf, PathBuf)> {
     let mut recu = None;
     Instrument::ouvrir(emplacements, ponts, |programme, dll, _| {
         recu = Some((programme.to_path_buf(), dll.to_path_buf()));
@@ -125,32 +133,87 @@ fn sans_logiciel_du_fabricant_l_application_propose_de_choisir_un_dossier() {
     assert!(detail.contains(&absent.display().to_string()), "{detail}");
 }
 
+/// Les emplacements sont essayés dans l'ordre (DLL embarquées, retenue, puis
+/// emplacements connus) : le premier qui convient l'emporte.
 #[test]
-fn la_dll_64_bits_est_preferee_et_lancee_avec_le_pont_64_bits() {
-    let x86 = dossier_vide("preference-x86");
-    fausse_dll(&x86.join("FDXSDK.dll"), Architecture::X86);
-    let x64 = dossier_vide("preference-x64");
-    fausse_dll(&x64.join("FDXSDK.dll"), Architecture::X64);
+fn le_premier_emplacement_qui_convient_l_emporte() {
+    let embarque = dossier_vide("ordre-embarque");
+    fausse_dll(&embarque.join("x86").join("FDXSDK.dll"), Architecture::X86);
+    let connu = dossier_vide("ordre-connu");
+    fausse_dll(&connu.join("FDXSDK.dll"), Architecture::X64);
 
-    let (programme, dll) = lancement(&[x86, x64.clone()], &ponts()).expect("pont lancé");
+    let (programme, dll) = lancement(&[embarque.clone(), connu], &ponts()).expect("pont lancé");
 
+    assert_eq!(programme, PathBuf::from("pont-myiro1-x86.exe"));
+    assert_eq!(dll, embarque.join("x86").join("FDXSDK.dll"));
+}
+
+/// Ordre de recherche : le dossier choisi par l'opérateur, les DLL embarquées
+/// à côté de l'application, la DLL retenue, puis les emplacements connus des
+/// logiciels du fabricant (le dossier `SDK/` du dépôt s'intercale en
+/// développement).
+#[test]
+fn l_ordre_de_recherche_commence_par_les_dll_embarquees() {
+    let app = PathBuf::from("C:/Applications/myiro-libre");
+    let retenue = PathBuf::from("D:/retenue/FDXSDK.dll");
+    let choisi = PathBuf::from("E:/choisi");
+
+    let ordre = emplacements_a_essayer(&app, Some(retenue.clone()), Some(choisi.clone()));
+
+    assert_eq!(ordre[0], choisi);
+    assert_eq!(ordre[1], app.join("sdk"));
+    let connus: Vec<PathBuf> = EMPLACEMENTS_CONNUS.iter().map(PathBuf::from).collect();
+    assert!(ordre.ends_with(&connus));
+    let i_retenue = ordre.iter().position(|e| *e == retenue).unwrap();
+    assert_eq!(i_retenue, ordre.len() - connus.len() - 1);
+
+    let sans = emplacements_a_essayer(&app, None, None);
+    assert_eq!(sans[0], app.join("sdk"));
+}
+
+/// DLL embarquées avec l'application (`sdk/x64`, `sdk/x86`) : la 64 bits
+/// avec le pont 64 bits, sinon la 32 bits avec le pont 32 bits.
+#[test]
+fn parmi_les_dll_embarquees_la_64_bits_est_preferee() {
+    let sdk = dossier_vide("embarque");
+    fausse_dll(&sdk.join("x64").join("FDXSDK.dll"), Architecture::X64);
+    fausse_dll(&sdk.join("x86").join("FDXSDK.dll"), Architecture::X86);
+    let seul_x86 = vec![(Architecture::X86, PathBuf::from("pont-myiro1-x86.exe"))];
+
+    let (programme, dll) = lancement(std::slice::from_ref(&sdk), &ponts()).expect("pont lancé");
     assert_eq!(programme, PathBuf::from("pont-myiro1-x64.exe"));
-    assert_eq!(dll, x64.join("FDXSDK.dll"));
+    assert_eq!(dll, sdk.join("x64").join("FDXSDK.dll"));
+
+    let (programme, dll) = lancement(std::slice::from_ref(&sdk), &seul_x86).expect("pont lancé");
+    assert_eq!(programme, PathBuf::from("pont-myiro1-x86.exe"));
+    assert_eq!(dll, sdk.join("x86").join("FDXSDK.dll"));
 }
 
 /// Un logiciel qui range ses DLL par architecture dans des sous-dossiers.
 #[test]
 fn dans_un_meme_logiciel_la_dll_64_bits_est_preferee() {
     let logiciel = dossier_vide("sous-dossiers");
-    fausse_dll(&logiciel.join("plugins").join("win.x86").join("FDXSDK.dll"), Architecture::X86);
     fausse_dll(
-        &logiciel.join("plugins").join("win.x86_64").join("FDXSDK.dll"),
+        &logiciel.join("plugins").join("win.x86").join("FDXSDK.dll"),
+        Architecture::X86,
+    );
+    fausse_dll(
+        &logiciel
+            .join("plugins")
+            .join("win.x86_64")
+            .join("FDXSDK.dll"),
         Architecture::X64,
     );
 
-    let (_, dll) = lancement(&[logiciel.clone()], &ponts()).expect("pont lancé");
+    let (_, dll) = lancement(std::slice::from_ref(&logiciel), &ponts()).expect("pont lancé");
 
-    assert_eq!(dll, logiciel.join("plugins").join("win.x86_64").join("FDXSDK.dll"));
+    assert_eq!(
+        dll,
+        logiciel
+            .join("plugins")
+            .join("win.x86_64")
+            .join("FDXSDK.dll")
+    );
 }
 
 #[test]
@@ -200,7 +263,10 @@ fn un_fichier_designe_qui_n_est_pas_fdxsdk_est_refuse() {
     fausse_dll(&casse, Architecture::X64);
 
     assert_eq!(lancement(&[autre], &ponts()), None);
-    assert_eq!(lancement(&[casse.clone()], &ponts()).map(|(_, d)| d), Some(casse));
+    assert_eq!(
+        lancement(std::slice::from_ref(&casse), &ponts()).map(|(_, d)| d),
+        Some(casse)
+    );
 }
 
 #[test]
@@ -259,10 +325,7 @@ fn une_dll_refusee_par_le_pont_renvoie_a_l_emplacement_du_sdk() {
             detail: "DllIntrouvable".into()
         })
     );
-    assert_eq!(
-        instrument.probleme().unwrap().ecran(),
-        Ecran::ChoixDossier
-    );
+    assert_eq!(instrument.probleme().unwrap().ecran(), Ecran::ChoixDossier);
 }
 
 #[test]
