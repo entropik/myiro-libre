@@ -237,11 +237,11 @@ enum Repos {
     Suppose,
     /// Événement 0 reçu, rien armé depuis : le refus confirme ce repos.
     Prouve,
-    /// Armé depuis le dernier repos prouvé (ou repos jamais prouvé ensuite) :
-    /// le refus ne prouve rien. Seuls l'événement 0 après un désarmement
-    /// accepté, ou une déconnexion faite, lèvent ce doute ; une reconnexion
-    /// sans `FDX_Disconnect` ne le lève pas.
-    Douteux,
+    /// Armé, ou armement tenté, depuis le dernier repos prouvé : le refus ne
+    /// prouve rien. Seuls l'événement 0 après un désarmement accepté, ou une
+    /// déconnexion faite, lèvent cette incertitude ; une reconnexion sans
+    /// `FDX_Disconnect` ne la lève pas.
+    Incertain,
 }
 
 /// Résultat d'une fermeture faite : la DLL est déconnectée.
@@ -335,8 +335,8 @@ impl<S: SdkMyiro1> Session<S> {
             .connecter(&port, DELAI_CONNEXION)
             .map_err(traduire)?;
         self.dll_connectee = true;
-        // Le doute sur le repos survit à une reconnexion faite sans
-        // `FDX_Disconnect` : seule une déconnexion faite le lève.
+        // L'incertitude sur le repos survit à une reconnexion faite sans
+        // `FDX_Disconnect` : seule une déconnexion faite la lève.
         self.etat = EtatInstrument::Inexploitable;
         let tampon = self.sdk.infos().map_err(traduire)?;
         let infos = lire_infos_instrument(&tampon);
@@ -606,6 +606,9 @@ impl<S: SdkMyiro1> Session<S> {
                 remise_au_repos: avant,
             });
         }
+        // Avant l'appel : un armement refusé ne prouve pas que rien n'a été
+        // armé, le repos prouvé ne vaut plus.
+        self.repos = Repos::Incertain;
         let armement = match mode {
             Mode::Ponctuelle => self.sdk.armer_ponctuelle(),
             Mode::Bande(attendues) => self.sdk.armer_bande(attendues),
@@ -618,7 +621,6 @@ impl<S: SdkMyiro1> Session<S> {
             }
             return Err(traduire(code));
         }
-        self.repos = Repos::Douteux;
         let resultat = self.attendre_mesure().and_then(|evenements| {
             let (plages, sens) = self.lire_plages()?;
             Ok((plages, sens, evenements))
@@ -725,8 +727,9 @@ impl<S: SdkMyiro1> Session<S> {
                                 self.perdre_liaison();
                                 return RemiseAuRepos::LiaisonPerdue {};
                             }
-                            EVENEMENT_REPOS => repos_vu = true,
-                            _ => {}
+                            // Seul le dernier événement compte : un autre
+                            // après l'événement 0 annule sa preuve.
+                            code => repos_vu = code == EVENEMENT_REPOS,
                         }
                     }
                     // Refus -9986 sans événement : c'est la réponse constatée au

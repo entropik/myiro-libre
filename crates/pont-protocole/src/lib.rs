@@ -213,8 +213,8 @@ pub enum ErreurPont {
     InstrumentPerdu {},
     /// La remise au repos de l'instrument n'est pas prouvée (`remise_au_repos`
     /// dit pourquoi) : l'instrument n'a pas été armé. Une mesure déjà rendue
-    /// reste valable. Une reconnexion ne lève pas ce doute : seul un
-    /// désarmement accepté suivi de l'événement 0 le lève, ou une fermeture
+    /// reste valable. Une reconnexion ne lève pas cette incertitude : seul un
+    /// désarmement accepté suivi de l'événement 0 la lève, ou une fermeture
     /// suivie d'un nouveau pont.
     ReposIncertain { remise_au_repos: RemiseAuRepos },
     /// `FDX_Disconnect` a échoué (code brut) : la fermeture n'est pas faite.

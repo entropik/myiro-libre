@@ -892,7 +892,7 @@ fn le_desarmement_refuse_trop_longtemps_est_rapporte_sans_attente_sans_fin() {
 }
 
 #[test]
-fn une_reconnexion_apres_une_perte_au_desarmement_garde_le_doute() {
+fn une_reconnexion_apres_une_perte_au_desarmement_garde_l_incertitude() {
     let mut session = session_etalonnee_salves(&[&[1, 2, 3, 6], &[1, 2, 3, 0]]);
     let mesure = session.mesurer_ponctuelle().unwrap();
     assert_eq!(mesure.remise_au_repos, RemiseAuRepos::LiaisonPerdue {});
@@ -907,7 +907,7 @@ fn une_reconnexion_apres_une_perte_au_desarmement_garde_le_doute() {
 }
 
 #[test]
-fn une_reconnexion_apres_un_repos_incertain_garde_le_doute() {
+fn une_reconnexion_apres_un_repos_incertain_garde_l_incertitude() {
     // Sans FDX_Disconnect, une nouvelle connexion ne prouve pas que
     // l'instrument est revenu au repos : un refus -9986 sans événement ne
     // suffit toujours pas pour armer.
@@ -927,6 +927,37 @@ fn une_reconnexion_apres_un_repos_incertain_garde_le_doute() {
         })
     );
     assert_eq!(nombre_d_armements(&session), 1);
+}
+
+#[test]
+fn un_evenement_apres_le_repos_annule_sa_preuve() {
+    // Refus -9986, événement 0, nouveau refus, puis un autre événement : le
+    // repos vu n'est plus d'actualité, le dernier refus ne prouve rien.
+    let mut session = session_etalonnee(&[1, 2, 3, 0, 1]);
+    session.sdk_mut().code_arret = -9986;
+    let mesure = session.mesurer_ponctuelle().unwrap();
+    assert_eq!(
+        mesure.remise_au_repos,
+        RemiseAuRepos::ArretRefuse { code: -9986 }
+    );
+}
+
+#[test]
+fn un_armement_refuse_ne_garde_pas_le_repos_prouve() {
+    let mut session = session_etalonnee_salves(&[&[1, 2, 3, 0], &[1, 2, 3, 0]]);
+    session.mesurer_ponctuelle().unwrap();
+    session.sdk_mut().code_armement = -9992;
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::ParametreRefuse {})
+    );
+    session.sdk_mut().code_armement = 0;
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::ReposIncertain {
+            remise_au_repos: RemiseAuRepos::ArretRefuse { code: -9986 }
+        })
+    );
 }
 
 // Fermeture explicite.
