@@ -1,20 +1,36 @@
-//! Module `instrument` (ADR 0005) : ouvre l'instrument par un pont et dit son
-//! état. L'ordre des paliers, le plafond et la traduction des échecs sont ici,
-//! jamais dans les écrans. Rien ici ne dépend de Tauri.
+//! Module `instrument` (ADR 0005) : trouve le logiciel du fabricant installé,
+//! ouvre l'instrument par le pont de la bonne architecture et dit son état.
+//! La recherche, l'ordre des paliers, le plafond et la traduction des échecs
+//! sont ici, jamais dans les écrans. Rien ici ne dépend de Tauri.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use pont_protocole::{Palier, Reponse, Requete};
 use serde::Serialize;
 
-use crate::pont::{Panne, Pont};
+use crate::pont::{architecture, Architecture, Panne, Pont};
 
 /// Dernier palier que l'application demande : la connexion. L'étalonnage et
 /// les mesures viendront avec leurs écrans.
 pub const PLAFOND: Palier = Palier::Connexion;
 
-/// Nom de la DLL du MYIRO-1 cherchée dans l'emplacement du SDK.
+/// Nom de la DLL du MYIRO-1 cherchée dans le logiciel du fabricant.
 pub const NOM_DLL: &str = "FDXSDK.dll";
+
+/// Dossiers d'installation connus des logiciels qui livrent `FDXSDK.dll`
+/// (audit du poste, `Audit-MYIRO/analyse/manifest.json`), dans l'ordre de
+/// préférence : la DLL 64 bits 1.0.1 essayée sur l'instrument réel, la 64 bits
+/// 1.0.3, puis la 32 bits 1.0.1 de l'outil de configuration du fabricant.
+pub const EMPLACEMENTS_CONNUS: &[&str] = &[
+    "C:/Program Files/Ergosoft 16",
+    "C:/ProgramData/EIZO/ColorNavigator 7",
+    "C:/Program Files (x86)/Configuration Tool MY-CT1",
+];
+
+/// Profondeur de recherche sous un emplacement (ColorNavigator range sa DLL
+/// trois niveaux plus bas).
+const PROFONDEUR: usize = 3;
 
 /// Seul modèle servi par `pont-myiro1`.
 const MODELE: &str = "MYIRO-1";
@@ -43,21 +59,20 @@ pub enum Etat {
 pub enum Ecran {
     /// Instrument non détecté : câble, port USB direct, réessayer.
     NonDetecte,
-    /// Emplacement du SDK installé sur le poste.
-    EmplacementSdk,
+    /// Logiciel du fabricant introuvable : choisir son dossier.
+    ChoixDossier,
 }
 
 /// Pourquoi l'instrument n'est pas prêt.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Probleme {
-    /// L'emplacement du SDK installé n'a pas encore été indiqué.
-    SdkNonIndique,
-    /// Aucun `FDXSDK.dll` à l'emplacement indiqué.
-    AucuneDll { emplacement: String },
+    /// Aucun `FDXSDK.dll` utilisable aux emplacements examinés.
+    LogicielAbsent { examines: String },
     /// Le pont n'a pas pu charger la DLL trouvée, ou elle ne répond pas comme
-    /// celle du MYIRO-1 (autre architecture, fichier incomplet).
-    SdkInutilisable { detail: String },
-    /// Le programme `pont-myiro1` n'a pas pu être lancé.
+    /// celle du MYIRO-1 (fichier abîmé, version inconnue).
+    LogicielInutilisable { detail: String },
+    /// Aucun pont `pont-myiro1` de l'architecture voulue, ou il n'a pas pu
+    /// être lancé.
     PontIntrouvable { detail: String },
     /// Le pont s'est arrêté ou a répondu hors du protocole.
     PontEnPanne { detail: String },
@@ -76,9 +91,9 @@ impl Probleme {
     /// Écran qui aide l'opérateur à le résoudre.
     pub fn ecran(&self) -> Ecran {
         match self {
-            Probleme::SdkNonIndique
-            | Probleme::AucuneDll { .. }
-            | Probleme::SdkInutilisable { .. } => Ecran::EmplacementSdk,
+            Probleme::LogicielAbsent { .. } | Probleme::LogicielInutilisable { .. } => {
+                Ecran::ChoixDossier
+            }
             Probleme::PontIntrouvable { .. }
             | Probleme::PontEnPanne { .. }
             | Probleme::PontBloque { .. }
@@ -103,9 +118,8 @@ impl Probleme {
     /// `probleme.<code>.cause` et `probleme.<code>.action` du catalogue.
     pub fn code(&self) -> &'static str {
         match self {
-            Probleme::SdkNonIndique => "sdk_non_indique",
-            Probleme::AucuneDll { .. } => "aucune_dll",
-            Probleme::SdkInutilisable { .. } => "sdk_inutilisable",
+            Probleme::LogicielAbsent { .. } => "logiciel_absent",
+            Probleme::LogicielInutilisable { .. } => "logiciel_inutilisable",
             Probleme::PontIntrouvable { .. } => "pont_introuvable",
             Probleme::PontEnPanne { .. } => "pont_en_panne",
             Probleme::PontBloque { .. } => "pont_bloque",
@@ -118,9 +132,9 @@ impl Probleme {
     /// Détail technique, montré replié sous l'explication.
     pub fn detail(&self) -> Option<&str> {
         match self {
-            Probleme::SdkNonIndique | Probleme::AucunInstrument => None,
-            Probleme::AucuneDll { emplacement: d }
-            | Probleme::SdkInutilisable { detail: d }
+            Probleme::AucunInstrument => None,
+            Probleme::LogicielAbsent { examines: d }
+            | Probleme::LogicielInutilisable { detail: d }
             | Probleme::PontIntrouvable { detail: d }
             | Probleme::PontEnPanne { detail: d }
             | Probleme::PontBloque { detail: d }
@@ -131,7 +145,8 @@ impl Probleme {
 }
 
 /// Ce que la page reçoit : l'état en un mot, le modèle et le problème
-/// éventuel. Le numéro de série reste dans le module.
+/// éventuel. Le numéro de série et les chemins restent dans le module, sauf
+/// dans le détail technique replié.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Vue {
     pub etat: &'static str,
@@ -152,7 +167,7 @@ impl From<Panne> for Probleme {
     fn from(panne: Panne) -> Self {
         match panne {
             Panne::Lancement { detail } => Probleme::PontIntrouvable { detail },
-            Panne::DllRefusee { detail } => Probleme::SdkInutilisable { detail },
+            Panne::DllRefusee { detail } => Probleme::LogicielInutilisable { detail },
             Panne::Arret { code, detail } => Probleme::PontEnPanne {
                 detail: match code {
                     Some(code) => format!("arrêt du pont, code {code} : {detail}"),
@@ -173,45 +188,48 @@ pub struct Instrument<P: Pont> {
     /// l'instrument est abandonné. Les paliers suivants passeront par lui.
     #[allow(dead_code)]
     pont: Option<P>,
+    /// DLL retenue, pour la retrouver directement la fois suivante.
+    sdk: Option<PathBuf>,
     etat: Etat,
     probleme: Option<Probleme>,
 }
 
 impl<P: Pont> Instrument<P> {
-    /// Cherche la DLL dans l'emplacement du SDK, lance le pont avec le plafond
-    /// de l'application et monte les paliers jusqu'à la connexion.
+    /// Cherche `FDXSDK.dll` dans les emplacements donnés (dans l'ordre ; une
+    /// DLL 64 bits est préférée), lance le pont de la même architecture avec
+    /// le plafond de l'application, et monte les paliers jusqu'à la connexion.
+    ///
+    /// `ponts` : les programmes `pont-myiro1` disponibles, par architecture.
+    /// `lancer` reçoit le programme, la DLL et le plafond.
     pub fn ouvrir(
-        sdk: Option<&Path>,
-        lancer: impl FnOnce(&Path, Palier) -> Result<P, Panne>,
+        emplacements: &[PathBuf],
+        ponts: &[(Architecture, PathBuf)],
+        lancer: impl FnOnce(&Path, &Path, Palier) -> Result<P, Panne>,
     ) -> Self {
-        let dll = match sdk {
-            None => return Self::en_echec(Probleme::SdkNonIndique),
-            Some(emplacement) => match chercher_dll(emplacement) {
-                Some(dll) => dll,
-                None => {
-                    let emplacement = emplacement.display().to_string();
-                    return Self::en_echec(Probleme::AucuneDll { emplacement });
-                }
-            },
+        let (programme, dll) = match choisir(emplacements, ponts) {
+            Ok(choix) => choix,
+            Err(probleme) => return Self::en_echec(None, probleme),
         };
-        let mut pont = match lancer(&dll, PLAFOND) {
+        let mut pont = match lancer(&programme, &dll, PLAFOND) {
             Ok(pont) => pont,
-            Err(panne) => return Self::en_echec(panne.into()),
+            Err(panne) => return Self::en_echec(Some(dll), panne.into()),
         };
         match monter(&mut pont) {
             Ok(fiche) => Instrument {
                 pont: Some(pont),
+                sdk: Some(dll),
                 etat: Etat::EtalonnageRequis(fiche),
                 probleme: None,
             },
-            Err(probleme) => Self::en_echec(probleme),
+            Err(probleme) => Self::en_echec(Some(dll), probleme),
         }
     }
 
     /// Sur un échec, le pont est fermé tout de suite : un nouvel essai en relance un.
-    fn en_echec(probleme: Probleme) -> Self {
+    fn en_echec(sdk: Option<PathBuf>, probleme: Probleme) -> Self {
         Instrument {
             pont: None,
+            sdk,
             etat: Etat::NonDetecte,
             probleme: Some(probleme),
         }
@@ -223,6 +241,11 @@ impl<P: Pont> Instrument<P> {
 
     pub fn probleme(&self) -> Option<&Probleme> {
         self.probleme.as_ref()
+    }
+
+    /// DLL du fabricant trouvée et confiée au pont, à retenir.
+    pub fn sdk(&self) -> Option<&Path> {
+        self.sdk.as_deref()
     }
 
     pub fn vue(&self) -> Vue {
@@ -239,12 +262,71 @@ impl<P: Pont> Instrument<P> {
                 code: p.code(),
                 ecran: match p.ecran() {
                     Ecran::NonDetecte => "non_detecte",
-                    Ecran::EmplacementSdk => "emplacement_sdk",
+                    Ecran::ChoixDossier => "choix_dossier",
                 },
                 guide_cablage: p.guide_cablage(),
                 detail: p.detail().map(String::from),
             }),
         }
+    }
+}
+
+/// Choisit la DLL et le pont : la première DLL 64 bits trouvée qui a son
+/// pont, sinon la première 32 bits qui a le sien.
+fn choisir(
+    emplacements: &[PathBuf],
+    ponts: &[(Architecture, PathBuf)],
+) -> Result<(PathBuf, PathBuf), Probleme> {
+    let mut examines = String::new();
+    let mut trouvees = Vec::new();
+    for emplacement in emplacements {
+        let dlls = chercher_dlls(emplacement);
+        if dlls.is_empty() {
+            let _ = writeln!(examines, "{} : aucun {NOM_DLL}", emplacement.display());
+        }
+        for dll in dlls {
+            match architecture(&dll) {
+                Some(arch) => {
+                    let _ = writeln!(examines, "{} : {}", dll.display(), nom_architecture(arch));
+                    trouvees.push((arch, dll));
+                }
+                None => {
+                    let _ = writeln!(examines, "{} : pas une DLL Windows", dll.display());
+                }
+            }
+        }
+    }
+    for voulue in [Architecture::X64, Architecture::X86] {
+        for (arch, dll) in &trouvees {
+            if *arch != voulue {
+                continue;
+            }
+            if let Some((_, programme)) = ponts.iter().find(|(a, _)| a == arch) {
+                return Ok((programme.clone(), dll.clone()));
+            }
+        }
+    }
+    let examines = examines.trim_end().to_string();
+    if trouvees.is_empty() {
+        return Err(Probleme::LogicielAbsent { examines });
+    }
+    let disponibles: Vec<_> = ponts.iter().map(|(a, _)| nom_architecture(*a)).collect();
+    Err(Probleme::PontIntrouvable {
+        detail: format!(
+            "{examines}\naucun pont-myiro1 de cette architecture ; ponts disponibles : {}",
+            if disponibles.is_empty() {
+                "aucun".to_string()
+            } else {
+                disponibles.join(", ")
+            }
+        ),
+    })
+}
+
+fn nom_architecture(arch: Architecture) -> &'static str {
+    match arch {
+        Architecture::X64 => "64 bits",
+        Architecture::X86 => "32 bits",
     }
 }
 
@@ -254,7 +336,7 @@ fn monter(pont: &mut impl Pont) -> Result<Fiche, Probleme> {
     match pont.demander(&Requete::Version {})? {
         Reponse::Version { .. } => {}
         Reponse::Erreur { erreur } => {
-            return Err(Probleme::SdkInutilisable {
+            return Err(Probleme::LogicielInutilisable {
                 detail: format!("version du SDK : {erreur:?}"),
             })
         }
@@ -291,34 +373,46 @@ fn inattendue(reponse: Reponse) -> Probleme {
     }
 }
 
-/// Trouve `FDXSDK.dll` : l'emplacement est la DLL elle-même ou un dossier qui
-/// la contient, au plus quelques niveaux plus bas.
-pub fn chercher_dll(emplacement: &Path) -> Option<PathBuf> {
+/// Tous les `FDXSDK.dll` d'un emplacement : la DLL elle-même, ou celles d'un
+/// dossier et de ses sous-dossiers (trois niveaux au plus), dans l'ordre des
+/// noms. Le pont exécute le code de la DLL qu'on lui donne : un fichier d'un
+/// autre nom n'est jamais retenu.
+fn chercher_dlls(emplacement: &Path) -> Vec<PathBuf> {
     if emplacement.is_file() {
-        // Le pont exécute le code de la DLL qu'on lui donne : jamais un autre fichier.
-        let nom = emplacement.file_name()?;
-        return nom
-            .eq_ignore_ascii_case(NOM_DLL)
-            .then(|| emplacement.to_path_buf());
+        let bon_nom = emplacement
+            .file_name()
+            .is_some_and(|n| n.eq_ignore_ascii_case(NOM_DLL));
+        return if bon_nom {
+            vec![emplacement.to_path_buf()]
+        } else {
+            Vec::new()
+        };
     }
-    chercher_dans(emplacement, 3)
+    let mut trouvees = Vec::new();
+    chercher_dans(emplacement, PROFONDEUR, &mut trouvees);
+    trouvees
 }
 
-fn chercher_dans(dossier: &Path, profondeur: usize) -> Option<PathBuf> {
+fn chercher_dans(dossier: &Path, profondeur: usize, trouvees: &mut Vec<PathBuf>) {
+    let Ok(entrees) = std::fs::read_dir(dossier) else {
+        return;
+    };
+    let mut chemins: Vec<PathBuf> = entrees.flatten().map(|e| e.path()).collect();
+    chemins.sort();
     let mut sous_dossiers = Vec::new();
-    for entree in std::fs::read_dir(dossier).ok()?.flatten() {
-        let chemin = entree.path();
+    for chemin in chemins {
         if chemin.is_dir() {
             sous_dossiers.push(chemin);
-        } else if entree.file_name().eq_ignore_ascii_case(NOM_DLL) {
-            return Some(chemin);
+        } else if chemin
+            .file_name()
+            .is_some_and(|n| n.eq_ignore_ascii_case(NOM_DLL))
+        {
+            trouvees.push(chemin);
         }
     }
-    sous_dossiers.sort();
-    if profondeur == 0 {
-        return None;
+    if profondeur > 0 {
+        for sous_dossier in sous_dossiers {
+            chercher_dans(&sous_dossier, profondeur - 1, trouvees);
+        }
     }
-    sous_dossiers
-        .iter()
-        .find_map(|d| chercher_dans(d, profondeur - 1))
 }

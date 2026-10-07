@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
@@ -35,6 +35,65 @@ pub enum Panne {
 /// Une requête, une réponse : tout le dialogue avec un pont.
 pub trait Pont {
     fn demander(&mut self, requete: &Requete) -> Result<Reponse, Panne>;
+}
+
+/// Architecture d'un exécutable ou d'une DLL Windows. Un pont ne charge
+/// qu'une DLL de sa propre architecture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Architecture {
+    X64,
+    X86,
+}
+
+/// Lit le type de machine dans l'en-tête PE d'un fichier, sans le charger.
+pub fn architecture(fichier: &Path) -> Option<Architecture> {
+    let mut f = std::fs::File::open(fichier).ok()?;
+    let mut entete = [0u8; 0x40];
+    f.read_exact(&mut entete).ok()?;
+    if &entete[..2] != b"MZ" {
+        return None;
+    }
+    let decalage = u32::from_le_bytes(entete[0x3c..0x40].try_into().ok()?);
+    let mut pe = [0u8; 6];
+    std::io::Seek::seek(&mut f, std::io::SeekFrom::Start(decalage.into())).ok()?;
+    f.read_exact(&mut pe).ok()?;
+    if &pe[..4] != b"PE\0\0" {
+        return None;
+    }
+    match u16::from_le_bytes([pe[4], pe[5]]) {
+        0x014c => Some(Architecture::X86),
+        0x8664 => Some(Architecture::X64),
+        _ => None,
+    }
+}
+
+/// Cherche les ponts livrés avec l'application, à partir du dossier de son
+/// exécutable : d'abord les ponts installés à côté (`pont-myiro1-x64.exe`,
+/// `pont-myiro1-x86.exe`), puis, en développement, `pont-myiro1.exe` dans le
+/// même dossier `target/<profil>` et dans `target/<cible>/<profil>`.
+/// L'architecture est lue dans l'en-tête ; un seul pont par architecture.
+pub fn chercher_ponts(dossier_exe: &Path) -> Vec<(Architecture, PathBuf)> {
+    let nom = |base: &str| format!("{base}{}", std::env::consts::EXE_SUFFIX);
+    let mut candidats = vec![
+        dossier_exe.join(nom("pont-myiro1-x64")),
+        dossier_exe.join(nom("pont-myiro1-x86")),
+        dossier_exe.join(nom("pont-myiro1")),
+    ];
+    if let (Some(profil), Some(target)) = (dossier_exe.file_name(), dossier_exe.parent()) {
+        for cible in ["x86_64-pc-windows-msvc", "i686-pc-windows-msvc"] {
+            candidats.push(target.join(cible).join(profil).join(nom("pont-myiro1")));
+        }
+    }
+    let mut ponts: Vec<(Architecture, PathBuf)> = Vec::new();
+    for chemin in candidats {
+        if let Some(arch) = architecture(&chemin) {
+            if !ponts.iter().any(|(a, _)| *a == arch) {
+                ponts.push((arch, chemin));
+            }
+        }
+    }
+    ponts.sort_by_key(|(a, _)| *a);
+    ponts
 }
 
 /// Code de sortie de `pont-myiro1` quand la DLL n'a pas pu être chargée.

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use app::instrument::{Etat, Instrument, Probleme, PLAFOND};
-use app::pont::{Panne, Pont, PontProcessus};
+use app::pont::{architecture, chercher_ponts, Architecture, Panne, Pont, PontProcessus};
 use pont_protocole::{Palier, Reponse, Requete};
 
 /// L'exemple est compilé par `cargo test` (toutes cibles) ou par
@@ -144,20 +144,97 @@ fn un_programme_absent_ne_se_lance_pas() {
     assert!(matches!(resultat, Err(Panne::Lancement { .. })));
 }
 
+fn dossier_vide(nom: &str) -> PathBuf {
+    let dossier = std::env::temp_dir()
+        .join("myiro-libre-tests")
+        .join("ponts")
+        .join(nom);
+    let _ = std::fs::remove_dir_all(&dossier);
+    std::fs::create_dir_all(&dossier).unwrap();
+    dossier
+}
+
+/// Faux exécutable : seul l'en-tête PE (type de machine) compte.
+fn faux_programme(chemin: &Path, architecture: Architecture) {
+    std::fs::create_dir_all(chemin.parent().unwrap()).unwrap();
+    let mut octets = vec![0u8; 0x48];
+    octets[..2].copy_from_slice(b"MZ");
+    octets[0x3c] = 0x40;
+    octets[0x40..0x44].copy_from_slice(b"PE\0\0");
+    let machine: u16 = match architecture {
+        Architecture::X86 => 0x014c,
+        Architecture::X64 => 0x8664,
+    };
+    octets[0x44..0x46].copy_from_slice(&machine.to_le_bytes());
+    std::fs::write(chemin, octets).unwrap();
+}
+
+/// Application installée : les deux ponts sont à côté de son exécutable.
+#[test]
+fn les_ponts_installes_a_cote_de_l_application_sont_trouves() {
+    let installe = dossier_vide("installe");
+    faux_programme(&installe.join("pont-myiro1-x64.exe"), Architecture::X64);
+    faux_programme(&installe.join("pont-myiro1-x86.exe"), Architecture::X86);
+
+    assert_eq!(
+        chercher_ponts(&installe),
+        vec![
+            (Architecture::X64, installe.join("pont-myiro1-x64.exe")),
+            (Architecture::X86, installe.join("pont-myiro1-x86.exe")),
+        ]
+    );
+}
+
+/// En développement : `target/debug/` pour le pont de l'hôte et
+/// `target/i686-pc-windows-msvc/debug/` pour le pont 32 bits.
+#[test]
+fn en_developpement_les_ponts_sont_cherches_dans_target() {
+    let target = dossier_vide("target");
+    let debug = target.join("debug");
+    faux_programme(&debug.join("pont-myiro1.exe"), Architecture::X64);
+    let x86 = target
+        .join("i686-pc-windows-msvc")
+        .join("debug")
+        .join("pont-myiro1.exe");
+    faux_programme(&x86, Architecture::X86);
+
+    assert_eq!(
+        chercher_ponts(&debug),
+        vec![
+            (Architecture::X64, debug.join("pont-myiro1.exe")),
+            (Architecture::X86, x86),
+        ]
+    );
+}
+
+/// L'architecture d'un pont est lue dans son en-tête, pas dans son nom ; un
+/// fichier absent ou illisible n'est pas proposé.
+#[test]
+fn un_pont_est_classe_par_son_en_tete() {
+    let dossier = dossier_vide("en-tete");
+    faux_programme(&dossier.join("pont-myiro1-x86.exe"), Architecture::X64);
+    std::fs::write(dossier.join("pont-myiro1-x64.exe"), b"rien").unwrap();
+
+    assert_eq!(
+        chercher_ponts(&dossier),
+        vec![(Architecture::X64, dossier.join("pont-myiro1-x86.exe"))]
+    );
+    assert_eq!(architecture(&dossier.join("absent.exe")), None);
+}
+
 /// De bout en bout : le module instrument, le vrai transport, un pont factice.
 #[test]
 fn l_instrument_s_ouvre_a_travers_un_vrai_processus() {
     let programme = pont_factice();
-    // Le module cherche un FDXSDK.dll : on lui donne un fichier de ce nom,
-    // vide ; le pont factice ne le charge pas et suit le scénario « normal ».
-    let dossier = std::env::temp_dir()
-        .join("myiro-libre-tests")
-        .join("processus");
-    std::fs::create_dir_all(&dossier).unwrap();
-    std::fs::write(dossier.join("FDXSDK.dll"), b"").unwrap();
+    let arch = architecture(&programme).expect("le pont factice est un exécutable");
+    // Le module cherche un FDXSDK.dll de la même architecture que le pont : on
+    // lui donne un faux ; le pont factice ne le charge pas et suit le
+    // scénario « normal ».
+    let dossier = dossier_vide("processus");
+    faux_programme(&dossier.join("FDXSDK.dll"), arch);
 
-    let instrument = Instrument::ouvrir(Some(&dossier), |_dll, plafond| {
-        PontProcessus::lancer(&programme, Path::new("normal"), plafond)
+    let instrument = Instrument::ouvrir(&[dossier], &[(arch, programme)], |prog, _dll, plafond| {
+        PontProcessus::lancer(prog, Path::new("normal"), plafond)
     });
 
     assert!(

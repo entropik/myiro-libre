@@ -65,12 +65,11 @@ function afficherTache(tache) {
 }
 
 // ---- Instrument : l'état vient du module Rust `instrument`, la page ne fait qu'afficher ----
-let vueInstrument = null; // null : recherche en cours
-let ecranChoisi = null; // écran ouvert par l'opérateur (changer l'emplacement du SDK)
+let vueInstrument = null; // dernier état rendu par le module `instrument`
+let occupe = true; // recherche de l'instrument en cours
 const TACHES_SANS_INSTRUMENT = ["bibliotheque"];
 
 function ecranInstrument() {
-  if (ecranChoisi) return ecranChoisi;
   return vueInstrument && vueInstrument.probleme ? vueInstrument.probleme.ecran : null;
 }
 
@@ -85,64 +84,62 @@ function afficherFeuille() {
   }
 }
 
-// Cause et action du problème (sauf quand le titre de l'écran le dit déjà), détail replié.
+// Cause et action du problème (sauf quand le titre de l'écran le dit déjà),
+// étapes de câblage si elles servent, détail replié, raison d'un bouton inactif.
 function remplirEcran(section) {
   const probleme = vueInstrument && vueInstrument.probleme;
   const concerne = Boolean(probleme) && probleme.ecran === section.dataset.ecran;
-  const evident = concerne && ["aucun_instrument", "sdk_non_indique"].includes(probleme.code);
+  const evident = concerne && ["aucun_instrument", "logiciel_absent"].includes(probleme.code);
   const avis = section.querySelector("[data-avis]");
   avis.hidden = !concerne || evident;
   if (concerne) {
     avis.querySelector("[data-avis-cause]").textContent = textes["probleme." + probleme.code + ".cause"];
     avis.querySelector("[data-avis-action]").textContent = textes["probleme." + probleme.code + ".action"];
   }
+  const guide = section.querySelector("[data-guide-cablage]");
+  if (guide) guide.hidden = !(concerne && probleme.guide_cablage);
   const detail = concerne ? probleme.detail : null;
   section.querySelector("[data-details]").hidden = !detail;
   section.querySelector("[data-details-texte]").textContent = detail || "";
+  section.querySelector("[data-raison-recherche]").hidden = !occupe;
 }
 
 function afficherInstrument() {
   const barre = document.querySelector("[data-instrument]");
   const texte = barre.querySelector("[data-instrument-texte]");
   let pret = false;
-  if (!vueInstrument) texte.textContent = textes["instrument.recherche"];
+  if (occupe || !vueInstrument) texte.textContent = textes["instrument.recherche"];
+  else if (ecranInstrument() === "choix_dossier") texte.textContent = textes["instrument.logiciel_absent"];
   else if (vueInstrument.etat === "non_detecte") texte.textContent = textes["instrument.aucun"];
   else {
-    texte.textContent = vueInstrument.modele + ", " + textes["instrument.etat." + vueInstrument.etat];
+    texte.textContent = textes["instrument.barre"]
+      .replace("{modele}", vueInstrument.modele)
+      .replace("{etat}", textes["instrument.etat." + vueInstrument.etat]);
     pret = vueInstrument.etat !== "etalonnage_requis";
   }
   barre.classList.toggle("state--ok", pret);
   barre.classList.toggle("state--warn", !pret);
-  for (const b of document.querySelectorAll("[data-action]")) b.disabled = !vueInstrument;
+  for (const b of document.querySelectorAll("[data-action]")) b.disabled = occupe;
   afficherFeuille();
 }
 
-async function ouvrirInstrument(commande, args) {
-  vueInstrument = null;
-  ecranChoisi = null;
+// Appelle une commande du module instrument. Elle rend la nouvelle vue, ou
+// `null` si l'opérateur a annulé (la vue précédente reste).
+async function interrogerInstrument(commande) {
+  occupe = true;
   afficherInstrument();
   try {
-    vueInstrument = await invoke(commande, args);
+    const vue = await invoke(commande);
+    if (vue) vueInstrument = vue;
   } catch (erreur) {
     vueInstrument = {
       etat: "non_detecte",
       modele: null,
-      probleme: { code: "pont_en_panne", ecran: "non_detecte", detail: String(erreur) },
+      probleme: { code: "pont_en_panne", ecran: "non_detecte", guide_cablage: false, detail: String(erreur) },
     };
   }
+  occupe = false;
   afficherInstrument();
-}
-
-async function changerSdk() {
-  ecranChoisi = "emplacement_sdk";
-  const champ = document.getElementById("emplacement-sdk");
-  if (!champ.value) champ.value = (await invoke("emplacement_sdk")) || "";
-  afficherFeuille();
-  champ.focus();
-}
-
-function validerSdk() {
-  ouvrirInstrument("indiquer_sdk", { chemin: document.getElementById("emplacement-sdk").value });
 }
 
 // ---- Lancement ----
@@ -155,12 +152,8 @@ document.addEventListener("click", (e) => {
     memoire("theme", cible.dataset.themeChoix);
   }
   if (cible.dataset.langueChoix) appliquerLangue(cible.dataset.langueChoix);
-  if (cible.dataset.action === "reessayer") ouvrirInstrument("ouvrir_instrument");
-  if (cible.dataset.action === "changer_sdk") changerSdk();
-  if (cible.dataset.action === "valider_sdk") validerSdk();
-});
-document.getElementById("emplacement-sdk").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && vueInstrument) validerSdk();
+  if (cible.dataset.action === "reessayer") interrogerInstrument("ouvrir_instrument");
+  if (cible.dataset.action === "choisir_dossier") interrogerInstrument("choisir_dossier");
 });
 sombreSysteme.addEventListener("change", marquerTheme);
 
@@ -169,6 +162,5 @@ sombreSysteme.addEventListener("change", marquerTheme);
   const demandee = await invoke("langue_demandee");
   await appliquerLangue(demandee || memoire("langue") || "fr");
   document.body.hidden = false;
-  document.getElementById("emplacement-sdk").value = (await invoke("emplacement_sdk")) || "";
-  await ouvrirInstrument("ouvrir_instrument");
+  await interrogerInstrument("ouvrir_instrument");
 })();

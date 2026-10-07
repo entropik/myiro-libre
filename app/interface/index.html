@@ -51,25 +51,21 @@
     <section data-ecran="non_detecte" hidden>
       <h2 class="empty__text" data-t="ecran.non_detecte.titre"></h2>
       <div class="notice notice--warn" data-avis hidden><p><b data-avis-cause></b> <span data-avis-action></span></p></div>
-      <p class="prose"><span class="label num">01</span> <span data-t="ecran.non_detecte.etape1"></span></p>
-      <p class="prose"><span class="label num">02</span> <span data-t="ecran.non_detecte.etape2"></span></p>
-      <p class="prose"><span class="label num">03</span> <span data-t="ecran.non_detecte.etape3"></span></p>
-      <div class="actions">
-        <button class="btn btn--primary" data-action="reessayer" data-t="ecran.reessayer"></button>
-        <button class="btn" data-action="changer_sdk" data-t="ecran.changer_sdk"></button>
+      <div data-guide-cablage>
+        <p class="prose"><span class="label num">01</span> <span data-t="ecran.non_detecte.etape1"></span></p>
+        <p class="prose"><span class="label num">02</span> <span data-t="ecran.non_detecte.etape2"></span></p>
+        <p class="prose"><span class="label num">03</span> <span data-t="ecran.non_detecte.etape3"></span></p>
       </div>
+      <div class="actions"><button class="btn btn--primary" data-action="reessayer" data-t="ecran.reessayer"></button></div>
+      <p class="why" data-raison-recherche data-t="raison.recherche" hidden></p>
       <details class="replie" data-details hidden><summary data-t="ecran.details"></summary><pre data-details-texte></pre></details>
     </section>
-    <section data-ecran="emplacement_sdk" hidden>
-      <h2 class="empty__text" data-t="ecran.sdk.titre"></h2>
-      <p class="prose" data-t="ecran.sdk.explication"></p>
+    <section data-ecran="choix_dossier" hidden>
+      <h2 class="empty__text" data-t="ecran.choix.titre"></h2>
+      <p class="prose" data-t="ecran.choix.explication"></p>
       <div class="notice notice--warn" data-avis hidden><p><b data-avis-cause></b> <span data-avis-action></span></p></div>
-      <div class="field">
-        <label class="label" for="emplacement-sdk" data-t="ecran.sdk.champ"></label>
-        <input class="input" id="emplacement-sdk" spellcheck="false" autocomplete="off">
-        <p data-t="ecran.sdk.aide"></p>
-      </div>
-      <div class="actions"><button class="btn btn--primary" data-action="valider_sdk" data-t="ecran.sdk.valider"></button></div>
+      <div class="actions"><button class="btn btn--primary" data-action="choisir_dossier" data-t="ecran.choix.action"></button></div>
+      <p class="why" data-raison-recherche data-t="raison.recherche" hidden></p>
       <details class="replie" data-details hidden><summary data-t="ecran.details"></summary><pre data-details-texte></pre></details>
     </section>
     <section class="empty" data-vue="mesurer">

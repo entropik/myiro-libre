@@ -86,11 +86,17 @@ const FRANCAIS: Catalogue = &[
     ("cartouche.aucune", "Aucune"),
     ("cartouche.non_fait", "Non fait"),
     ("cartouche.inconnue", "Inconnue"),
-    // Instrument : état dans la barre
+    // Instrument : état dans la barre ({modele} et {etat} sont remplacés)
     ("instrument.recherche", "Recherche de l’instrument…"),
+    ("instrument.barre", "{modele}, {etat}"),
     ("instrument.etat.connecte", "connecté"),
     ("instrument.etat.etalonnage_requis", "étalonnage requis"),
     ("instrument.etat.etalonne", "étalonné"),
+    ("instrument.logiciel_absent", "Logiciel du fabricant absent"),
+    (
+        "raison.recherche",
+        "Disponible quand la recherche de l’instrument est terminée.",
+    ),
     // Instrument : écrans d’aide
     ("ecran.non_detecte.titre", "Aucun instrument détecté."),
     (
@@ -103,47 +109,36 @@ const FRANCAIS: Catalogue = &[
     ),
     ("ecran.non_detecte.etape3", "Puis cliquez sur Réessayer."),
     ("ecran.reessayer", "Réessayer"),
-    ("ecran.changer_sdk", "Changer l’emplacement du SDK"),
-    ("ecran.sdk.titre", "Où se trouve le SDK du MYIRO-1\u{202f}?"),
     (
-        "ecran.sdk.explication",
-        "myiro-libre ne fournit pas les DLL de Konica Minolta. Il utilise celles du logiciel du fabricant déjà installé sur ce poste.",
+        "ecran.choix.titre",
+        "Le logiciel du fabricant du MYIRO-1 n’est pas installé sur ce poste.",
     ),
-    ("ecran.sdk.champ", "Dossier du SDK ou fichier FDXSDK.dll"),
     (
-        "ecran.sdk.aide",
-        "Collez le chemin du dossier d’installation du logiciel du fabricant. L’application y cherche FDXSDK.dll.",
+        "ecran.choix.explication",
+        "myiro-libre s’appuie sur ce logiciel pour parler à l’instrument. S’il est installé ailleurs, choisissez son dossier.",
     ),
-    ("ecran.sdk.valider", "Utiliser cet emplacement"),
+    ("ecran.choix.action", "Choisir le dossier…"),
     ("ecran.details", "Détails techniques"),
     // Problèmes : cause probable, puis une action
     (
-        "probleme.sdk_non_indique.cause",
-        "L’emplacement du SDK n’est pas encore indiqué.",
+        "probleme.logiciel_absent.cause",
+        "Le logiciel du fabricant du MYIRO-1 n’a pas été trouvé.",
     ),
     (
-        "probleme.sdk_non_indique.action",
-        "Indiquez le dossier du logiciel Konica Minolta installé sur ce poste.",
+        "probleme.logiciel_absent.action",
+        "Choisissez le dossier où il est installé.",
     ),
     (
-        "probleme.aucune_dll.cause",
-        "Aucun fichier FDXSDK.dll n’a été trouvé à cet emplacement.",
+        "probleme.logiciel_inutilisable.cause",
+        "Le logiciel du fabricant trouvé sur ce poste n’a pas pu être utilisé.",
     ),
     (
-        "probleme.aucune_dll.action",
-        "Indiquez le dossier où le logiciel du fabricant est installé, ou le fichier FDXSDK.dll lui-même.",
-    ),
-    (
-        "probleme.sdk_inutilisable.cause",
-        "Le fichier FDXSDK.dll trouvé n’a pas pu être chargé. Il est peut-être abîmé, ou prévu pour une autre version de Windows (32 ou 64 bits).",
-    ),
-    (
-        "probleme.sdk_inutilisable.action",
-        "Indiquez une autre copie de FDXSDK.dll, par exemple celle d’un autre logiciel du fabricant.",
+        "probleme.logiciel_inutilisable.action",
+        "Choisissez le dossier d’un autre logiciel du fabricant.",
     ),
     (
         "probleme.pont_introuvable.cause",
-        "Le programme qui dialogue avec l’instrument (pont-myiro1) est introuvable.",
+        "Une partie de myiro-libre est introuvable.",
     ),
     (
         "probleme.pont_introuvable.action",
@@ -151,7 +146,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "probleme.pont_en_panne.cause",
-        "Le programme qui dialogue avec l’instrument s’est arrêté de façon imprévue.",
+        "Le dialogue avec l’instrument s’est interrompu.",
     ),
     (
         "probleme.pont_en_panne.action",
@@ -159,7 +154,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "probleme.pont_bloque.cause",
-        "Le programme qui dialogue avec l’instrument ne répondait plus et a été arrêté. L’instrument est peut-être resté dans un état incertain.",
+        "L’instrument ne répondait plus et la liaison a été coupée. Il est peut-être resté dans un état incertain.",
     ),
     (
         "probleme.pont_bloque.action",
@@ -240,11 +235,17 @@ const ANGLAIS: Catalogue = &[
     ("cartouche.aucune", "None"),
     ("cartouche.non_fait", "Not done"),
     ("cartouche.inconnue", "Unknown"),
-    // Instrument: state in the top bar
+    // Instrument: state in the top bar ({modele} and {etat} are replaced)
     ("instrument.recherche", "Looking for the instrument…"),
+    ("instrument.barre", "{modele}, {etat}"),
     ("instrument.etat.connecte", "connected"),
     ("instrument.etat.etalonnage_requis", "calibration required"),
     ("instrument.etat.etalonne", "calibrated"),
+    ("instrument.logiciel_absent", "Manufacturer software missing"),
+    (
+        "raison.recherche",
+        "Available once the search for the instrument is over.",
+    ),
     // Instrument: help screens
     ("ecran.non_detecte.titre", "No instrument detected."),
     (
@@ -257,47 +258,36 @@ const ANGLAIS: Catalogue = &[
     ),
     ("ecran.non_detecte.etape3", "Then click Try again."),
     ("ecran.reessayer", "Try again"),
-    ("ecran.changer_sdk", "Change the SDK location"),
-    ("ecran.sdk.titre", "Where is the MYIRO-1 SDK?"),
     (
-        "ecran.sdk.explication",
-        "myiro-libre does not ship the Konica Minolta DLLs. It uses those of the manufacturer’s software already installed on this computer.",
+        "ecran.choix.titre",
+        "The MYIRO-1 manufacturer’s software is not installed on this computer.",
     ),
-    ("ecran.sdk.champ", "SDK folder or FDXSDK.dll file"),
     (
-        "ecran.sdk.aide",
-        "Paste the path of the manufacturer’s software installation folder. The application looks for FDXSDK.dll in it.",
+        "ecran.choix.explication",
+        "myiro-libre relies on this software to talk to the instrument. If it is installed elsewhere, choose its folder.",
     ),
-    ("ecran.sdk.valider", "Use this location"),
+    ("ecran.choix.action", "Choose the folder…"),
     ("ecran.details", "Technical details"),
     // Problems: likely cause, then one action
     (
-        "probleme.sdk_non_indique.cause",
-        "The SDK location has not been set yet.",
+        "probleme.logiciel_absent.cause",
+        "The MYIRO-1 manufacturer’s software was not found.",
     ),
     (
-        "probleme.sdk_non_indique.action",
-        "Enter the folder of the Konica Minolta software installed on this computer.",
+        "probleme.logiciel_absent.action",
+        "Choose the folder where it is installed.",
     ),
     (
-        "probleme.aucune_dll.cause",
-        "No FDXSDK.dll file was found at this location.",
+        "probleme.logiciel_inutilisable.cause",
+        "The manufacturer’s software found on this computer could not be used.",
     ),
     (
-        "probleme.aucune_dll.action",
-        "Enter the folder where the manufacturer’s software is installed, or the FDXSDK.dll file itself.",
-    ),
-    (
-        "probleme.sdk_inutilisable.cause",
-        "The FDXSDK.dll file found could not be loaded. It may be damaged, or built for another version of Windows (32 or 64 bit).",
-    ),
-    (
-        "probleme.sdk_inutilisable.action",
-        "Enter another copy of FDXSDK.dll, for example the one from another manufacturer’s program.",
+        "probleme.logiciel_inutilisable.action",
+        "Choose the folder of another program from the manufacturer.",
     ),
     (
         "probleme.pont_introuvable.cause",
-        "The program that talks to the instrument (pont-myiro1) cannot be found.",
+        "Part of myiro-libre cannot be found.",
     ),
     (
         "probleme.pont_introuvable.action",
@@ -305,7 +295,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "probleme.pont_en_panne.cause",
-        "The program that talks to the instrument stopped unexpectedly.",
+        "The connection with the instrument was interrupted.",
     ),
     (
         "probleme.pont_en_panne.action",
@@ -313,7 +303,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "probleme.pont_bloque.cause",
-        "The program that talks to the instrument stopped answering and was shut down. The instrument may have been left in an uncertain state.",
+        "The instrument stopped answering and the connection was cut. It may have been left in an uncertain state.",
     ),
     (
         "probleme.pont_bloque.action",
@@ -409,7 +399,15 @@ mod tests {
         for etat in ["connecte", "etalonnage_requis", "etalonne"] {
             demandees.push(format!("instrument.etat.{etat}"));
         }
-        demandees.extend(["instrument.recherche".into(), "instrument.aucun".into()]);
+        demandees.extend(
+            [
+                "instrument.recherche",
+                "instrument.aucun",
+                "instrument.barre",
+                "instrument.logiciel_absent",
+            ]
+            .map(String::from),
+        );
         assert!(
             demandees.len() > 40,
             "clés lues dans la page : {demandees:?}"
