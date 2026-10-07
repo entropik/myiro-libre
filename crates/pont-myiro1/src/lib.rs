@@ -70,9 +70,10 @@ pub trait SdkMyiro1 {
     fn etalonner_blanc(&mut self) -> Result<i32, i32>;
     /// `FDX_SetMeasureCondition({0, 0})` : arme une mesure ponctuelle.
     fn armer_ponctuelle(&mut self) -> Result<i32, i32>;
-    /// `FDX_SetMeasureCondition({1, 0})` : arme une lecture de bande, sans
-    /// contrôle du nombre de plages par la DLL.
-    fn armer_bande(&mut self) -> Result<i32, i32>;
+    /// `FDX_SetMeasureCondition({1, n})` : arme une lecture de bande ; la DLL
+    /// compare le nombre de plages reconnues à `plages_attendues` (0 : aucun
+    /// contrôle).
+    fn armer_bande(&mut self, plages_attendues: u32) -> Result<i32, i32>;
     /// `FDX_StopMeasurement` : désarme et ramène l'instrument au repos.
     fn arreter_mesure(&mut self) -> Result<i32, i32>;
     /// `FDX_GetMeasureData` en deux temps, chaque résultat préparé à `longueur` valeurs.
@@ -112,7 +113,8 @@ pub struct MesureBande {
 #[derive(Clone, Copy)]
 enum Mode {
     Ponctuelle,
-    Bande,
+    /// Nombre de plages attendu, 0 si inconnu.
+    Bande(u32),
 }
 
 /// Une mesure ponctuelle : les trois spectres (380 à 730 nm par 10 nm) et les
@@ -274,9 +276,23 @@ impl<S: SdkMyiro1> Session<S> {
 
     /// Lecture de bande : l'opérateur fait glisser l'instrument le long d'une
     /// rangée de plages ; la DLL les reconnaît et rend une mesure par plage.
-    pub fn mesurer_bande(&mut self) -> Result<MesureBande, ErreurPont> {
+    /// Avec `plages_attendues`, la DLL et le pont refusent une lecture qui n'en
+    /// compte pas autant (par exemple le blanc du départ pris pour une plage).
+    pub fn mesurer_bande(
+        &mut self,
+        plages_attendues: Option<u32>,
+    ) -> Result<MesureBande, ErreurPont> {
         self.autoriser(Palier::Bande, Some(Palier::Etalonnage))?;
-        let (plages, sens, evenements) = self.mesurer(Mode::Bande)?;
+        let (plages, sens, evenements) =
+            self.mesurer(Mode::Bande(plages_attendues.unwrap_or(0)))?;
+        if let Some(attendues) = plages_attendues {
+            if plages.len() != attendues as usize {
+                return Err(ErreurPont::ReponseInattendue(format!(
+                    "{} plages lues au lieu de {attendues}",
+                    plages.len()
+                )));
+            }
+        }
         Ok(MesureBande {
             plages,
             sens,
@@ -294,7 +310,7 @@ impl<S: SdkMyiro1> Session<S> {
         self.desarmer("avant armement");
         let armement = match mode {
             Mode::Ponctuelle => self.sdk.armer_ponctuelle(),
-            Mode::Bande => self.sdk.armer_bande(),
+            Mode::Bande(attendues) => self.sdk.armer_bande(attendues),
         };
         self.journal
             .push(format!("armement : code {}", code_de(armement)));

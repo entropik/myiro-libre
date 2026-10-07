@@ -94,8 +94,8 @@ impl SdkMyiro1 for SdkSimule {
         }
         Ok(0)
     }
-    fn armer_bande(&mut self) -> Result<i32, i32> {
-        self.appels.push("armer bande".into());
+    fn armer_bande(&mut self, plages_attendues: u32) -> Result<i32, i32> {
+        self.appels.push(format!("armer bande {plages_attendues}"));
         if self.code_armement < 0 {
             return Err(self.code_armement);
         }
@@ -594,7 +594,7 @@ fn session_pour_bande(apres: &[i32], plages: usize) -> Session<SdkSimule> {
 #[test]
 fn une_bande_rend_une_mesure_par_plage() {
     let mut session = session_pour_bande(&[1, 2, 3], 12);
-    let bande = session.mesurer_bande().unwrap();
+    let bande = session.mesurer_bande(None).unwrap();
     assert_eq!(bande.plages.len(), 12);
     for plage in &bande.plages {
         assert_eq!(plage.m0, vec![10.0; 36]);
@@ -609,9 +609,9 @@ fn une_bande_rend_une_mesure_par_plage() {
 #[test]
 fn la_bande_arme_l_instrument_en_mode_bande_puis_desarme() {
     let mut session = session_pour_bande(&[1, 2, 3], 12);
-    session.mesurer_bande().unwrap();
+    session.mesurer_bande(None).unwrap();
     let appels = &session.sdk().appels;
-    assert!(appels.contains(&"armer bande".to_string()));
+    assert!(appels.contains(&"armer bande 0".to_string()));
     assert!(!appels.contains(&"armer ponctuelle".to_string()));
     assert_eq!(appels.last().unwrap(), "arreter");
 }
@@ -623,20 +623,24 @@ fn la_bande_exige_le_palier_bande() {
     let mut session = session_connectee(sdk, Palier::MesurePonctuelle);
     session.etalonner().unwrap();
     assert_eq!(
-        session.mesurer_bande(),
+        session.mesurer_bande(None),
         Err(ErreurPont::PalierNonAutorise {
             demande: Palier::Bande,
             plafond: Palier::MesurePonctuelle
         })
     );
-    assert!(!session.sdk().appels.contains(&"armer bande".to_string()));
+    assert!(!session
+        .sdk()
+        .appels
+        .iter()
+        .any(|a| a.starts_with("armer bande")));
 }
 
 #[test]
 fn une_bande_sans_plage_reconnue_est_refusee() {
     let mut session = session_pour_bande(&[1, 2, 3], 0);
     assert!(matches!(
-        session.mesurer_bande(),
+        session.mesurer_bande(None),
         Err(ErreurPont::ReponseInattendue(_))
     ));
 }
@@ -650,7 +654,24 @@ fn une_bande_echouee_est_signalee() {
         erreur: -9898,
     });
     assert_eq!(
-        session.mesurer_bande(),
+        session.mesurer_bande(None),
         Err(ErreurPont::MesureEchouee { erreur: -9898 })
     );
+}
+
+#[test]
+fn le_nombre_de_plages_attendu_est_transmis_a_la_dll() {
+    let mut session = session_pour_bande(&[1, 2, 3], 12);
+    session.mesurer_bande(Some(12)).unwrap();
+    assert!(session.sdk().appels.contains(&"armer bande 12".to_string()));
+}
+
+#[test]
+fn une_bande_qui_ne_compte_pas_les_plages_attendues_est_refusee() {
+    // Même si la DLL ne contrôlait pas le nombre, le pont le vérifie.
+    let mut session = session_pour_bande(&[1, 2, 3], 13);
+    assert!(matches!(
+        session.mesurer_bande(Some(12)),
+        Err(ErreurPont::ReponseInattendue(_))
+    ));
 }

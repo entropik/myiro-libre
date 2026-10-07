@@ -228,6 +228,12 @@ fn palier_mesure_ponctuelle_avec_le_vrai_instrument() {
 fn palier_bande_avec_le_vrai_instrument() {
     use std::io::Write;
     let rangees = std::env::var("MYIRO_RANGEES").unwrap_or("1,2,3".into());
+    // Nombre de plages par rangée transmis à la DLL (MYIRO_PLAGES_ATTENDUES,
+    // 0 ou absent : aucun contrôle).
+    let plages_attendues = std::env::var("MYIRO_PLAGES_ATTENDUES")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .filter(|&n| n > 0);
     let sortie = std::env::var("MYIRO_SORTIE")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
@@ -255,7 +261,7 @@ fn palier_bande_avec_le_vrai_instrument() {
     for rangee in rangees.split(',') {
         println!("bande {rangee} : faites glisser l'instrument le long de la rangée");
         let deja = session.journal().len();
-        let resultat = session.mesurer_bande();
+        let resultat = session.mesurer_bande(plages_attendues);
         for ligne in &session.journal()[deja..] {
             println!("    journal : {ligne}");
         }

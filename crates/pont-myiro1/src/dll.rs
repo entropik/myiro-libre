@@ -212,10 +212,10 @@ impl SdkMyiro1 for FdxDll {
         verifier(unsafe { (self.armer)(&condition) })
     }
 
-    fn armer_bande(&mut self) -> Result<i32, i32> {
+    fn armer_bande(&mut self, plages_attendues: u32) -> Result<i32, i32> {
         let condition = ConditionMesure {
             type_mesure: MESURE_BANDE,
-            option: 0,
+            option: plages_attendues,
         };
         // SAFETY : pointeur vers 8 octets (fiche FDX_SetMeasureCondition).
         verifier(unsafe { (self.armer)(&condition) })
