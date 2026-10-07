@@ -63,6 +63,14 @@ _Éviter_ : phase (réservé au plan d'action), niveau, étape
 Dernier palier qu'un pont a le droit d'atteindre, fixé à son lancement ; toute demande au-delà est refusée sans toucher à l'instrument.
 _Éviter_ : limite, niveau maximal
 
+**Progression** :
+Liste des paliers déjà franchis par un pont depuis son lancement. C'est un historique : un palier franchi une fois n'autorise pas à mesurer.
+_Éviter_ : niveau atteint, état (au sens d'autorisation)
+
+**État courant** :
+Ce que le pont sait de l'instrument à cet instant : non connecté, inexploitable (identité illisible), connecté, étalonné ou perdu (liaison coupée). Lui seul autorise un étalonnage ou une mesure ; un échec d'étalonnage, une perte de liaison ou une nouvelle connexion le font redescendre.
+_Éviter_ : statut, palier (réservé à la progression imposée)
+
 **Prise de main** :
 Droit exclusif d'un logiciel à piloter un FD-9 en réseau ; un seul l'a à la fois. Le pont l'obtient à la connexion et la rend à la déconnexion. FD-S2w resté connecté la garde.
 _Éviter_ : autorité, authority, verrou

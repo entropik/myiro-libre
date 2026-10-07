@@ -176,13 +176,23 @@ pub enum ErreurPont {
     EtalonnageEchoue { erreur: i32 },
     /// Code -9983 : l'instrument n'est pas (ou plus) étalonné.
     NonEtalonne,
+    /// Aucun étalonnage utilisable dans la connexion en cours (jamais fait,
+    /// échoué, expiré, ou refusé par l'instrument) : étalonner avant de
+    /// mesurer. La DLL n'a pas été appelée.
+    EtalonnageRequis,
+    /// La connexion est ouverte mais l'identité de l'instrument n'a pas pu
+    /// être lue : rien ne peut se faire avant une nouvelle connexion. La DLL
+    /// n'a pas été appelée.
+    SessionInexploitable,
     /// L'instrument a signalé l'échec de la mesure (événement 4).
     MesureEchouee { erreur: i32 },
     /// La DLL a rendu une réponse de forme imprévue (nombre ou taille de résultats).
     ReponseInattendue { detail: String },
     /// L'instrument n'a pas répondu dans le délai prévu.
     Delai,
-    /// L'instrument s'est déconnecté ou ne répond plus (événement 6).
+    /// L'instrument s'est déconnecté ou ne répond plus (événement 6). La
+    /// session et son étalonnage sont invalidés : toute demande suivante reçoit
+    /// cette même erreur, sans appel à la DLL, jusqu'à une nouvelle connexion.
     InstrumentPerdu,
     /// Autre code d'erreur de la DLL, conservé brut.
     Sdk { code: i32 },

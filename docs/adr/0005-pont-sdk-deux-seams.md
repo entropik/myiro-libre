@@ -20,6 +20,19 @@ Le contrat de `FDX_SetMeasureCondition` est établi (`docs/abi/FDX_SetMeasureCon
 
 Les fiches `docs/abi/FD9_*` établissent ce que `FD9_Connect` lit : la liaison (0 réseau, 1 USB), l'adresse (IP ou nom d'hôte, 23 caractères au plus, car la DLL n'en recopie que 24 octets) et un nom d'application (20 octets recopiés). Le port TCP 49152 est fixé dans la DLL, il n'y a ni délai ni clé de licence. Le paramètre de connexion du FD-9 est donc « une entrée de la détection, ou une adresse saisie », plus le nom `myiro-libre` ; en réseau, l'adresse saisie dispense de la détection. `crates/fd9-sys` en porte les formes (`Appareil::reseau`, `NomApplication`), vérifiées avant tout appel. Sa liste blanche compte six exports et aucune exception : ni `JIG_*` ni `FD9_Set*`, `FD9_TAConnect` (connexion prioritaire) exclu tant que la prise de main n'est pas comprise.
 
+### Complément du 7 octobre 2026 : état courant de l'instrument (ticket #23)
+
+Le pont MYIRO-1 sépare désormais trois choses : le **plafond** (fixé au lancement, jamais relevé), la **progression** des paliers (ce qui a été franchi une fois, gardé comme historique) et l'**état courant** de l'instrument (non connecté, inexploitable, connecté, étalonné, perdu). Seul l'état courant autorise un étalonnage ou une mesure.
+
+- Un nouvel étalonnage rend l'ancien inutilisable dès son début : après un échec, un délai dépassé, un refus ou une perte de liaison, il faut réétalonner.
+- La connexion n'est exploitable qu'une fois l'identité lue. Toute nouvelle connexion efface l'identité et la date d'étalonnage de la précédente ; la provenance d'une mesure les prend dans l'état relevé avant l'armement.
+- Une perte de liaison (événement 6, même pendant le désarmement ou le retour au repos) bloque tout jusqu'à une nouvelle connexion : toute nouvelle demande est refusée sans appel à la DLL, mais la demande en cours tente encore un désarmement (`FDX_StopMeasurement`, export déjà autorisé) ; la politique de désarmement relève du ticket #24. Seul l'événement 6 mène à l'état perdu : un délai dépassé ou une erreur de la DLL pendant la lecture ne l'invalident pas (supposé, à observer sur l'instrument). Une mesure déjà rendue n'est pas touchée.
+- Le protocole distingue trois refus : `etalonnage_requis`, `instrument_perdu` (rendu aussi aux demandes suivantes) et `session_inexploitable`. Dans les trois cas, l'instrument n'est pas armé.
+
+La session n'a pas encore de déconnexion volontaire : seule la perte de liaison (événement 6) mène à l'état perdu ; la fermeture relève du ticket #24.
+
+Vérifié contre l'instrument simulé seulement ; le comportement du vrai MYIRO-1 après une perte de liaison reste à observer, de même que la réponse de la DLL à une reconnexion sans déconnexion préalable (supposée acceptée par le simulé, voir la fiche `FDX_Connect`).
+
 ## Options écartées
 
 - **Commande brute et catalogue dynamique** (appeler un export par son nom). Ils ouvrent un chemin vers des exports arbitraires, contraire à la règle de sécurité matérielle. Un banc d'exploration éventuel serait un binaire séparé, hors build de production.
