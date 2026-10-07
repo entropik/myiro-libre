@@ -259,9 +259,9 @@ Commence une fois la v1 mesurant par la DLL. Le pilote libre est un adapter de p
 
 ## 7. Prochaines actions immédiates
 
-Mise à jour du 7 octobre 2026. Faits : dépôt, ADR 0001 à 0006, fiches `docs/abi/` des quatre premiers paliers MYIRO-1 (confirmées par les SDK Mac non dépouillés), squelette Rust testé (`fdx-sys`, `pont-protocole`, `pont-myiro1`). La clé de licence FD9 est tranchée : FD9SDK n'en demande pas.
+Mise à jour du 7 octobre 2026, soir. Faits : ADR 0001 à 0006 ; fiches `docs/abi/` du MYIRO-1 (version, détection, connexion, identité, événements, étalonnage, armement, désarmement, lecture) ; phases 1, 3 et 4 du MYIRO-1 menées jusqu'au bout : programme `pont-myiro1` (protocole JSON, plafond, provenance), et sur l'instrument réel version, détection, connexion, étalonnage, mesure ponctuelle et bande, comparées au FD-9 (ΔE00 de 0,2 à 0,6 en ponctuel, 0,6 en moyenne en bande). Sauvegarde des logiciels récupérés : empreintes calculées (`Audit-MYIRO/logiciels/EMPREINTES-SHA256.txt`), copie hors poste à faire par l'utilisateur. La clé de licence FD9 est tranchée : FD9SDK n'en demande pas.
 
-1. Phase 3 : charger la vraie `FDXSDK.dll` dans le pont et appeler `FDX_GetSDKVersion` seul (aucun contact avec l'instrument), avec accord préalable.
-2. Phase 1 : fiches `RegisterDeviceEventHandler`, `Calibration`, `Get/SetMeasureCondition`, `StartMeasurement`, `GetMeasureData`, `GetRAWData`, à partir des rapports `retroanalyse/logiciels/`.
-3. Phase 2 : fiches FD9SDK à partir des symboles de la bibliothèque Mac de FD-S2w.
-4. Sauvegarde hors poste de `Audit-MYIRO/logiciels/` (logiciels récupérés avant la fermeture), avec empreintes.
+1. Phase 2 et 5 : fiches FD9SDK à partir des symboles de la bibliothèque Mac de FD-S2w, puis pont FD-9 avec les mêmes paliers.
+2. Phase 6 : bibliothèque de mesures et export CGATS.17 alimentés par le programme `pont-myiro1` (provenance comprise).
+3. Phase 9 (ADR 0006) : jeu de validation « données brutes → spectres » à partir des mesures réelles déjà archivées.
+4. Copie hors poste de `Audit-MYIRO/logiciels/`, vérifiée par les empreintes.
