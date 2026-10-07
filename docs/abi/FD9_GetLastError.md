@@ -11,13 +11,17 @@ int32_t __stdcall FD9_GetLastError(void);   /* x86 : ret (aucun argument) */
 ## Ce qui est confirmé
 
 - Aucun argument ; la fonction se contente de relire une variable globale (`fd9-x86` `0x100b0e50`, `fd9-x64` `0x1800d0280`).
-- **Elle rend le code interne d'origine, pas le code public** : la fonction de regroupement mémorise le code reçu avant de chercher son groupe (`fd9-x86` `0x100b43d5`, `fd9-x64` `0x1800d4517`). Exemple : un `FD9_Connect` vers une adresse injoignable renvoie 1003, et `FD9_GetLastError` rend ensuite 4001.
+- **Elle rend le code interne d'origine, pas le code public** : la fonction de regroupement mémorise le code reçu avant de chercher son groupe (`fd9-x86` `0x100b43d5`, `fd9-x64` `0x1800d4517`). Exemple : quand la connexion TCP de `FD9_Connect` échoue, l'export renvoie 1003 et `FD9_GetLastError` rend ensuite 4001 (valeurs confirmées ; que 4001 corresponde à une adresse injoignable est supposé).
 - Chaque export remplace ce code, y compris par 0 en cas de succès.
 - La seule autre fonction de version est `JIG_GetSDKVersion`, un export de maintenance : il reste hors de la liste blanche.
 
 ## Ce qui est supposé
 
 - Avant tout autre appel, la valeur est 0 (variable globale non initialisée par le code, donc à zéro au chargement).
+
+## Propriété de la mémoire
+
+- Aucun pointeur échangé : la fonction rend un entier (confirmé, `0x100b0e50`).
 
 ## Le palier Version du FD-9
 

@@ -20,7 +20,7 @@ Les désassemblages des exports se régénèrent avec `python -I Audit-MYIRO/out
 | `fd9-x64` | Ergosoft `FD9SDK.dll` | 1.3.1.5 | x64 |
 | FD-S2w 1.6.1 Mac | `libFD9SDK.dylib` | 1.3.2.3 | x86_64, **symboles conservés** |
 
-Les deux DLL Windows ont les mêmes 125 exports, dont 38 `FD9_*` ; les 86 autres sont des `JIG_*` (maintenance usine et tests de l'appareil), jamais appelés.
+Les deux DLL Windows ont les mêmes 125 exports : 38 fonctions `FD9_*`, 86 fonctions `JIG_*` (maintenance usine et tests de l'appareil), jamais appelées, et une donnée, `gSDKLog` (variable du journal du SDK, rôle supposé d'après son nom), qui n'est pas une fonction et n'est jamais résolue par le pont.
 
 FD9SDK est un SDK distinct de FDXSDK : noms, codes d'erreur, structures et transport réseau diffèrent. Le nom de code interne du FD-9 est « Jungfrau ».
 
@@ -30,6 +30,7 @@ FD9SDK est un SDK distinct de FDXSDK : noms, codes d'erreur, structures et trans
 - **Les scalaires d'entrée passent par pointeur** (confirmé) : par exemple, la capacité de `FD9_GetDeviceList` est un `const uint32_t *`. Le code C++ d'origine utilise des références.
 - **Session globale** (confirmé) : aucune poignée d'instrument ; un seul instrument à la fois par processus. Un drapeau interne vaut 0 hors connexion, 1 connecté en réseau, 2 connecté en USB (`fd9-x86` `0x1008aa3c..0x1008aa44`).
 - **Retour : un code public regroupé**, 0 = succès (confirmé). Chaque export passe son code interne à une fonction de regroupement (`fd9-x86` `0x100b43b0`) qui le cherche dans une table de 32 groupes (`0x10108ca0`, identique dans la bibliothèque Mac) et renvoie le numéro du groupe ; un code absent de la table devient **1999**.
+- **Propriété de la mémoire** : chaque fiche a sa rubrique. En résumé, pour ces six exports, la DLL ne garde aucun pointeur de l'appelant après le retour, **sauf le rappel d'événements**, relu à chaque événement.
 - **`FD9_GetLastError` rend le code interne d'origine**, pas le code regroupé (confirmé en x86 et en x64). C'est le seul moyen de distinguer deux échecs du même groupe.
 
 ## Codes publics rencontrés dans ces fiches
@@ -39,7 +40,7 @@ FD9SDK est un SDK distinct de FDXSDK : noms, codes d'erreur, structures et trans
 | 0 | succès | — | confirmé |
 | 1001 | paramètre invalide | 1001 (contrôles des exports), 2001 (liaison inconnue), 2002 (adresse vide) | valeurs confirmées |
 | 1002 | échec réseau pendant la détection | 12051 à 12057 (sockets de la détection) | valeurs confirmées, sens supposé |
-| 1003 | instrument injoignable | 4001 (connexion TCP refusée), 4010 (nom d'hôte introuvable) | valeurs confirmées, sens supposé d'après le code |
+| 1003 | instrument injoignable | 4001 (échec de la connexion TCP), 4010 (échec de la résolution du nom) | valeurs confirmées, sens supposé d'après l'appel qui précède |
 | 1004 | aucun instrument connecté | 8054 | valeurs confirmées, sens tiré du code de `FD9_Disconnect` |
 | 1103 | appel interdit pendant une connexion | 8055 | valeurs confirmées, sens tiré du code |
 | 1104 | appel interdit pendant une mesure | 8064 | valeurs confirmées, sens supposé |

@@ -29,6 +29,12 @@ int32_t __stdcall FD9_GetDeviceList(tFD9_DeviceData *liste,      /* obligatoire 
 
 Taille confirmée par le pas de 44 octets (`imul …, 0x2c`, `0x100ae273`) ; aucune adresse mémoire dans la structure, donc même forme en 32 et 64 bits (`Appareil` dans `crates/fd9-sys`).
 
+## Propriété de la mémoire
+
+- Le tableau, le compteur et la capacité appartiennent à l'appelant, qui les alloue (confirmé : la DLL n'alloue rien pour l'appelant et ne rend aucun pointeur).
+- La DLL écrit dans le tableau et le compteur **pendant l'appel seulement** : elle ne garde leurs adresses que dans des variables locales de la fonction (`0x100ae280`, `0x100ae292`), et la recherche se fait dans un objet posé sur la pile de l'export (`0x100b0e9c`). Rien n'est gardé après le retour (confirmé).
+- Elle écrit au plus `capacite` entrées de 44 octets (effacement initial de `capacite × 44` octets, `0x100ae273..0x100ae298` ; arrêt de la recherche quand le compteur atteint la capacité, en USB `0x100ae340..0x100ae345` et en réseau `0x100ae5d0..0x100ae5d5`, `0x100ae905`). Le tableau doit donc faire au moins `capacite` entrées (confirmé).
+
 ## Ce qui est supposé
 
 - Si FD-S2w tourne sur le même ordinateur, il occupe déjà le port local 49152 : la détection réseau échoue alors, sans gêner l'USB.

@@ -18,7 +18,7 @@ Le contrat de `FDX_SetMeasureCondition` est établi (`docs/abi/FDX_SetMeasureCon
 
 ### Complément du 7 octobre 2026 : paramètre de connexion du FD-9
 
-Les fiches `docs/abi/FD9_*` établissent ce que `FD9_Connect` lit : la liaison (0 réseau, 1 USB), l'adresse (IP ou nom d'hôte, 31 caractères au plus) et un nom d'application (20 octets recopiés). Le port TCP 49152 est fixé dans la DLL, il n'y a ni délai ni clé de licence. Le paramètre de connexion du FD-9 est donc « une entrée de la détection, ou une adresse saisie », plus le nom `myiro-libre` ; en réseau, l'adresse saisie dispense de la détection. `crates/fd9-sys` en porte les formes (`Appareil::reseau`, `NomApplication`), vérifiées avant tout appel. Sa liste blanche compte six exports et aucune exception : ni `JIG_*` ni `FD9_Set*`, `FD9_TAConnect` (connexion prioritaire) exclu tant que la prise de main n'est pas comprise.
+Les fiches `docs/abi/FD9_*` établissent ce que `FD9_Connect` lit : la liaison (0 réseau, 1 USB), l'adresse (IP ou nom d'hôte, 23 caractères au plus, car la DLL n'en recopie que 24 octets) et un nom d'application (20 octets recopiés). Le port TCP 49152 est fixé dans la DLL, il n'y a ni délai ni clé de licence. Le paramètre de connexion du FD-9 est donc « une entrée de la détection, ou une adresse saisie », plus le nom `myiro-libre` ; en réseau, l'adresse saisie dispense de la détection. `crates/fd9-sys` en porte les formes (`Appareil::reseau`, `NomApplication`), vérifiées avant tout appel. Sa liste blanche compte six exports et aucune exception : ni `JIG_*` ni `FD9_Set*`, `FD9_TAConnect` (connexion prioritaire) exclu tant que la prise de main n'est pas comprise.
 
 ## Options écartées
 

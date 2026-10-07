@@ -15,10 +15,16 @@ int32_t __stdcall FD9_Disconnect(void);   /* x86 : ret (aucun argument) */
 - **Pendant une mesure** : si l'état du SDK n'est ni 0 ni 1, code interne 8064, public **1104**, et la session reste ouverte (`0x1008af8f..0x1008af9d`).
 - Sinon, la DLL arrête ses objets de communication et d'événements, ferme le transport, remet le drapeau de session à zéro et renvoie 0 (`0x1008afa3..0x1008b004`).
 
+## Propriété de la mémoire
+
+- Aucun argument, aucun pointeur rendu (confirmé).
+- La DLL libère elle-même ses objets de session : objet d'événements arrêté puis détruit (`0x1008afa3..0x1008afc2`), (confirmé) ; transport fermé par l'appel suivant (`0x1008aff5`, rôle supposé). L'appelant n'a rien à libérer.
+- L'adresse du rappel d'événements reste enregistrée (aucune écriture dans sa variable) : le pont la désinscrit lui-même ensuite (confirmé, voir [FD9_RegisterDeviceEventHandler](FD9_RegisterDeviceEventHandler.md)).
+
 ## Ce qui est supposé
 
 - Les états 0 et 1 sont les deux états d'attente de prise de main de `FD9_eSDKStatus` ; tout autre état veut dire qu'un travail ou une mesure est engagé.
-- Le rappel d'événements n'est plus appelé après le retour.
+- Le rappel d'événements n'est plus appelé après le retour (l'objet qui l'appelle est détruit, mais l'attente d'un appel en cours n'a pas été relevée).
 
 ## Pour le pont
 

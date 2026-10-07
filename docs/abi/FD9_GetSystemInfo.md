@@ -32,6 +32,13 @@ int32_t __stdcall FD9_GetSystemInfo(tFD9_SystemInfo *infos);   /* x86 : ret 4 */
 
 `InfosSysteme` dans `crates/fd9-sys` reprend cette forme ; ses tests vérifient taille et positions en 32 et 64 bits. L'étude Mac donnait 104 octets ; les deux DLL Windows n'en écrivent que 100. Le pont passe un tampon de **256 octets** (`TamponInfosSysteme`) pour garder une marge.
 
+## Propriété de la mémoire
+
+- La structure appartient à l'appelant, qui l'alloue ; la DLL n'alloue rien pour lui et ne rend aucun pointeur (confirmé).
+- Elle y écrit **pendant l'appel seulement** et ne garde pas son adresse : le pointeur ne passe que par des registres et la pile (`0x1008f3a8`, `edi` jusqu'au retour) (confirmé).
+- Elle n'écrit pas au-delà de 100 octets dans les deux versions étudiées (effacement de `0x64` octets, dernier champ recopié sur 31 octets à `+0x44`) (confirmé). Le tampon de 256 octets du pont est une marge pour d'autres versions.
+- Les textes (code produit, n° de série) n'ont pas de zéro final : l'appelant les lit sur leur longueur fixe, jamais avec une fonction qui cherche le zéro (confirmé).
+
 ## Ce qui est supposé
 
 - Le n° de série est codé en BCD dans l'instrument : l'écriture hexadécimale donne alors 8 chiffres décimaux.

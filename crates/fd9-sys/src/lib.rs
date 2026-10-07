@@ -104,8 +104,10 @@ impl Appareil {
     /// Paramètre de connexion réseau du FD-9 : l'adresse IP (ou le nom
     /// d'hôte) suffit, sans passer par la détection. Le SDK joint
     /// l'instrument en TCP sur le port 49152 (fiche `docs/abi/FD9_Connect.md`).
+    /// 23 caractères au plus : la DLL n'en recopie que 24 octets, sans zéro
+    /// final garanti.
     pub fn reseau(adresse: &str) -> Result<Self, ErreurParametre> {
-        verifier_texte(adresse, 31)?;
+        verifier_texte(adresse, 23)?;
         let mut zone = [0u8; 32];
         zone[..adresse.len()].copy_from_slice(adresse.as_bytes());
         Ok(Appareil {

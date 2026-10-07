@@ -60,11 +60,12 @@ fn une_connexion_reseau_directe_se_prepare_sans_detection() {
 
 #[test]
 fn une_adresse_reseau_garde_toujours_son_zero_final() {
-    // FD9_Connect mesure l'adresse avec strlen : 31 caractères au plus.
-    assert!(Appareil::reseau(&"a".repeat(31)).is_ok());
+    // En réseau, la DLL ne recopie que 24 octets de l'adresse, sans ajouter
+    // de zéro final : 23 caractères au plus (fiche FD9_Connect).
+    assert!(Appareil::reseau(&"a".repeat(23)).is_ok());
     assert_eq!(
-        Appareil::reseau(&"a".repeat(32)),
-        Err(ErreurParametre::TropLong { maximum: 31 })
+        Appareil::reseau(&"a".repeat(24)),
+        Err(ErreurParametre::TropLong { maximum: 23 })
     );
 }
 
@@ -132,11 +133,11 @@ fn tampon_exemple() -> TamponInfosSysteme {
     };
     mots(0, &[1, 0x20, 3]);
     mots(0x0c, &[1, 2, 3]);
-    mots(0x2c, &[2019, 4, 9]);
-    mots(0x38, &[2021, 6, 15]);
+    mots(0x2c, &[2001, 2, 3]);
+    mots(0x38, &[2004, 5, 6]);
     octets[0x18..0x1c].copy_from_slice(b"9C1A");
     octets[0x1c..0x24].copy_from_slice(b"12345678");
-    octets[0x24..0x2a].copy_from_slice(&[0x00, 0x20, 0x6b, 0x01, 0x02, 0x03]);
+    octets[0x24..0x2a].copy_from_slice(&[0x02, 0x00, 0x00, 0x00, 0x00, 0x01]);
     octets[0x44..0x44 + 19].copy_from_slice(b"KONICA MINOLTA FD-9");
     unsafe { std::mem::transmute::<[u8; 256], TamponInfosSysteme>(octets) }
 }
@@ -168,7 +169,7 @@ fn le_numero_de_serie_et_le_code_produit_sont_lus_sans_zero_final() {
 
 #[test]
 fn l_adresse_mac_est_lue_a_l_octet_0x24() {
-    assert_eq!(tampon_exemple().infos.mac(), "00:20:6B:01:02:03");
+    assert_eq!(tampon_exemple().infos.mac(), "02:00:00:00:00:01");
 }
 
 #[test]

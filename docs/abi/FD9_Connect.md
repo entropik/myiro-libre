@@ -16,12 +16,21 @@ int32_t __stdcall FD9_Connect(const tFD9_DeviceData *appareil,  /* 44 octets */
 - **Déjà connecté : la fonction rend 0 sans rien faire** (`0x1008a984`, `0x1008abac`). Un second `FD9_Connect` vers un autre instrument « réussit » donc en restant sur le premier.
 - Adresse vide : code interne 2002, public 1001. Liaison autre que 0 ou 1 : code interne 2001, public 1001 (`0x1008f1ea..0x1008f2ae`).
 - Seuls la liaison et l'adresse sont lus ; **l'identifiant (`+0x24`) est ignoré** (`0x1008a999..0x1008a9bb`).
-- **Liaison 0 (réseau)** : connexion TCP au **port 49152**, fixé dans la DLL (`0x10087481`). Selon un test sur le texte (`0x100873f0`, supposé : « est-ce une adresse `a.b.c.d` ? »), l'adresse est convertie directement ou résolue comme nom d'hôte par `gethostbyname`. Échec de connexion TCP : code interne 4001 ; nom introuvable : 4010 ; tous deux publics **1003**.
-- **Liaison 1 (USB)** : ouverture du port série nommé dans l'adresse (`COMn`).
+- **Liaison 0 (réseau)** : connexion TCP au **port 49152**, fixé dans la DLL (`0x10087481`). Selon un test sur le texte (`0x100873f0`, supposé : « est-ce une adresse `a.b.c.d` ? »), l'adresse est convertie directement ou résolue comme nom d'hôte par `gethostbyname`. Un échec de `connect` donne le code interne 4001, un échec de `gethostbyname` le code 4010, tous deux publics **1003** (valeurs confirmées ; sens supposé : instrument injoignable, nom introuvable).
+- **Liaison 1 (USB)** : ouverture du port série nommé dans l'adresse, sous la forme `\\.\COMn`, dans un texte de 15 octets (`0x100a46fa..0x100a471b`).
 - **Nom d'application** : la DLL en recopie au plus **20 octets** dans une commande envoyée à l'instrument, avec une attente de 30 secondes (`0x1008fbd2..0x1008fc2c`). FD-S2w envoie le nom de l'application suivi du nom de l'ordinateur entre parenthèses.
 - Si l'instrument refuse cette commande, la DLL produit le code interne 10002108 ou 10002109, absent de la table : public **1999**. Seul `FD9_GetLastError` les distingue.
 - Ensuite, selon un état interne, la DLL vérifie l'échéance de la calibration périodique : **1901** veut dire « connecté, calibration périodique due » (code interne 8011, `0x1008ab83..0x1008ab94`). FD-S2w le traite comme un succès, avec un avertissement.
 - Une connexion réussie pose le drapeau de session (1 = réseau, 2 = USB).
+
+## Propriété de la mémoire
+
+- L'entrée de 44 octets et le nom d'application appartiennent à l'appelant ; la DLL n'alloue rien pour lui (confirmé).
+- **Les deux sont recopiés, rien n'est gardé** : l'appelant peut libérer ou réutiliser ses textes dès le retour (confirmé).
+  - Réseau : l'objet de communication recopie l'adresse avec une copie bornée à **24 octets**, sans ajouter de zéro final (`0x1008725a..0x10087273`). Le champ suivant de l'objet reçoit l'adresse de connexion du socket : une adresse de 24 caractères ou plus serait donc lue sans fin. D'où la limite de 23 caractères.
+  - USB : le nom du port est recopié sous la forme `\\.\COMn` dans 15 octets (`0x100a4700..0x100a471b`) ; un nom de port de plus de 10 caractères ne tiendrait pas. Le pont n'utilise que les noms rendus par la détection.
+  - Nom d'application : recopie bornée à 20 octets dans un tampon local, puis dans la commande envoyée (`0x1008fbd2..0x1008fc1b`).
+- La liaison est lue une fois, puis gardée dans les variables de la DLL (drapeau de session) ; l'identifiant n'est jamais lu (confirmé).
 
 ## Ce qui est supposé
 
@@ -35,7 +44,7 @@ L'ADR 0005 prévoit un paramètre de connexion propre à chaque SDK. Pour le FD-
 | Paramètre | Valeur | Niveau |
 |---|---|---|
 | Liaison | 0 (réseau) ou 1 (USB) | confirmé |
-| Adresse | IP de l'instrument, par exemple `192.168.1.40`, ou nom d'hôte ; 31 caractères au plus, car la DLL mesure le texte jusqu'au zéro final | confirmé |
+| Adresse | IP de l'instrument, par exemple `192.168.1.40`, ou nom d'hôte ; **23 caractères au plus**, limite déduite de la recopie de 24 octets sans zéro final ajouté (voir « Propriété de la mémoire ») ; le champ de 32 octets de l'entrée en permettrait 31, mais la DLL n'en garde pas autant | recopie confirmée, limite déduite |
 | Port | 49152, fixé dans la DLL : rien à régler | confirmé |
 | Identifiant | inutile à la connexion ; mis à zéro quand l'adresse est saisie | confirmé |
 | Nom d'application | `myiro-libre` ; 19 caractères ASCII au plus, pour que le zéro final tienne dans les 20 octets recopiés | confirmé pour la recopie, choix du nom propre au projet |
