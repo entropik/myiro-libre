@@ -42,7 +42,7 @@ Question à trancher pour l'architecture : la conversion Lab vers RVB ou CMJN et
 
 ## Suite de l'exploration (7 octobre 2026)
 
-Huit notes thématiques, avec sources citées et faits marqués [établi], [probable] ou [à vérifier] :
+Neuf notes thématiques, avec sources citées et faits marqués [établi], [probable] ou [à vérifier] :
 
 - [Critères de contrôle ISO 12647-7 et -8](icc-12647-controle.md)
 - [Conditions de mesure M0 à M3 (ISO 13655)](icc-conditions-de-mesure.md)
@@ -52,6 +52,7 @@ Huit notes thématiques, avec sources citées et faits marqués [établi], [prob
 - [Options d'ArgyllCMS](icc-argyll-options.md)
 - [Projets libres et pilotes](icc-projets-libres.md)
 - [Éclairage ISO 3664](icc-eclairage-iso3664.md)
+- [Profil au gamut maximal : encrage, noir, gris neutre, saturation](icc-gamut-maximal.md)
 
 ## 5. Ce qu'il reste à chercher (état avant la suite ci-dessus)
 
