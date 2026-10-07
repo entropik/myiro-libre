@@ -65,6 +65,8 @@ Le 7 octobre 2026, MYIRO-1 en USB, DLL 1.0.1.0 x64, mesures ponctuelles sur une 
 - **comparaison avec un FD-9** (FD-S2w, mêmes plages de la même feuille) : ΔE00 de 0,18 à 0,21 sur un cyan, 0,29 à 0,41 sur un noir, 0,36 à 0,56 sur un gris moyen, en M0, M1 et M2 ; écart spectral moyen de 0,001 à 0,004. L'accord annoncé entre instruments est de 0,3 en moyenne ;
 - répétabilité sur le blanc papier, même point : ΔL\* de 0,01 entre deux mesures successives.
 
+**Lecture en bande**, même jour (test `palier_bande_avec_le_vrai_instrument`, type de mesure 1, option 0) : chaque lecture rend **une mesure par plage** reconnue par la DLL, toutes lectures cohérentes entre elles ; sens rendu : 1. Rangées de 12 plages de 20 mm : 12, 13 et 12 plages reconnues ; la 13ᵉ était le blanc papier du départ, pris pour une plage. Après avoir écarté ce blanc, comparaison des 36 plages avec le FD-9 : ΔE00 moyen 0,62 (M0), 0,65 (M1), 0,59 (M2), maximum 1,15. L'écart est plus grand qu'en ponctuel, la bande moyennant une zone différente de la plage en mouvement.
+
 Les mesures brutes restent dans `Archivage/donnees/` (local).
 
 ## Preuves (locales)
