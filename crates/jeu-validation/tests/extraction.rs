@@ -102,7 +102,12 @@ fn une_plage_sans_ses_donnees_brutes_est_refusee() {
 
 #[test]
 fn des_donnees_brutes_de_mauvaise_longueur_sont_refusees() {
-    let abime = CSV.replace(";2057.25\n", "\n");
+    // Retire la dernière valeur brute de chaque plage (fins de ligne LF ou CRLF).
+    let abime: String = CSV
+        .lines()
+        .map(|l| format!("{}\n", l.strip_suffix(";2057.25").unwrap_or(l)))
+        .collect();
+    assert_ne!(abime.replace("\r\n", "\n"), CSV.replace("\r\n", "\n"));
     assert!(extraire(&[SortieArchivee {
         nom: "essai",
         contenu: &abime,
