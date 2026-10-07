@@ -71,14 +71,21 @@ let vueInstrument = null; // dernier état rendu par le module `instrument`
 let occupe = true; // recherche de l'instrument en cours
 const TACHES_SANS_INSTRUMENT = ["bibliotheque"];
 
+// L'écran d'étalonnage ne s'ouvre que sur demande de l'opérateur (bouton « Étalonner »).
 function ecranInstrument() {
-  return vueInstrument && vueInstrument.probleme ? vueInstrument.probleme.ecran : null;
+  const ecran = vueInstrument && vueInstrument.probleme ? vueInstrument.probleme.ecran : null;
+  return ecran === "etalonnage" ? null : ecran;
 }
 
 // Feuille du centre : l'écran de l'instrument remplace celle des tâches qui en ont besoin.
+// L'étalonnage en cours l'emporte : l'opérateur l'a demandé.
 function afficherFeuille() {
   const tache = tacheCourante();
-  const ecran = TACHES_SANS_INSTRUMENT.includes(tache) ? null : ecranInstrument();
+  const ecran = phaseEtalonnage
+    ? "etalonnage"
+    : TACHES_SANS_INSTRUMENT.includes(tache)
+      ? null
+      : ecranInstrument();
   for (const v of document.querySelectorAll("[data-vue]")) v.hidden = ecran !== null || v.dataset.vue !== tache;
   for (const e of document.querySelectorAll("[data-ecran]")) {
     e.hidden = e.dataset.ecran !== ecran;
@@ -105,6 +112,7 @@ function remplirEcran(section) {
   }
   const guide = section.querySelector("[data-guide-cablage]");
   if (guide) guide.hidden = !(concerne && probleme.guide_cablage);
+  if (section.dataset.ecran === "etalonnage") remplirEtalonnage(section);
   const detail = concerne ? probleme.detail : null;
   section.querySelector("[data-details]").hidden = !detail;
   section.querySelector("[data-details-texte]").textContent = detail || "";
@@ -129,8 +137,99 @@ function afficherInstrument() {
   barre.classList.toggle("state--ok", pret);
   barre.classList.toggle("state--warn", !pret);
   for (const b of document.querySelectorAll("[data-action]")) b.disabled = occupe;
+  // « Étalonner » à côté de l'état, tant que l'étalonnage est requis et pas déjà ouvert.
+  const etalonner = document.querySelector("[data-etalonner]");
+  etalonner.hidden = !(vue && vue.etat === "etalonnage_requis") || phaseEtalonnage !== null;
+  // Rappel avant toute mesure : la raison des boutons de mesure inactifs le dit.
+  const raison = vue && vue.etat === "etalonnage_requis" ? "raison.etalonnage" : "raison.instrument";
+  for (const p of document.querySelectorAll("[data-t='raison.instrument']")) p.textContent = textes[raison];
   afficherFeuille();
 }
+
+// ---- Étalonnage guidé : le module `instrument` demande le geste (événement « geste »),
+// l'écran le montre et rend la réponse de l'opérateur (commande `repondre_geste`). ----
+let phaseEtalonnage = null; // null, "geste", "en_cours" ou "reussi"
+let appelEnCours = false; // la commande `etalonner` n'a pas encore rendu sa vue
+let gesteEnAttente = false; // le module attend la réponse de l'opérateur
+let gesteDejaFait = false; // geste confirmé sur l'écran d'échec, avant d'être redemandé
+const ETAPES = { geste: "blanc", en_cours: "etalonnage", reussi: "mesure" };
+
+function remplirEtalonnage(section) {
+  const phase = phaseEtalonnage || "geste";
+  const courante = ETAPES[phase];
+  const ordre = Object.values(ETAPES);
+  const etapes = section.querySelector("[data-etapes]");
+  etapes.style.setProperty("--n", String(ordre.length));
+  for (const b of etapes.querySelectorAll("[data-etape]")) {
+    const rang = ordre.indexOf(b.dataset.etape);
+    b.classList.toggle("done", rang < ordre.indexOf(courante));
+    if (b.dataset.etape === courante) b.setAttribute("aria-current", "step");
+    else b.removeAttribute("aria-current");
+  }
+  for (const el of section.querySelectorAll("[data-phase]")) {
+    el.hidden = !el.dataset.phase.split(" ").includes(phase);
+  }
+  // Boutons actifs quand le module attend la réponse, ou sur l'écran d'échec (plus d'appel en cours).
+  const repondable = phase === "geste" && (gesteEnAttente || !appelEnCours);
+  for (const b of section.querySelectorAll("[data-geste]")) b.disabled = !repondable;
+  const avis = section.querySelector("[data-avis]");
+  if (phase !== "geste") avis.hidden = true;
+  // Après un échec, l'avis donne déjà le geste à refaire : pas de redite.
+  section.querySelector("[data-geste-texte]").hidden = !avis.hidden;
+}
+
+async function lancerEtalonnage(dejaFait) {
+  if (appelEnCours) return;
+  appelEnCours = true;
+  gesteDejaFait = dejaFait;
+  phaseEtalonnage = dejaFait ? "en_cours" : "geste";
+  afficherInstrument();
+  try {
+    const vue = await invoke("etalonner");
+    if (vue) vueInstrument = vue;
+  } catch (erreur) {
+    console.error("etalonner", erreur);
+  }
+  appelEnCours = false;
+  gesteEnAttente = false;
+  gesteDejaFait = false;
+  const etalonne = vueInstrument && vueInstrument.etat === "etalonne";
+  const aRefaire = Boolean(vueInstrument && vueInstrument.probleme && vueInstrument.probleme.ecran === "etalonnage");
+  // Réussite : étape suivante. Échec : l'écran reste, avec l'avis et une action.
+  // Annulation : l'écran se ferme. Perte de l'instrument : l'écran du problème prend le relais.
+  if (etalonne && phaseEtalonnage === "en_cours") phaseEtalonnage = "reussi";
+  else if (aRefaire && phaseEtalonnage !== null) phaseEtalonnage = "geste";
+  else phaseEtalonnage = null;
+  afficherInstrument();
+}
+
+function repondreGeste(fait) {
+  if (gesteEnAttente) {
+    gesteEnAttente = false;
+    phaseEtalonnage = fait ? "en_cours" : null;
+    invoke("repondre_geste", { fait }).catch((erreur) => console.error("repondre_geste", erreur));
+  } else if (!appelEnCours) {
+    // Écran d'échec : « Lancer l'étalonnage » repart ; « Annuler » ferme l'écran.
+    if (fait) {
+      lancerEtalonnage(true);
+      return;
+    }
+    phaseEtalonnage = null;
+  }
+  afficherInstrument();
+}
+
+window.__TAURI__.event.listen("geste", (evenement) => {
+  if (evenement.payload !== "poser_sur_blanc") return;
+  gesteEnAttente = true;
+  if (gesteDejaFait) {
+    gesteDejaFait = false;
+    repondreGeste(true);
+    return;
+  }
+  phaseEtalonnage = "geste";
+  afficherInstrument();
+});
 
 // Appelle une commande du module instrument. Elle rend la nouvelle vue, ou
 // `null` si l'opérateur a annulé : la vue précédente reste. La page ne
@@ -160,6 +259,12 @@ document.addEventListener("click", (e) => {
   if (cible.dataset.langueChoix) appliquerLangue(cible.dataset.langueChoix);
   if (cible.dataset.action === "reessayer") interrogerInstrument("ouvrir_instrument");
   if (cible.dataset.action === "choisir_dossier") interrogerInstrument("choisir_dossier");
+  if (cible.hasAttribute("data-etalonner")) lancerEtalonnage(false);
+  if (cible.dataset.geste) repondreGeste(cible.dataset.geste === "fait");
+  if (cible.hasAttribute("data-fin-etalonnage")) {
+    phaseEtalonnage = null;
+    afficherInstrument();
+  }
 });
 sombreSysteme.addEventListener("change", marquerTheme);
 
@@ -168,5 +273,7 @@ sombreSysteme.addEventListener("change", marquerTheme);
   const demandee = await invoke("langue_demandee");
   await appliquerLangue(demandee || memoire("langue") || "fr");
   document.body.hidden = false;
+  // Page rechargée pendant un geste : le module ne l'attend plus.
+  await invoke("repondre_geste", { fait: false });
   await interrogerInstrument("ouvrir_instrument");
 })();

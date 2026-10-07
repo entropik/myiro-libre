@@ -5,11 +5,12 @@
 use std::path::{Path, PathBuf};
 
 use app::instrument::{
-    emplacements_a_essayer, Ecran, Etat, Instrument, Probleme, EMPLACEMENTS_CONNUS, PLAFOND,
+    emplacements_a_essayer, Accord, Ecran, Etat, Geste, Instrument, Probleme, EMPLACEMENTS_CONNUS,
+    PLAFOND,
 };
 use app::pont::{Architecture, Panne, PontSimule};
 use app::textes::{texte, Langue};
-use pont_protocole::{ErreurPont, Palier, Requete};
+use pont_protocole::{ErreurPont, Palier, Reponse, Requete};
 
 /// Numéro de série fictif : jamais celui d'un instrument réel.
 const SERIE: u32 = 12345678;
@@ -313,9 +314,11 @@ fn un_fichier_designe_qui_n_est_pas_fdxsdk_est_refuse() {
     );
 }
 
+/// Le plafond est relevé jusqu'à l'étalonnage, jamais au-delà : aucune
+/// mesure dans ce ticket. Ouvrir s'arrête à la connexion, sans étalonner.
 #[test]
-fn le_pont_est_lance_avec_le_plafond_connexion() {
-    assert_eq!(PLAFOND, Palier::Connexion);
+fn le_pont_est_lance_avec_le_plafond_etalonnage_sans_etalonner_a_l_ouverture() {
+    assert_eq!(PLAFOND, Palier::Etalonnage);
     let sdk = sdk_factice("plafond");
     let mut recu = None;
     let simule = PontSimule::avec_instruments(&[SERIE]);
@@ -326,7 +329,7 @@ fn le_pont_est_lance_avec_le_plafond_connexion() {
         Ok(simule)
     });
 
-    assert_eq!(recu, Some(Palier::Connexion));
+    assert_eq!(recu, Some(Palier::Etalonnage));
     assert!(!journal.requetes().iter().any(|r| matches!(
         r,
         Requete::Etalonner {} | Requete::MesurerPonctuelle {} | Requete::MesurerBande { .. }
@@ -558,6 +561,9 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
         Probleme::AucunInstrument,
         Probleme::DetectionImpossible { detail: d() },
         Probleme::ConnexionImpossible { detail: d() },
+        Probleme::EtalonnageEchoue { detail: d() },
+        Probleme::EtalonnageDelai { detail: d() },
+        Probleme::InstrumentPerdu { detail: d() },
     ];
     // Garde : ajouter une variante à `Probleme` casse la compilation ici ;
     // on lui donne alors un numéro, et l'assertion exige qu'elle soit listée.
@@ -571,13 +577,16 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
             Probleme::AucunInstrument => 5,
             Probleme::DetectionImpossible { .. } => 6,
             Probleme::ConnexionImpossible { .. } => 7,
+            Probleme::EtalonnageEchoue { .. } => 8,
+            Probleme::EtalonnageDelai { .. } => 9,
+            Probleme::InstrumentPerdu { .. } => 10,
         }
     }
     let mut numeros: Vec<usize> = tous.iter().map(numero).collect();
     numeros.sort();
     assert_eq!(
         numeros,
-        (0..8).collect::<Vec<_>>(),
+        (0..11).collect::<Vec<_>>(),
         "chaque problème est listé une fois"
     );
     for probleme in tous {
@@ -605,4 +614,230 @@ fn sans_instrument_branche_l_ecran_non_detecte_guide_l_operateur() {
         .requetes()
         .iter()
         .any(|r| matches!(r, Requete::Connecter { .. })));
+}
+
+// ---- Étalonnage guidé (ticket #4) ----
+
+#[test]
+fn l_etalonnage_demande_le_blanc_puis_etalonne_et_garde_l_heure() {
+    let simule = PontSimule::avec_instruments(&[SERIE]);
+    let journal = simule.journal();
+    let sdk = sdk_factice("etalonnage-reussi");
+    let mut instrument = ouvrir(simule, &sdk);
+    let mut demandes = Vec::new();
+
+    instrument.etalonner(&mut |geste: Geste| {
+        // Le geste est demandé avant que l'étalonnage parte vers le pont.
+        assert!(!journal.requetes().contains(&Requete::Etalonner {}));
+        demandes.push(geste);
+        Accord::Fait
+    });
+
+    assert_eq!(demandes, vec![Geste::PoserSurBlanc]);
+    assert_eq!(journal.requetes().last(), Some(&Requete::Etalonner {}));
+    assert!(matches!(instrument.etat(), Etat::Etalonne(f) if f.numero_serie == SERIE));
+    assert_eq!(instrument.probleme(), None);
+    let vue = serde_json::to_value(instrument.vue()).unwrap();
+    assert_eq!(vue["etat"], "etalonne");
+    assert_eq!(vue["pret"], true);
+    // Heure avec fuseau, au format de la provenance : AAAA-MM-JJTHH:MM:SS±HH:MM.
+    let heure = instrument.etalonnage().expect("heure d'étalonnage");
+    let heure = heure.texte();
+    assert_eq!(heure.len(), 25, "{heure}");
+    assert!(heure[19..].starts_with(['+', '-']), "{heure}");
+}
+
+#[test]
+fn si_l_operateur_renonce_rien_n_est_envoye_a_l_instrument() {
+    let simule = PontSimule::avec_instruments(&[SERIE]);
+    let journal = simule.journal();
+    let sdk = sdk_factice("etalonnage-annule");
+    let mut instrument = ouvrir(simule, &sdk);
+    let avant = journal.requetes().len();
+
+    instrument.etalonner(&mut |_: Geste| Accord::Annule);
+
+    assert_eq!(journal.requetes().len(), avant);
+    assert!(matches!(instrument.etat(), Etat::EtalonnageRequis(_)));
+    assert_eq!(instrument.probleme(), None);
+    assert_eq!(instrument.etalonnage(), None);
+}
+
+#[test]
+fn sans_instrument_connecte_aucun_geste_n_est_demande() {
+    let sdk = sdk_factice("etalonnage-sans-instrument");
+    let mut instrument = ouvrir(PontSimule::avec_instruments(&[]), &sdk);
+
+    instrument.etalonner(&mut |geste: Geste| -> Accord { panic!("geste demandé : {geste:?}") });
+
+    assert_eq!(instrument.etat(), &Etat::NonDetecte);
+    assert_eq!(instrument.probleme(), Some(&Probleme::AucunInstrument));
+}
+
+/// Étalonne un instrument dont le pont rend `resultat` à l'étalonnage.
+fn etalonner_avec(nom: &str, resultat: Result<Reponse, Panne>) -> Instrument<PontSimule> {
+    let simule = PontSimule::avec_instruments(&[SERIE]).echouer_a(Palier::Etalonnage, resultat);
+    let mut instrument = ouvrir(simule, &sdk_factice(nom));
+    instrument.etalonner(&mut fait);
+    instrument
+}
+
+fn erreur(erreur: ErreurPont) -> Result<Reponse, Panne> {
+    Ok(Reponse::Erreur { erreur })
+}
+
+/// Opérateur simulé qui fait chaque geste demandé.
+fn fait(_: Geste) -> Accord {
+    Accord::Fait
+}
+
+/// L'instrument a signalé l'échec (événement 9) : il reste connecté, l'écran
+/// d'étalonnage dit quoi faire, et un nouvel essai repart vers le pont.
+#[test]
+fn un_etalonnage_echoue_reste_sur_l_ecran_d_etalonnage_avec_une_action() {
+    let simule = PontSimule::avec_instruments(&[SERIE]).echouer_a(
+        Palier::Etalonnage,
+        erreur(ErreurPont::EtalonnageEchoue { erreur: -9990 }),
+    );
+    let journal = simule.journal();
+    let mut instrument = ouvrir(simule, &sdk_factice("etalonnage-echoue"));
+
+    instrument.etalonner(&mut fait);
+
+    assert!(matches!(instrument.etat(), Etat::EtalonnageRequis(_)));
+    assert_eq!(instrument.etalonnage(), None);
+    let probleme = instrument.probleme().expect("problème");
+    assert_eq!(probleme.code(), "etalonnage_echoue");
+    assert_eq!(probleme.ecran(), Ecran::Etalonnage);
+    assert!(!probleme.guide_cablage());
+    assert!(probleme.detail().unwrap().contains("-9990"));
+    let vue = serde_json::to_value(instrument.vue()).unwrap();
+    assert_eq!(vue["etat"], "etalonnage_requis");
+    assert_eq!(vue["probleme"]["ecran"], "etalonnage");
+
+    instrument.etalonner(&mut fait);
+    let essais = journal
+        .requetes()
+        .iter()
+        .filter(|r| **r == Requete::Etalonner {})
+        .count();
+    assert_eq!(essais, 2, "le pont est gardé pour un nouvel essai");
+}
+
+#[test]
+fn un_etalonnage_sans_reponse_de_l_instrument_a_son_propre_probleme() {
+    let instrument = etalonner_avec("etalonnage-delai", erreur(ErreurPont::Delai {}));
+
+    assert!(matches!(instrument.etat(), Etat::EtalonnageRequis(_)));
+    let probleme = instrument.probleme().unwrap();
+    assert_eq!(probleme.code(), "etalonnage_delai");
+    assert_eq!(probleme.ecran(), Ecran::Etalonnage);
+}
+
+/// Les autres refus de l'instrument laissent aussi l'étalonnage à refaire.
+#[test]
+fn un_refus_de_l_instrument_laisse_l_etalonnage_a_refaire() {
+    for (n, refus) in [
+        ErreurPont::EtalonnageRequis {},
+        ErreurPont::NonEtalonne {},
+        ErreurPont::EtatIncompatible {},
+        ErreurPont::Sdk { code: -9999 },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let instrument = etalonner_avec(&format!("etalonnage-refus-{n}"), erreur(refus.clone()));
+        assert!(
+            matches!(instrument.etat(), Etat::EtalonnageRequis(_)),
+            "{refus:?}"
+        );
+        assert_eq!(
+            instrument.probleme().unwrap().code(),
+            "etalonnage_echoue",
+            "{refus:?}"
+        );
+    }
+}
+
+/// Liaison perdue (événement 6) : plus rien n'est possible avant une nouvelle
+/// connexion ; l'écran « non détecté » guide l'opérateur.
+#[test]
+fn un_instrument_perdu_pendant_l_etalonnage_doit_etre_reconnecte() {
+    let mut instrument = etalonner_avec("etalonnage-perdu", erreur(ErreurPont::InstrumentPerdu {}));
+
+    assert_eq!(instrument.etat(), &Etat::NonDetecte);
+    let probleme = instrument.probleme().unwrap();
+    assert_eq!(probleme.code(), "instrument_perdu");
+    assert_eq!(probleme.ecran(), Ecran::NonDetecte);
+    assert!(probleme.guide_cablage());
+    assert_eq!(instrument.etalonnage(), None);
+    // Le pont est fermé : aucun geste n'est plus demandé.
+    instrument.etalonner(&mut |geste: Geste| -> Accord { panic!("geste demandé : {geste:?}") });
+}
+
+#[test]
+fn une_session_inexploitable_a_l_etalonnage_demande_une_nouvelle_connexion() {
+    let instrument = etalonner_avec(
+        "etalonnage-inexploitable",
+        erreur(ErreurPont::SessionInexploitable {}),
+    );
+
+    assert_eq!(instrument.etat(), &Etat::NonDetecte);
+    assert_eq!(
+        instrument.probleme().unwrap().code(),
+        "connexion_impossible"
+    );
+}
+
+#[test]
+fn un_pont_bloque_pendant_l_etalonnage_est_signale() {
+    let instrument = etalonner_avec(
+        "etalonnage-bloque",
+        Err(Panne::SansReponse {
+            detail: "aucune réponse".into(),
+        }),
+    );
+
+    assert_eq!(instrument.etat(), &Etat::NonDetecte);
+    assert_eq!(instrument.probleme().unwrap().code(), "pont_bloque");
+}
+
+/// Un pont lancé sans le palier étalonnage, ou qui répond hors de propos,
+/// est en panne : l'instrument n'est jamais donné pour étalonné.
+#[test]
+fn une_reponse_hors_de_propos_a_l_etalonnage_est_une_panne() {
+    for (n, resultat) in [
+        erreur(ErreurPont::PalierNonAutorise {
+            demande: Palier::Etalonnage,
+            plafond: Palier::Connexion,
+        }),
+        Ok(Reponse::Ferme {}),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let instrument = etalonner_avec(&format!("etalonnage-panne-{n}"), resultat);
+        assert_eq!(instrument.etat(), &Etat::NonDetecte);
+        assert_eq!(instrument.probleme().unwrap().code(), "pont_en_panne");
+    }
+}
+
+/// Un nouvel étalonnage rend l'ancien inutilisable dès son début (#23) :
+/// après un échec, l'heure du précédent ne garantit plus rien.
+#[test]
+fn un_nouvel_etalonnage_qui_echoue_efface_l_ancien() {
+    let simule = PontSimule::avec_instruments(&[SERIE]).echouer_apres(
+        Palier::Etalonnage,
+        1,
+        erreur(ErreurPont::EtalonnageEchoue { erreur: -9990 }),
+    );
+    let mut instrument = ouvrir(simule, &sdk_factice("etalonnage-refait"));
+    instrument.etalonner(&mut fait);
+    assert!(instrument.etalonnage().is_some());
+
+    instrument.etalonner(&mut fait);
+
+    assert!(matches!(instrument.etat(), Etat::EtalonnageRequis(_)));
+    assert_eq!(instrument.etalonnage(), None);
+    assert!(!instrument.vue().pret);
 }

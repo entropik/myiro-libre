@@ -77,6 +77,12 @@ fn main() -> ExitCode {
                 writeln!(sortie, "pas du JSON").unwrap();
                 continue;
             }
+            // Étalonnage plus long que le délai d'une autre demande (300 ms
+            // dans le test), mais moins que le double.
+            "etalonnage_lent" if matches!(requete, Ok(Requete::Etalonner {})) => {
+                std::thread::sleep(std::time::Duration::from_millis(450));
+                Reponse::Etalonne {}
+            }
             "echo" => Reponse::RequeteInvalide {
                 detail: args.join(" "),
             },

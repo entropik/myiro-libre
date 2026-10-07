@@ -55,7 +55,7 @@ fn le_pont_recoit_la_dll_et_le_plafond_en_arguments() {
 
     match pont.demander(&Requete::Version {}) {
         Ok(Reponse::RequeteInvalide { detail }) => {
-            assert_eq!(detail, "--dll echo --plafond connexion")
+            assert_eq!(detail, "--dll echo --plafond etalonnage")
         }
         autre => panic!("réponse inattendue : {autre:?}"),
     }
@@ -119,6 +119,19 @@ fn une_sortie_fermee_sans_fin_du_pont_est_bornee() {
         debut.elapsed() < Duration::from_secs(5),
         "{:?}",
         debut.elapsed()
+    );
+}
+
+/// L'étalonnage attend jusqu'à 30 s dans le pont, en plus de l'appel à la DLL :
+/// l'application lui laisse deux fois le délai d'une autre demande, pour ne
+/// pas couper un pont qui allait répondre.
+#[test]
+fn l_etalonnage_a_deux_fois_le_delai_d_une_autre_demande() {
+    let mut pont = lancer("etalonnage_lent").avec_delai(Duration::from_millis(300));
+
+    assert_eq!(
+        pont.demander(&Requete::Etalonner {}),
+        Ok(Reponse::Etalonne {})
     );
 }
 

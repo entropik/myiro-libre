@@ -234,6 +234,68 @@ const FRANCAIS: Catalogue = &[
         "centre.choisir",
         "Choisissez une mesure dans la bibliothèque.",
     ),
+    (
+        "probleme.etalonnage_echoue.cause",
+        "L’étalonnage n’a pas réussi. Le MYIRO-1 n’était peut-être pas bien posé sur son capuchon.",
+    ),
+    (
+        "probleme.etalonnage_echoue.action",
+        "Posez-le bien à plat sur son capuchon, puis cliquez sur «\u{202f}Lancer l’étalonnage\u{202f}».",
+    ),
+    (
+        "probleme.etalonnage_delai.cause",
+        "Le MYIRO-1 n’a pas terminé l’étalonnage à temps.",
+    ),
+    (
+        "probleme.etalonnage_delai.action",
+        "Vérifiez qu’il est bien posé sur son capuchon, puis cliquez sur «\u{202f}Lancer l’étalonnage\u{202f}».",
+    ),
+    (
+        "probleme.instrument_perdu.cause",
+        "La liaison avec le MYIRO-1 a été perdue.",
+    ),
+    (
+        "probleme.instrument_perdu.action",
+        "Vérifiez le câble, puis cliquez sur «\u{202f}Réessayer\u{202f}» pour le reconnecter.",
+    ),
+    // Étalonnage guidé
+    ("instrument.etalonner", "Étalonner"),
+    (
+        "raison.etalonnage",
+        "Disponible une fois l’instrument étalonné.",
+    ),
+    ("ecran.etalonnage.etapes", "Étapes"),
+    ("ecran.etalonnage.etape.blanc", "Poser sur le blanc"),
+    ("ecran.etalonnage.etape.etalonnage", "Étalonnage"),
+    ("ecran.etalonnage.etape.mesure", "Mesure"),
+    ("ecran.etalonnage.titre", "Étalonnez le MYIRO-1."),
+    (
+        "ecran.etalonnage.pourquoi",
+        "Avant de mesurer, le MYIRO-1 se règle sur son blanc de référence, rangé dans son capuchon. Sans ce réglage, ses mesures ne sont pas fiables. Ensuite, vous pourrez mesurer vos couleurs.",
+    ),
+    (
+        "ecran.etalonnage.geste",
+        "Posez le MYIRO-1 bien à plat sur son capuchon, puis cliquez sur «\u{202f}Lancer l’étalonnage\u{202f}».",
+    ),
+    ("ecran.etalonnage.lancer", "Lancer l’étalonnage"),
+    ("ecran.etalonnage.annuler", "Annuler"),
+    (
+        "ecran.etalonnage.en_cours",
+        "Étalonnage en cours. Laissez l’instrument sur son capuchon pendant quelques secondes.",
+    ),
+    ("ecran.etalonnage.reussi", "Le MYIRO-1 est étalonné."),
+    (
+        "ecran.etalonnage.reussi.suite",
+        "Vous pouvez maintenant mesurer vos couleurs.",
+    ),
+    ("ecran.etalonnage.continuer", "Continuer"),
+    (
+        "ecran.etalonnage.schema",
+        "Schéma\u{202f}: le MYIRO-1 posé à plat sur son capuchon, qui contient le blanc de référence.",
+    ),
+    ("ecran.etalonnage.schema.instrument", "MYIRO-1"),
+    ("ecran.etalonnage.schema.capuchon", "Capuchon"),
+    ("ecran.etalonnage.schema.blanc", "Blanc de référence"),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -427,6 +489,68 @@ const ANGLAIS: Catalogue = &[
     ("compte.mesure", "measurement"),
     ("compte.mesures", "measurements"),
     ("centre.choisir", "Choose a measurement in the library."),
+    (
+        "probleme.etalonnage_echoue.cause",
+        "Calibration failed. The MYIRO-1 may not have been sitting properly on its cap.",
+    ),
+    (
+        "probleme.etalonnage_echoue.action",
+        "Set it flat on its cap, then click “Start calibration”.",
+    ),
+    (
+        "probleme.etalonnage_delai.cause",
+        "The MYIRO-1 did not finish calibrating in time.",
+    ),
+    (
+        "probleme.etalonnage_delai.action",
+        "Check that it is sitting properly on its cap, then click “Start calibration”.",
+    ),
+    (
+        "probleme.instrument_perdu.cause",
+        "The connection with the MYIRO-1 was lost.",
+    ),
+    (
+        "probleme.instrument_perdu.action",
+        "Check the cable, then click “Try again” to reconnect it.",
+    ),
+    // Guided calibration
+    ("instrument.etalonner", "Calibrate"),
+    (
+        "raison.etalonnage",
+        "Available once the instrument is calibrated.",
+    ),
+    ("ecran.etalonnage.etapes", "Steps"),
+    ("ecran.etalonnage.etape.blanc", "Set on the white"),
+    ("ecran.etalonnage.etape.etalonnage", "Calibration"),
+    ("ecran.etalonnage.etape.mesure", "Measurement"),
+    ("ecran.etalonnage.titre", "Calibrate the MYIRO-1."),
+    (
+        "ecran.etalonnage.pourquoi",
+        "Before measuring, the MYIRO-1 sets itself against its reference white, kept in its cap. Without this, its measurements are not reliable. Then you can measure your colours.",
+    ),
+    (
+        "ecran.etalonnage.geste",
+        "Set the MYIRO-1 flat on its cap, then click “Start calibration”.",
+    ),
+    ("ecran.etalonnage.lancer", "Start calibration"),
+    ("ecran.etalonnage.annuler", "Cancel"),
+    (
+        "ecran.etalonnage.en_cours",
+        "Calibrating. Leave the instrument on its cap for a few seconds.",
+    ),
+    ("ecran.etalonnage.reussi", "The MYIRO-1 is calibrated."),
+    (
+        "ecran.etalonnage.reussi.suite",
+        "You can now measure your colours.",
+    ),
+    ("ecran.etalonnage.continuer", "Continue"),
+    (
+        "ecran.etalonnage.schema",
+        "Diagram: the MYIRO-1 set flat on its cap, which holds the reference white.",
+    ),
+    ("ecran.etalonnage.schema.instrument", "MYIRO-1"),
+    ("ecran.etalonnage.schema.capuchon", "Cap"),
+    ("ecran.etalonnage.schema.blanc", "Reference white"),
 ];
 
 fn catalogue(langue: Langue) -> Catalogue {
@@ -499,6 +623,7 @@ mod tests {
                 "instrument.aucun",
                 "instrument.barre",
                 "instrument.logiciel_absent",
+                "raison.etalonnage",
                 "ecran.choix.titre.logiciel_absent",
                 "ecran.choix.titre.logiciel_inutilisable",
             ]
@@ -522,7 +647,11 @@ mod tests {
     /// « Puis cliquez sur «\u{202f}Réessayer\u{202f}». »
     #[test]
     fn un_bouton_cite_est_entre_guillemets() {
-        for bouton in ["ecran.reessayer", "ecran.choix.action"] {
+        for bouton in [
+            "ecran.reessayer",
+            "ecran.choix.action",
+            "ecran.etalonnage.lancer",
+        ] {
             let libelle = texte(Langue::Francais, bouton);
             let cite = format!("«\u{202f}{libelle}\u{202f}»");
             let fautes: Vec<_> = cles()
