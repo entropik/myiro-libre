@@ -56,7 +56,7 @@ _Éviter_ : bridge, wrapper, driver, pilote (réservé au pilote Windows)
 _Éviter_ : phase (réservé au plan d'action), niveau, étape
 
 **Provenance** :
-Ce que le pont atteste sur une mesure : instrument (modèle, n° de série, micrologiciel), version du SDK, date réelle avec fuseau, condition de mesure relue sur l'instrument, illuminant, observateur. Elle est posée par le pont, jamais reconstituée par l'application, et aucune mesure n'existe sans elle.
+Ce que le pont atteste sur une mesure : instrument (modèle, n° de série, micrologiciel), chaîne logicielle (SDK, pont, empreinte de la DLL), date réelle avec fuseau, géométrie de lecture, condition de mesure relue sur l'instrument, illuminant, observateur. Le reste du contexte (support, encres, séchage, chauffe…) relève de la bibliothèque, pas du pont. Elle est posée par le pont, jamais reconstituée par l'application, et aucune mesure n'existe sans elle.
 _Éviter_ : métadonnées, contexte
 
 **Inconnu** :
