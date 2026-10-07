@@ -147,6 +147,18 @@ fn csv_avec_premier_spectre(valeur: &str) -> String {
 }
 
 #[test]
+fn une_ligne_sans_aucune_valeur_est_dite_trop_courte() {
+    // Cinq champs : plage, données, L, a, b, et aucune valeur après.
+    let abime = format!("{}\nC;M0;50;0;0\n", CSV.trim_end());
+    let erreur = extraire(&[SortieArchivee {
+        nom: "essai",
+        contenu: &abime,
+    }])
+    .unwrap_err();
+    assert!(erreur.contains("trop courte"), "{erreur}");
+}
+
+#[test]
 fn une_valeur_non_finie_est_refusee_a_l_extraction() {
     for valeur in ["NaN", "inf", "-inf"] {
         let abime = csv_avec_premier_spectre(valeur);

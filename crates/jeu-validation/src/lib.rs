@@ -345,7 +345,8 @@ fn extraire_csv(sortie: &SortieArchivee, source: &str) -> Result<Vec<Paire>, Str
         }
         let lieu = || format!("{}, ligne {}", sortie.nom, n + 1);
         let champs: Vec<&str> = ligne.split(';').collect();
-        if champs.len() < 5 {
+        // Plage, données, L, a, b, puis au moins une valeur.
+        if champs.len() < 6 {
             return Err(format!("{} : ligne trop courte", lieu()));
         }
         let valeurs = champs[5..]
