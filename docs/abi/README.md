@@ -49,3 +49,5 @@ Les codes existent par plages : -9999 à -9981 (général), -9899 à -9892 (reco
 2. [FDX_GetDevicePortList](FDX_GetDevicePortList.md) : liste des instruments visibles (palier Détection)
 3. [FDX_Connect](FDX_Connect.md) : ouverture de la session (palier Connexion)
 4. [FDX_GetDeviceInfo](FDX_GetDeviceInfo.md) : identité de l'instrument (palier Connexion)
+5. [FDX_RegisterDeviceEventHandler](FDX_RegisterDeviceEventHandler.md) : événements de l'instrument (tous les paliers à partir de la connexion)
+6. [FDX_Calibration](FDX_Calibration.md) : étalonnage sur le blanc (palier Étalonnage)
