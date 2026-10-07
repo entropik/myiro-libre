@@ -63,6 +63,10 @@ _Éviter_ : phase (réservé au plan d'action), niveau, étape
 Dernier palier qu'un pont a le droit d'atteindre, fixé à son lancement ; toute demande au-delà est refusée sans toucher à l'instrument.
 _Éviter_ : limite, niveau maximal
 
+**Prise de main** :
+Droit exclusif d'un logiciel à piloter un FD-9 en réseau ; un seul l'a à la fois. Le pont l'obtient à la connexion et la rend à la déconnexion. FD-S2w resté connecté la garde.
+_Éviter_ : autorité, authority, verrou
+
 **Armement** :
 Mise en attente de l'instrument pour une mesure ponctuelle ou une bande : il attend l'appui sur son bouton. Ne règle rien de permanent dans l'instrument.
 _Éviter_ : réglage, condition (au sens de `SetMeasureCondition`)
