@@ -11,7 +11,7 @@ use fdx_sys::{
     CONDITION_M1, CONDITION_M2, LONGUEUR_BRUTES, LONGUEUR_LAB, LONGUEUR_SPECTRE, TAILLE_INFOS,
     TAILLE_TAMPON_INFOS,
 };
-use pont_protocole::{ErreurPont, Palier};
+use pont_protocole::{ErreurPont, InstrumentMesurant, Palier, Provenance};
 use std::time::{Duration, Instant};
 
 /// Délai passé à `FDX_Connect`, en secondes : valeur des logiciels officiels
@@ -81,6 +81,10 @@ pub trait SdkMyiro1 {
     fn lire(&mut self, condition: &ConditionCalcul, longueur: usize) -> Result<Lecture, i32>;
     /// Prochain événement de l'instrument, ou `None` si le délai expire.
     fn attendre_evenement(&mut self, delai: Duration) -> Option<Evenement>;
+    /// SHA-256 de la DLL chargée, pour la provenance des mesures.
+    fn empreinte(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Ce que rend une lecture de `FDX_GetMeasureData`.
@@ -109,6 +113,7 @@ pub struct MesureBande {
     pub plages: Vec<MesurePlage>,
     pub sens: u32,
     pub evenements: Vec<Evenement>,
+    pub provenance: Provenance,
 }
 
 #[derive(Clone, Copy)]
@@ -130,6 +135,7 @@ pub struct MesurePonctuelle {
     /// valider notre propre colorimétrie.
     pub lab_dll: [Vec<f32>; 3],
     pub evenements: Vec<Evenement>,
+    pub provenance: Provenance,
 }
 
 /// Résultat d'un étalonnage réussi.
@@ -157,6 +163,10 @@ pub struct Session<S: SdkMyiro1> {
     atteint: Option<Palier>,
     ports: Vec<Port>,
     journal: Vec<String>,
+    // Ce qui alimente la provenance des mesures.
+    version: Option<Version>,
+    instrument: Option<InfosInstrument>,
+    etalonnage: Option<String>,
 }
 
 impl<S: SdkMyiro1> Session<S> {
@@ -167,6 +177,9 @@ impl<S: SdkMyiro1> Session<S> {
             atteint: None,
             ports: Vec::new(),
             journal: Vec::new(),
+            version: None,
+            instrument: None,
+            etalonnage: None,
         }
     }
 
@@ -191,6 +204,7 @@ impl<S: SdkMyiro1> Session<S> {
     pub fn version(&mut self) -> Result<Version, ErreurPont> {
         self.autoriser(Palier::Version, None)?;
         let version = self.sdk.version().map_err(traduire)?;
+        self.version = Some(version);
         self.atteint = Some(Palier::Version);
         Ok(version)
     }
@@ -217,8 +231,10 @@ impl<S: SdkMyiro1> Session<S> {
             .map_err(traduire)?;
         self.atteint = Some(Palier::Connexion);
         let tampon = self.sdk.infos().map_err(traduire)?;
+        let infos = lire_infos_instrument(&tampon);
+        self.instrument = Some(infos.clone());
         Ok(Connexion {
-            infos: lire_infos_instrument(&tampon),
+            infos,
             identite_brute: tampon[..TAILLE_INFOS].to_vec(),
             anomalie_date_initiale: code & BIT_ANOMALIE_DATE_INITIALE != 0,
         })
@@ -250,6 +266,7 @@ impl<S: SdkMyiro1> Session<S> {
             }
         }
         self.atteint = Some(Palier::Etalonnage);
+        self.etalonnage = Some(maintenant());
         Ok(Etalonnage { evenements })
     }
 
@@ -265,7 +282,9 @@ impl<S: SdkMyiro1> Session<S> {
             )));
         }
         let plage = plages.remove(0);
+        let provenance = self.provenance("ponctuelle")?;
         Ok(MesurePonctuelle {
+            provenance,
             m0: plage.m0,
             m1: plage.m1,
             m2: plage.m2,
@@ -298,6 +317,30 @@ impl<S: SdkMyiro1> Session<S> {
             plages,
             sens,
             evenements,
+            provenance: self.provenance("bande")?,
+        })
+    }
+
+    /// Ce que le pont atteste sur la mesure qui vient de se terminer.
+    fn provenance(&self, geometrie: &str) -> Result<Provenance, ErreurPont> {
+        let (Some(version), Some(infos)) = (&self.version, &self.instrument) else {
+            return Err(inattendue("mesure sans version ni identité".into()));
+        };
+        Ok(Provenance {
+            instrument: InstrumentMesurant {
+                modele: "MYIRO-1".into(),
+                numero_serie: infos.numero,
+                micrologiciel: infos.micrologiciel.clone(),
+                code_produit: infos.code_produit.clone(),
+            },
+            version_sdk: [version.partie0, version.partie1, version.partie2],
+            empreinte_dll: self.sdk.empreinte(),
+            version_pont: env!("CARGO_PKG_VERSION").into(),
+            architecture: std::env::consts::ARCH.into(),
+            horodatage: maintenant(),
+            etalonnage: self.etalonnage.clone(),
+            geometrie: geometrie.into(),
+            calcul: CONDITIONS_DE_CALCUL.into(),
         })
     }
 
@@ -499,6 +542,15 @@ fn traduire(code: i32) -> ErreurPont {
         CODE_NON_ETALONNE => ErreurPont::NonEtalonne,
         code => ErreurPont::Sdk { code },
     }
+}
+
+/// Ce que le pont demande à la DLL, pour la provenance.
+const CONDITIONS_DE_CALCUL: &str =
+    "spectres : Illuminant 0/1/2 = M0/M1/M2, 380-730 nm par 10 nm ; Lab : D50, 2°";
+
+/// Heure de l'ordinateur, RFC 3339 à la seconde, avec fuseau.
+fn maintenant() -> String {
+    chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false)
 }
 
 fn inattendue(detail: String) -> ErreurPont {

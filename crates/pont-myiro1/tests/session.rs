@@ -550,3 +550,41 @@ fn une_bande_qui_ne_compte_pas_les_plages_attendues_est_refusee() {
         Err(ErreurPont::ReponseInattendue { .. })
     ));
 }
+
+/// Format RFC 3339 avec fuseau, à la seconde : 2026-10-07T15:04:05+02:00.
+fn est_un_horodatage_avec_fuseau(texte: &str) -> bool {
+    let octets = texte.as_bytes();
+    texte.len() == 25
+        && octets[10] == b'T'
+        && (octets[19] == b'+' || octets[19] == b'-')
+        && octets[22] == b':'
+}
+
+#[test]
+fn une_mesure_ponctuelle_porte_sa_provenance() {
+    let mut session = session_etalonnee(&[1, 2, 3]);
+    let mesure = session.mesurer_ponctuelle().unwrap();
+    let p = &mesure.provenance;
+    assert_eq!(p.instrument.modele, "MYIRO-1");
+    assert_eq!(p.instrument.numero_serie, 12345678);
+    assert_eq!(p.version_sdk, [1, 1, 0]);
+    assert_eq!(p.empreinte_dll.as_deref(), Some("empreinte simulée"));
+    assert_eq!(p.geometrie, "ponctuelle");
+    assert!(
+        est_un_horodatage_avec_fuseau(&p.horodatage),
+        "{}",
+        p.horodatage
+    );
+    let etalonnage = p.etalonnage.as_deref().expect("date de l'étalonnage");
+    assert!(est_un_horodatage_avec_fuseau(etalonnage), "{etalonnage}");
+    assert!(etalonnage <= p.horodatage.as_str());
+    assert!(!p.version_pont.is_empty());
+}
+
+#[test]
+fn une_bande_porte_sa_provenance() {
+    let mut session = session_pour_bande(&[1, 2, 3], 12);
+    let bande = session.mesurer_bande(None).unwrap();
+    assert_eq!(bande.provenance.geometrie, "bande");
+    assert_eq!(bande.provenance.instrument.numero_serie, 12345678);
+}

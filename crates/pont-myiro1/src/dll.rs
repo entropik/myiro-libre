@@ -96,6 +96,7 @@ pub struct FdxDll {
     arreter: FnSansArgument,
     lire: FnLire,
     connecte: bool,
+    empreinte: Option<String>,
     // Déclarée en dernier : la DLL reste chargée tant que les pointeurs vivent.
     _bibliotheque: Library,
 }
@@ -120,6 +121,7 @@ impl FdxDll {
             arreter: resoudre(&bibliotheque, "FDX_StopMeasurement")?,
             lire: resoudre(&bibliotheque, "FDX_GetMeasureData")?,
             connecte: false,
+            empreinte: empreinte_fichier(chemin).ok(),
             _bibliotheque: bibliotheque,
         };
         // Rappel enregistré avant toute connexion, comme EIZO et MYIRO tools.
@@ -130,6 +132,16 @@ impl FdxDll {
         unsafe { (dll.enregistrer)(Some(rappel)) };
         Ok(dll)
     }
+}
+
+/// SHA-256 d'un fichier, en hexadécimal.
+pub fn empreinte_fichier(chemin: &Path) -> std::io::Result<String> {
+    use sha2::{Digest, Sha256};
+    let contenu = std::fs::read(chemin)?;
+    Ok(Sha256::digest(&contenu)
+        .iter()
+        .map(|octet| format!("{octet:02x}"))
+        .collect())
 }
 
 fn resoudre<T: Copy>(bibliotheque: &Library, nom: &str) -> Result<T, ErreurChargement> {
@@ -266,6 +278,10 @@ impl SdkMyiro1 for FdxDll {
             resultats: tampons,
             sens,
         })
+    }
+
+    fn empreinte(&self) -> Option<String> {
+        self.empreinte.clone()
     }
 
     fn attendre_evenement(&mut self, delai: Duration) -> Option<Evenement> {

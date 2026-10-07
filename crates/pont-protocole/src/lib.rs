@@ -53,9 +53,11 @@ pub enum Reponse {
     },
     Etalonne {},
     /// Une plage en mesure ponctuelle, une par plage reconnue en bande.
+    /// Aucune mesure ne sort du pont sans sa provenance (ADR 0005).
     Mesure {
         plages: Vec<Plage>,
         sens: u32,
+        provenance: Provenance,
     },
     Ferme {},
     Erreur {
@@ -109,6 +111,37 @@ pub struct Plage {
     pub lab_m0: Vec<f32>,
     pub lab_m1: Vec<f32>,
     pub lab_m2: Vec<f32>,
+}
+
+/// Ce que le pont atteste sur une mesure (ADR 0005, GLOSSARY : Provenance).
+/// Posée par le pont, jamais reconstituée par l'application. Une valeur que le
+/// pont ne connaît pas est absente (`null`), jamais remplacée par zéro.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Provenance {
+    pub instrument: InstrumentMesurant,
+    /// Les trois nombres de `FDX_GetSDKVersion`, tels quels.
+    pub version_sdk: [u32; 3],
+    /// SHA-256 de la DLL chargée, en hexadécimal.
+    pub empreinte_dll: Option<String>,
+    pub version_pont: String,
+    /// « x86 » ou « x86_64 ».
+    pub architecture: String,
+    /// Fin de la mesure, heure de l'ordinateur, au format RFC 3339 avec fuseau.
+    pub horodatage: String,
+    /// Dernier étalonnage réussi de la session, même format.
+    pub etalonnage: Option<String>,
+    /// « ponctuelle » ou « bande ».
+    pub geometrie: String,
+    /// Conditions de calcul demandées à la DLL.
+    pub calcul: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstrumentMesurant {
+    pub modele: String,
+    pub numero_serie: u32,
+    pub micrologiciel: String,
+    pub code_produit: String,
 }
 
 /// Étapes de la progression imposée sur instrument réel, dans l'ordre.

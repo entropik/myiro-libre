@@ -289,3 +289,15 @@ fn palier_bande_avec_le_vrai_instrument() {
     }
     println!("résultats écrits dans {}", sortie.display());
 }
+
+#[test]
+fn l_empreinte_d_un_fichier_est_son_sha256() {
+    let chemin = std::env::temp_dir().join("myiro-libre-empreinte-abc.txt");
+    std::fs::write(&chemin, b"abc").unwrap();
+    // Valeur de référence de la norme FIPS 180-2 pour « abc ».
+    assert_eq!(
+        pont_myiro1::dll::empreinte_fichier(&chemin).unwrap(),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    );
+    let _ = std::fs::remove_file(chemin);
+}

@@ -51,6 +51,9 @@ impl SdkSimule {
 }
 
 impl SdkMyiro1 for SdkSimule {
+    fn empreinte(&self) -> Option<String> {
+        Some("empreinte simulée".into())
+    }
     fn version(&mut self) -> Result<Version, i32> {
         self.appels.push("version".into());
         Ok(Version {

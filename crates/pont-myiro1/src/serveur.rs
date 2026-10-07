@@ -74,6 +74,7 @@ fn traiter<S: SdkMyiro1>(session: &mut Session<S>, requete: Requete) -> (Reponse
                         lab_m2: mesure.lab_dll[2].clone(),
                     }],
                     sens: 0,
+                    provenance: mesure.provenance,
                 })
             }
             Requete::MesurerBande { plages_attendues } => session
@@ -81,6 +82,7 @@ fn traiter<S: SdkMyiro1>(session: &mut Session<S>, requete: Requete) -> (Reponse
                 .map(|bande| Reponse::Mesure {
                     plages: bande.plages.into_iter().map(plage).collect(),
                     sens: bande.sens,
+                    provenance: bande.provenance,
                 }),
             // La déconnexion elle-même a lieu à la fermeture de l'adapter.
             Requete::Fermer {} => return (Reponse::Ferme {}, true),
