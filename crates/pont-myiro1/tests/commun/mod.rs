@@ -14,6 +14,10 @@ pub struct SdkSimule {
     pub code_connexion: i32,
     pub code_etalonnage: i32,
     pub code_armement: i32,
+    /// Code négatif : `FDX_GetDeviceInfo` échoue avec ce code.
+    pub code_infos: i32,
+    /// N° de série rendu par `FDX_GetDeviceInfo`.
+    pub numero_serie: u32,
     /// Nombre de résultats rendus par chaque lecture (1 en ponctuelle).
     pub resultats_par_lecture: usize,
     /// Événements que l'instrument simulé émettra, dans l'ordre.
@@ -45,6 +49,7 @@ impl SdkSimule {
                 opaque: [0; 40],
             }],
             resultats_par_lecture: 1,
+            numero_serie: 12345678,
             ..Default::default()
         }
     }
@@ -76,8 +81,11 @@ impl SdkMyiro1 for SdkSimule {
     }
     fn infos(&mut self) -> Result<[u8; TAILLE_TAMPON_INFOS], i32> {
         self.appels.push("infos".into());
+        if self.code_infos < 0 {
+            return Err(self.code_infos);
+        }
         let mut t = [0u8; TAILLE_TAMPON_INFOS];
-        t[0..4].copy_from_slice(&12345678u32.to_le_bytes());
+        t[0..4].copy_from_slice(&self.numero_serie.to_le_bytes());
         Ok(t)
     }
     fn etalonner_blanc(&mut self) -> Result<i32, i32> {

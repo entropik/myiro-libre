@@ -9,15 +9,110 @@ use pont_protocole::{lire_reponse, ErreurPont, Palier, Reponse};
 
 /// Envoie `requetes` au pont et rend ses réponses décodées.
 fn dialoguer(sdk: SdkSimule, plafond: Palier, requetes: &[&str]) -> Vec<Reponse> {
+    dialoguer_brut(sdk, plafond, requetes)
+        .0
+        .iter()
+        .map(|ligne| lire_reponse(ligne).unwrap())
+        .collect()
+}
+
+/// Idem, en rendant les lignes telles qu'écrites et la session pour examen.
+fn dialoguer_brut(
+    sdk: SdkSimule,
+    plafond: Palier,
+    requetes: &[&str],
+) -> (Vec<String>, Session<SdkSimule>) {
     let mut session = Session::new(sdk, plafond);
     let entree = requetes.join("\n");
     let mut sortie = Vec::new();
     servir(&mut session, entree.as_bytes(), &mut sortie).unwrap();
-    String::from_utf8(sortie)
+    let lignes = String::from_utf8(sortie)
         .unwrap()
         .lines()
-        .map(|ligne| lire_reponse(ligne).unwrap())
-        .collect()
+        .map(String::from)
+        .collect();
+    (lignes, session)
+}
+
+const JUSQU_A_LA_CONNEXION: [&str; 3] = [
+    r#"{"cmd":"version"}"#,
+    r#"{"cmd":"detecter"}"#,
+    r#"{"cmd":"connecter","instrument":0}"#,
+];
+
+fn sequence(suite: &[&'static str]) -> Vec<&'static str> {
+    JUSQU_A_LA_CONNEXION.iter().chain(suite).copied().collect()
+}
+
+fn armements(session: &Session<SdkSimule>) -> usize {
+    session
+        .sdk()
+        .appels
+        .iter()
+        .filter(|a| a.starts_with("armer"))
+        .count()
+}
+
+#[test]
+fn apres_un_etalonnage_echoue_le_pont_repond_etalonnage_requis_sans_armer() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements.extend([7, 8, 7, 9].map(evenement));
+    sdk.salves.push_back([1, 2, 3].map(evenement).to_vec());
+    let (lignes, session) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[
+            r#"{"cmd":"etalonner"}"#,
+            r#"{"cmd":"etalonner"}"#,
+            r#"{"cmd":"mesurer_ponctuelle"}"#,
+        ]),
+    );
+    assert_eq!(
+        lignes[5],
+        r#"{"rep":"erreur","erreur":{"type":"etalonnage_requis"}}"#
+    );
+    assert_eq!(armements(&session), 0);
+}
+
+#[test]
+fn apres_une_perte_de_liaison_le_pont_repond_instrument_perdu_sans_armer() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements.extend([7, 8].map(evenement));
+    sdk.salves.push_back([1, 6].map(evenement).to_vec());
+    sdk.salves.push_back([1, 2, 3].map(evenement).to_vec());
+    let (lignes, session) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[
+            r#"{"cmd":"etalonner"}"#,
+            r#"{"cmd":"mesurer_ponctuelle"}"#,
+            r#"{"cmd":"mesurer_ponctuelle"}"#,
+        ]),
+    );
+    let perdu = r#"{"rep":"erreur","erreur":{"type":"instrument_perdu"}}"#;
+    assert_eq!(lignes[4], perdu);
+    assert_eq!(lignes[5], perdu);
+    assert_eq!(armements(&session), 1);
+}
+
+#[test]
+fn une_identite_illisible_rend_la_session_inexploitable_pour_le_consommateur() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.code_infos = -1;
+    sdk.evenements.extend([7, 8].map(evenement));
+    let (lignes, session) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[r#"{"cmd":"etalonner"}"#, r#"{"cmd":"mesurer_ponctuelle"}"#]),
+    );
+    let inexploitable = r#"{"rep":"erreur","erreur":{"type":"session_inexploitable"}}"#;
+    assert_eq!(lignes[3], inexploitable);
+    assert_eq!(lignes[4], inexploitable);
+    assert!(!session
+        .sdk()
+        .appels
+        .contains(&"etalonner blanc".to_string()));
+    assert_eq!(armements(&session), 0);
 }
 
 #[test]

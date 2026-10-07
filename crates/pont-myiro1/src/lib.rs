@@ -1,7 +1,9 @@
 //! Pont MYIRO-1 : logique de session au-dessus de `FDXSDK.dll`.
 //!
 //! La session impose l'ordre des paliers et le plafond fixé au lancement,
-//! avant tout appel à la DLL (ADR 0005, docs/abi/).
+//! avant tout appel à la DLL (ADR 0005, docs/abi/). Trois notions restent
+//! séparées : le plafond (fixe), la progression des paliers (historique) et
+//! l'état courant de l'instrument, seul à autoriser étalonnage et mesures.
 
 pub mod dll;
 pub mod serveur;
@@ -157,16 +159,38 @@ pub struct Connexion {
     pub identite_brute: Vec<u8>,
 }
 
+/// État courant de l'instrument vu par la session. Lui seul autorise
+/// l'étalonnage et les mesures : un palier franchi dans le passé n'y suffit
+/// jamais. L'identité et la date d'étalonnage n'existent qu'à l'intérieur de
+/// l'état qui les garantit, et disparaissent avec lui.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EtatInstrument {
+    /// Aucune connexion exploitable : jamais connecté, ou tentative en cours
+    /// ou échouée.
+    NonConnecte,
+    /// `FDX_Connect` a réussi mais l'identité n'a pas pu être lue : une
+    /// nouvelle connexion est nécessaire.
+    Inexploitable,
+    /// Connecté et identifié, sans étalonnage utilisable.
+    Connecte { identite: InfosInstrument },
+    /// Étalonné sur le blanc pendant cette connexion ; `date` au format RFC 3339.
+    Etalonne {
+        identite: InfosInstrument,
+        date: String,
+    },
+    /// Liaison perdue (événement 6) : une nouvelle connexion est nécessaire.
+    Perdu,
+}
+
 pub struct Session<S: SdkMyiro1> {
     sdk: S,
     plafond: Palier,
-    atteint: Option<Palier>,
+    /// Plus haut palier franchi : historique, n'autorise aucune mesure.
+    progression: Option<Palier>,
+    etat: EtatInstrument,
     ports: Vec<Port>,
     journal: Vec<String>,
-    // Ce qui alimente la provenance des mesures.
     version: Option<Version>,
-    instrument: Option<InfosInstrument>,
-    etalonnage: Option<String>,
 }
 
 impl<S: SdkMyiro1> Session<S> {
@@ -174,12 +198,11 @@ impl<S: SdkMyiro1> Session<S> {
         Session {
             sdk,
             plafond,
-            atteint: None,
+            progression: None,
+            etat: EtatInstrument::NonConnecte,
             ports: Vec::new(),
             journal: Vec::new(),
             version: None,
-            instrument: None,
-            etalonnage: None,
         }
     }
 
@@ -196,16 +219,27 @@ impl<S: SdkMyiro1> Session<S> {
         &self.journal
     }
 
-    /// Dernier palier franchi avec succès.
+    /// Plus haut palier franchi avec succès depuis le lancement. C'est un
+    /// historique : il ne dit pas si l'instrument est encore connecté ni
+    /// étalonné (voir [`Session::etat`]).
     pub fn palier_atteint(&self) -> Option<Palier> {
-        self.atteint
+        self.progression
+    }
+
+    /// État courant de l'instrument.
+    pub fn etat(&self) -> &EtatInstrument {
+        &self.etat
+    }
+
+    fn franchir(&mut self, palier: Palier) {
+        self.progression = self.progression.max(Some(palier));
     }
 
     pub fn version(&mut self) -> Result<Version, ErreurPont> {
         self.autoriser(Palier::Version, None)?;
         let version = self.sdk.version().map_err(traduire)?;
         self.version = Some(version);
-        self.atteint = Some(Palier::Version);
+        self.franchir(Palier::Version);
         Ok(version)
     }
 
@@ -213,7 +247,7 @@ impl<S: SdkMyiro1> Session<S> {
     pub fn detecter(&mut self) -> Result<Vec<Port>, ErreurPont> {
         self.autoriser(Palier::Detection, Some(Palier::Version))?;
         self.ports = self.sdk.ports().map_err(traduire)?;
-        self.atteint = Some(Palier::Detection);
+        self.franchir(Palier::Detection);
         Ok(self.ports.clone())
     }
 
@@ -222,17 +256,24 @@ impl<S: SdkMyiro1> Session<S> {
     ///
     /// Attention : sur un instrument qui n'a jamais reçu de date de mise en
     /// service, la DLL y inscrit la date de l'ordinateur pendant cet appel.
+    ///
+    /// Toute tentative efface l'identité et l'étalonnage de la connexion
+    /// précédente ; la connexion n'est exploitable qu'une fois l'identité lue.
     pub fn connecter(&mut self, index: usize) -> Result<Connexion, ErreurPont> {
         self.autoriser(Palier::Connexion, Some(Palier::Detection))?;
         let port = *self.ports.get(index).ok_or(ErreurPont::InstrumentInconnu)?;
+        self.etat = EtatInstrument::NonConnecte;
         let code = self
             .sdk
             .connecter(&port, DELAI_CONNEXION)
             .map_err(traduire)?;
-        self.atteint = Some(Palier::Connexion);
+        self.etat = EtatInstrument::Inexploitable;
         let tampon = self.sdk.infos().map_err(traduire)?;
         let infos = lire_infos_instrument(&tampon);
-        self.instrument = Some(infos.clone());
+        self.etat = EtatInstrument::Connecte {
+            identite: infos.clone(),
+        };
+        self.franchir(Palier::Connexion);
         Ok(Connexion {
             infos,
             identite_brute: tampon[..TAILLE_INFOS].to_vec(),
@@ -241,9 +282,30 @@ impl<S: SdkMyiro1> Session<S> {
     }
 
     /// Étalonnage sur le blanc : l'instrument doit être posé sur son capuchon.
-    /// Un échec laisse la session au palier Connexion.
+    /// L'étalonnage précédent cesse d'être utilisable dès le début de la
+    /// tentative : après un échec, un délai ou une perte, il faut réétalonner.
     pub fn etalonner(&mut self) -> Result<Etalonnage, ErreurPont> {
-        self.autoriser(Palier::Etalonnage, Some(Palier::Connexion))?;
+        self.autoriser(Palier::Etalonnage, None)?;
+        self.exiger(false)?;
+        self.invalider_etalonnage();
+        let resultat = self.attendre_etalonnage();
+        match &resultat {
+            Ok(_) => {
+                if let EtatInstrument::Connecte { identite } = &self.etat {
+                    self.etat = EtatInstrument::Etalonne {
+                        identite: identite.clone(),
+                        date: maintenant(),
+                    };
+                }
+                self.franchir(Palier::Etalonnage);
+            }
+            Err(ErreurPont::InstrumentPerdu) => self.etat = EtatInstrument::Perdu,
+            Err(_) => {}
+        }
+        resultat
+    }
+
+    fn attendre_etalonnage(&mut self) -> Result<Etalonnage, ErreurPont> {
         self.sdk.etalonner_blanc().map_err(traduire)?;
         let echeance = Instant::now() + DELAI_ETALONNAGE;
         let mut evenements = Vec::new();
@@ -265,15 +327,14 @@ impl<S: SdkMyiro1> Session<S> {
                 _ => {}
             }
         }
-        self.atteint = Some(Palier::Etalonnage);
-        self.etalonnage = Some(maintenant());
         Ok(Etalonnage { evenements })
     }
 
     /// Mesure ponctuelle : arme l'instrument, attend l'appui sur son bouton,
     /// lit M0, M1, M2 et les données brutes, puis désarme dans tous les cas.
     pub fn mesurer_ponctuelle(&mut self) -> Result<MesurePonctuelle, ErreurPont> {
-        self.autoriser(Palier::MesurePonctuelle, Some(Palier::Etalonnage))?;
+        self.autoriser(Palier::MesurePonctuelle, None)?;
+        let garantie = self.garantie()?;
         let (mut plages, _, evenements) = self.mesurer(Mode::Ponctuelle)?;
         if plages.len() != 1 {
             return Err(inattendue(format!(
@@ -282,7 +343,7 @@ impl<S: SdkMyiro1> Session<S> {
             )));
         }
         let plage = plages.remove(0);
-        let provenance = self.provenance("ponctuelle")?;
+        let provenance = self.provenance(garantie, "ponctuelle")?;
         Ok(MesurePonctuelle {
             provenance,
             m0: plage.m0,
@@ -302,7 +363,8 @@ impl<S: SdkMyiro1> Session<S> {
         &mut self,
         plages_attendues: Option<u32>,
     ) -> Result<MesureBande, ErreurPont> {
-        self.autoriser(Palier::Bande, Some(Palier::Etalonnage))?;
+        self.autoriser(Palier::Bande, None)?;
+        let garantie = self.garantie()?;
         let (plages, sens, evenements) =
             self.mesurer(Mode::Bande(plages_attendues.unwrap_or(0)))?;
         if let Some(attendues) = plages_attendues {
@@ -317,14 +379,53 @@ impl<S: SdkMyiro1> Session<S> {
             plages,
             sens,
             evenements,
-            provenance: self.provenance("bande")?,
+            provenance: self.provenance(garantie, "bande")?,
         })
     }
 
-    /// Ce que le pont atteste sur la mesure qui vient de se terminer.
-    fn provenance(&self, geometrie: &str) -> Result<Provenance, ErreurPont> {
-        let (Some(version), Some(infos)) = (&self.version, &self.instrument) else {
-            return Err(inattendue("mesure sans version ni identité".into()));
+    /// Identité et date d'étalonnage qui garantissent la mesure demandée,
+    /// relevées avant armement ; refus sans appel à la DLL sinon.
+    fn garantie(&self) -> Result<(InfosInstrument, String), ErreurPont> {
+        self.exiger(true)?;
+        match &self.etat {
+            EtatInstrument::Etalonne { identite, date } => Ok((identite.clone(), date.clone())),
+            _ => Err(ErreurPont::EtalonnageRequis),
+        }
+    }
+
+    /// Refuse, sans appel à la DLL, ce que l'état courant ne permet pas :
+    /// une connexion identifiée, et un étalonnage utilisable si `etalonne`.
+    fn exiger(&self, etalonne: bool) -> Result<(), ErreurPont> {
+        match &self.etat {
+            EtatInstrument::Etalonne { .. } => Ok(()),
+            EtatInstrument::Connecte { .. } if !etalonne => Ok(()),
+            EtatInstrument::Connecte { .. } => Err(ErreurPont::EtalonnageRequis),
+            EtatInstrument::Perdu => Err(ErreurPont::InstrumentPerdu),
+            EtatInstrument::Inexploitable => Err(ErreurPont::SessionInexploitable),
+            EtatInstrument::NonConnecte => Err(ErreurPont::EtatInvalide {
+                attendu: Palier::Connexion,
+            }),
+        }
+    }
+
+    /// L'étalonnage cesse d'être utilisable ; l'identité reste.
+    fn invalider_etalonnage(&mut self) {
+        if let EtatInstrument::Etalonne { identite, .. } = &self.etat {
+            self.etat = EtatInstrument::Connecte {
+                identite: identite.clone(),
+            };
+        }
+    }
+
+    /// Ce que le pont atteste sur la mesure qui vient de se terminer, à partir
+    /// de la garantie relevée avant armement.
+    fn provenance(
+        &self,
+        (infos, etalonnage): (InfosInstrument, String),
+        geometrie: &str,
+    ) -> Result<Provenance, ErreurPont> {
+        let Some(version) = &self.version else {
+            return Err(inattendue("mesure sans version du SDK".into()));
         };
         Ok(Provenance {
             instrument: InstrumentMesurant {
@@ -338,7 +439,7 @@ impl<S: SdkMyiro1> Session<S> {
             version_pont: env!("CARGO_PKG_VERSION").into(),
             architecture: std::env::consts::ARCH.into(),
             horodatage: maintenant(),
-            etalonnage: self.etalonnage.clone(),
+            etalonnage: Some(etalonnage),
             geometrie: geometrie.into(),
             calcul: CONDITIONS_DE_CALCUL.into(),
         })
@@ -352,6 +453,9 @@ impl<S: SdkMyiro1> Session<S> {
         // Comme MYIRO tools : désarmer avant d'armer, l'instrument se réarmant
         // seul après une mesure.
         self.desarmer("avant armement");
+        if self.etat == EtatInstrument::Perdu {
+            return Err(ErreurPont::InstrumentPerdu);
+        }
         let armement = match mode {
             Mode::Ponctuelle => self.sdk.armer_ponctuelle(),
             Mode::Bande(attendues) => self.sdk.armer_bande(attendues),
@@ -360,7 +464,7 @@ impl<S: SdkMyiro1> Session<S> {
             .push(format!("armement : code {}", code_de(armement)));
         if let Err(code) = armement {
             if code == CODE_NON_ETALONNE {
-                self.atteint = Some(Palier::Connexion);
+                self.invalider_etalonnage();
             }
             return Err(traduire(code));
         }
@@ -368,6 +472,9 @@ impl<S: SdkMyiro1> Session<S> {
             let (plages, sens) = self.lire_plages()?;
             Ok((plages, sens, evenements))
         });
+        if resultat.as_ref().err() == Some(&ErreurPont::InstrumentPerdu) {
+            self.etat = EtatInstrument::Perdu;
+        }
         // Désarmer même après un échec.
         self.desarmer("après lecture");
         resultat
@@ -442,10 +549,16 @@ impl<S: SdkMyiro1> Session<S> {
                     return;
                 }
                 Err(CODE_ETAT_INCOMPATIBLE) => match self.sdk.attendre_evenement(DELAI_REPOS) {
-                    Some(evenement) => self.journal.push(format!(
-                        "événement {} (avant nouvel essai de désarmement)",
-                        evenement.code
-                    )),
+                    Some(evenement) => {
+                        self.journal.push(format!(
+                            "événement {} (avant nouvel essai de désarmement)",
+                            evenement.code
+                        ));
+                        if evenement.code == EVENEMENT_DECONNEXION {
+                            self.etat = EtatInstrument::Perdu;
+                            return;
+                        }
+                    }
                     // Aucun événement : l'instrument est déjà au repos.
                     None => return,
                 },
@@ -463,7 +576,11 @@ impl<S: SdkMyiro1> Session<S> {
         {
             self.journal
                 .push(format!("événement {} (attente du repos)", evenement.code));
-            if evenement.code == EVENEMENT_REPOS || evenement.code == EVENEMENT_DECONNEXION {
+            if evenement.code == EVENEMENT_DECONNEXION {
+                self.etat = EtatInstrument::Perdu;
+                break;
+            }
+            if evenement.code == EVENEMENT_REPOS {
                 break;
             }
         }
@@ -523,7 +640,7 @@ impl<S: SdkMyiro1> Session<S> {
             });
         }
         if let Some(attendu) = prealable {
-            if self.atteint < Some(attendu) {
+            if self.progression < Some(attendu) {
                 return Err(ErreurPont::EtatInvalide { attendu });
             }
         }
