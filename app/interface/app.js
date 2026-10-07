@@ -1,4 +1,4 @@
-// Cadre de l'application : tâches, thème, langue. Les textes viennent du catalogue
+// Cadre de l'application : tâches, thème, langue, instrument. Les textes viennent du catalogue
 // Rust (module `textes`) : une seule langue par fenêtre, jamais de texte en dur ici.
 "use strict";
 
@@ -26,6 +26,7 @@ async function appliquerLangue(code) {
     b.setAttribute("aria-pressed", String(b.dataset.langueChoix === code));
   }
   afficherTache(tacheCourante());
+  afficherInstrument();
   memoire("langue", code);
 }
 
@@ -59,8 +60,89 @@ function afficherTache(tache) {
     if (b.dataset.tache === tache) b.setAttribute("aria-current", "page");
     else b.removeAttribute("aria-current");
   }
-  for (const v of document.querySelectorAll("[data-vue]")) v.hidden = v.dataset.vue !== tache;
   document.querySelector("[data-tache-courante]").textContent = textes["tache." + tache] || "";
+  afficherFeuille();
+}
+
+// ---- Instrument : l'état vient du module Rust `instrument`, la page ne fait qu'afficher ----
+let vueInstrument = null; // null : recherche en cours
+let ecranChoisi = null; // écran ouvert par l'opérateur (changer l'emplacement du SDK)
+const TACHES_SANS_INSTRUMENT = ["bibliotheque"];
+
+function ecranInstrument() {
+  if (ecranChoisi) return ecranChoisi;
+  return vueInstrument && vueInstrument.probleme ? vueInstrument.probleme.ecran : null;
+}
+
+// Feuille du centre : l'écran de l'instrument remplace celle des tâches qui en ont besoin.
+function afficherFeuille() {
+  const tache = tacheCourante();
+  const ecran = TACHES_SANS_INSTRUMENT.includes(tache) ? null : ecranInstrument();
+  for (const v of document.querySelectorAll("[data-vue]")) v.hidden = ecran !== null || v.dataset.vue !== tache;
+  for (const e of document.querySelectorAll("[data-ecran]")) {
+    e.hidden = e.dataset.ecran !== ecran;
+    remplirEcran(e);
+  }
+}
+
+// Cause et action du problème (sauf quand le titre de l'écran le dit déjà), détail replié.
+function remplirEcran(section) {
+  const probleme = vueInstrument && vueInstrument.probleme;
+  const concerne = Boolean(probleme) && probleme.ecran === section.dataset.ecran;
+  const evident = concerne && ["aucun_instrument", "sdk_non_indique"].includes(probleme.code);
+  const avis = section.querySelector("[data-avis]");
+  avis.hidden = !concerne || evident;
+  if (concerne) {
+    avis.querySelector("[data-avis-cause]").textContent = textes["probleme." + probleme.code + ".cause"];
+    avis.querySelector("[data-avis-action]").textContent = textes["probleme." + probleme.code + ".action"];
+  }
+  const detail = concerne ? probleme.detail : null;
+  section.querySelector("[data-details]").hidden = !detail;
+  section.querySelector("[data-details-texte]").textContent = detail || "";
+}
+
+function afficherInstrument() {
+  const barre = document.querySelector("[data-instrument]");
+  const texte = barre.querySelector("[data-instrument-texte]");
+  let pret = false;
+  if (!vueInstrument) texte.textContent = textes["instrument.recherche"];
+  else if (vueInstrument.etat === "non_detecte") texte.textContent = textes["instrument.aucun"];
+  else {
+    texte.textContent = vueInstrument.modele + ", " + textes["instrument.etat." + vueInstrument.etat];
+    pret = vueInstrument.etat !== "etalonnage_requis";
+  }
+  barre.classList.toggle("state--ok", pret);
+  barre.classList.toggle("state--warn", !pret);
+  for (const b of document.querySelectorAll("[data-action]")) b.disabled = !vueInstrument;
+  afficherFeuille();
+}
+
+async function ouvrirInstrument(commande, args) {
+  vueInstrument = null;
+  ecranChoisi = null;
+  afficherInstrument();
+  try {
+    vueInstrument = await invoke(commande, args);
+  } catch (erreur) {
+    vueInstrument = {
+      etat: "non_detecte",
+      modele: null,
+      probleme: { code: "pont_en_panne", ecran: "non_detecte", detail: String(erreur) },
+    };
+  }
+  afficherInstrument();
+}
+
+async function changerSdk() {
+  ecranChoisi = "emplacement_sdk";
+  const champ = document.getElementById("emplacement-sdk");
+  if (!champ.value) champ.value = (await invoke("emplacement_sdk")) || "";
+  afficherFeuille();
+  champ.focus();
+}
+
+function validerSdk() {
+  ouvrirInstrument("indiquer_sdk", { chemin: document.getElementById("emplacement-sdk").value });
 }
 
 // ---- Lancement ----
@@ -73,6 +155,12 @@ document.addEventListener("click", (e) => {
     memoire("theme", cible.dataset.themeChoix);
   }
   if (cible.dataset.langueChoix) appliquerLangue(cible.dataset.langueChoix);
+  if (cible.dataset.action === "reessayer") ouvrirInstrument("ouvrir_instrument");
+  if (cible.dataset.action === "changer_sdk") changerSdk();
+  if (cible.dataset.action === "valider_sdk") validerSdk();
+});
+document.getElementById("emplacement-sdk").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && vueInstrument) validerSdk();
 });
 sombreSysteme.addEventListener("change", marquerTheme);
 
@@ -81,4 +169,6 @@ sombreSysteme.addEventListener("change", marquerTheme);
   const demandee = await invoke("langue_demandee");
   await appliquerLangue(demandee || memoire("langue") || "fr");
   document.body.hidden = false;
+  document.getElementById("emplacement-sdk").value = (await invoke("emplacement_sdk")) || "";
+  await ouvrirInstrument("ouvrir_instrument");
 })();

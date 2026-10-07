@@ -21,7 +21,7 @@
     <button data-tache="bibliotheque"><span class="label num">04</span><span data-t="tache.bibliotheque"></span></button>
   </nav>
   <div class="c-10-12 masthead__tools">
-    <span class="state state--warn" data-t-aria="instrument.libelle"><i></i><span data-t="instrument.aucun"></span></span>
+    <span class="state state--warn" data-t-aria="instrument.libelle" data-instrument role="status"><i></i><span data-instrument-texte></span></span>
     <div class="seg" role="group" data-t-aria="theme.libelle">
       <button data-theme-choix="light" data-t="theme.clair"></button><button data-theme-choix="dark" data-t="theme.sombre"></button>
     </div>
@@ -47,6 +47,31 @@
 
   <div class="c-3-9">
     <div class="sheet-head"><span class="label label--ink" data-tache-courante></span><span class="label num" data-t="feuille.numero"></span></div>
+    <!-- Écrans de l’instrument : ils remplacent la feuille des tâches qui en ont besoin. -->
+    <section data-ecran="non_detecte" hidden>
+      <h2 class="empty__text" data-t="ecran.non_detecte.titre"></h2>
+      <div class="notice notice--warn" data-avis hidden><p><b data-avis-cause></b> <span data-avis-action></span></p></div>
+      <p class="prose"><span class="label num">01</span> <span data-t="ecran.non_detecte.etape1"></span></p>
+      <p class="prose"><span class="label num">02</span> <span data-t="ecran.non_detecte.etape2"></span></p>
+      <p class="prose"><span class="label num">03</span> <span data-t="ecran.non_detecte.etape3"></span></p>
+      <div class="actions">
+        <button class="btn btn--primary" data-action="reessayer" data-t="ecran.reessayer"></button>
+        <button class="btn" data-action="changer_sdk" data-t="ecran.changer_sdk"></button>
+      </div>
+      <details class="replie" data-details hidden><summary data-t="ecran.details"></summary><pre data-details-texte></pre></details>
+    </section>
+    <section data-ecran="emplacement_sdk" hidden>
+      <h2 class="empty__text" data-t="ecran.sdk.titre"></h2>
+      <p class="prose" data-t="ecran.sdk.explication"></p>
+      <div class="notice notice--warn" data-avis hidden><p><b data-avis-cause></b> <span data-avis-action></span></p></div>
+      <div class="field">
+        <label class="label" for="emplacement-sdk" data-t="ecran.sdk.champ"></label>
+        <input class="input" id="emplacement-sdk" spellcheck="false" autocomplete="off">
+        <p data-t="ecran.sdk.aide"></p>
+      </div>
+      <div class="actions"><button class="btn btn--primary" data-action="valider_sdk" data-t="ecran.sdk.valider"></button></div>
+      <details class="replie" data-details hidden><summary data-t="ecran.details"></summary><pre data-details-texte></pre></details>
+    </section>
     <section class="empty" data-vue="mesurer">
       <h2 class="empty__text" data-t="vide.mesurer.phrase"></h2>
       <div class="actions"><button class="btn btn--primary" disabled data-t="vide.mesurer.action"></button></div>

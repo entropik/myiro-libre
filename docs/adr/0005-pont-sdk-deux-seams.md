@@ -52,6 +52,16 @@ Ce complément remplit ce que le complément du ticket #23 renvoyait au ticket #
 
 Vérifié contre l'instrument simulé seulement. Les codes d'échec de `FDX_Disconnect` (pas encore de fiche) et le comportement du vrai MYIRO-1 quand l'événement 0 manque restent à observer. La durée de `FDX_Disconnect` n'est pas bornée par le pont : un appel bloqué dans la DLL bloque la fermeture. Le délai et la détection d'un pont bloqué relèvent du module instrument (ticket #26).
 
+### Complément du 7 octobre 2026 : le module `instrument` dans l'application
+
+Le seam (a) existe (ticket #3). Le trait `Pont` (une requête, une réponse), `PontProcessus`, `PontSimule` et le module `instrument` vivent dans `app/src/pont.rs` et `app/src/instrument.rs`, sans aucune dépendance à Tauri : seul `app/src/lib.rs` les relie à la fenêtre.
+
+- **Ouvrir.** `Instrument::ouvrir` cherche `FDXSDK.dll` à l'emplacement du SDK indiqué par l'opérateur (le fichier, ou un dossier qui la contient à trois niveaux au plus), lance le pont avec le plafond `Connexion`, puis demande version, détection et connexion au premier instrument détecté. Il ne demande jamais plus loin : l'étalonnage et les mesures viendront avec leurs écrans (#4, #7) et la spécification #21 (fermeture, annulation).
+- **État.** Quatre états : non détecté, connecté, étalonnage requis, étalonné. Un MYIRO-1 qui vient d'être connecté est en « étalonnage requis », car le pont refuse toute mesure avant un étalonnage de la session. « Connecté » est réservé à un instrument sans étalonnage (ADR 0005, conséquences : i1Display3) ; « étalonné » sera atteint par #21.
+- **Échecs.** Chaque échec devient un problème nommé (SDK non indiqué, aucune DLL, SDK inutilisable, pont introuvable, pont en panne, aucun instrument, connexion impossible), avec une cause probable et une action dans le catalogue de textes, le détail technique à part. Le problème désigne l'écran qui aide à le résoudre : instrument non détecté, ou emplacement du SDK.
+- **Transport.** `PontProcessus` lance le pont sans fenêtre de console, reconnaît le code de sortie 3 (DLL refusée) et une ligne hors protocole. Pour fermer, il ferme l'entrée du pont (qui désarme et se déconnecte), attend 10 s puis l'arrête de force ; un arrêt forcé ne prouve pas que l'instrument est au repos (#21). Un pont factice (`app/examples/pont_factice.rs`) vérifie ce transport sans aucune DLL.
+- **Où sont les fichiers.** Le pont est cherché à côté de l'application (`pont-myiro1.exe`), ou donné par `--pont <chemin>` au lancement (pont 32 bits pour une DLL 32 bits). L'emplacement du SDK est retenu dans le dossier de configuration de l'application ; aucune DLL n'est fournie ni copiée.
+
 ## Options écartées
 
 - **Commande brute et catalogue dynamique** (appeler un export par son nom). Ils ouvrent un chemin vers des exports arbitraires, contraire à la règle de sécurité matérielle. Un banc d'exploration éventuel serait un binaire séparé, hors build de production.

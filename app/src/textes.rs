@@ -360,6 +360,38 @@ mod tests {
         assert_eq!(texte(Langue::Anglais, "tache.mesurer"), "Measure");
     }
 
+    /// Chaque texte demandé par la page (`data-t`, `data-t-aria`) et chaque
+    /// état de l'instrument affiché dans la barre existent au catalogue.
+    #[test]
+    fn la_page_ne_demande_que_des_cles_du_catalogue() {
+        let page = include_str!("../interface/index.html");
+        let mut demandees: Vec<String> = page
+            .split("data-t")
+            .skip(1)
+            .filter_map(|reste| {
+                let reste = reste.strip_prefix("-aria").unwrap_or(reste);
+                let reste = reste.strip_prefix("=\"")?;
+                reste.split('"').next().map(String::from)
+            })
+            .collect();
+        for etat in ["connecte", "etalonnage_requis", "etalonne"] {
+            demandees.push(format!("instrument.etat.{etat}"));
+        }
+        demandees.extend(["instrument.recherche".into(), "instrument.aucun".into()]);
+        assert!(
+            demandees.len() > 40,
+            "clés lues dans la page : {demandees:?}"
+        );
+        let inconnues: Vec<_> = demandees
+            .iter()
+            .filter(|c| !cles().any(|k| k == c.as_str()))
+            .collect();
+        assert!(
+            inconnues.is_empty(),
+            "clés absentes du catalogue : {inconnues:?}"
+        );
+    }
+
     #[test]
     fn chaque_cle_existe_en_francais_et_en_anglais() {
         assert_eq!(cles_manquantes(), vec![]);

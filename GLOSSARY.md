@@ -59,6 +59,14 @@ _Éviter_ : bridge, wrapper, driver, pilote (réservé au pilote Windows)
 Étape de la progression imposée sur instrument réel (version du SDK, détection, connexion, étalonnage, mesure ponctuelle, puis bande ou feuille). Le pont refuse tout palier au-delà du plafond autorisé au lancement ; chaque pont déclare les paliers qui existent pour son instrument.
 _Éviter_ : phase (réservé au plan d'action), niveau, étape
 
+**Emplacement du SDK** :
+Dossier du logiciel Konica Minolta installé sur le poste (ou le fichier `FDXSDK.dll` lui-même) que l'opérateur indique à l'application ; elle y cherche la DLL et la donne au pont. Les DLL ne sont jamais fournies avec myiro-libre.
+_Éviter_ : chemin de la DLL, dossier d'installation (sans préciser lequel)
+
+**État de l'instrument** :
+Ce que la barre du haut dit de l'instrument, en un mot : non détecté, connecté, étalonnage requis ou étalonné. Il est établi par le module `instrument`, jamais par un écran.
+_Éviter_ : statut, mode
+
 **Plafond** :
 Dernier palier qu'un pont a le droit d'atteindre, fixé à son lancement ; toute demande au-delà est refusée sans toucher à l'instrument.
 _Éviter_ : limite, niveau maximal

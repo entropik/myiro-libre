@@ -11,9 +11,7 @@
 use std::io::{BufRead, Write};
 use std::process::ExitCode;
 
-use pont_protocole::{
-    ecrire_reponse, lire_requete, Identite, InstrumentDetecte, Reponse, Requete,
-};
+use pont_protocole::{ecrire_reponse, lire_requete, Identite, InstrumentDetecte, Reponse, Requete};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

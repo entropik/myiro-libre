@@ -63,12 +63,17 @@ fn sans_emplacement_du_sdk_l_application_le_demande_sans_lancer_le_pont() {
 
     assert_eq!(instrument.etat(), &Etat::NonDetecte);
     assert_eq!(instrument.probleme(), Some(&Probleme::SdkNonIndique));
-    assert_eq!(instrument.probleme().unwrap().ecran(), Ecran::EmplacementSdk);
+    assert_eq!(
+        instrument.probleme().unwrap().ecran(),
+        Ecran::EmplacementSdk
+    );
 }
 
 #[test]
 fn un_emplacement_sans_dll_est_signale_clairement() {
-    let vide = std::env::temp_dir().join("myiro-libre-tests").join("sans-dll");
+    let vide = std::env::temp_dir()
+        .join("myiro-libre-tests")
+        .join("sans-dll");
     std::fs::create_dir_all(vide.join("sous-dossier")).unwrap();
 
     let instrument = Instrument::ouvrir(Some(&vide), ne_pas_lancer);
@@ -79,7 +84,10 @@ fn un_emplacement_sans_dll_est_signale_clairement() {
             emplacement: vide.display().to_string()
         })
     );
-    assert_eq!(instrument.probleme().unwrap().ecran(), Ecran::EmplacementSdk);
+    assert_eq!(
+        instrument.probleme().unwrap().ecran(),
+        Ecran::EmplacementSdk
+    );
 }
 
 #[test]
@@ -148,7 +156,10 @@ fn une_dll_refusee_par_le_pont_renvoie_a_l_emplacement_du_sdk() {
             detail: "DllIntrouvable".into()
         })
     );
-    assert_eq!(instrument.probleme().unwrap().ecran(), Ecran::EmplacementSdk);
+    assert_eq!(
+        instrument.probleme().unwrap().ecran(),
+        Ecran::EmplacementSdk
+    );
 }
 
 #[test]
