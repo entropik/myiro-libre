@@ -1,0 +1,11 @@
+[package]
+name = "pont-myiro1"
+version = "0.1.0"
+description = "Pont MYIRO-1 : seul processus qui charge FDXSDK.dll (ADR 0005)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+fdx-sys = { path = "../fdx-sys" }
+pont-protocole = { path = "../pont-protocole" }

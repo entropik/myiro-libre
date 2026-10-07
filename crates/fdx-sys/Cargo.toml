@@ -1,0 +1,7 @@
+[package]
+name = "fdx-sys"
+version = "0.1.0"
+description = "Types et liste blanche des exports de FDXSDK (MYIRO-1), reconstitués par analyse statique"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
