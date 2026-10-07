@@ -3,6 +3,7 @@
 - [`adr/`](adr/) : décisions d'architecture.
 - [`agents/`](agents/) : consignes pour les agents (tickets, étiquettes, documentation de domaine).
 - [`abi/`](abi/) : fiches d'ABI de FDXSDK (signatures, preuves, statut confirmé ou supposé).
+- [`pilote-libre/`](pilote-libre/) : pilote libre (ADR 0006) ; format du [jeu de validation](pilote-libre/jeu-validation.md) et banc de comparaison.
 - [`references/`](references/) : base de connaissance ouverte (ICC, couleur, ArgyllCMS, projets libres). Point d'entrée : [`references/icc.md`](references/icc.md).
 - [`../design-system/`](../design-system/README.md) : système graphique de l'interface (jetons, composants, pages de référence à ouvrir dans un navigateur).
 - [`blog/`](blog/) : journal de bord, un résumé par jour (`AAAA-MM-JJ.md`).

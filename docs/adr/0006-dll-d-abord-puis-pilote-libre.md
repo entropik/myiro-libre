@@ -27,6 +27,10 @@ Avec un pilote libre, c'est notre code qui envoie les octets à l'appareil. La l
 - L'observation du trafic entre un logiciel officiel et l'instrument (port série, réseau) reste passive : on écoute, on ne rejoue rien.
 - L'analyse menée pour l'interopérabilité ne copie aucun code du fabricant : seuls des faits (formats, codes, comportements) passent dans le dépôt.
 
+### Complément du 7 octobre 2026
+
+Le jeu de validation et son banc vivent dans une crate à part, `jeu-validation`, indépendante de Windows et des ponts (comme les crates partagées de l'ADR 0004) ; elle ne dépend que de `pont-protocole` pour relire les sorties JSON du pont. Le calcul candidat y est un trait, `CalculSpectres`, dont le pilote libre sera un adapter. Le jeu remplace le numéro de série par un pseudonyme et se produit hors git ; seul son format est documenté (`docs/pilote-libre/jeu-validation.md`).
+
 ## Options écartées
 
 - **Pilote libre tout de suite** : plus long avant la première mesure, et sans étalon pour vérifier les calculs.

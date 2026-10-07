@@ -75,6 +75,14 @@ _Éviter_ : réglage, condition (au sens de `SetMeasureCondition`)
 Valeurs rendues par l'instrument avant tout calcul de spectre (152 par plage pour le MYIRO-1), conservées avec chaque mesure pour valider le pilote libre (ADR 0006).
 _Éviter_ : raw, données capteur
 
+**Jeu de validation** :
+Ensemble de paires « données brutes → spectres M0, M1, M2 » calculées par la DLL du fabricant sur des mesures réelles, sans identifiant d'instrument, qui sert d'étalon au pilote libre (ADR 0006). Il se produit en local et n'est jamais versionné. Format : `docs/pilote-libre/jeu-validation.md`.
+_Éviter_ : dataset, jeu de test, corpus
+
+**Banc de comparaison** :
+Outil qui fait calculer les spectres d'un jeu de validation par un calcul candidat et rend, par condition de mesure, l'écart moyen et maximal avec la DLL, longueur d'onde par longueur d'onde.
+_Éviter_ : benchmark (mesure de vitesse), validateur
+
 **Provenance** :
 Ce que le pont atteste sur une mesure : instrument (modèle, n° de série, micrologiciel), chaîne logicielle (SDK, pont, empreinte de la DLL), date réelle avec fuseau, géométrie de lecture, condition de mesure relue sur l'instrument, illuminant, observateur. Le reste du contexte (support, encres, séchage, chauffe…) relève de la bibliothèque, pas du pont. Elle est posée par le pont, jamais reconstituée par l'application, et aucune mesure n'existe sans elle.
 _Éviter_ : métadonnées, contexte
