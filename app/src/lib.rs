@@ -121,6 +121,10 @@ fn ouvrir_bibliotheque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
+/// Temps laissé à l'opérateur pour répondre à un geste ; au-delà, il est
+/// réputé avoir renoncé et l'écran d'étalonnage se ferme.
+const DELAI_GESTE: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
 /// Geste montré à l'écran, en attente de la réponse de l'opérateur.
 #[derive(Default)]
 struct GesteEnAttente(Mutex<Option<mpsc::Sender<Accord>>>);
@@ -140,8 +144,15 @@ impl Gestes for GestesEcran<'_> {
         if self.app.emit("geste", geste).is_err() {
             return Accord::Annule;
         }
-        // Sans réponse possible (page fermée), l'opérateur a renoncé.
-        reponse.recv().unwrap_or(Accord::Annule)
+        // Sans réponse (page fermée, opérateur parti), l'opérateur a renoncé :
+        // l'attente est bornée, car l'instrument reste verrouillé pendant ce temps.
+        let accord = reponse.recv_timeout(DELAI_GESTE).unwrap_or(Accord::Annule);
+        self.attente
+            .0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        accord
     }
 }
 

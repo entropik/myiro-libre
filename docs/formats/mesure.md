@@ -75,6 +75,12 @@ Hors de la réponse `mesure`, la même valeur, sans `statut`, accompagne la rép
 
 **Compatibilité.** Depuis le ticket #25, un lecteur refuse les champs et les valeurs qu'il ne connaît pas. Un lecteur antérieur au ticket #24 rejettera donc une réponse `mesure` qui porte `remise_au_repos`, la réponse `fermeture_incertaine` et les erreurs `repos_incertain`, `deconnexion_echouee` et `session_fermee` : l'application et le pont doivent être mis à jour ensemble. Autre changement visible : `fermer` juste après `connecter`, sans mesure, ne répond plus `ferme` mais `fermeture_incertaine` avec `repos_suppose`.
 
+## Date d'étalonnage (réponse du protocole)
+
+Un étalonnage réussi répond `{"rep": "etalonne", "date": "2026-10-07T09:30:00+02:00"}` (valeur fictive). La date est celle de l'horloge du pont, à la seconde, avec fuseau, au même format que `horodatage`. C'est exactement celle que porte ensuite `etalonnage` dans la provenance des mesures de cette connexion : l'application la garde telle quelle et ne la recalcule jamais (ticket #4).
+
+Une réponse `etalonne` sans `date`, avec une date sans fuseau ou avec un champ en trop est refusée. **Compatibilité** : un pont antérieur répondait `{"rep": "etalonne"}` ; l'application actuelle le refuse, et un lecteur antérieur refuse le champ `date`. Application et pont se mettent à jour ensemble.
+
 ## Confirmé, supposé, inconnu
 
 Une donnée dont on n'est pas sûr est **qualifiée** : `{"statut": "confirmee", "valeur": …}`, `{"statut": "supposee", "valeur": …}` ou `{"statut": "inconnue"}`. Une donnée inconnue n'a jamais de valeur, et une valeur nue à la place d'une donnée qualifiée est refusée.

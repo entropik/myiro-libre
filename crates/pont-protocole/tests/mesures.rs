@@ -203,7 +203,7 @@ fn une_reponse_du_protocole_avec_un_champ_inconnu_est_refusee() {
     assert_ne!(abime, texte);
     assert!(lire_reponse(&abime).is_err(), "{abime}");
     for ligne in [
-        r#"{"rep":"etalonne","force":true}"#,
+        r#"{"rep":"etalonne","date":"2026-10-07T09:30:00+02:00","force":true}"#,
         r#"{"rep":"ferme","detail":"x"}"#,
         r#"{"rep":"version","parties":[1,0,1],"protocole":2}"#,
         r#"{"rep":"instruments","liste":[{"liaison":"usb","port":"COM3","numero_serie":12345678,"x":1}]}"#,

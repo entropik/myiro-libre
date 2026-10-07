@@ -8,7 +8,7 @@ use app::instrument::{
     emplacements_a_essayer, Accord, Ecran, Etat, Geste, Instrument, Probleme, EMPLACEMENTS_CONNUS,
     PLAFOND,
 };
-use app::pont::{Architecture, Panne, PontSimule};
+use app::pont::{Architecture, Panne, PontSimule, DATE_ETALONNAGE_SIMULEE};
 use app::textes::{texte, Langue};
 use pont_protocole::{ErreurPont, Palier, Reponse, Requete};
 
@@ -640,11 +640,12 @@ fn l_etalonnage_demande_le_blanc_puis_etalonne_et_garde_l_heure() {
     let vue = serde_json::to_value(instrument.vue()).unwrap();
     assert_eq!(vue["etat"], "etalonne");
     assert_eq!(vue["pret"], true);
-    // Heure avec fuseau, au format de la provenance : AAAA-MM-JJTHH:MM:SS±HH:MM.
-    let heure = instrument.etalonnage().expect("heure d'étalonnage");
-    let heure = heure.texte();
-    assert_eq!(heure.len(), 25, "{heure}");
-    assert!(heure[19..].starts_with(['+', '-']), "{heure}");
+    // La date est celle du pont, gardée telle quelle (ADR 0005 : la
+    // provenance est posée par le pont, jamais par l'application).
+    assert_eq!(
+        instrument.etalonnage().map(|d| d.texte()),
+        Some(DATE_ETALONNAGE_SIMULEE)
+    );
 }
 
 #[test]

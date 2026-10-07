@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use pont_protocole::{
-    lire_reponse, ErreurPont, Identite, InstrumentDetecte, Palier, Reponse, Requete,
+    lire_reponse, ErreurPont, Horodatage, Identite, InstrumentDetecte, Palier, Reponse, Requete,
 };
 
 /// Le pont n'a pas pu répondre : ce n'est pas une erreur de l'instrument, mais
@@ -252,6 +252,9 @@ impl Drop for PontProcessus {
     }
 }
 
+/// Date fictive rendue par le pont simulé à un étalonnage réussi.
+pub const DATE_ETALONNAGE_SIMULEE: &str = "2026-10-07T09:30:00+02:00";
+
 /// Requêtes reçues par un pont simulé, lisibles après coup par les tests.
 #[derive(Clone, Default)]
 pub struct Journal(Arc<Mutex<Vec<Requete>>>);
@@ -352,7 +355,9 @@ impl Pont for PontSimule {
                     erreur: ErreurPont::InstrumentInconnu {},
                 },
             },
-            Requete::Etalonner {} => Reponse::Etalonne {},
+            Requete::Etalonner {} => Reponse::Etalonne {
+                date: Horodatage::new(DATE_ETALONNAGE_SIMULEE).expect("date fictive valable"),
+            },
             // Le simulé ne va pas plus loin que l'étalonnage, comme le plafond
             // de l'application.
             _ => Reponse::Erreur {

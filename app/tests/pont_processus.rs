@@ -129,10 +129,29 @@ fn une_sortie_fermee_sans_fin_du_pont_est_bornee() {
 fn l_etalonnage_a_deux_fois_le_delai_d_une_autre_demande() {
     let mut pont = lancer("etalonnage_lent").avec_delai(Duration::from_millis(300));
 
-    assert_eq!(
+    assert!(matches!(
         pont.demander(&Requete::Etalonner {}),
-        Ok(Reponse::Etalonne {})
+        Ok(Reponse::Etalonne { .. })
+    ));
+}
+
+/// Au-delà du délai doublé, l'étalonnage est abandonné comme toute autre
+/// demande : le pont est arrêté de force, l'instrument reste incertain.
+#[test]
+fn un_etalonnage_qui_depasse_le_delai_double_arrete_le_pont() {
+    let mut pont = lancer("etalonnage_trop_lent").avec_delai(Duration::from_millis(300));
+    let debut = Instant::now();
+
+    assert!(matches!(
+        pont.demander(&Requete::Etalonner {}),
+        Err(Panne::SansReponse { .. })
+    ));
+    assert!(
+        debut.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        debut.elapsed()
     );
+    assert!(pont.demander(&Requete::Version {}).is_err());
 }
 
 /// Fermer un pont bloqué ne bloque pas non plus.

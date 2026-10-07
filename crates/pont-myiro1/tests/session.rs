@@ -272,6 +272,26 @@ fn un_echec_d_etalonnage_ne_permet_pas_de_mesurer() {
     assert!(!a_arme(&session));
 }
 
+/// La date rendue par l'étalonnage est celle que porteront les mesures qui
+/// suivent : l'application la garde telle quelle.
+#[test]
+fn l_etalonnage_rend_la_date_reprise_par_la_provenance() {
+    let mut session = session_connectee(sdk_qui_etalonne(&[7, 8]), Palier::MesurePonctuelle);
+    session
+        .sdk_mut()
+        .salves
+        .push_back([1, 2, 3].map(evenement).to_vec());
+    let etalonnage = session.etalonner().unwrap();
+    assert!(est_un_horodatage_avec_fuseau(etalonnage.date.texte()));
+
+    let mesure = session.mesurer_ponctuelle().unwrap();
+
+    assert_eq!(
+        date_confirmee(&mesure.provenance.etalonnage),
+        etalonnage.date.texte()
+    );
+}
+
 #[test]
 fn un_etalonnage_reussi_ouvre_le_palier_suivant() {
     let mut session = session_connectee(sdk_qui_etalonne(&[7, 8]), Palier::Etalonnage);

@@ -145,7 +145,9 @@ pub enum Probleme {
     /// L'instrument détecté a refusé la connexion ou ne répond pas.
     ConnexionImpossible { detail: String },
     /// L'instrument a refusé ou raté l'étalonnage (événement d'échec, refus) :
-    /// il reste connecté, l'étalonnage est à refaire.
+    /// il reste connecté, l'étalonnage est à refaire. Le message suppose que
+    /// l'instrument était mal posé ; l'événement 9 sans capuchon n'a pas été
+    /// observé (fiche `docs/abi/FDX_Calibration.md`, « Reste à vérifier »).
     EtalonnageEchoue { detail: String },
     /// L'instrument n'a pas terminé l'étalonnage dans le délai du pont.
     EtalonnageDelai { detail: String },
@@ -271,8 +273,9 @@ pub struct Instrument<P: Pont> {
     sdk: Option<PathBuf>,
     etat: Etat,
     probleme: Option<Probleme>,
-    /// Heure du dernier étalonnage réussi, avec fuseau, pour la provenance
-    /// des mesures qui suivent. Effacée dès qu'un nouvel étalonnage commence.
+    /// Date du dernier étalonnage réussi, avec fuseau, telle que le pont l'a
+    /// rendue : celle de la provenance des mesures qui suivent. Effacée dès
+    /// qu'un nouvel étalonnage commence.
     etalonnage: Option<Horodatage>,
 }
 
@@ -343,9 +346,11 @@ impl<P: Pont> Instrument<P> {
         self.etat = Etat::EtalonnageRequis(fiche.clone());
         self.probleme = None;
         let probleme = match pont.demander(&Requete::Etalonner {}) {
-            Ok(Reponse::Etalonne {}) => {
+            Ok(Reponse::Etalonne { date }) => {
+                // La date du pont, telle quelle : c'est elle que porteront les
+                // mesures (ADR 0005, la provenance est posée par le pont).
                 self.etat = Etat::Etalonne(fiche);
-                self.etalonnage = Some(maintenant());
+                self.etalonnage = Some(date);
                 return;
             }
             Ok(Reponse::Erreur { erreur }) => {
@@ -524,12 +529,6 @@ fn monter(pont: &mut impl Pont) -> Result<Fiche, Probleme> {
         }),
         autre => Err(inattendue(autre)),
     }
-}
-
-/// Heure locale avec fuseau, à la seconde, au format de la provenance.
-fn maintenant() -> Horodatage {
-    let texte = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
-    Horodatage::new(texte).expect("chrono rend toujours une heure avec fuseau")
 }
 
 fn inattendue(reponse: Reponse) -> Probleme {

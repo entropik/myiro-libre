@@ -172,6 +172,9 @@ pub struct MesurePonctuelle {
 pub struct Etalonnage {
     /// Événements reçus pendant l'étalonnage, pour le journal.
     pub evenements: Vec<Evenement>,
+    /// Heure de la réussite, avec fuseau : celle que porteront les mesures
+    /// qui suivent dans leur provenance.
+    pub date: Horodatage,
 }
 
 /// Résultat d'une connexion réussie.
@@ -360,11 +363,13 @@ impl<S: SdkMyiro1> Session<S> {
         self.invalider_etalonnage();
         let resultat = self.attendre_etalonnage();
         match &resultat {
-            Ok(_) => {
+            Ok(etalonnage) => {
+                // Une seule date : celle rendue à l'application est celle que
+                // porteront les mesures.
                 if let EtatInstrument::Connecte { identite } = &self.etat {
                     self.etat = EtatInstrument::Etalonne {
                         identite: identite.clone(),
-                        date: maintenant(),
+                        date: etalonnage.date.texte().to_string(),
                     };
                 }
                 self.franchir(Palier::Etalonnage);
@@ -397,7 +402,8 @@ impl<S: SdkMyiro1> Session<S> {
                 _ => {}
             }
         }
-        Ok(Etalonnage { evenements })
+        let date = Horodatage::new(maintenant()).map_err(|e| inattendue(e.to_string()))?;
+        Ok(Etalonnage { evenements, date })
     }
 
     /// Mesure ponctuelle : arme l'instrument, attend l'appui sur son bouton,

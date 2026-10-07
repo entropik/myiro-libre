@@ -392,7 +392,17 @@ fn une_bande_rend_une_plage_par_resultat() {
             r#"{"cmd":"mesurer_bande","plages_attendues":12}"#,
         ],
     );
-    assert_eq!(reponses[3], Reponse::Etalonne {});
+    let Reponse::Etalonne { date } = &reponses[3] else {
+        panic!("{:?}", reponses[3])
+    };
+    let Reponse::Mesure { mesure, .. } = &reponses[4] else {
+        panic!("{:?}", reponses[4])
+    };
+    // La date rendue à l'étalonnage est celle de la provenance des mesures.
+    assert_eq!(
+        mesure.provenance().etalonnage,
+        pont_protocole::Info::Confirmee(date.clone())
+    );
     let Reponse::Mesure { mesure, .. } = &reponses[4] else {
         panic!("{:?}", reponses[4])
     };

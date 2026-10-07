@@ -76,7 +76,9 @@ fn traiter<S: SdkMyiro1>(session: &mut Session<S>, requete: Requete) -> (Reponse
                     identite: identite(&connexion),
                 })
         }
-        Requete::Etalonner {} => session.etalonner().map(|_| Reponse::Etalonne {}),
+        Requete::Etalonner {} => session.etalonner().map(|etalonnage| Reponse::Etalonne {
+            date: etalonnage.date,
+        }),
         Requete::MesurerPonctuelle {} => session.mesurer_ponctuelle().and_then(|mesure| {
             let plage = MesurePlage {
                 m0: mesure.m0,
