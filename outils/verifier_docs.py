@@ -32,7 +32,10 @@ def git(*args):
 
 
 def fichiers(staged):
-    noms = git("diff", "--cached", "--name-only", "--diff-filter=ACM") if staged else git("ls-files")
+    if staged:
+        noms = git("diff", "--cached", "--name-only", "--diff-filter=ACM")
+    else:  # fichiers suivis, plus fichiers neufs pas encore ajoutés (hors fichiers ignorés)
+        noms = git("ls-files") + git("ls-files", "--others", "--exclude-standard")
     return [RACINE / n for n in noms if n not in IGNORES]
 
 

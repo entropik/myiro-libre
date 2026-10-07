@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grille · système graphique myiro-libre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<link rel="stylesheet" href="doc.css">
+</head>
+<body>
+<header class="ds-head"><div class="page"><div class="grid">
+  <div class="c-1-4 brand">myiro-libre</div>
+  <nav class="c-5-12" aria-label="Pages du système graphique"><a href="index.html">Sommaire</a><a href="brand-book.html">Couleurs</a><a href="typography.html">Typographie</a><a href="grid.html" aria-current="page">Grille</a><a href="ui-kit.html">Composants</a><a href="patterns.html">Assemblages</a></nav>
+</div></div></header>
+<main class="page">
+<section class="ds-intro"><span class="label">Grille</span><h1>Douze colonnes, des filets</h1><p class="prose">Gabarit suisse&#8239;: douze colonnes, gouttière de 1,5&#8239;rem, marges de 2&#8239;rem (1&#8239;rem sous 64&#8239;rem de large). Tout se pose sur la grille&#8239;; rien ne flotte. Dans l’application, la touche G affiche la grille.</p></section>
+<section class="ds-block"><span class="label">Gabarit</span><h2>Les douze colonnes</h2><p>Largeur maximale 90&#8239;rem. Gouttière <code>--grid-gutter</code>, marges <code>--grid-margin</code>.</p><div class="ds-demo"><div class="ds-grid-demo"><div class="ds-col">1</div><div class="ds-col">2</div><div class="ds-col">3</div><div class="ds-col">4</div><div class="ds-col">5</div><div class="ds-col">6</div><div class="ds-col">7</div><div class="ds-col">8</div><div class="ds-col">9</div><div class="ds-col">10</div><div class="ds-col">11</div><div class="ds-col">12</div></div></div><pre class="ds-code">.grid { display: grid; grid-template-columns: repeat(var(--grid-columns), 1fr); column-gap: var(--grid-gutter); }</pre></section>
+<section class="ds-block"><span class="label">Dispositions</span><h2>Les cinq dispositions autorisées</h2><p>L’écran de travail est toujours 2 + 7 + 3&#8239;: bibliothèque, feuille, cartouche. Sous 64&#8239;rem, tout passe sur une seule colonne et la bibliothèque disparaît.</p><div class="ds-demo"><div class="ds-spec"><div><b>12</b><br><span class="mute small">Pleine largeur</span></div><div class="ds-grid-demo ds-lay-12"><div class="ds-col" data-g="1-12">12</div></div></div><div class="ds-spec"><div><b>2 + 7 + 3</b><br><span class="mute small">Bibliothèque, feuille, cartouche (écran de travail)</span></div><div class="ds-grid-demo ds-lay-2-7-3"><div class="ds-col" data-g="1-2">2</div><div class="ds-col" data-g="3-7">7</div><div class="ds-col" data-g="10-3">3</div></div></div><div class="ds-spec"><div><b>6 + 6</b><br><span class="mute small">Deux colonnes égales (comparaison)</span></div><div class="ds-grid-demo ds-lay-6-6"><div class="ds-col" data-g="1-6">6</div><div class="ds-col" data-g="7-6">6</div></div></div><div class="ds-spec"><div><b>4 + 4 + 4</b><br><span class="mute small">Trois colonnes (compteurs, cartes de choix)</span></div><div class="ds-grid-demo ds-lay-4-4-4"><div class="ds-col" data-g="1-4">4</div><div class="ds-col" data-g="5-4">4</div><div class="ds-col" data-g="9-4">4</div></div></div><div class="ds-spec"><div><b>8 + 4</b><br><span class="mute small">Contenu et aside</span></div><div class="ds-grid-demo ds-lay-8-4"><div class="ds-col" data-g="1-8">8</div><div class="ds-col" data-g="9-4">4</div></div></div></div></section>
+<section class="ds-block"><span class="label">Rythme vertical</span><h2>Espacements</h2><p>Base de 4&#8239;px. Entre deux sections&#8239;: 3&#8239;rem. Entre un libellé et un titre&#8239;: 0,5&#8239;rem. Entre un titre et son contenu&#8239;: 1&#8239;rem. Les filets de section font 2&#8239;px, ceux d’en-tête de feuille 4&#8239;px, les séparations de tableau 1&#8239;px.</p><div class="ds-demo"><table><thead><tr><th>Jeton</th><th class="r">Valeur</th></tr></thead><tbody><tr><td>--space-1</td><td class="r num">0,25 rem</td></tr><tr><td>--space-2</td><td class="r num">0,5 rem</td></tr><tr><td>--space-3</td><td class="r num">0,75 rem</td></tr><tr><td>--space-4</td><td class="r num">1 rem</td></tr><tr><td>--space-6</td><td class="r num">1,5 rem</td></tr><tr><td>--space-8</td><td class="r num">2 rem</td></tr><tr><td>--space-12</td><td class="r num">3 rem</td></tr><tr><td>--space-16</td><td class="r num">4 rem</td></tr><tr><td>--space-24</td><td class="r num">6 rem</td></tr></tbody></table></div></section>
+<section class="ds-block"><span class="label">Point de rupture</span><h2>Un seul</h2><p>64&#8239;rem (1024&#8239;px). En dessous&#8239;: une colonne, tableaux défilants, parcours sur deux colonnes.</p><div class="ds-demo"><p class="mute">Pas d’autre point de rupture&#8239;: la typographie est fluide.</p></div></section>
+</main>
+</body>
+</html>
