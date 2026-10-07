@@ -4,6 +4,7 @@
 //! avant tout appel à la DLL (ADR 0005, docs/abi/).
 
 pub mod dll;
+pub mod serveur;
 
 use fdx_sys::{
     lire_infos_instrument, ConditionCalcul, InfosInstrument, Port, Version, CONDITION_M0,
