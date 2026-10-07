@@ -29,6 +29,9 @@ pub enum Inconnu {
     BlancInvalide,
     /// La teinte d'une couleur sans chroma (un gris parfait) n'existe pas.
     TeinteSansChroma,
+    /// Le calcul déborde (valeurs d'entrée extrêmes) : le résultat ne serait
+    /// pas un nombre fini.
+    ResultatNonFini,
 }
 
 /// Valeurs tristimulus, blanc de référence à Y = 100.
@@ -65,14 +68,34 @@ fn verifier_lab(lab: &Lab) -> Result<(), Inconnu> {
     }
 }
 
+/// Un résultat qui n'est pas un nombre fini est inconnu, jamais rendu tel quel.
+fn fini(valeur: f64) -> Result<f64, Inconnu> {
+    if valeur.is_finite() {
+        Ok(valeur)
+    } else {
+        Err(Inconnu::ResultatNonFini)
+    }
+}
+
+/// Angle de `atan2(b, a)` en degrés, ramené dans [0, 360) : un angle infime
+/// négatif donnerait sinon exactement 360 par arrondi.
+fn teinte_degres(b: f64, a: f64) -> f64 {
+    let h = b.atan2(a).to_degrees().rem_euclid(360.0);
+    if h >= 360.0 {
+        0.0
+    } else {
+        h
+    }
+}
+
 /// Lab vers LCH.
 pub fn lab_vers_lch(lab: Lab) -> Result<Lch, Inconnu> {
     verifier_lab(&lab)?;
-    let c = lab.a.hypot(lab.b);
+    let c = fini(lab.a.hypot(lab.b))?;
     let h = if c == 0.0 {
         Err(Inconnu::TeinteSansChroma)
     } else {
-        Ok(lab.b.atan2(lab.a).to_degrees().rem_euclid(360.0))
+        Ok(teinte_degres(lab.b, lab.a))
     };
     Ok(Lch { l: lab.l, c, h })
 }
@@ -96,7 +119,7 @@ pub fn delta_e00(lab1: Lab, lab2: Lab) -> Result<f64, Inconnu> {
         let h = if c == 0.0 {
             0.0
         } else {
-            lab.b.atan2(a).to_degrees().rem_euclid(360.0)
+            teinte_degres(lab.b, a)
         };
         (c, h)
     };
@@ -146,7 +169,7 @@ pub fn delta_e00(lab1: Lab, lab2: Lab) -> Result<f64, Inconnu> {
     let r_t = -(2.0 * d_theta).to_radians().sin() * r_c;
 
     let (tl, tc, th) = (dl / s_l, dc / s_c, dh_grand / s_h);
-    Ok((tl * tl + tc * tc + th * th + r_t * tc * th).sqrt())
+    fini((tl * tl + tc * tc + th * th + r_t * tc * th).sqrt())
 }
 
 /// Écart de chroma CIELAB ΔC*ab = C₂ − C₁, signé : positif quand la seconde
@@ -154,7 +177,7 @@ pub fn delta_e00(lab1: Lab, lab2: Lab) -> Result<f64, Inconnu> {
 pub fn delta_c(lab1: Lab, lab2: Lab) -> Result<f64, Inconnu> {
     verifier_lab(&lab1)?;
     verifier_lab(&lab2)?;
-    Ok(lab2.a.hypot(lab2.b) - lab1.a.hypot(lab1.b))
+    fini(lab2.a.hypot(lab2.b) - lab1.a.hypot(lab1.b))
 }
 
 /// Écart de teinte CIELAB ΔH*ab = 2 √(C₁ C₂) sin(Δh / 2), signé : positif
@@ -164,13 +187,13 @@ pub fn delta_c(lab1: Lab, lab2: Lab) -> Result<f64, Inconnu> {
 pub fn delta_h(lab1: Lab, lab2: Lab) -> Result<f64, Inconnu> {
     verifier_lab(&lab1)?;
     verifier_lab(&lab2)?;
-    let (c1, c2) = (lab1.a.hypot(lab1.b), lab2.a.hypot(lab2.b));
+    let (c1, c2) = (fini(lab1.a.hypot(lab1.b))?, fini(lab2.a.hypot(lab2.b))?);
     if c1 == 0.0 || c2 == 0.0 {
         return Ok(0.0);
     }
     let dh = (lab2.b.atan2(lab2.a) - lab1.b.atan2(lab1.a)).to_degrees();
     let dh = (dh + 180.0).rem_euclid(360.0) - 180.0;
-    Ok(2.0 * (c1 * c2).sqrt() * (dh / 2.0).to_radians().sin())
+    fini(2.0 * (c1 * c2).sqrt() * (dh / 2.0).to_radians().sin())
 }
 
 /// Facteur de réflexion de la longueur d'onde de rang `i` des tables
@@ -215,7 +238,12 @@ pub fn spectre_vers_xyz(spectre: &[f64]) -> Result<Xyz, Inconnu> {
     if spectre.iter().any(|v| !v.is_finite()) {
         return Err(Inconnu::ValeurNonFinie);
     }
-    Ok(integrer(spectre))
+    let xyz = integrer(spectre);
+    Ok(Xyz {
+        x: fini(xyz.x)?,
+        y: fini(xyz.y)?,
+        z: fini(xyz.z)?,
+    })
 }
 
 /// XYZ vers Lab, rapporté au blanc donné.
@@ -238,9 +266,9 @@ pub fn xyz_vers_lab(xyz: Xyz, blanc: Xyz) -> Result<Lab, Inconnu> {
     };
     let (fx, fy, fz) = (f(xyz.x / blanc.x), f(xyz.y / blanc.y), f(xyz.z / blanc.z));
     Ok(Lab {
-        l: 116.0 * fy - 16.0,
-        a: 500.0 * (fx - fy),
-        b: 200.0 * (fy - fz),
+        l: fini(116.0 * fy - 16.0)?,
+        a: fini(500.0 * (fx - fy))?,
+        b: fini(200.0 * (fy - fz))?,
     })
 }
 

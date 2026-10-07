@@ -4,15 +4,16 @@
 //! Les mesures ne sont pas versionnées (`Archivage/donnees/`). Le test lit les
 //! fichiers `.csv` écrits par les tests `--ignored` du pont
 //! (`plage;donnees;L;a;b;nm380;…;nm730`), sous `Archivage/donnees/` à la racine
-//! du dépôt ou dans le dossier donné par la variable `MESURES_ARCHIVEES`. Sans
-//! mesures, il s'arrête en le signalant.
+//! du dépôt ou dans le dossier donné par la variable `MESURES_ARCHIVEES`. Il est
+//! ignoré par défaut (`cargo test -p colorimetrie -- --ignored` pour le lancer)
+//! et échoue s'il ne trouve aucune mesure.
 
 use std::path::{Path, PathBuf};
 
 use colorimetrie::{delta_e00, spectre_vers_lab, Lab, LONGUEUR_SPECTRE};
 
 /// Écart maximal admis entre notre Lab et celui de la DLL.
-const ECART_MAXIMAL: f64 = 0.05;
+const ECART_MAXIMAL: f64 = 0.02;
 
 fn dossier() -> PathBuf {
     std::env::var_os("MESURES_ARCHIVEES").map_or_else(
@@ -66,6 +67,7 @@ fn lignes_du_pont(texte: &str) -> Vec<(Lab, Vec<f64>)> {
 }
 
 #[test]
+#[ignore = "lit les mesures réelles locales (Archivage/donnees/ ou MESURES_ARCHIVEES), non versionnées"]
 fn notre_lab_rejoint_celui_de_la_dll_sur_les_mesures_archivees() {
     let mut fichiers = Vec::new();
     fichiers_csv(&dossier(), &mut fichiers);
@@ -74,13 +76,11 @@ fn notre_lab_rejoint_celui_de_la_dll_sur_les_mesures_archivees() {
         .filter_map(|f| std::fs::read_to_string(f).ok())
         .flat_map(|texte| lignes_du_pont(&texte))
         .collect();
-    if mesures.is_empty() {
-        eprintln!(
-            "aucune mesure archivée sous {} : test non joué",
-            dossier().display()
-        );
-        return;
-    }
+    assert!(
+        !mesures.is_empty(),
+        "aucune mesure archivée sous {} : donner le dossier dans MESURES_ARCHIVEES",
+        dossier().display()
+    );
     let ecarts: Vec<f64> = mesures
         .iter()
         .map(|(dll, spectre)| delta_e00(*dll, spectre_vers_lab(spectre).unwrap()).unwrap())

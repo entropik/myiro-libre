@@ -80,3 +80,25 @@ fn un_blanc_de_reference_nul_donne_un_lab_inconnu() {
     };
     assert_eq!(xyz_vers_lab(xyz, blanc), Err(Inconnu::BlancInvalide));
 }
+
+#[test]
+fn un_spectre_qui_deborde_donne_un_lab_inconnu() {
+    assert_eq!(
+        spectre_vers_xyz(&[f64::MAX; LONGUEUR_SPECTRE]),
+        Err(Inconnu::ResultatNonFini)
+    );
+    let blanc_infime = Xyz {
+        x: 1e-300,
+        y: 1e-300,
+        z: 1e-300,
+    };
+    let xyz = Xyz {
+        x: 1e300,
+        y: 1e300,
+        z: 1e300,
+    };
+    assert_eq!(
+        xyz_vers_lab(xyz, blanc_infime),
+        Err(Inconnu::ResultatNonFini)
+    );
+}

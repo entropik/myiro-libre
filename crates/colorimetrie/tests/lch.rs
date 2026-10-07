@@ -52,3 +52,19 @@ fn un_lab_non_fini_donne_un_lch_inconnu() {
         Err(Inconnu::ValeurNonFinie)
     );
 }
+
+#[test]
+fn une_teinte_a_peine_sous_0_degre_reste_sous_360() {
+    // atan2 rend un angle infime négatif ; ramené dans [0, 360), il ne doit
+    // pas valoir 360.
+    let h = lab_vers_lch(lab(50.0, 10.0, -1e-17)).unwrap().h.unwrap();
+    assert!((0.0..360.0).contains(&h), "teinte {h}");
+}
+
+#[test]
+fn une_chroma_qui_deborde_donne_un_lch_inconnu() {
+    assert_eq!(
+        lab_vers_lch(lab(50.0, f64::MAX, f64::MAX)),
+        Err(Inconnu::ResultatNonFini)
+    );
+}

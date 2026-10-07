@@ -106,3 +106,15 @@ fn delta_h_d_un_gris_vers_une_couleur_est_nul() {
         1e-12,
     );
 }
+
+#[test]
+fn un_ecart_qui_deborde_est_inconnu_et_non_faux() {
+    // Une chroma énorme fait déborder les calculs intermédiaires : le résultat
+    // n'est pas un nombre, il doit être inconnu.
+    let enorme = lab(50.0, 1e300, 1e300);
+    let normal = lab(50.0, 10.0, 10.0);
+    assert_eq!(delta_e00(enorme, normal), Err(Inconnu::ResultatNonFini));
+    let extreme = lab(50.0, f64::MAX, f64::MAX);
+    assert_eq!(delta_c(extreme, normal), Err(Inconnu::ResultatNonFini));
+    assert_eq!(delta_h(extreme, extreme), Err(Inconnu::ResultatNonFini));
+}
