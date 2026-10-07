@@ -23,6 +23,7 @@ Tu es un **ouvrier** : tu construis un seul ticket de myiro-libre, en TDD, dans 
    Si un critère d'acceptation exige un seam non convenu, arrête-toi et rends un rapport *bloqué*. Si un test passe au rouge sans que tu saches pourquoi, passe à **Diagnostiquer**.
 
 4. **Vérifier en entier.** Lance une fois, à la fin :
+   - `cargo fmt --all --check` (la CI Windows le contrôle) ;
    - `cargo test` ;
    - `cargo clippy --all-targets -- -D warnings` ;
    - `cargo test --target i686-pc-windows-msvc` si un pont ou une crate `*-sys` est touché ;

@@ -1,5 +1,16 @@
 {
   "enabledPlugins": {
     "mattpocock-skills@mattpocock": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(cargo test)",
+      "Bash(cargo test --target i686-pc-windows-msvc)",
+      "Bash(cargo clippy --all-targets -- -D warnings)",
+      "Bash(cargo fmt --all --check)",
+      "Bash(python outils/verifier_docs.py)",
+      "Bash(python outils/test_verifier_docs.py)",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot"
+    ]
   }
 }
