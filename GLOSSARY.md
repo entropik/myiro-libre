@@ -63,6 +63,10 @@ _Éviter_ : phase (réservé au plan d'action), niveau, étape
 Dernier palier qu'un pont a le droit d'atteindre, fixé à son lancement ; toute demande au-delà est refusée sans toucher à l'instrument.
 _Éviter_ : limite, niveau maximal
 
+**Prise de main** :
+Droit exclusif d'un logiciel à piloter un FD-9 en réseau ; un seul l'a à la fois. Le pont l'obtient à la connexion et la rend à la déconnexion. FD-S2w resté connecté la garde.
+_Éviter_ : autorité, authority, verrou
+
 **Armement** :
 Mise en attente de l'instrument pour une mesure ponctuelle ou une bande : il attend l'appui sur son bouton. Ne règle rien de permanent dans l'instrument.
 _Éviter_ : réglage, condition (au sens de `SetMeasureCondition`)
@@ -71,6 +75,14 @@ _Éviter_ : réglage, condition (au sens de `SetMeasureCondition`)
 Valeurs rendues par l'instrument avant tout calcul de spectre (152 par plage pour le MYIRO-1), conservées avec chaque mesure pour valider le pilote libre (ADR 0006).
 _Éviter_ : raw, données capteur
 
+**Jeu de validation** :
+Ensemble de paires « données brutes → spectres M0, M1, M2 » calculées par la DLL du fabricant sur des mesures réelles, sans identifiant d'instrument, qui sert d'étalon au pilote libre (ADR 0006). Il se produit en local et n'est jamais versionné. Format : `docs/pilote-libre/jeu-validation.md`.
+_Éviter_ : dataset, jeu de test, corpus
+
+**Banc de comparaison** :
+Outil qui fait calculer les spectres d'un jeu de validation par un calcul candidat et rend, par condition de mesure, l'écart moyen et maximal avec la DLL, longueur d'onde par longueur d'onde.
+_Éviter_ : benchmark (mesure de vitesse), validateur
+
 **Provenance** :
 Ce que le pont atteste sur une mesure : instrument (modèle, n° de série, micrologiciel), chaîne logicielle (SDK, pont, empreinte de la DLL), date réelle avec fuseau, géométrie de lecture, condition de mesure relue sur l'instrument, illuminant, observateur. Le reste du contexte (support, encres, séchage, chauffe…) relève de la bibliothèque, pas du pont. Elle est posée par le pont, jamais reconstituée par l'application, et aucune mesure n'existe sans elle.
 _Éviter_ : métadonnées, contexte
@@ -78,6 +90,16 @@ _Éviter_ : métadonnées, contexte
 **Inconnu** :
 État d'une donnée que l'instrument ou le SDK n'a pas fournie ou dont le sens n'est pas établi. Une donnée est confirmée, supposée ou inconnue ; une valeur inconnue n'est jamais remplacée par zéro, une chaîne vide ou une valeur par défaut.
 _Éviter_ : null, vide, zéro, par défaut
+
+### Couleur
+
+**Écart de couleur** :
+Différence chiffrée entre deux couleurs Lab. ΔE00 (CIEDE2000) par défaut ; ΔC (écart de chroma) et ΔH (écart de teinte) sont des critères distincts, signés, qu'on ne confond pas avec ΔE00. On dit toujours quelle formule est employée.
+_Éviter_ : delta E sans précision, différence de couleur
+
+**Teinte** :
+Angle de la couleur dans le plan a*b*, en degrés (0 à 360). Un gris parfait (chroma nulle) n'a pas de teinte : elle est inconnue, pas nulle.
+_Éviter_ : hue, nuance
 
 ### Impression
 

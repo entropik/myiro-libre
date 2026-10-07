@@ -1,5 +1,7 @@
 # Fiches d'ABI : FDXSDK (MYIRO-1)
 
+Les fiches du FD-9 (`FD9SDK.dll`, préfixe `FD9_`) ont leur propre page : [FD9SDK](FD9SDK.md).
+
 Une fiche par fonction de `FDXSDK.dll`, établie par lecture statique des DLL et de leurs appelants (MY-CT1, EIZO ColorNavigator, Ergosoft). Aucune DLL n'a été chargée et aucun instrument n'a été interrogé pour écrire ces fiches.
 
 Chaque affirmation porte un niveau :

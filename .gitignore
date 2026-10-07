@@ -30,6 +30,9 @@ Audit-MYIRO/retroanalyse/
 Inventaire/
 Archivage/donnees/
 
+# Jeux de test de tiers sans droit de redistribution (jeu CIEDE2000 de Sharma) : posés à la main, jamais versionnés
+crates/colorimetrie/tests/donnees-locales/
+
 # Logiciels, mises à jour et manuels Konica Minolta récupérés avant la fermeture, et leurs extractions : licence fabricant, jamais versionnés
 Audit-MYIRO/logiciels/
 Audit-MYIRO/extraits/

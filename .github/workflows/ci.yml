@@ -1,0 +1,78 @@
+# Intégration continue : relance sur une machine neuve les contrôles faits en local.
+#
+# Les noms des jobs `windows` et `linux` sont exigés par la protection de `main` :
+# ne pas les renommer.
+#
+# Ce que la CI ne couvre pas : les tests `--ignored` (DLL Konica Minolta, instrument
+# réel), les écrans, et les mots interdits (la liste `.mots-interdits.local` reste sur
+# le poste). Aucune DLL ni aucun fichier Konica Minolta n'est téléchargé ici.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.x"
+      - name: Outils Rust (stable, cible 32 bits)
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+          rustup target add i686-pc-windows-msvc
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Mise en forme
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Tests (64 bits)
+        run: cargo test
+      - name: Tests (32 bits, comme la DLL de MY-CT1)
+        run: cargo test --target i686-pc-windows-msvc
+      - name: Tests du vérificateur de documentation
+        run: python outils/test_verifier_docs.py
+      - name: Vérification de la documentation
+        run: python outils/verifier_docs.py
+
+  linux:
+    runs-on: ubuntu-latest
+    env:
+      # Crates qui doivent rester indépendantes de Windows (ADR 0004).
+      # Y ajouter `bibliotheque` et `mires` à leur création.
+      CRATES: >-
+        -p pont-protocole
+        -p jeu-validation
+        -p colorimetrie
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.x"
+      - name: Outils Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Mise en forme
+        run: cargo fmt $CRATES --check
+      - name: Clippy
+        run: cargo clippy $CRATES --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test $CRATES
+      - name: Tests du vérificateur de documentation
+        run: python outils/test_verifier_docs.py
+      - name: Vérification de la documentation
+        run: python outils/verifier_docs.py

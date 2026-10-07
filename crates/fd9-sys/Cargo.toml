@@ -1,0 +1,7 @@
+[package]
+name = "fd9-sys"
+version = "0.1.0"
+description = "Types et liste blanche des exports de FD9SDK (FD-9), reconstitués par analyse statique"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true

@@ -11,6 +11,9 @@ TARGETS={
  'myct1':'MY-CT1/SpectrophotometerConfigurationToolMY-CT1.exe',
  'eizo-x64':'EIZO/plugins/exports/win.x86_64/libmeasurementdevice_x64.dll',
  'eizo-x86':'EIZO/plugins/exports/win.x86_64/libmeasurementdevice.dll',
+ 'fd9-x86':'FD-S2w/Module/FD9SDK.dll',
+ 'fd9-x64':'Ergosoft/FD9SDK.dll',
+ 'fds2w':'FD-S2w/Module/FD-S2w.exe',
 }
 class Binary:
  def __init__(self,key):
@@ -66,10 +69,10 @@ class Binary:
   out.mkdir(parents=True,exist_ok=True)
   meta={'source':str(self.path),'sha256':hashlib.sha256(self.path.read_bytes()).hexdigest(),'image_base':hex(self.base),'bits':self.bits,'capstone':capstone.__version__,'exports':{hex(k):v for k,v in self.exports.items()},'imports':{hex(k):v for k,v in self.imports.items()},'runtime_functions':[(hex(a),hex(b)) for a,b in self.ranges]}
   (out/'metadata.json').write_text(json.dumps(meta,indent=2),encoding='utf-8')
-  if self.key.startswith('fdx'):
+  if self.key.startswith(('fdx','fd9')):
    exp=out/'exports';exp.mkdir(exist_ok=True)
    for va,name in self.exports.items():
-    if name.lower().startswith('fdx_jig'):continue
+    if name.lower().startswith(('fdx_jig','jig_')):continue
     lines,cut=self.cfg(va)
     (exp/(name+'.asm.txt')).write_text(f'; {self.key} VA={va:#x} RVA={va-self.base:#x} instruction_limit_reached={cut}\n; Parcours des branches directes seulement : tables de saut, exceptions et appels indirects non suivis.\n'+'\n'.join(lines)+'\n',encoding='utf-8')
   else:

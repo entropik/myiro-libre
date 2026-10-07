@@ -51,7 +51,7 @@ Date de recherche : 7 octobre 2026.
 
 ## 5. Questions ouvertes
 
-- Droit de reprendre le jeu de test de Sharma dans les tests du dépôt (la page autorise l'usage pour la recherche et à titre personnel avec citation) : mettre un lien et recalculer les valeurs soi-même, ou demander. [à vérifier]
+- Droit de reprendre le jeu de test de Sharma dans les tests du dépôt : **tranché le 7 octobre 2026, on ne le reprend pas.** La page de publication autorise l'usage personnel et de recherche avec citation, mais ne donne aucun droit de redistribution. Le fichier `ciede2000testdata.txt` se télécharge à la main depuis la page de l'auteur et se pose dans `crates/colorimetrie/tests/donnees-locales/` (ignoré par git) ; le test `sharma.rs`, ignoré par défaut, le lit avec `cargo test -p colorimetrie -- --ignored`. Le dépôt ne garde que la paire 1, citée ci-dessus. Résultat : les 34 paires sont reproduites à 0,00005 près.
 - Définition exacte de ΔCh de la norme 2016 (valeur signée ? en CIELAB ou en LCh00 ?). [à vérifier]
 - Quels paramètres k_L, k_C, k_H sont employés pour le contrôle d'épreuve (supposé 1, 1, 1) ? [à vérifier]
 - Les caisses Rust sont-elles testées contre Sharma ? À vérifier dans leur code de tests.

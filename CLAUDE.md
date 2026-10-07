@@ -32,6 +32,7 @@ python Audit-MYIRO/outils/synthese.py  # régénère comparaison, indices-techni
 
 Code Rust (espace de travail Cargo à la racine) :
 
+- `crates/colorimetrie` : spectre → XYZ → Lab (D50, 2°), LCH, ΔE00, ΔC, ΔH ; contrat partagé avec le futur RIP (ADR 0004), sans Windows ni ponts. Ses tests `sharma.rs` et `mesures_archivees.rs` lisent des données locales non versionnées : ils sont `#[ignore]` et se lancent par `cargo test -p colorimetrie -- --ignored` (variables `SHARMA_CIEDE2000`, `MESURES_ARCHIVEES`).
 - `crates/fdx-sys` : liste blanche des exports de `FDXSDK.dll` et formes binaires ; ne charge jamais la DLL.
 - `crates/pont-protocole` : messages JSON entre l'application et les ponts (requêtes, réponses, provenance) ; indépendant de Windows.
 - `crates/pont-myiro1` : session (paliers, plafond, journal), adapter `FdxDll`, boucle du protocole et exécutable `pont-myiro1 --dll <FDXSDK.dll> [--plafond <palier>]`.
@@ -44,6 +45,8 @@ cargo test -p pont-myiro1 --test dll -- --ignored palier_version   # appels rée
 ```
 
 Les tests `--ignored` de `crates/pont-myiro1/tests/dll.rs` parlent au vrai MYIRO-1 et, à partir de l'étalonnage, demandent des gestes à l'opérateur : ne les lancer qu'avec son accord, palier par palier. Leurs sorties (mesures) vont dans `Archivage/donnees/`, local et non versionné.
+
+Intégration continue (`.github/workflows/ci.yml`, GitHub Actions) à chaque PR et à chaque poussée sur `main`. Job `windows` : `cargo fmt --all --check`, clippy, `cargo test` en 64 puis 32 bits. Job `linux` : fmt, clippy et tests limités aux crates qui doivent rester indépendantes de Windows (liste explicite `CRATES` dans le workflow, aujourd'hui `pont-protocole`). Les deux jobs lancent `python outils/test_verifier_docs.py` et `python outils/verifier_docs.py`. `main` exige ces deux contrôles verts : ne pas renommer les jobs. La CI ne couvre pas la DLL ni l'instrument (tests `--ignored`, aucun fichier Konica Minolta sur GitHub), ni les écrans, ni les mots interdits (la liste `.mots-interdits.local` reste sur le poste ; sans elle, le contrôle est sauté et annoncé).
 
 ## Points techniques établis par l'audit
 
