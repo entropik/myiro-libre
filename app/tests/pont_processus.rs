@@ -4,6 +4,7 @@
 //! chemin de la DLL.
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use app::instrument::{Etat, Instrument, Probleme, PLAFOND};
 use app::pont::{Panne, Pont, PontProcessus};
@@ -81,6 +82,46 @@ fn un_pont_qui_s_arrete_rend_son_code_et_son_message() {
         }
         autre => panic!("réponse inattendue : {autre:?}"),
     }
+}
+
+/// Un pont bloqué (DLL qui ne rend pas la main) ne bloque pas l'application :
+/// passé le délai, il est arrêté de force et la panne le dit.
+#[test]
+fn sans_reponse_dans_le_delai_le_pont_est_arrete_de_force() {
+    let mut pont = lancer("bloque").avec_delai(Duration::from_millis(300));
+    let debut = Instant::now();
+
+    assert!(matches!(
+        pont.demander(&Requete::Version {}),
+        Err(Panne::SansReponse { .. })
+    ));
+    // Le processus a été arrêté : la demande suivante échoue aussitôt.
+    assert!(pont.demander(&Requete::Detecter {}).is_err());
+    assert!(debut.elapsed() < Duration::from_secs(5), "{:?}", debut.elapsed());
+}
+
+/// Un pont qui ferme sa sortie sans se terminer est arrêté de force, sans
+/// attente sans fin.
+#[test]
+fn une_sortie_fermee_sans_fin_du_pont_est_bornee() {
+    let mut pont = lancer("sortie_fermee").avec_delai(Duration::from_millis(300));
+    let debut = Instant::now();
+
+    assert!(matches!(
+        pont.demander(&Requete::Version {}),
+        Err(Panne::SansReponse { .. })
+    ));
+    assert!(debut.elapsed() < Duration::from_secs(5), "{:?}", debut.elapsed());
+}
+
+/// Fermer un pont bloqué ne bloque pas non plus.
+#[test]
+fn la_fermeture_d_un_pont_bloque_est_bornee() {
+    let mut pont = lancer("bloque").avec_delai(Duration::from_millis(300));
+    let _ = pont.demander(&Requete::Version {});
+    let debut = Instant::now();
+    drop(pont);
+    assert!(debut.elapsed() < Duration::from_secs(5), "{:?}", debut.elapsed());
 }
 
 #[test]

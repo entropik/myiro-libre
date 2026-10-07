@@ -158,6 +158,22 @@ const FRANCAIS: Catalogue = &[
         "Réessayez. Si le problème revient, débranchez puis rebranchez l’instrument.",
     ),
     (
+        "probleme.pont_bloque.cause",
+        "Le programme qui dialogue avec l’instrument ne répondait plus et a été arrêté. L’instrument est peut-être resté dans un état incertain.",
+    ),
+    (
+        "probleme.pont_bloque.action",
+        "Débranchez l’instrument, attendez quelques secondes, rebranchez-le, puis réessayez.",
+    ),
+    (
+        "probleme.detection_impossible.cause",
+        "La recherche des instruments branchés a échoué.",
+    ),
+    (
+        "probleme.detection_impossible.action",
+        "Débranchez puis rebranchez l’instrument, et réessayez.",
+    ),
+    (
         "probleme.aucun_instrument.cause",
         "Aucun MYIRO-1 n’est détecté.",
     ),
@@ -294,6 +310,22 @@ const ANGLAIS: Catalogue = &[
     (
         "probleme.pont_en_panne.action",
         "Try again. If it happens again, unplug and replug the instrument.",
+    ),
+    (
+        "probleme.pont_bloque.cause",
+        "The program that talks to the instrument stopped answering and was shut down. The instrument may have been left in an uncertain state.",
+    ),
+    (
+        "probleme.pont_bloque.action",
+        "Unplug the instrument, wait a few seconds, plug it back in, then try again.",
+    ),
+    (
+        "probleme.detection_impossible.cause",
+        "The search for connected instruments failed.",
+    ),
+    (
+        "probleme.detection_impossible.action",
+        "Unplug and replug the instrument, then try again.",
     ),
     (
         "probleme.aucun_instrument.cause",

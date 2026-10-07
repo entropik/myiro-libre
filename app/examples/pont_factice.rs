@@ -6,12 +6,31 @@
 //! - `echo` : répond à tout par `requete_invalide` en recopiant ses arguments ;
 //! - `dll_refusee` : s'arrête comme `pont-myiro1` devant une DLL introuvable ;
 //! - `muet` : lit une requête puis s'arrête avec le code 1 ;
-//! - `illisible` : répond par une ligne hors protocole.
+//! - `illisible` : répond par une ligne hors protocole ;
+//! - `bloque` : lit une requête et ne répond jamais (DLL bloquée) ;
+//! - `sortie_fermee` : lit une requête, ferme sa sortie et ne se termine pas.
 
 use std::io::{BufRead, Write};
 use std::process::ExitCode;
 
 use pont_protocole::{ecrire_reponse, lire_requete, Identite, InstrumentDetecte, Reponse, Requete};
+
+/// Ferme la sortie standard sans terminer le processus.
+#[cfg(windows)]
+fn fermer_sortie() {
+    use std::os::windows::io::{AsRawHandle, FromRawHandle};
+    let poignee = std::io::stdout().as_raw_handle();
+    // SAFETY : la poignée de la sortie standard est valide ; la refermer est
+    // le but du scénario, et plus rien n'écrit dessus ensuite.
+    drop(unsafe { std::fs::File::from_raw_handle(poignee) });
+}
+
+#[cfg(not(windows))]
+fn fermer_sortie() {
+    use std::os::fd::FromRawFd;
+    // SAFETY : descripteur 1 valide, refermé exprès ; plus rien n'écrit dessus.
+    drop(unsafe { std::fs::File::from_raw_fd(1) });
+}
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -33,6 +52,15 @@ fn main() -> ExitCode {
             "muet" => {
                 eprintln!("arrêt simulé");
                 return ExitCode::from(1);
+            }
+            "bloque" => loop {
+                std::thread::sleep(std::time::Duration::from_secs(60));
+            },
+            "sortie_fermee" => {
+                fermer_sortie();
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(60));
+                }
             }
             "illisible" => {
                 writeln!(sortie, "pas du JSON").unwrap();

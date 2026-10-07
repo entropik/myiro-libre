@@ -98,6 +98,23 @@ fn la_dll_est_trouvee_dans_un_sous_dossier_ou_designee_directement() {
     assert_eq!(chercher_dll(&dll), Some(dll));
 }
 
+/// Le pont chargerait n'importe quel fichier désigné : seul un fichier nommé
+/// FDXSDK.dll (casse indifférente) est accepté.
+#[test]
+fn un_fichier_designe_qui_n_est_pas_fdxsdk_est_refuse() {
+    let dossier = std::env::temp_dir()
+        .join("myiro-libre-tests")
+        .join("mauvais-nom");
+    std::fs::create_dir_all(&dossier).unwrap();
+    let autre = dossier.join("autre.dll");
+    std::fs::write(&autre, b"").unwrap();
+    let casse = dossier.join("fdxsdk.DLL");
+    std::fs::write(&casse, b"").unwrap();
+
+    assert_eq!(chercher_dll(&autre), None);
+    assert_eq!(chercher_dll(&casse), Some(casse));
+}
+
 #[test]
 fn le_pont_est_lance_avec_le_plafond_connexion() {
     assert_eq!(PLAFOND, Palier::Connexion);
@@ -182,6 +199,63 @@ fn une_connexion_refusee_par_l_instrument_garde_le_detail_technique() {
     assert_eq!(instrument.probleme().unwrap().ecran(), Ecran::NonDetecte);
 }
 
+/// Une détection en échec ne dit pas qu'un instrument a été vu.
+#[test]
+fn une_detection_en_echec_a_son_propre_probleme() {
+    let simule = PontSimule::avec_instruments(&[SERIE]).echouer_a(
+        Palier::Detection,
+        Ok(pont_protocole::Reponse::Erreur {
+            erreur: ErreurPont::Sdk { code: -9999 },
+        }),
+    );
+    let sdk = sdk_factice("detection");
+
+    let instrument = ouvrir(simule, Some(&sdk));
+
+    match instrument.probleme() {
+        Some(p @ Probleme::DetectionImpossible { detail }) => {
+            assert!(detail.contains("-9999"));
+            assert_eq!(p.ecran(), Ecran::NonDetecte);
+            assert!(p.guide_cablage());
+        }
+        autre => panic!("problème inattendu : {autre:?}"),
+    }
+}
+
+/// Les étapes câble et port USB ne servent à rien quand c'est le programme
+/// pont qui manque ou ne répond pas.
+#[test]
+fn le_guide_de_cablage_n_apparait_que_pour_un_probleme_d_instrument() {
+    let d = || String::from("détail");
+    assert!(Probleme::AucunInstrument.guide_cablage());
+    assert!(Probleme::ConnexionImpossible { detail: d() }.guide_cablage());
+    assert!(!Probleme::PontIntrouvable { detail: d() }.guide_cablage());
+    assert!(!Probleme::PontEnPanne { detail: d() }.guide_cablage());
+    assert!(!Probleme::PontBloque { detail: d() }.guide_cablage());
+}
+
+#[test]
+fn un_pont_qui_ne_repond_plus_laisse_l_instrument_dans_un_etat_incertain() {
+    let simule = PontSimule::avec_instruments(&[SERIE]).echouer_a(
+        Palier::Connexion,
+        Err(Panne::SansReponse {
+            detail: "aucune réponse en 30 s".into(),
+        }),
+    );
+    let sdk = sdk_factice("bloque");
+
+    let instrument = ouvrir(simule, Some(&sdk));
+
+    assert_eq!(instrument.etat(), &Etat::NonDetecte);
+    assert!(matches!(
+        instrument.probleme(),
+        Some(Probleme::PontBloque { .. })
+    ));
+    let vue = serde_json::to_value(instrument.vue()).unwrap();
+    assert_eq!(vue["probleme"]["code"], "pont_bloque");
+    assert_eq!(vue["probleme"]["guide_cablage"], false);
+}
+
 #[test]
 fn un_pont_qui_s_arrete_en_cours_de_route_est_signale() {
     let simule = PontSimule::avec_instruments(&[SERIE]).echouer_a(
@@ -254,7 +328,9 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
         Probleme::SdkInutilisable { detail: d() },
         Probleme::PontIntrouvable { detail: d() },
         Probleme::PontEnPanne { detail: d() },
+        Probleme::PontBloque { detail: d() },
         Probleme::AucunInstrument,
+        Probleme::DetectionImpossible { detail: d() },
         Probleme::ConnexionImpossible { detail: d() },
     ];
     for probleme in tous {

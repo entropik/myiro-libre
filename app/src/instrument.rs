@@ -61,8 +61,13 @@ pub enum Probleme {
     PontIntrouvable { detail: String },
     /// Le pont s'est arrêté ou a répondu hors du protocole.
     PontEnPanne { detail: String },
+    /// Le pont n'a pas répondu dans le délai et a été arrêté de force :
+    /// l'instrument est peut-être resté dans un état incertain (#21).
+    PontBloque { detail: String },
     /// Le pont répond, mais ne voit aucun instrument.
     AucunInstrument,
+    /// La recherche des instruments branchés a échoué.
+    DetectionImpossible { detail: String },
     /// L'instrument détecté a refusé la connexion ou ne répond pas.
     ConnexionImpossible { detail: String },
 }
@@ -76,13 +81,24 @@ impl Probleme {
             | Probleme::SdkInutilisable { .. } => Ecran::EmplacementSdk,
             Probleme::PontIntrouvable { .. }
             | Probleme::PontEnPanne { .. }
+            | Probleme::PontBloque { .. }
             | Probleme::AucunInstrument
+            | Probleme::DetectionImpossible { .. }
             | Probleme::ConnexionImpossible { .. } => Ecran::NonDetecte,
         }
     }
-}
 
-impl Probleme {
+    /// Les étapes « câble, port USB direct » aident-elles ? Seulement quand
+    /// c'est l'instrument qui manque, pas le programme pont.
+    pub fn guide_cablage(&self) -> bool {
+        matches!(
+            self,
+            Probleme::AucunInstrument
+                | Probleme::DetectionImpossible { .. }
+                | Probleme::ConnexionImpossible { .. }
+        )
+    }
+
     /// Code du problème : les textes de l'écran sont les clés
     /// `probleme.<code>.cause` et `probleme.<code>.action` du catalogue.
     pub fn code(&self) -> &'static str {
@@ -92,7 +108,9 @@ impl Probleme {
             Probleme::SdkInutilisable { .. } => "sdk_inutilisable",
             Probleme::PontIntrouvable { .. } => "pont_introuvable",
             Probleme::PontEnPanne { .. } => "pont_en_panne",
+            Probleme::PontBloque { .. } => "pont_bloque",
             Probleme::AucunInstrument => "aucun_instrument",
+            Probleme::DetectionImpossible { .. } => "detection_impossible",
             Probleme::ConnexionImpossible { .. } => "connexion_impossible",
         }
     }
@@ -105,6 +123,8 @@ impl Probleme {
             | Probleme::SdkInutilisable { detail: d }
             | Probleme::PontIntrouvable { detail: d }
             | Probleme::PontEnPanne { detail: d }
+            | Probleme::PontBloque { detail: d }
+            | Probleme::DetectionImpossible { detail: d }
             | Probleme::ConnexionImpossible { detail: d } => Some(d),
         }
     }
@@ -123,6 +143,8 @@ pub struct Vue {
 pub struct VueProbleme {
     pub code: &'static str,
     pub ecran: &'static str,
+    /// Montrer les étapes câble et port USB.
+    pub guide_cablage: bool,
     pub detail: Option<String>,
 }
 
@@ -138,6 +160,7 @@ impl From<Panne> for Probleme {
                 },
             },
             Panne::ReponseIllisible { detail } => Probleme::PontEnPanne { detail },
+            Panne::SansReponse { detail } => Probleme::PontBloque { detail },
         }
     }
 }
@@ -218,6 +241,7 @@ impl<P: Pont> Instrument<P> {
                     Ecran::NonDetecte => "non_detecte",
                     Ecran::EmplacementSdk => "emplacement_sdk",
                 },
+                guide_cablage: p.guide_cablage(),
                 detail: p.detail().map(String::from),
             }),
         }
@@ -242,7 +266,7 @@ fn monter(pont: &mut impl Pont) -> Result<Fiche, Probleme> {
         }
         Reponse::Instruments { .. } => {}
         Reponse::Erreur { erreur } => {
-            return Err(Probleme::ConnexionImpossible {
+            return Err(Probleme::DetectionImpossible {
                 detail: format!("détection : {erreur:?}"),
             })
         }
@@ -271,7 +295,11 @@ fn inattendue(reponse: Reponse) -> Probleme {
 /// la contient, au plus quelques niveaux plus bas.
 pub fn chercher_dll(emplacement: &Path) -> Option<PathBuf> {
     if emplacement.is_file() {
-        return Some(emplacement.to_path_buf());
+        // Le pont exécute le code de la DLL qu'on lui donne : jamais un autre fichier.
+        let nom = emplacement.file_name()?;
+        return nom
+            .eq_ignore_ascii_case(NOM_DLL)
+            .then(|| emplacement.to_path_buf());
     }
     chercher_dans(emplacement, 3)
 }
