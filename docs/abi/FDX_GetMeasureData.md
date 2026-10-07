@@ -47,7 +47,6 @@ int32_t __stdcall FDX_GetMeasureData(FDX_MeasureData *resultats,      /* tableau
 
 ## Ce qui est supposé
 
-- L'échelle du spectre (0 à 1 ou 0 à 100) : à établir sur la première mesure d'un blanc.
 - Le sens exact des valeurs de `sens` et de `DensityStatus`.
 
 ## Pour le pont
@@ -56,10 +55,17 @@ int32_t __stdcall FDX_GetMeasureData(FDX_MeasureData *resultats,      /* tableau
 - Pour chaque mesure : `DataType` 10 avec `Illuminant` 0, 1 et 2 (**trois spectres M0, M1, M2**), puis `DataType` 11 (**données brutes**, gardées pour le futur pilote libre, ADR 0006). La colorimétrie se calcule ensuite dans notre code, pas dans la DLL.
 - Allouer chaque tableau à la longueur exacte attendue (36 ou 152), vérifier `nombre` après le second appel, et archiver `sens`.
 
-## À vérifier sur l'instrument
+## Vérifié sur l'instrument
 
-- Les valeurs d'un blanc papier (échelle) et d'un noir ; l'écart M0/M2 sur un papier azuré.
-- Le nombre de résultats d'une mesure ponctuelle (1 attendu).
+Le 7 octobre 2026, MYIRO-1 en USB, DLL 1.0.1.0 x64, mesures ponctuelles sur une mire imprimée sur papier azuré (test `palier_mesure_ponctuelle_avec_le_vrai_instrument`) :
+
+- une mesure ponctuelle rend **un seul résultat** par lecture ; chaque lecture (spectre M0, M1, M2 ; 152 valeurs brutes ; Lab) réussit dans l'ordre ;
+- **échelle du spectre : 0 à 1**, comme les exports de FD-S2w ;
+- M0, M1 et M2 diffèrent comme attendu sur papier azuré : b\* du blanc vers -10 en M1 et -1 en M2 ;
+- **comparaison avec un FD-9** (FD-S2w, mêmes plages de la même feuille) : ΔE00 de 0,18 à 0,21 sur un cyan, 0,29 à 0,41 sur un noir, 0,36 à 0,56 sur un gris moyen, en M0, M1 et M2 ; écart spectral moyen de 0,001 à 0,004. L'accord annoncé entre instruments est de 0,3 en moyenne ;
+- répétabilité sur le blanc papier, même point : ΔL\* de 0,01 entre deux mesures successives.
+
+Les mesures brutes restent dans `Archivage/donnees/` (local).
 
 ## Preuves (locales)
 
