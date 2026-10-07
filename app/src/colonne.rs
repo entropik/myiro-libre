@@ -93,7 +93,7 @@ pub fn cle_erreur(erreur: &ErreurBibliotheque) -> &'static str {
     }
 }
 
-/// Ce que le panneau de détails montre d'une mesure.
+/// Ce que la feuille du centre et le cartouche montrent d'une mesure.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct DetailMesure {
     pub id: IdMesure,
@@ -102,10 +102,12 @@ pub struct DetailMesure {
     pub instrument: Instrument,
     pub etalonnage: Info<Horodatage>,
     pub geometrie: Geometrie,
-    /// Conditions de mesure des trois spectres, telles que demandées par le
-    /// pont ; inconnues si le pont ne les a pas dites.
+    /// Condition de mesure de chacun des trois spectres d'une plage, telle
+    /// que le pont l'a demandée : inconnue ou supposée si le pont l'a dit
+    /// ainsi. C'est la seule source des libellés M0, M1, M2 à l'écran.
     pub conditions_mesure: Info<[Info<ConditionMesure>; 3]>,
-    /// Lab de chaque plage, dans l'ordre M0, M1, M2.
+    /// Lab de chaque plage : trois valeurs, une par spectre, dans l'ordre des
+    /// spectres de la plage (leur condition est dans `conditions_mesure`).
     pub lab: Vec<[[f32; 3]; 3]>,
 }
 
@@ -181,6 +183,58 @@ mod tests {
         let dossier = tempfile::tempdir().unwrap();
         let etagere = Etagere::demonstration(dossier.path());
         (dossier, etagere)
+    }
+
+    /// Le détail ne transforme jamais la position d'un spectre en condition de
+    /// mesure : ce que le pont n'a pas dit reste inconnu, ce qu'il suppose
+    /// reste supposé (ADR 0005).
+    #[test]
+    fn le_detail_garde_les_conditions_de_mesure_inconnues_ou_supposees() {
+        use pont_protocole::{ConditionsCalcul, Mesure};
+        let (dossier, etagere) = demonstration();
+        let id = etagere.arborescence("").unwrap()[0].mesures[1].id;
+        drop(etagere);
+        let enregistree = Bibliotheque::ouvrir(dossier.path())
+            .unwrap()
+            .mesure(id)
+            .unwrap();
+        let avec_demande = |demande: Info<ConditionsCalcul>| {
+            let mut provenance = enregistree.mesure.provenance().clone();
+            provenance.calcul.demande = demande;
+            MesureEnregistree {
+                mesure: Mesure::new(enregistree.mesure.plages().to_vec(), provenance).unwrap(),
+                ..enregistree.clone()
+            }
+        };
+
+        let inconnue = DetailMesure::de(&avec_demande(Info::Inconnue));
+        assert_eq!(inconnue.conditions_mesure, Info::Inconnue);
+        assert_eq!(inconnue.lab.len(), 1);
+
+        let Some(mut conditions) = enregistree
+            .mesure
+            .provenance()
+            .calcul
+            .demande
+            .valeur()
+            .cloned()
+        else {
+            panic!("la démonstration dit ses conditions");
+        };
+        conditions.conditions_spectres = [
+            Info::Inconnue,
+            Info::Supposee(ConditionMesure::M1),
+            Info::Confirmee(ConditionMesure::M2),
+        ];
+        let melangee = DetailMesure::de(&avec_demande(Info::Supposee(conditions)));
+        assert_eq!(
+            melangee.conditions_mesure,
+            Info::Supposee([
+                Info::Inconnue,
+                Info::Supposee(ConditionMesure::M1),
+                Info::Confirmee(ConditionMesure::M2),
+            ])
+        );
     }
 
     #[test]

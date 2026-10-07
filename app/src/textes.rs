@@ -227,6 +227,13 @@ const FRANCAIS: Catalogue = &[
     ("details.plage", "Plage"),
     ("details.nom", "Nom"),
     ("details.renommer", "Renommer"),
+    ("details.spectre", "Spectre"),
+    ("compte.mesure", "mesure"),
+    ("compte.mesures", "mesures"),
+    (
+        "centre.choisir",
+        "Choisissez une mesure dans la bibliothèque.",
+    ),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -416,6 +423,10 @@ const ANGLAIS: Catalogue = &[
     ("details.plage", "Patch"),
     ("details.nom", "Name"),
     ("details.renommer", "Rename"),
+    ("details.spectre", "Spectrum"),
+    ("compte.mesure", "measurement"),
+    ("compte.mesures", "measurements"),
+    ("centre.choisir", "Choose a measurement in the library."),
 ];
 
 fn catalogue(langue: Langue) -> Catalogue {

@@ -161,7 +161,7 @@ tr.hl td { background: var(--color-hair); }
 
 /* ---- Index de la bibliothèque, numéroté comme une nomenclature ---- */
 .index ol { list-style: none; margin: 0; padding: 0; }
-.index li { display: grid; grid-template-columns: var(--space-8) 1fr auto; column-gap: var(--space-2); padding: var(--space-2) 0; border-top: var(--rule) solid var(--color-hair); font-size: var(--text-sm); }
+.index li { display: grid; grid-template-columns: var(--space-8) minmax(0, 1fr) auto; overflow-wrap: anywhere; column-gap: var(--space-2); padding: var(--space-2) 0; border-top: var(--rule) solid var(--color-hair); font-size: var(--text-sm); }
 .index li.l1 { border-top-color: var(--color-rule); font-weight: 700; margin-top: var(--space-4); }
 .index li.l1:first-child { margin-top: 0; }
 .index li.sel { background: var(--color-ink); color: var(--text-inverse); }
@@ -188,6 +188,18 @@ tr.hl td { background: var(--color-hair); }
 .frame > .grid { align-items: start; }
 .zone__title { display: block; margin-bottom: var(--space-3); }
 
+/* ---- Application plein cadre : la fenêtre ne défile jamais ; une zone trop longue défile seule ---- */
+.app:not([hidden]) { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+.app > .masthead { flex: none; }
+.app > .frame { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; padding-bottom: 0; }
+.app > .frame > .grid { flex: 1; min-height: 0; align-items: stretch; }
+.app > .frame > .grid > * { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-gutter: stable; padding-bottom: var(--space-12); }
+
+/* ---- Feuille d'un résultat : titre en grand corps, ligne de contexte, tableau lisible ---- */
+.sheet-title { font-size: var(--text-3xl); font-weight: 600; letter-spacing: var(--tracking-snug); line-height: var(--leading-snug); }
+.sheet-title + .why { margin-top: var(--space-2); font-size: var(--text-base); }
+.table--l td { font-size: var(--text-lg); }
+
 /* ---- État vide : une phrase en grand corps, une action ---- */
 .empty__text { font-size: var(--text-3xl); font-weight: 600; letter-spacing: var(--tracking-snug); line-height: var(--leading-snug); max-width: var(--measure); }
 
@@ -197,4 +209,7 @@ tr.hl td { background: var(--color-hair); }
   table { display: block; overflow-x: auto; }
   .steps { grid-template-columns: repeat(2, 1fr); row-gap: var(--space-2); }
   .kpis .n { font-size: var(--text-4xl); }
+  /* Zones empilées : la page défile de nouveau, les zones ne défilent plus seules. */
+  .app:not([hidden]) { display: block; height: auto; overflow: visible; }
+  .app > .frame > .grid > * { overflow-y: visible; }
 }

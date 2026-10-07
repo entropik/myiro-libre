@@ -1,6 +1,7 @@
-// Colonne de gauche (conditions d'impression → mesures, avec recherche) et panneau
-// de détails. Les données viennent de la bibliothèque locale (module Rust `colonne`) ;
-// les textes, du catalogue (`textes`, chargé par app.js). Aucun texte en dur ici.
+// Bibliothèque à l'écran : colonne de gauche (conditions d'impression → mesures, avec
+// recherche), feuille du centre (la mesure ou la condition choisie) et cartouche de
+// provenance à droite. Les données viennent de la bibliothèque locale (module Rust
+// `colonne`) ; les textes, du catalogue (`textes`, chargé par app.js). Aucun texte en dur.
 "use strict";
 
 (() => {
@@ -13,12 +14,17 @@
   const recherche = zone.querySelector("[data-recherche]");
   const nouvelle = zone.querySelector("[data-nouvelle-condition]");
   const nouvelleErreur = zone.querySelector("[data-nouvelle-erreur]");
+  const centreVide = document.querySelector("[data-centre-vide]");
+  const centrePhrase = document.querySelector("[data-centre-phrase]");
+  const centreAjout = document.querySelector("[data-centre-ajout]");
+  const centreChoix = document.querySelector("[data-centre-choix]");
   const detailsChoix = document.querySelector("[data-details-choix]");
   const detailsVide = document.querySelector("[data-details-vide]");
 
   let branches = [];
+  let bibliothequeVide = false; // aucune condition d'impression, recherche à part
   let choix = null; // { type: "condition" | "mesure", id }
-  let condition_lab = 0; // M0, M1 ou M2 dans le tableau des valeurs
+  let spectreChoisi = 0; // spectre 1, 2 ou 3 de chaque plage dans le tableau
 
   // ---- Petits outils ----
   function el(nom, classe, texte) {
@@ -30,12 +36,12 @@
 
   // Date et heure telles que le pont les a écrites (heure du poste de mesure),
   // sans conversion de fuseau.
-  function date(horodatage, avecAnnee = true) {
+  function date(horodatage) {
     const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(horodatage);
     if (!m) return horodatage;
     const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
     return new Intl.DateTimeFormat(document.documentElement.lang, {
-      day: "numeric", month: "short", year: avecAnnee ? "numeric" : undefined,
+      day: "numeric", month: "short", year: "numeric",
       hour: "2-digit", minute: "2-digit", timeZone: "UTC",
     }).format(d);
   }
@@ -63,7 +69,28 @@
     return info.statut === "supposee" ? `${texte} (${t("details.a_confirmer")})` : texte;
   }
 
-  // ---- Arborescence ----
+  // Condition de mesure du spectre n° i d'une plage, telle que le pont l'a dite :
+  // jamais devinée d'après la position du spectre (ADR 0005).
+  function conditionSpectre(d, i) {
+    const inconnue = `${i + 1} · ${t("cartouche.inconnue")}`;
+    const toutes = d.conditions_mesure;
+    if (toutes.statut === "inconnue") return inconnue;
+    const une = toutes.valeur[i];
+    if (une.statut === "inconnue") return inconnue;
+    const supposee = toutes.statut === "supposee" || une.statut === "supposee";
+    return supposee ? `${une.valeur} (${t("details.a_confirmer")})` : une.valeur;
+  }
+
+  function conditionsMesure(d) {
+    if (d.conditions_mesure.statut === "inconnue") return t("cartouche.inconnue");
+    return [0, 1, 2].map((i) => conditionSpectre(d, i)).join(", ");
+  }
+
+  function brancheDe(idCondition) {
+    return branches.find((b) => b.condition.id === idCondition);
+  }
+
+  // ---- Arborescence, à gauche ----
   function ligne(numero, texte, droite, choixLigne, niveau1) {
     const li = el("li", niveau1 ? "l1" : "");
     li.tabIndex = 0;
@@ -87,8 +114,7 @@
           { type: "mesure", id: m.id }, false));
       });
     });
-    const vide = branches.length === 0;
-    message.hidden = !vide;
+    message.hidden = branches.length > 0;
     message.textContent = recherche.value.trim() ? t("bibliotheque.aucun_resultat") : t("vide.bibliotheque.phrase");
   }
 
@@ -102,17 +128,18 @@
       message.textContent = t(cle);
       return;
     }
+    if (!recherche.value.trim()) bibliothequeVide = branches.length === 0;
     dessinerArbre();
   }
 
-  // ---- Détails ----
+  // ---- Cartouche de provenance, à droite ----
   function cellule(libelle, valeur, large) {
     const c = el("div", large ? "cell cell--wide" : "cell");
     c.append(el("span", "label", t(libelle)), el("span", "", valeur));
     return c;
   }
 
-  function cartouche(libelle, titre, cellules) {
+  function montrerCartouche(libelle, titre, cellules) {
     const c = el("div", "cartouche");
     const tete = el("div", "cartouche__title");
     tete.append(el("span", "label", t(libelle)), el("strong", "", titre));
@@ -121,27 +148,91 @@
     const pied = el("div", "cartouche__foot");
     pied.append(el("span", "", "myiro-libre"), el("span", "num", "0.1.0"));
     c.append(tete, cells, pied);
-    return c;
-  }
-
-  function montrer(...enfants) {
-    detailsChoix.replaceChildren(...enfants);
+    detailsChoix.replaceChildren(c);
     detailsChoix.hidden = false;
     detailsVide.hidden = true;
   }
 
-  function cacherDetails() {
+  function cacherCartouche() {
     detailsChoix.replaceChildren();
     detailsChoix.hidden = true;
     detailsVide.hidden = false;
   }
 
-  function detailsCondition(b) {
+  // ---- Feuille du centre ----
+  function montrerCentre(...enfants) {
+    centreChoix.replaceChildren(...enfants);
+    centreChoix.hidden = false;
+    centreVide.hidden = true;
+  }
+
+  function centreSansChoix() {
+    centreChoix.replaceChildren();
+    centreChoix.hidden = true;
+    centreVide.hidden = false;
+    centrePhrase.textContent = t(bibliothequeVide ? "vide.bibliotheque.phrase" : "centre.choisir");
+    centreAjout.hidden = !bibliothequeVide;
+  }
+
+  function enTete(titre, contexte) {
+    const tete = el("div");
+    tete.append(el("h2", "sheet-title", titre), el("p", "why", contexte));
+    return tete;
+  }
+
+  function tableauLab(d) {
+    const section = el("div", "section");
+    const tete = el("div", "section__head");
+    tete.append(el("span", "label label--ink", t("details.valeurs")));
+    const seg = el("div", "seg");
+    seg.setAttribute("role", "group");
+    seg.setAttribute("aria-label", t("details.valeurs.libelle"));
+    [0, 1, 2].forEach((i) => {
+      const b = el("button", "", conditionSpectre(d, i));
+      b.setAttribute("aria-pressed", String(i === spectreChoisi));
+      b.addEventListener("click", () => { spectreChoisi = i; afficherChoix(); });
+      seg.append(b);
+    });
+    tete.append(seg);
+
+    const table = el("table", "table--l");
+    const entete = el("tr");
+    entete.append(el("th", "", t("details.plage")), el("th", "r lc", "L*"), el("th", "r lc", "a*"), el("th", "r lc", "b*"));
+    const thead = el("thead");
+    thead.append(entete);
+    const corps = el("tbody");
+    d.lab.forEach((plage, i) => {
+      const tr = el("tr");
+      tr.append(el("td", "id num", String(i + 1)));
+      for (const v of plage[spectreChoisi]) tr.append(el("td", "r num", nombre(v)));
+      corps.append(tr);
+    });
+    table.append(thead, corps);
+    section.append(tete, table);
+    return section;
+  }
+
+  // Emplacement réservé à la courbe de spectre, construite plus tard.
+  function emplacementSpectre() {
+    const section = el("div", "section");
+    const tete = el("div", "section__head");
+    tete.append(el("span", "label label--ink", t("details.spectre")));
+    section.append(tete, el("p", "why", t("raison.bientot")));
+    return section;
+  }
+
+  function choisirCondition(b) {
     const instruments = [];
     for (const m of b.mesures) {
       const nom = instrument(m.instrument);
       if (!instruments.includes(nom)) instruments.push(nom);
     }
+    montrerCartouche("details.condition", b.condition.nom, [
+      cellule("bibliotheque.mesures", String(b.mesures.length)),
+      cellule("cartouche.reference", t("cartouche.aucune")),
+      cellule("details.instruments", instruments.join(", ") || t("cartouche.aucun"), true),
+    ]);
+
     const champ = el("div", "field");
     const libelle = el("label", "label", t("details.nom"));
     libelle.htmlFor = "nom-condition";
@@ -149,13 +240,12 @@
     saisie.id = "nom-condition";
     saisie.autocomplete = "off";
     saisie.value = b.condition.nom;
-    const erreur = el("p");
+    const erreur = el("p", "why");
     erreur.hidden = true;
     champ.append(libelle, saisie, erreur);
     const bouton = el("button", "btn", t("details.renommer"));
     const actions = el("div", "actions");
     actions.append(bouton);
-
     const renommer = async () => {
       try {
         await invoke("bibliotheque_renommer_condition", { id: b.condition.id, nom: saisie.value });
@@ -172,86 +262,52 @@
 
     const section = el("div", "section");
     section.append(champ, actions);
-    montrer(
-      cartouche("details.condition", b.condition.nom, [
-        cellule("bibliotheque.mesures", String(b.mesures.length)),
-        cellule("cartouche.reference", t("cartouche.aucune")),
-        cellule("details.instruments", instruments.join(", ") || t("cartouche.aucun"), true),
-      ]),
+    montrerCentre(
+      enTete(b.condition.nom, `${b.mesures.length} ${t(b.mesures.length > 1 ? "compte.mesures" : "compte.mesure")}`),
       section,
     );
   }
 
-  function tableauLab(d) {
-    const section = el("div", "section");
-    const tete = el("div", "section__head");
-    tete.append(el("span", "label label--ink", t("details.valeurs")));
-    const seg = el("div", "seg");
-    seg.setAttribute("role", "group");
-    seg.setAttribute("aria-label", t("details.valeurs.libelle"));
-    ["M0", "M1", "M2"].forEach((nom, i) => {
-      const b = el("button", "", nom);
-      b.setAttribute("aria-pressed", String(i === condition_lab));
-      b.addEventListener("click", () => { condition_lab = i; afficherChoix(); });
-      seg.append(b);
-    });
-    tete.append(seg);
-
-    const table = el("table");
-    const entete = el("tr");
-    entete.append(el("th", "", t("details.plage")), el("th", "r lc", "L*"), el("th", "r lc", "a*"), el("th", "r lc", "b*"));
-    const thead = el("thead");
-    thead.append(entete);
-    const corps = el("tbody");
-    d.lab.forEach((plage, i) => {
-      const tr = el("tr");
-      tr.append(el("td", "id num", String(i + 1)));
-      for (const v of plage[condition_lab]) tr.append(el("td", "r num", nombre(v)));
-      corps.append(tr);
-    });
-    table.append(thead, corps);
-    section.append(tete, table);
-    return section;
-  }
-
-  async function detailsMesure(id) {
+  async function choisirMesure(id) {
     let d;
     try {
       d = await invoke("bibliotheque_detail_mesure", { id });
     } catch (cle) {
-      montrer(el("p", "why", t(cle)));
+      cacherCartouche();
+      montrerCentre(el("p", "why", t(cle)));
       return;
     }
     if (!choix || choix.type !== "mesure" || choix.id !== id) return; // choix changé entre-temps
-    const branche = branches.find((b) => b.condition.id === d.condition);
-    const conditions = qualifiee(d.conditions_mesure,
-      (liste) => liste.map((c) => qualifiee(c, (v) => v, "cartouche.inconnue")).join(", "),
-      "cartouche.inconnue");
-    montrer(
-      cartouche("details.mesure", date(d.horodatage), [
-        cellule("cartouche.instrument", instrument(d.instrument)),
-        cellule("cartouche.etalonnage", qualifiee(d.etalonnage, (h) => date(h), "cartouche.inconnu")),
-        cellule("cartouche.condition_mesure", conditions),
-        cellule("cartouche.reference", t("cartouche.aucune")),
-        cellule("details.condition", branche ? branche.condition.nom : "", true),
-        cellule("details.lecture", lecture(d.geometrie, d.lab.length), true),
-      ]),
+    const branche = brancheDe(d.condition);
+    const nomCondition = branche ? branche.condition.nom : "";
+    const lu = lecture(d.geometrie, d.lab.length);
+    montrerCartouche("details.mesure", date(d.horodatage), [
+      cellule("cartouche.instrument", instrument(d.instrument)),
+      cellule("cartouche.etalonnage", qualifiee(d.etalonnage, (h) => date(h), "cartouche.inconnu")),
+      cellule("cartouche.condition_mesure", conditionsMesure(d)),
+      cellule("cartouche.reference", t("cartouche.aucune")),
+      cellule("details.condition", nomCondition, true),
+      cellule("details.lecture", lu, true),
+    ]);
+    montrerCentre(
+      enTete(date(d.horodatage), [lu, nomCondition].filter(Boolean).join(" · ")),
       tableauLab(d),
+      emplacementSpectre(),
     );
   }
 
   function afficherChoix() {
     dessinerArbre();
-    if (!choix) return cacherDetails();
-    if (choix.type === "condition") {
-      const b = branches.find((x) => x.condition.id === choix.id);
-      return b ? detailsCondition(b) : cacherDetails();
-    }
-    return detailsMesure(choix.id);
+    const b = choix && choix.type === "condition" ? brancheDe(choix.id) : null;
+    if (b) return choisirCondition(b);
+    if (choix && choix.type === "mesure") return choisirMesure(choix.id);
+    cacherCartouche();
+    centreSansChoix();
   }
 
   function choisir(li) {
     choix = { type: li.dataset.type, id: Number(li.dataset.id) };
+    afficherTache("bibliotheque"); // app.js : la feuille du centre montre le choix
     afficherChoix();
   }
 
@@ -295,10 +351,15 @@
   });
   zone.querySelector("[data-creer-condition]").addEventListener("click", creer);
   nouvelle.addEventListener("keydown", (e) => { if (e.key === "Enter") creer(); });
+  // L'action principale de la feuille vide mène au champ d'ajout, à gauche.
+  centreAjout.addEventListener("click", () => {
+    if (nouvelle.value.trim()) creer();
+    else nouvelle.focus();
+  });
 
   // La langue est appliquée au lancement puis à chaque changement : tout se redessine.
   let premiereFois = true;
-  document.addEventListener("langue-appliquee", async () => {
+  async function langueAppliquee() {
     recherche.placeholder = t("bibliotheque.recherche_aide");
     if (premiereFois) {
       premiereFois = false;
@@ -306,5 +367,8 @@
       await chargerArbre();
     }
     afficherChoix();
-  });
+  }
+  document.addEventListener("langue-appliquee", langueAppliquee);
+  // Le catalogue a pu arriver avant le chargement de ce script.
+  if (Object.keys(textes).length > 0) langueAppliquee();
 })();

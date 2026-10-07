@@ -12,7 +12,7 @@
 <script src="bibliotheque.js" defer></script>
 </head>
 <!-- Les textes viennent du catalogue Rust (data-t) : la page reste masquée tant qu'il n'est pas appliqué. -->
-<body hidden>
+<body class="app" hidden>
 <header class="masthead"><div class="page"><div class="grid">
   <div class="c-1-2 brand">myiro-libre</div>
   <nav class="c-3-9 nav" data-t-aria="nav.libelle">
@@ -45,7 +45,7 @@
     <div class="field">
       <label class="label" for="nouvelle-condition" data-t="bibliotheque.nouvelle"></label>
       <input class="input" id="nouvelle-condition" autocomplete="off" data-nouvelle-condition>
-      <p data-nouvelle-erreur hidden></p>
+      <p class="why" data-nouvelle-erreur hidden></p>
     </div>
     <div class="actions"><button class="btn" data-creer-condition data-t="bibliotheque.ajouter"></button></div>
     <p class="why" data-t="bibliotheque.demonstration" data-demonstration hidden></p>
@@ -89,10 +89,13 @@
       <div class="actions"><button class="btn btn--primary" disabled data-t="vide.profiler.action"></button></div>
       <p class="why" data-t="raison.instrument"></p>
     </section>
-    <section class="empty" data-vue="bibliotheque" hidden>
-      <h2 class="empty__text" data-t="vide.bibliotheque.phrase"></h2>
-      <div class="actions"><button class="btn btn--primary" disabled data-t="vide.bibliotheque.action"></button></div>
-      <p class="why" data-t="raison.bientot"></p>
+    <!-- Feuille de la bibliothèque : la mesure ou la condition choisie à gauche (bibliotheque.js). -->
+    <section data-vue="bibliotheque" hidden>
+      <div class="empty" data-centre-vide>
+        <h2 class="empty__text" data-centre-phrase></h2>
+        <div class="actions"><button class="btn btn--primary" data-centre-ajout hidden data-t="vide.bibliotheque.action"></button></div>
+      </div>
+      <div data-centre-choix hidden></div>
     </section>
   </div>
 
