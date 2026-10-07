@@ -86,6 +86,93 @@ const FRANCAIS: Catalogue = &[
     ("cartouche.aucune", "Aucune"),
     ("cartouche.non_fait", "Non fait"),
     ("cartouche.inconnue", "Inconnue"),
+    // Instrument : état dans la barre
+    ("instrument.recherche", "Recherche de l’instrument…"),
+    ("instrument.etat.connecte", "connecté"),
+    ("instrument.etat.etalonnage_requis", "étalonnage requis"),
+    ("instrument.etat.etalonne", "étalonné"),
+    // Instrument : écrans d’aide
+    ("ecran.non_detecte.titre", "Aucun instrument détecté."),
+    (
+        "ecran.non_detecte.etape1",
+        "Vérifiez que le câble USB est bien branché aux deux bouts.",
+    ),
+    (
+        "ecran.non_detecte.etape2",
+        "Branchez l’instrument directement sur l’ordinateur, sans concentrateur ni rallonge.",
+    ),
+    ("ecran.non_detecte.etape3", "Puis cliquez sur Réessayer."),
+    ("ecran.reessayer", "Réessayer"),
+    ("ecran.changer_sdk", "Changer l’emplacement du SDK"),
+    ("ecran.sdk.titre", "Où se trouve le SDK du MYIRO-1\u{202f}?"),
+    (
+        "ecran.sdk.explication",
+        "myiro-libre ne fournit pas les DLL de Konica Minolta. Il utilise celles du logiciel du fabricant déjà installé sur ce poste.",
+    ),
+    ("ecran.sdk.champ", "Dossier du SDK ou fichier FDXSDK.dll"),
+    (
+        "ecran.sdk.aide",
+        "Collez le chemin du dossier d’installation du logiciel du fabricant. L’application y cherche FDXSDK.dll.",
+    ),
+    ("ecran.sdk.valider", "Utiliser cet emplacement"),
+    ("ecran.details", "Détails techniques"),
+    // Problèmes : cause probable, puis une action
+    (
+        "probleme.sdk_non_indique.cause",
+        "L’emplacement du SDK n’est pas encore indiqué.",
+    ),
+    (
+        "probleme.sdk_non_indique.action",
+        "Indiquez le dossier du logiciel Konica Minolta installé sur ce poste.",
+    ),
+    (
+        "probleme.aucune_dll.cause",
+        "Aucun fichier FDXSDK.dll n’a été trouvé à cet emplacement.",
+    ),
+    (
+        "probleme.aucune_dll.action",
+        "Indiquez le dossier où le logiciel du fabricant est installé, ou le fichier FDXSDK.dll lui-même.",
+    ),
+    (
+        "probleme.sdk_inutilisable.cause",
+        "Le fichier FDXSDK.dll trouvé n’a pas pu être chargé. Il est peut-être abîmé, ou prévu pour une autre version de Windows (32 ou 64 bits).",
+    ),
+    (
+        "probleme.sdk_inutilisable.action",
+        "Indiquez une autre copie de FDXSDK.dll, par exemple celle d’un autre logiciel du fabricant.",
+    ),
+    (
+        "probleme.pont_introuvable.cause",
+        "Le programme qui dialogue avec l’instrument (pont-myiro1) est introuvable.",
+    ),
+    (
+        "probleme.pont_introuvable.action",
+        "Réinstallez myiro-libre, puis réessayez.",
+    ),
+    (
+        "probleme.pont_en_panne.cause",
+        "Le programme qui dialogue avec l’instrument s’est arrêté de façon imprévue.",
+    ),
+    (
+        "probleme.pont_en_panne.action",
+        "Réessayez. Si le problème revient, débranchez puis rebranchez l’instrument.",
+    ),
+    (
+        "probleme.aucun_instrument.cause",
+        "Aucun MYIRO-1 n’est détecté.",
+    ),
+    (
+        "probleme.aucun_instrument.action",
+        "Vérifiez le câble et branchez l’instrument directement sur l’ordinateur, puis réessayez.",
+    ),
+    (
+        "probleme.connexion_impossible.cause",
+        "Le MYIRO-1 est détecté, mais il ne répond pas à la connexion. Un autre logiciel l’utilise peut-être.",
+    ),
+    (
+        "probleme.connexion_impossible.action",
+        "Fermez les autres logiciels de mesure, débranchez puis rebranchez l’instrument, et réessayez.",
+    ),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -137,6 +224,93 @@ const ANGLAIS: Catalogue = &[
     ("cartouche.aucune", "None"),
     ("cartouche.non_fait", "Not done"),
     ("cartouche.inconnue", "Unknown"),
+    // Instrument: state in the top bar
+    ("instrument.recherche", "Looking for the instrument…"),
+    ("instrument.etat.connecte", "connected"),
+    ("instrument.etat.etalonnage_requis", "calibration required"),
+    ("instrument.etat.etalonne", "calibrated"),
+    // Instrument: help screens
+    ("ecran.non_detecte.titre", "No instrument detected."),
+    (
+        "ecran.non_detecte.etape1",
+        "Check that the USB cable is firmly plugged in at both ends.",
+    ),
+    (
+        "ecran.non_detecte.etape2",
+        "Plug the instrument directly into the computer, without a hub or extension cable.",
+    ),
+    ("ecran.non_detecte.etape3", "Then click Try again."),
+    ("ecran.reessayer", "Try again"),
+    ("ecran.changer_sdk", "Change the SDK location"),
+    ("ecran.sdk.titre", "Where is the MYIRO-1 SDK?"),
+    (
+        "ecran.sdk.explication",
+        "myiro-libre does not ship the Konica Minolta DLLs. It uses those of the manufacturer’s software already installed on this computer.",
+    ),
+    ("ecran.sdk.champ", "SDK folder or FDXSDK.dll file"),
+    (
+        "ecran.sdk.aide",
+        "Paste the path of the manufacturer’s software installation folder. The application looks for FDXSDK.dll in it.",
+    ),
+    ("ecran.sdk.valider", "Use this location"),
+    ("ecran.details", "Technical details"),
+    // Problems: likely cause, then one action
+    (
+        "probleme.sdk_non_indique.cause",
+        "The SDK location has not been set yet.",
+    ),
+    (
+        "probleme.sdk_non_indique.action",
+        "Enter the folder of the Konica Minolta software installed on this computer.",
+    ),
+    (
+        "probleme.aucune_dll.cause",
+        "No FDXSDK.dll file was found at this location.",
+    ),
+    (
+        "probleme.aucune_dll.action",
+        "Enter the folder where the manufacturer’s software is installed, or the FDXSDK.dll file itself.",
+    ),
+    (
+        "probleme.sdk_inutilisable.cause",
+        "The FDXSDK.dll file found could not be loaded. It may be damaged, or built for another version of Windows (32 or 64 bit).",
+    ),
+    (
+        "probleme.sdk_inutilisable.action",
+        "Enter another copy of FDXSDK.dll, for example the one from another manufacturer’s program.",
+    ),
+    (
+        "probleme.pont_introuvable.cause",
+        "The program that talks to the instrument (pont-myiro1) cannot be found.",
+    ),
+    (
+        "probleme.pont_introuvable.action",
+        "Reinstall myiro-libre, then try again.",
+    ),
+    (
+        "probleme.pont_en_panne.cause",
+        "The program that talks to the instrument stopped unexpectedly.",
+    ),
+    (
+        "probleme.pont_en_panne.action",
+        "Try again. If it happens again, unplug and replug the instrument.",
+    ),
+    (
+        "probleme.aucun_instrument.cause",
+        "No MYIRO-1 is detected.",
+    ),
+    (
+        "probleme.aucun_instrument.action",
+        "Check the cable and plug the instrument directly into the computer, then try again.",
+    ),
+    (
+        "probleme.connexion_impossible.cause",
+        "The MYIRO-1 is detected but does not answer the connection. Another program may be using it.",
+    ),
+    (
+        "probleme.connexion_impossible.action",
+        "Close other measuring software, unplug and replug the instrument, then try again.",
+    ),
 ];
 
 fn catalogue(langue: Langue) -> Catalogue {

@@ -1,0 +1,80 @@
+//! Pont factice pour les tests de `PontProcessus` : il se lance comme
+//! `pont-myiro1 --dll <chemin> --plafond <palier>`, mais ne charge aucune DLL.
+//! Le « chemin de la DLL » choisit le scénario :
+//!
+//! - `normal` : un MYIRO-1 fictif (n° 12345678), version, détection, connexion ;
+//! - `echo` : répond à tout par `requete_invalide` en recopiant ses arguments ;
+//! - `dll_refusee` : s'arrête comme `pont-myiro1` devant une DLL introuvable ;
+//! - `muet` : lit une requête puis s'arrête avec le code 1 ;
+//! - `illisible` : répond par une ligne hors protocole.
+
+use std::io::{BufRead, Write};
+use std::process::ExitCode;
+
+use pont_protocole::{
+    ecrire_reponse, lire_requete, Identite, InstrumentDetecte, Reponse, Requete,
+};
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let scenario = args
+        .windows(2)
+        .find(|a| a[0] == "--dll")
+        .map(|a| a[1].clone())
+        .unwrap_or_default();
+    if scenario == "dll_refusee" {
+        eprintln!("pont-myiro1 : DllIntrouvable(\"{scenario}\")");
+        return ExitCode::from(3);
+    }
+    let stdin = std::io::stdin();
+    let mut sortie = std::io::stdout();
+    for ligne in stdin.lock().lines() {
+        let Ok(ligne) = ligne else { break };
+        let requete = lire_requete(&ligne);
+        let reponse = match scenario.as_str() {
+            "muet" => {
+                eprintln!("arrêt simulé");
+                return ExitCode::from(1);
+            }
+            "illisible" => {
+                writeln!(sortie, "pas du JSON").unwrap();
+                continue;
+            }
+            "echo" => Reponse::RequeteInvalide {
+                detail: args.join(" "),
+            },
+            _ => match requete {
+                Ok(Requete::Version {}) => Reponse::Version { parties: [1, 0, 1] },
+                Ok(Requete::Detecter {}) => Reponse::Instruments {
+                    liste: vec![InstrumentDetecte {
+                        liaison: "usb".into(),
+                        port: "COM3".into(),
+                        numero_serie: 12345678,
+                    }],
+                },
+                Ok(Requete::Connecter { .. }) => Reponse::Connecte {
+                    identite: Identite {
+                        numero_serie: 12345678,
+                        micrologiciel: "1.00".into(),
+                        code_produit: "factice".into(),
+                        adresse_mac: "00:00:00:00:00:00".into(),
+                        date_initiale: None,
+                        anomalie_date_initiale: false,
+                        brute_hex: String::new(),
+                    },
+                },
+                Ok(Requete::Fermer {}) => {
+                    writeln!(sortie, "{}", ecrire_reponse(&Reponse::Ferme {})).unwrap();
+                    return ExitCode::SUCCESS;
+                }
+                Ok(_) => Reponse::RequeteInvalide {
+                    detail: "hors du scénario".into(),
+                },
+                Err(detail) => Reponse::RequeteInvalide { detail },
+            },
+        };
+        writeln!(sortie, "{}", ecrire_reponse(&reponse)).unwrap();
+        sortie.flush().unwrap();
+    }
+    ExitCode::SUCCESS
+}

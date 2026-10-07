@@ -3,6 +3,8 @@
 //! Seule cette crate dépend de Tauri ; le cœur (ponts, protocole, et plus tard
 //! colorimétrie, mires, bibliothèque) n'en dépend pas.
 
+pub mod instrument;
+pub mod pont;
 pub mod textes;
 
 use std::collections::BTreeMap;
