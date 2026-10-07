@@ -30,3 +30,6 @@ Archivage/donnees/
 # Logiciels, mises à jour et manuels Konica Minolta récupérés avant la fermeture, et leurs extractions : licence fabricant, jamais versionnés
 Audit-MYIRO/logiciels/
 Audit-MYIRO/extraits/
+
+# Sources externes (manuel et captures Coraye, analyses) : copie locale de travail, droits des éditeurs, jamais publiées
+docs/sources/
