@@ -26,7 +26,7 @@ Le pont MYIRO-1 sépare désormais trois choses : le **plafond** (fixé au lance
 
 - Un nouvel étalonnage rend l'ancien inutilisable dès son début : après un échec, un délai dépassé, un refus ou une perte de liaison, il faut réétalonner.
 - La connexion n'est exploitable qu'une fois l'identité lue. Toute nouvelle connexion efface l'identité et la date d'étalonnage de la précédente ; la provenance d'une mesure les prend dans l'état relevé avant l'armement.
-- Une perte de liaison (événement 6, même pendant le désarmement ou le retour au repos) bloque tout jusqu'à une nouvelle connexion, sans appel à la DLL. Une mesure déjà rendue n'est pas touchée.
+- Une perte de liaison (événement 6, même pendant le désarmement ou le retour au repos) bloque tout jusqu'à une nouvelle connexion : toute nouvelle demande est refusée sans appel à la DLL, mais la demande en cours tente encore un désarmement (`FDX_StopMeasurement`, export déjà autorisé) ; la politique de désarmement relève du ticket #24. Seul l'événement 6 mène à l'état perdu : un délai dépassé ou une erreur de la DLL pendant la lecture ne l'invalident pas (supposé, à observer sur l'instrument). Une mesure déjà rendue n'est pas touchée.
 - Le protocole distingue trois refus : `etalonnage_requis`, `instrument_perdu` (rendu aussi aux demandes suivantes) et `session_inexploitable`. Dans les trois cas, l'instrument n'est pas armé.
 
 La session n'a pas encore de déconnexion volontaire : seule la perte de liaison (événement 6) mène à l'état perdu ; la fermeture relève du ticket #24.
