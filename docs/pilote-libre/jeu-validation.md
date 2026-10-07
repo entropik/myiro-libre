@@ -15,7 +15,7 @@ cargo run -p jeu-validation --bin extraire-jeu -- <jeu.json> <sortie du pont>...
 Il accepte deux formes de sortie, reconnues d'après leur premier caractère :
 
 - **CSV des tests sur instrument** (`crates/pont-myiro1/tests/dll.rs`, paliers 4 et 5) : une en-tête `plage;donnees;L;a;b;nm380;…;nm730`, puis pour chaque plage quatre lignes `M0`, `M1`, `M2` (Lab puis 36 valeurs de spectre) et `brutes` (3 champs vides à la place de L, a, b, puis 152 valeurs). Ce CSV ne porte aucun identifiant d'instrument.
-- **Lignes JSON du protocole** (`pont-protocole`), une réponse par ligne : seules les réponses `mesure` donnent des paires, une par plage ; les autres sont ignorées.
+- **Lignes JSON du protocole** (`pont-protocole`), une réponse par ligne : seules les réponses `mesure` donnent des paires, une par plage ; les autres sont ignorées. Les mesures au [format courant](../formats/mesure.md) comme celles du format initial (pont 0.1.0) sont acceptées ; le champ `calcul` du jeu reprend le libellé du calcul.
 
 L'extraction échoue, sans rien deviner, si une plage est incomplète (spectre ou données brutes manquants), si une donnée est en double, si une plage revient plus loin dans le même fichier, si une liste n'a pas la bonne longueur, ou si une valeur n'est pas un nombre fini (`NaN`, `inf`).
 

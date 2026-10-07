@@ -33,6 +33,12 @@ La session n'a pas encore de déconnexion volontaire : seule la perte de liaison
 
 Vérifié contre l'instrument simulé seulement ; le comportement du vrai MYIRO-1 après une perte de liaison reste à observer, de même que la réponse de la DLL à une reconnexion sans déconnexion préalable (supposée acceptée par le simulé, voir la fiche `FDX_Connect`).
 
+### Complément du 7 octobre 2026 : mesures validées et format versionné (ticket #25)
+
+- Les mesures circulent et se conservent dans un seul format, `myiro-libre/mesure/1` ([`docs/formats/mesure.md`](../formats/mesure.md)). Spectres, données brutes, Lab, plages et mesures sont des types de `pont-protocole` qui se vérifient à la construction comme à la relecture : nombres finis, plages cohérentes, une seule plage en ponctuelle, 36 valeurs par spectre et 152 données brutes pour le MYIRO-1 seulement. Une réflectance supérieure à 1 est acceptée. Le pont vérifie chaque mesure avant de l'envoyer : une valeur non finie de la DLL devient une erreur `reponse_inattendue`.
+- La provenance est structurée : géométrie de lecture (ponctuelle, bande avec son sens brut, feuille), conditions de calcul **demandées** à la DLL et conditions **observées** sur l'instrument, séparées. Empreinte de la DLL, date d'étalonnage et conditions de calcul sont qualifiées confirmé, supposé ou inconnu. Le pont ne relit aucune condition : `observe` reste inconnu, ce qui précise la phrase « la condition archivée est celle relue sur l'instrument » ci-dessus tant qu'aucun appel vérifié ne la rend.
+- Le format initial (pont 0.1.0, sans numéro) se relit en mémoire, sans réécrire les archives : les faits démontrables sont repris, le texte libre du calcul devient un libellé et les conditions restent inconnues. Toute autre version est refusée en clair ; un champ inconnu aussi.
+
 ## Options écartées
 
 - **Commande brute et catalogue dynamique** (appeler un export par son nom). Ils ouvrent un chemin vers des exports arbitraires, contraire à la règle de sécurité matérielle. Un banc d'exploration éventuel serait un binaire séparé, hors build de production.

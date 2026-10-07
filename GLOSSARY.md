@@ -95,6 +95,14 @@ _Éviter_ : benchmark (mesure de vitesse), validateur
 Ce que le pont atteste sur une mesure : instrument (modèle, n° de série, micrologiciel), chaîne logicielle (SDK, pont, empreinte de la DLL), date réelle avec fuseau, géométrie de lecture, condition de mesure relue sur l'instrument, illuminant, observateur. Le reste du contexte (support, encres, séchage, chauffe…) relève de la bibliothèque, pas du pont. Elle est posée par le pont, jamais reconstituée par l'application, et aucune mesure n'existe sans elle.
 _Éviter_ : métadonnées, contexte
 
+**Format de mesure** :
+Forme écrite d'une mesure, identique dans le protocole et dans la bibliothèque, désignée par un nom versionné (`myiro-libre/mesure/1`). Une version non prise en charge est refusée en clair. Le **format initial** est celui du pont 0.1.0, sans numéro : il se relit sans réécrire les archives, ses faits non démontrables restant inconnus. Description : `docs/formats/mesure.md`.
+_Éviter_ : schéma, export (réservé à CGATS)
+
+**Conditions demandées / observées** :
+Les conditions de calcul que le pont a demandées à la DLL, et celles relues sur l'instrument par un appel vérifié. Les deux sont conservées séparément ; tant que rien n'est relu, les conditions observées sont inconnues.
+_Éviter_ : conditions réelles, paramètres
+
 **Inconnu** :
 État d'une donnée que l'instrument ou le SDK n'a pas fournie ou dont le sens n'est pas établi. Une donnée est confirmée, supposée ou inconnue ; une valeur inconnue n'est jamais remplacée par zéro, une chaîne vide ou une valeur par défaut.
 _Éviter_ : null, vide, zéro, par défaut
