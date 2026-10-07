@@ -66,12 +66,20 @@ fn le_numero_de_serie_est_remplace_par_un_pseudonyme_stable() {
         .collect();
     assert_eq!(
         pseudonymes,
-        ["instrument-1", "instrument-2", "instrument-2", "instrument-1"]
+        [
+            "instrument-1",
+            "instrument-2",
+            "instrument-2",
+            "instrument-1"
+        ]
     );
 
     let texte = serde_json::to_string(&jeu).unwrap();
     for identifiant in ["12345678", "87654321", "02:00:00:00:00:01", "FDX-0000"] {
-        assert!(!texte.contains(identifiant), "{identifiant} reste dans le jeu");
+        assert!(
+            !texte.contains(identifiant),
+            "{identifiant} reste dans le jeu"
+        );
     }
 }
 
@@ -138,10 +146,14 @@ fn le_nom_du_fichier_source_n_entre_pas_dans_le_jeu() {
 fn csv_avec_premier_spectre(valeur: &str) -> String {
     CSV.lines()
         .map(|l| match l.strip_prefix("A;M0;50;0;0;0.5;") {
-            Some(reste) => format!("A;M0;50;0;0;{valeur};{reste}
-"),
-            None => format!("{l}
-"),
+            Some(reste) => format!(
+                "A;M0;50;0;0;{valeur};{reste}
+"
+            ),
+            None => format!(
+                "{l}
+"
+            ),
         })
         .collect()
 }
@@ -177,11 +189,18 @@ fn une_plage_qui_revient_plus_loin_est_refusee() {
     let lignes_a: String = CSV
         .lines()
         .filter(|l| l.starts_with("A;"))
-        .map(|l| format!("{l}
-"))
+        .map(|l| {
+            format!(
+                "{l}
+"
+            )
+        })
         .collect();
-    let double = format!("{}
-{lignes_a}", CSV.trim_end());
+    let double = format!(
+        "{}
+{lignes_a}",
+        CSV.trim_end()
+    );
     let erreur = extraire(&[SortieArchivee {
         nom: "essai",
         contenu: &double,

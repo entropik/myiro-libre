@@ -45,7 +45,10 @@ fn un_calcul_identique_a_la_dll_a_un_ecart_nul() {
     assert_eq!(m0.paires, 2);
     assert_eq!(m0.ecart_maximal.unwrap(), 0.0);
     assert_eq!(m0.ecart_moyen.unwrap(), 0.0);
-    assert!(m0.par_longueur_onde.iter().all(|l| l.ecart_maximal == Some(0.0)));
+    assert!(m0
+        .par_longueur_onde
+        .iter()
+        .all(|l| l.ecart_maximal == Some(0.0)));
 }
 
 #[test]
@@ -119,7 +122,11 @@ impl CalculSpectres for Troue {
 fn une_valeur_non_finie_du_candidat_est_un_echec_jamais_un_ecart() {
     let rapport = comparer(&jeu(), &Troue);
     assert_eq!(rapport.echecs.len(), 2);
-    assert!(rapport.echecs[0].detail.contains("M1"), "{}", rapport.echecs[0].detail);
+    assert!(
+        rapport.echecs[0].detail.contains("M1"),
+        "{}",
+        rapport.echecs[0].detail
+    );
     let m1 = rapport.condition(Condition::M1);
     assert_eq!(m1.paires, 0);
     assert_eq!(m1.par_longueur_onde[17].ecart_maximal, None);

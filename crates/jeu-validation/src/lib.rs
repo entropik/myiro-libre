@@ -196,7 +196,10 @@ pub fn comparer(jeu: &JeuValidation, candidat: &impl CalculSpectres) -> Rapport 
 /// Décrit le défaut d'une suite de valeurs : mauvaise longueur ou valeur non finie.
 fn defaut_de_forme(quoi: &str, valeurs: &[f32], attendu: usize) -> Option<String> {
     if valeurs.len() != attendu {
-        return Some(format!("{quoi} : {} valeurs au lieu de {attendu}", valeurs.len()));
+        return Some(format!(
+            "{quoi} : {} valeurs au lieu de {attendu}",
+            valeurs.len()
+        ));
     }
     valeurs
         .iter()
