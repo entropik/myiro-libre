@@ -28,6 +28,8 @@ async function appliquerLangue(code) {
   afficherTache(tacheCourante());
   afficherInstrument();
   memoire("langue", code);
+  // Les parties dessinées par d'autres scripts (bibliotheque.js) se redessinent.
+  document.dispatchEvent(new CustomEvent("langue-appliquee"));
 }
 
 // ---- Thème : celui du système tant que l'utilisateur n'a pas choisi ----

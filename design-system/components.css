@@ -166,6 +166,8 @@ tr.hl td { background: var(--color-hair); }
 .index li.l1:first-child { margin-top: 0; }
 .index li.sel { background: var(--color-ink); color: var(--text-inverse); }
 .index li.sel * { color: inherit; }
+.index li[tabindex] { cursor: pointer; }
+.index > .field { margin: var(--space-4) 0; }
 
 /* ---- Bandeau et section ---- */
 .masthead { border-bottom: var(--rule-strong) solid var(--color-rule); background: var(--color-paper); }
