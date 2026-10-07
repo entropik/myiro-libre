@@ -40,7 +40,20 @@ Question à trancher pour l'architecture : la conversion Lab vers RVB ou CMJN et
 - [DisplayCAL (fork Python 3)](https://github.com/eoyilmaz/displaycal-py3) : interface libre d'ArgyllCMS pour les écrans, un exemple d'application libre au-dessus d'ArgyllCMS.
 - [DemoIccMAX / iccDEV](https://www.color.org/opensource.xalter) : outils de l'ICC pour examiner un profil.
 
-## 5. Ce qu'il reste à chercher
+## Suite de l'exploration (7 octobre 2026)
+
+Huit notes thématiques, avec sources citées et faits marqués [établi], [probable] ou [à vérifier] :
+
+- [Critères de contrôle ISO 12647-7 et -8](icc-12647-controle.md)
+- [Conditions de mesure M0 à M3 (ISO 13655)](icc-conditions-de-mesure.md)
+- [Densité (statuts E, T, A, M)](icc-densite.md)
+- [Écart de couleur CIEDE2000](icc-delta-e.md)
+- [Formats CGATS.17, .ti3 et .cal](icc-cgats-argyll-formats.md)
+- [Options d'ArgyllCMS](icc-argyll-options.md)
+- [Projets libres et pilotes](icc-projets-libres.md)
+- [Éclairage ISO 3664](icc-eclairage-iso3664.md)
+
+## 5. Ce qu'il reste à chercher (état avant la suite ci-dessus)
 
 - Définition exacte des critères de contrôle ISO 12647-7 et -8 (sous-ensembles de plages, limites) : normes payantes, voir si des synthèses officielles ou FOGRA existent.
 - Conditions de mesure M0, M1, M2 et ISO 13655 : une source gratuite fiable.

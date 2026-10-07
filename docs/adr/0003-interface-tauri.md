@@ -22,4 +22,6 @@ Retenue après une maquette jetable à deux itérations (branche `prototype/inte
 - **Grande typographie et contraste** : le verdict est un mot en très grand corps, doublé d'une icône et de la couleur (jamais la couleur seule), avec la marge visible et le détail replié.
 - **Règles d'usage** : un seul bouton principal par écran, toute action inactive affiche sa raison, rouge réservé au danger et au hors tolérance, une seule langue par fenêtre, section « Avancé » avec la commande ArgyllCMS équivalente.
 
+Le système graphique qui en découle (jetons, composants, règles) est dans `design-system/`.
+
 La maquette n'est pas du code de production : l'interface est réécrite dans l'application. Les valeurs qu'elle affiche (seuils, durées de lecture, réglages de profil) sont des hypothèses à établir.
