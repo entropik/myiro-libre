@@ -45,6 +45,24 @@ _Éviter_ : calibration (ambigu avec la linéarisation)
 Condition d'éclairage de l'instrument selon l'ISO 13655 (M0, M1, M2…) sous laquelle un spectre est obtenu.
 _Éviter_ : mode de mesure, filtre
 
+### Pont et provenance
+
+**Pont** :
+Exécutable séparé qui charge la DLL du fabricant pour un instrument donné et seul la touche ; l'application lui parle par un protocole. Il applique la liste blanche des appels autorisés.
+_Éviter_ : bridge, wrapper, driver, pilote (réservé au pilote Windows)
+
+**Palier** :
+Étape de la progression imposée sur instrument réel (version du SDK, détection, connexion, étalonnage, mesure ponctuelle, puis bande ou feuille). Le pont refuse tout palier au-delà du plafond autorisé au lancement ; chaque pont déclare les paliers qui existent pour son instrument.
+_Éviter_ : phase (réservé au plan d'action), niveau, étape
+
+**Provenance** :
+Ce que le pont atteste sur une mesure : instrument (modèle, n° de série, micrologiciel), version du SDK, date réelle avec fuseau, condition de mesure relue sur l'instrument, illuminant, observateur. Elle est posée par le pont, jamais reconstituée par l'application, et aucune mesure n'existe sans elle.
+_Éviter_ : métadonnées, contexte
+
+**Inconnu** :
+État d'une donnée que l'instrument ou le SDK n'a pas fournie ou dont le sens n'est pas établi. Une donnée est confirmée, supposée ou inconnue ; une valeur inconnue n'est jamais remplacée par zéro, une chaîne vide ou une valeur par défaut.
+_Éviter_ : null, vide, zéro, par défaut
+
 ### Impression
 
 **Condition d'impression** :
