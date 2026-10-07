@@ -15,7 +15,7 @@ use pont_protocole::{ConditionMesure, Geometrie, Horodatage, Info};
 use serde::Serialize;
 
 /// La bibliothèque ouverte au lancement, partagée par les commandes.
-pub struct Etagere {
+pub struct BibliothequeOuverte {
     bibliotheque: Result<Mutex<Bibliotheque>, ErreurBibliotheque>,
     demonstration: bool,
 }
@@ -26,17 +26,17 @@ pub fn emplacement(donnees_application: &Path) -> PathBuf {
     donnees_application.join("bibliotheque")
 }
 
-impl Etagere {
+impl BibliothequeOuverte {
     /// Ouvre la bibliothèque du dossier.
-    pub fn ouvrir(dossier: &Path) -> Etagere {
-        Etagere {
+    pub fn ouvrir(dossier: &Path) -> BibliothequeOuverte {
+        BibliothequeOuverte {
             bibliotheque: Bibliotheque::ouvrir(dossier).map(Mutex::new),
             demonstration: false,
         }
     }
 
     /// Bibliothèque de démonstration : vidée puis garnie de mesures fictives.
-    pub fn demonstration(dossier: &Path) -> Etagere {
+    pub fn demonstration(dossier: &Path) -> BibliothequeOuverte {
         let base = dossier.join(bibliotheque::FICHIER_BASE);
         let ouverte = match std::fs::remove_file(&base) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(ErreurBibliotheque::Base(
@@ -45,7 +45,7 @@ impl Etagere {
             _ => Bibliotheque::ouvrir(dossier),
         }
         .and_then(|b| crate::demonstration::remplir(&b).map(|()| b));
-        Etagere {
+        BibliothequeOuverte {
             bibliotheque: ouverte.map(Mutex::new),
             demonstration: true,
         }
@@ -68,7 +68,16 @@ impl Etagere {
     }
 
     pub fn detail_mesure(&self, id: IdMesure) -> Result<DetailMesure, String> {
-        self.avec(|b| b.mesure(id).map(|m| DetailMesure::de(&m)))
+        self.avec(|b| {
+            let mesure = b.mesure(id)?;
+            let nom = b
+                .conditions()?
+                .into_iter()
+                .find(|c| c.id == mesure.condition)
+                .map(|c| c.nom)
+                .unwrap_or_default();
+            Ok(DetailMesure::de(&mesure, nom))
+        })
     }
 
     pub fn creer_condition(&self, nom: &str) -> Result<ConditionImpression, String> {
@@ -98,6 +107,8 @@ pub fn cle_erreur(erreur: &ErreurBibliotheque) -> &'static str {
 pub struct DetailMesure {
     pub id: IdMesure,
     pub condition: IdCondition,
+    /// Nom de la condition d'impression, même si la recherche la masque à gauche.
+    pub nom_condition: String,
     pub horodatage: String,
     pub instrument: Instrument,
     pub etalonnage: Info<Horodatage>,
@@ -112,7 +123,7 @@ pub struct DetailMesure {
 }
 
 impl DetailMesure {
-    pub fn de(enregistree: &MesureEnregistree) -> DetailMesure {
+    pub fn de(enregistree: &MesureEnregistree, nom_condition: String) -> DetailMesure {
         let p = enregistree.mesure.provenance();
         let conditions_mesure = match &p.calcul.demande {
             Info::Confirmee(c) => Info::Confirmee(c.conditions_spectres.clone()),
@@ -122,6 +133,7 @@ impl DetailMesure {
         DetailMesure {
             id: enregistree.id,
             condition: enregistree.condition,
+            nom_condition,
             horodatage: p.horodatage.texte().to_string(),
             instrument: enregistree.instrument.clone(),
             etalonnage: p.etalonnage.clone(),
@@ -137,52 +149,58 @@ impl DetailMesure {
     }
 }
 
+/// Version de l'application, pour le pied du cartouche.
 #[tauri::command]
-pub fn bibliotheque_demonstration(etagere: tauri::State<'_, Etagere>) -> bool {
-    etagere.demonstration
+pub fn version_application() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+#[tauri::command]
+pub fn bibliotheque_demonstration(ouverte: tauri::State<'_, BibliothequeOuverte>) -> bool {
+    ouverte.demonstration
 }
 
 #[tauri::command]
 pub fn bibliotheque_arborescence(
-    etagere: tauri::State<'_, Etagere>,
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
     recherche: &str,
 ) -> Result<Vec<Branche>, String> {
-    etagere.arborescence(recherche)
+    ouverte.arborescence(recherche)
 }
 
 #[tauri::command]
 pub fn bibliotheque_detail_mesure(
-    etagere: tauri::State<'_, Etagere>,
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
     id: i64,
 ) -> Result<DetailMesure, String> {
-    etagere.detail_mesure(IdMesure(id))
+    ouverte.detail_mesure(IdMesure(id))
 }
 
 #[tauri::command]
 pub fn bibliotheque_creer_condition(
-    etagere: tauri::State<'_, Etagere>,
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
     nom: &str,
 ) -> Result<ConditionImpression, String> {
-    etagere.creer_condition(nom)
+    ouverte.creer_condition(nom)
 }
 
 #[tauri::command]
 pub fn bibliotheque_renommer_condition(
-    etagere: tauri::State<'_, Etagere>,
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
     id: i64,
     nom: &str,
 ) -> Result<(), String> {
-    etagere.renommer_condition(IdCondition(id), nom)
+    ouverte.renommer_condition(IdCondition(id), nom)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn demonstration() -> (tempfile::TempDir, Etagere) {
+    fn demonstration() -> (tempfile::TempDir, BibliothequeOuverte) {
         let dossier = tempfile::tempdir().unwrap();
-        let etagere = Etagere::demonstration(dossier.path());
-        (dossier, etagere)
+        let ouverte = BibliothequeOuverte::demonstration(dossier.path());
+        (dossier, ouverte)
     }
 
     /// Le détail ne transforme jamais la position d'un spectre en condition de
@@ -191,9 +209,9 @@ mod tests {
     #[test]
     fn le_detail_garde_les_conditions_de_mesure_inconnues_ou_supposees() {
         use pont_protocole::{ConditionsCalcul, Mesure};
-        let (dossier, etagere) = demonstration();
-        let id = etagere.arborescence("").unwrap()[0].mesures[1].id;
-        drop(etagere);
+        let (dossier, ouverte) = demonstration();
+        let id = ouverte.arborescence("").unwrap()[0].mesures[1].id;
+        drop(ouverte);
         let enregistree = Bibliotheque::ouvrir(dossier.path())
             .unwrap()
             .mesure(id)
@@ -207,7 +225,7 @@ mod tests {
             }
         };
 
-        let inconnue = DetailMesure::de(&avec_demande(Info::Inconnue));
+        let inconnue = DetailMesure::de(&avec_demande(Info::Inconnue), String::new());
         assert_eq!(inconnue.conditions_mesure, Info::Inconnue);
         assert_eq!(inconnue.lab.len(), 1);
 
@@ -226,7 +244,7 @@ mod tests {
             Info::Supposee(ConditionMesure::M1),
             Info::Confirmee(ConditionMesure::M2),
         ];
-        let melangee = DetailMesure::de(&avec_demande(Info::Supposee(conditions)));
+        let melangee = DetailMesure::de(&avec_demande(Info::Supposee(conditions)), String::new());
         assert_eq!(
             melangee.conditions_mesure,
             Info::Supposee([
@@ -237,10 +255,26 @@ mod tests {
         );
     }
 
+    /// Le cartouche nomme la condition d'impression de la mesure même quand
+    /// la recherche l'a retirée de la colonne de gauche.
+    #[test]
+    fn le_detail_nomme_la_condition_de_la_mesure() {
+        let (_dossier, ouverte) = demonstration();
+        let mesure = ouverte.arborescence("offset").unwrap()[0].mesures[0].id;
+        assert!(ouverte.arborescence("jet").unwrap()[0]
+            .mesures
+            .iter()
+            .all(|m| m.id != mesure));
+        assert_eq!(
+            ouverte.detail_mesure(mesure).unwrap().nom_condition,
+            "Offset, couché mat 150\u{202f}g"
+        );
+    }
+
     #[test]
     fn la_demonstration_montre_trois_conditions_dont_une_vide() {
-        let (_dossier, etagere) = demonstration();
-        let branches = etagere.arborescence("").unwrap();
+        let (_dossier, ouverte) = demonstration();
+        let branches = ouverte.arborescence("").unwrap();
         let resume: Vec<_> = branches
             .iter()
             .map(|b| (b.condition.nom.as_str(), b.mesures.len()))
@@ -262,18 +296,18 @@ mod tests {
     #[test]
     fn la_demonstration_repart_de_zero_a_chaque_lancement() {
         let dossier = tempfile::tempdir().unwrap();
-        drop(Etagere::demonstration(dossier.path()));
-        let etagere = Etagere::demonstration(dossier.path());
-        assert_eq!(etagere.arborescence("").unwrap().len(), 3);
+        drop(BibliothequeOuverte::demonstration(dossier.path()));
+        let ouverte = BibliothequeOuverte::demonstration(dossier.path());
+        assert_eq!(ouverte.arborescence("").unwrap().len(), 3);
     }
 
     #[test]
     fn le_detail_d_une_bande_donne_le_lab_de_chaque_plage_en_m0_m1_m2() {
-        let (_dossier, etagere) = demonstration();
-        let bande = etagere.arborescence("").unwrap()[0].mesures[0].clone();
+        let (_dossier, ouverte) = demonstration();
+        let bande = ouverte.arborescence("").unwrap()[0].mesures[0].clone();
         assert_eq!(bande.geometrie, Geometrie::Bande { sens: 0 });
 
-        let detail = etagere.detail_mesure(bande.id).unwrap();
+        let detail = ouverte.detail_mesure(bande.id).unwrap();
         assert_eq!(detail.lab.len(), 4);
         // Le noir (dernière plage) est sombre, le jaune est jaune.
         assert!(detail.lab[3][0][0] < 30.0);
@@ -294,17 +328,17 @@ mod tests {
 
     #[test]
     fn les_refus_arrivent_a_la_page_comme_des_cles_du_catalogue() {
-        let (_dossier, etagere) = demonstration();
+        let (_dossier, ouverte) = demonstration();
         assert_eq!(
-            etagere.creer_condition("  "),
+            ouverte.creer_condition("  "),
             Err("bibliotheque.erreur.nom_vide".to_string())
         );
         assert_eq!(
-            etagere.creer_condition("Offset, couché mat 150\u{202f}g"),
+            ouverte.creer_condition("Offset, couché mat 150\u{202f}g"),
             Err("bibliotheque.erreur.nom_pris".to_string())
         );
         assert_eq!(
-            etagere.detail_mesure(IdMesure(999)),
+            ouverte.detail_mesure(IdMesure(999)),
             Err("bibliotheque.erreur.autre".to_string())
         );
         for cle in [
@@ -323,12 +357,12 @@ mod tests {
     #[test]
     fn une_condition_creee_puis_renommee_apparait_sous_son_nouveau_nom() {
         let dossier = tempfile::tempdir().unwrap();
-        let etagere = Etagere::ouvrir(&emplacement(dossier.path()));
-        let creee = etagere.creer_condition("Offset").unwrap();
-        etagere
+        let ouverte = BibliothequeOuverte::ouvrir(&emplacement(dossier.path()));
+        let creee = ouverte.creer_condition("Offset").unwrap();
+        ouverte
             .renommer_condition(creee.id, "Offset, couché mat")
             .unwrap();
-        let noms: Vec<_> = etagere
+        let noms: Vec<_> = ouverte
             .arborescence("")
             .unwrap()
             .into_iter()

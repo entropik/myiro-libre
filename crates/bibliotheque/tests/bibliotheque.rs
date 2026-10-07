@@ -138,6 +138,12 @@ fn deux_noms_qui_ne_different_que_par_les_majuscules_ne_coexistent_pas() {
         biblio.creer_condition("écran, ADHÉSIF").unwrap_err(),
         ErreurBibliotheque::NomDejaPris("Écran, adhésif".into())
     );
+    // Renommer une autre condition vers ce nom, en d'autres majuscules : refusé.
+    let offset = biblio.creer_condition("Offset").unwrap();
+    assert_eq!(
+        biblio.renommer_condition(offset.id, "ÉCRAN, ADHÉSIF"),
+        Err(ErreurBibliotheque::NomDejaPris("Écran, adhésif".into()))
+    );
     // Changer les majuscules de son propre nom reste permis.
     biblio
         .renommer_condition(ecran.id, "écran, adhésif")

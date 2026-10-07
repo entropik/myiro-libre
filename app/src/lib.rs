@@ -112,12 +112,12 @@ fn choisir_dossier(app: AppHandle, instruments: State<'_, Instruments>) -> Optio
 
 /// Ouvre la bibliothèque du poste, ou celle de démonstration avec `--demo`.
 fn ouvrir_bibliotheque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let etagere = if std::env::args().any(|a| a == "--demo") {
-        colonne::Etagere::demonstration(&demonstration::dossier())
+    let ouverte = if std::env::args().any(|a| a == "--demo") {
+        colonne::BibliothequeOuverte::demonstration(&demonstration::dossier())
     } else {
-        colonne::Etagere::ouvrir(&colonne::emplacement(&app.path().app_data_dir()?))
+        colonne::BibliothequeOuverte::ouvrir(&colonne::emplacement(&app.path().app_data_dir()?))
     };
-    app.manage(etagere);
+    app.manage(ouverte);
     Ok(())
 }
 
@@ -132,6 +132,7 @@ pub fn lancer() {
             langue_demandee,
             ouvrir_instrument,
             choisir_dossier,
+            colonne::version_application,
             colonne::bibliotheque_demonstration,
             colonne::bibliotheque_arborescence,
             colonne::bibliotheque_detail_mesure,

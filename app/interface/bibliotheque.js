@@ -23,6 +23,8 @@
 
   let branches = [];
   let bibliothequeVide = false; // aucune condition d'impression, recherche à part
+  let erreurBibliotheque = null; // clé du catalogue si la bibliothèque ne répond pas
+  let version = ""; // version de l'application, pour le pied du cartouche
   let choix = null; // { type: "condition" | "mesure", id }
   let spectreChoisi = 0; // spectre 1, 2 ou 3 de chaque plage dans le tableau
 
@@ -110,25 +112,24 @@
       arbre.append(ligne(String(i + 1), b.condition.nom, String(b.mesures.length),
         { type: "condition", id: b.condition.id }, true));
       b.mesures.forEach((m, j) => {
-        arbre.append(ligne(`${i + 1}.${j + 1}`, `${date(m.horodatage)} · ${lecture(m.geometrie, m.plages)}`, "",
+        arbre.append(ligne(`${i + 1}.${j + 1}`, `${date(m.horodatage)} · ${lecture(m.geometrie, m.plages)} · ${m.instrument.modele}`, "",
           { type: "mesure", id: m.id }, false));
       });
     });
     message.hidden = branches.length > 0;
-    message.textContent = recherche.value.trim() ? t("bibliotheque.aucun_resultat") : t("vide.bibliotheque.phrase");
+    if (erreurBibliotheque) message.textContent = t(erreurBibliotheque);
+    else message.textContent = recherche.value.trim() ? t("bibliotheque.aucun_resultat") : t("vide.bibliotheque.phrase");
   }
 
   async function chargerArbre() {
     try {
       branches = await invoke("bibliotheque_arborescence", { recherche: recherche.value });
+      erreurBibliotheque = null;
     } catch (cle) {
       branches = [];
-      dessinerArbre();
-      message.hidden = false;
-      message.textContent = t(cle);
-      return;
+      erreurBibliotheque = cle;
     }
-    if (!recherche.value.trim()) bibliothequeVide = branches.length === 0;
+    if (!erreurBibliotheque && !recherche.value.trim()) bibliothequeVide = branches.length === 0;
     dessinerArbre();
   }
 
@@ -146,7 +147,7 @@
     const cells = el("div", "cells");
     cells.append(...cellules);
     const pied = el("div", "cartouche__foot");
-    pied.append(el("span", "", "myiro-libre"), el("span", "num", "0.1.0"));
+    pied.append(el("span", "", "myiro-libre"), el("span", "num", version));
     c.append(tete, cells, pied);
     detailsChoix.replaceChildren(c);
     detailsChoix.hidden = false;
@@ -170,8 +171,10 @@
     centreChoix.replaceChildren();
     centreChoix.hidden = true;
     centreVide.hidden = false;
-    centrePhrase.textContent = t(bibliothequeVide ? "vide.bibliotheque.phrase" : "centre.choisir");
-    centreAjout.hidden = !bibliothequeVide;
+    // Une bibliothèque qui ne s'ouvre pas le dit aussi au centre, sans proposer d'ajout.
+    if (erreurBibliotheque) centrePhrase.textContent = t(erreurBibliotheque);
+    else centrePhrase.textContent = t(bibliothequeVide ? "vide.bibliotheque.phrase" : "centre.choisir");
+    centreAjout.hidden = Boolean(erreurBibliotheque) || !bibliothequeVide;
   }
 
   function enTete(titre, contexte) {
@@ -278,8 +281,7 @@
       return;
     }
     if (!choix || choix.type !== "mesure" || choix.id !== id) return; // choix changé entre-temps
-    const branche = brancheDe(d.condition);
-    const nomCondition = branche ? branche.condition.nom : "";
+    const nomCondition = d.nom_condition;
     const lu = lecture(d.geometrie, d.lab.length);
     montrerCartouche("details.mesure", date(d.horodatage), [
       cellule("cartouche.instrument", instrument(d.instrument)),
@@ -363,6 +365,8 @@
     recherche.placeholder = t("bibliotheque.recherche_aide");
     if (premiereFois) {
       premiereFois = false;
+      version = await invoke("version_application");
+      for (const v of document.querySelectorAll("[data-version]")) v.textContent = version;
       zone.querySelector("[data-demonstration]").hidden = !(await invoke("bibliotheque_demonstration"));
       await chargerArbre();
     }
