@@ -32,7 +32,9 @@ pub enum Requete {
         #[serde(default)]
         plages_attendues: Option<u32>,
     },
-    /// Désarme, se déconnecte et termine le pont.
+    /// Désarme, se déconnecte, puis répond `ferme` ou `fermeture_incertaine`
+    /// et termine le pont. Si la déconnexion échoue, le pont répond par une
+    /// erreur et reste à l'écoute : seul un nouveau `fermer` touche la DLL.
     Fermer {},
 }
 
@@ -62,8 +64,21 @@ pub enum Reponse {
     /// sa provenance (ADR 0005), au format conservable versionné.
     Mesure {
         mesure: Mesure,
+        /// Désarmement qui a suivi la lecture : la mesure reste valable même
+        /// si le repos n'est pas prouvé. Absent des réponses écrites avant le
+        /// ticket #24 : relu comme inconnu, jamais comme réussi. Ce n'est pas
+        /// une donnée de la mesure conservée (format `myiro-libre/mesure/1`).
+        #[serde(default = "Info::inconnue")]
+        remise_au_repos: Info<RemiseAuRepos>,
     },
+    /// Fermeture confirmée : désarmement prouvé puis déconnexion faite. Le pont
+    /// s'arrête.
     Ferme {},
+    /// Déconnexion faite, mais retour au repos non prouvé : l'instrument peut
+    /// demander une intervention. Le pont s'arrête aussi.
+    FermetureIncertaine {
+        remise_au_repos: RemiseAuRepos,
+    },
     Erreur {
         erreur: ErreurPont,
     },
@@ -84,7 +99,10 @@ pub fn lire_reponse(ligne: &str) -> Result<Reponse, String> {
         serde_json::from_str(ligne).map_err(|erreur| erreur.to_string())?;
     if est_mesure_initiale(&valeur) {
         return mesure_initiale(valeur)
-            .map(|mesure| Reponse::Mesure { mesure })
+            .map(|mesure| Reponse::Mesure {
+                mesure,
+                remise_au_repos: Info::Inconnue,
+            })
             .map_err(|erreur| erreur.to_string());
     }
     serde_json::from_value(valeur).map_err(|erreur| erreur.to_string())
@@ -113,6 +131,25 @@ pub struct Identite {
     pub anomalie_date_initiale: bool,
     /// Les 40 octets bruts, en hexadécimal, pour réinterprétation ultérieure.
     pub brute_hex: String,
+}
+
+/// Résultat du retour au repos après un désarmement (`FDX_StopMeasurement`).
+/// Seul `au_repos` permet une nouvelle mesure ; les autres cas disent pourquoi
+/// le repos n'est pas prouvé. Une absence de preuve n'est jamais une réussite.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "etat", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RemiseAuRepos {
+    // Accolades vides : sans elles, serde accepterait des champs en trop.
+    /// Désarmement accepté puis événement 0 reçu ; ou désarmement refusé
+    /// (-9986) sans autre événement alors que rien n'avait été armé depuis le
+    /// dernier repos prouvé.
+    AuRepos {},
+    /// Le désarmement accepté n'a pas été suivi de l'événement 0 dans le délai.
+    ReposNonSignale {},
+    /// La DLL a refusé le désarmement (code brut), essais épuisés.
+    ArretRefuse { code: i32 },
+    /// Liaison perdue (événement 6) avant la preuve du repos.
+    LiaisonPerdue {},
 }
 
 /// Étapes de la progression imposée sur instrument réel, dans l'ordre.
@@ -167,6 +204,20 @@ pub enum ErreurPont {
     /// session et son étalonnage sont invalidés : toute demande suivante reçoit
     /// cette même erreur, sans appel à la DLL, jusqu'à une nouvelle connexion.
     InstrumentPerdu {},
+    /// Le retour au repos de l'instrument n'est pas prouvé (`remise_au_repos`
+    /// dit pourquoi) : l'instrument n'a pas été armé. Une mesure déjà rendue
+    /// reste valable ; une nouvelle connexion rétablit l'état.
+    ReposIncertain { remise_au_repos: RemiseAuRepos },
+    /// `FDX_Disconnect` a échoué (code brut) : la fermeture n'est pas faite.
+    /// `remise_au_repos` est le résultat du désarmement qui l'a précédée ; une
+    /// nouvelle demande `fermer` ne refait que la déconnexion.
+    DeconnexionEchouee {
+        code: i32,
+        remise_au_repos: RemiseAuRepos,
+    },
+    /// Une fermeture a été demandée : plus rien n'est transmis à la DLL, sauf
+    /// une nouvelle demande `fermer` si la déconnexion a échoué.
+    SessionFermee {},
     /// Autre code d'erreur de la DLL, conservé brut.
     Sdk { code: i32 },
 }

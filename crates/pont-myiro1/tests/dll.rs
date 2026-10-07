@@ -98,7 +98,7 @@ fn palier_detection_avec_la_vraie_dll() {
 }
 
 /// Palier 2 : se connecte au premier instrument détecté, lit son identité,
-/// puis se déconnecte (à la fermeture de l'adapter). Aucun étalonnage ni
+/// puis ferme la session (désarmement, déconnexion). Aucun étalonnage ni
 /// mesure. Vérifier l'horloge de l'ordinateur avant le premier lancement
 /// (docs/abi/FDX_Connect.md).
 #[test]
@@ -130,6 +130,7 @@ fn palier_connexion_avec_le_vrai_instrument() {
         ports[0].numero_serie(),
         "n° de série incohérent"
     );
+    fermer(&mut session);
 }
 
 /// Palier 3 : étalonnage sur le blanc du MYIRO-1 réel. L'instrument doit être
@@ -158,6 +159,7 @@ fn palier_etalonnage_avec_le_vrai_instrument() {
     }
     resultat.expect("étalonnage sur le blanc");
     assert_eq!(session.palier_atteint(), Some(Palier::Etalonnage));
+    fermer(&mut session);
 }
 
 /// Palier 4 : étalonnage puis mesures ponctuelles du MYIRO-1 réel, une par plage
@@ -214,8 +216,10 @@ fn palier_mesure_ponctuelle_avec_le_vrai_instrument() {
             "  événements {:?}",
             mesure.evenements.iter().map(|e| e.code).collect::<Vec<_>>()
         );
+        println!("  retour au repos {:?}", mesure.remise_au_repos);
     }
     println!("résultats écrits dans {}", sortie.display());
+    fermer(&mut session);
 }
 
 /// Palier 5 : étalonnage puis lecture en bande des rangées de la mire de
@@ -273,7 +277,12 @@ fn palier_bande_avec_le_vrai_instrument() {
                 continue;
             }
         };
-        println!("  {} plages, sens {}", bande.plages.len(), bande.sens);
+        println!(
+            "  {} plages, sens {}, retour au repos {:?}",
+            bande.plages.len(),
+            bande.sens,
+            bande.remise_au_repos
+        );
         for (i, plage) in bande.plages.iter().enumerate() {
             let nom = format!("{rangee}{}1", (b'A' + i as u8) as char);
             for (cond, spectre, lab) in [
@@ -288,6 +297,19 @@ fn palier_bande_avec_le_vrai_instrument() {
         }
     }
     println!("résultats écrits dans {}", sortie.display());
+    fermer(&mut session);
+}
+
+/// Fermeture explicite en fin de palier : désarmement, attente du repos et
+/// déconnexion, résultat affiché (ticket #24).
+fn fermer(session: &mut Session<FdxDll>) {
+    let deja = session.journal().len();
+    let resultat = session.fermer();
+    for ligne in &session.journal()[deja..] {
+        println!("    journal : {ligne}");
+    }
+    println!("fermeture        : {resultat:?}");
+    resultat.expect("fermeture");
 }
 
 #[test]

@@ -32,7 +32,7 @@ fn derniere_reponse(mut sdk: SdkSimule, mesure: &str) -> Reponse {
 
 fn mesure_recue(sdk: SdkSimule, requete: &str) -> Mesure {
     match derniere_reponse(sdk, requete) {
-        Reponse::Mesure { mesure } => mesure,
+        Reponse::Mesure { mesure, .. } => mesure,
         autre => panic!("{autre:?}"),
     }
 }

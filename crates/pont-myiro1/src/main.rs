@@ -61,7 +61,8 @@ fn main() -> ExitCode {
         std::io::stdin().lock(),
         &mut std::io::stdout(),
     );
-    // La session, puis la DLL, se ferment ici : désarmement et déconnexion.
+    // `servir` a déjà fermé la session (désarmement puis déconnexion) ; la
+    // DLL ne tente un ultime nettoyage que si la déconnexion a échoué.
     drop(session);
     match resultat {
         Ok(()) => ExitCode::SUCCESS,

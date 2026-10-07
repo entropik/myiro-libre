@@ -3,8 +3,8 @@
 mod commun;
 
 use commun::{evenement, SdkSimule, EMPREINTE_SIMULEE};
-use pont_myiro1::{Connexion, Evenement, Session};
-use pont_protocole::{ErreurPont, Geometrie, Horodatage, Info, Palier};
+use pont_myiro1::{Connexion, Evenement, Fermeture, Session};
+use pont_protocole::{ErreurPont, Geometrie, Horodatage, Info, Palier, RemiseAuRepos};
 
 /// La date d'étalonnage d'une mesure : le pont l'a observée, elle doit être
 /// confirmée, pas seulement présente.
@@ -790,6 +790,224 @@ fn apres_reconnexion_la_date_d_etalonnage_vient_de_la_nouvelle_session() {
     let apres = session.mesurer_ponctuelle().unwrap();
     let nouvelle = date_confirmee(&apres.provenance.etalonnage);
     assert!(nouvelle > ancienne, "{nouvelle} après {ancienne}");
+}
+
+// Désarmement et fermeture : le résultat du retour au repos est rapporté.
+
+#[test]
+fn une_mesure_suivie_du_retour_au_repos_le_confirme() {
+    let mut session = session_etalonnee(&[1, 2, 3, 0]);
+    let mesure = session.mesurer_ponctuelle().unwrap();
+    assert_eq!(mesure.remise_au_repos, RemiseAuRepos::AuRepos {});
+}
+
+#[test]
+fn sans_evenement_de_repos_la_mesure_reste_disponible_mais_le_repos_est_incertain() {
+    let mut session = session_etalonnee(&[1, 2, 3]);
+    let mesure = session.mesurer_ponctuelle().unwrap();
+    assert_eq!(mesure.m1, vec![20.0; 36]);
+    assert_eq!(mesure.provenance.instrument.numero_serie, 12345678);
+    assert_eq!(mesure.remise_au_repos, RemiseAuRepos::ReposNonSignale {});
+}
+
+#[test]
+fn apres_un_repos_non_signale_la_mesure_suivante_est_refusee_sans_armer() {
+    let mut session = session_etalonnee_salves(&[&[1, 2, 3], &[1, 2, 3, 0]]);
+    session.mesurer_ponctuelle().unwrap();
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::ReposIncertain {
+            remise_au_repos: RemiseAuRepos::ArretRefuse { code: -9986 }
+        })
+    );
+    assert_eq!(nombre_d_armements(&session), 1);
+}
+
+fn nombre_d_armements(session: &Session<SdkSimule>) -> usize {
+    session
+        .sdk()
+        .appels
+        .iter()
+        .filter(|a| a.starts_with("armer"))
+        .count()
+}
+
+#[test]
+fn un_arret_refuse_apres_la_mesure_garde_la_mesure_et_bloque_la_suivante() {
+    let mut session = session_etalonnee_salves(&[&[1, 2, 3, 0], &[1, 2, 3, 0]]);
+    // L'instrument armé ne répond plus au désarmement (-9987).
+    session.sdk_mut().code_arret = -9987;
+    let mesure = session.mesurer_ponctuelle().unwrap();
+    assert_eq!(mesure.m0, vec![10.0; 36]);
+    assert_eq!(
+        mesure.remise_au_repos,
+        RemiseAuRepos::ArretRefuse { code: -9987 }
+    );
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::ReposIncertain {
+            remise_au_repos: RemiseAuRepos::ArretRefuse { code: -9987 }
+        })
+    );
+    assert_eq!(nombre_d_armements(&session), 1);
+}
+
+#[test]
+fn une_deconnexion_pendant_le_desarmement_garde_la_mesure_et_la_dit_perdue() {
+    let mut session = session_etalonnee(&[1, 2, 3, 6]);
+    let mesure = session.mesurer_ponctuelle().unwrap();
+    assert_eq!(mesure.remise_au_repos, RemiseAuRepos::LiaisonPerdue {});
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::InstrumentPerdu {})
+    );
+}
+
+#[test]
+fn le_desarmement_refuse_trop_longtemps_est_rapporte_sans_attente_sans_fin() {
+    // Après la mesure, chaque essai est refusé (-9986) et suivi d'un événement
+    // sans retour au repos : trois essais au plus.
+    let mut session = session_etalonnee(&[1, 2, 3, 1, 1, 1, 1]);
+    session.sdk_mut().code_arret = -9986;
+    let mesure = session.mesurer_ponctuelle().unwrap();
+    assert_eq!(
+        mesure.remise_au_repos,
+        RemiseAuRepos::ArretRefuse { code: -9986 }
+    );
+    let arrets = session
+        .sdk()
+        .appels
+        .iter()
+        .filter(|a| *a == "arreter")
+        .count();
+    assert_eq!(arrets, 1 + 3, "un avant armement, trois après");
+}
+
+// Fermeture explicite.
+
+#[test]
+fn fermer_sans_connexion_est_confirme_sans_toucher_la_dll() {
+    let mut session = Session::new(SdkSimule::avec_un_myiro1(), Palier::Connexion);
+    session.version().unwrap();
+    assert_eq!(session.fermer(), Ok(Fermeture::Confirmee));
+    assert_eq!(session.sdk().appels, ["version"]);
+}
+
+#[test]
+fn fermer_desarme_puis_deconnecte() {
+    let mut session = session_etalonnee(&[1, 2, 3, 0]);
+    session.mesurer_ponctuelle().unwrap();
+    let avant = session.sdk().appels.len();
+    assert_eq!(session.fermer(), Ok(Fermeture::Confirmee));
+    assert_eq!(session.sdk().appels[avant..], ["arreter", "deconnecter"]);
+}
+
+#[test]
+fn fermer_apres_un_repos_non_signale_deconnecte_mais_reste_incertain() {
+    let mut session = session_etalonnee(&[1, 2, 3]);
+    session.mesurer_ponctuelle().unwrap();
+    assert_eq!(
+        session.fermer(),
+        Ok(Fermeture::Incertaine {
+            remise_au_repos: RemiseAuRepos::ArretRefuse { code: -9986 }
+        })
+    );
+    assert_eq!(session.sdk().appels.last().unwrap(), "deconnecter");
+}
+
+#[test]
+fn une_deconnexion_pendant_le_nettoyage_de_fermeture_est_rapportee() {
+    let mut session = session_etalonnee(&[]);
+    session.sdk_mut().evenements.push_back(evenement(6));
+    assert_eq!(
+        session.fermer(),
+        Ok(Fermeture::Incertaine {
+            remise_au_repos: RemiseAuRepos::LiaisonPerdue {}
+        })
+    );
+    assert_eq!(session.sdk().appels.last().unwrap(), "deconnecter");
+}
+
+#[test]
+fn fermer_une_session_perdue_deconnecte_sans_desarmer() {
+    let mut session = session_etalonnee(&[1, 6]);
+    let _ = session.mesurer_ponctuelle();
+    let avant = session.sdk().appels.len();
+    assert_eq!(
+        session.fermer(),
+        Ok(Fermeture::Incertaine {
+            remise_au_repos: RemiseAuRepos::LiaisonPerdue {}
+        })
+    );
+    assert_eq!(session.sdk().appels[avant..], ["deconnecter"]);
+}
+
+#[test]
+fn une_deconnexion_echouee_est_une_erreur_qui_garde_le_resultat_du_desarmement() {
+    let mut session = session_etalonnee(&[]);
+    session.sdk_mut().code_deconnexion = -9987;
+    assert_eq!(
+        session.fermer(),
+        Err(ErreurPont::DeconnexionEchouee {
+            code: -9987,
+            remise_au_repos: RemiseAuRepos::AuRepos {}
+        })
+    );
+}
+
+#[test]
+fn une_fermeture_partielle_reprise_ne_refait_que_la_deconnexion() {
+    let mut session = session_etalonnee(&[]);
+    session.sdk_mut().code_deconnexion = -9987;
+    assert!(session.fermer().is_err());
+    session.sdk_mut().code_deconnexion = 0;
+    let avant = session.sdk().appels.len();
+    assert_eq!(session.fermer(), Ok(Fermeture::Confirmee));
+    assert_eq!(session.sdk().appels[avant..], ["deconnecter"]);
+}
+
+#[test]
+fn une_fermeture_repetee_ne_rappelle_pas_la_dll() {
+    let mut session = session_etalonnee(&[1, 2, 3]);
+    session.mesurer_ponctuelle().unwrap();
+    let premiere = session.fermer();
+    let avant = session.sdk().appels.len();
+    assert_eq!(session.fermer(), premiere);
+    assert_eq!(session.fermer(), premiere);
+    assert_eq!(session.sdk().appels.len(), avant);
+}
+
+#[test]
+fn apres_fermeture_aucune_demande_ne_touche_la_dll() {
+    let mut session = session_etalonnee(&[1, 2, 3, 0]);
+    session.fermer().unwrap();
+    let avant = session.sdk().appels.len();
+    assert_eq!(session.version(), Err(ErreurPont::SessionFermee {}));
+    assert_eq!(session.detecter(), Err(ErreurPont::SessionFermee {}));
+    assert_eq!(session.connecter(0), Err(ErreurPont::SessionFermee {}));
+    assert_eq!(session.etalonner(), Err(ErreurPont::SessionFermee {}));
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::SessionFermee {})
+    );
+    assert_eq!(
+        session.mesurer_bande(None),
+        Err(ErreurPont::SessionFermee {})
+    );
+    assert_eq!(session.sdk().appels.len(), avant);
+}
+
+#[test]
+fn apres_une_deconnexion_echouee_les_demandes_restent_refusees() {
+    let mut session = session_etalonnee(&[1, 2, 3, 0]);
+    session.sdk_mut().code_deconnexion = -1;
+    assert!(session.fermer().is_err());
+    let avant = session.sdk().appels.len();
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::SessionFermee {})
+    );
+    assert_eq!(session.sdk().appels.len(), avant);
 }
 
 #[test]

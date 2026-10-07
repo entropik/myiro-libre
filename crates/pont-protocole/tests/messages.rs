@@ -100,6 +100,7 @@ fn une_erreur_sans_detail_s_ecrit_par_son_seul_type() {
         (ErreurPont::NonEtalonne {}, "non_etalonne"),
         (ErreurPont::EtalonnageRequis {}, "etalonnage_requis"),
         (ErreurPont::SessionInexploitable {}, "session_inexploitable"),
+        (ErreurPont::SessionFermee {}, "session_fermee"),
     ] {
         let reponse = Reponse::Erreur { erreur };
         let ligne = format!(r#"{{"rep":"erreur","erreur":{{"type":"{texte}"}}}}"#);

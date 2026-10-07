@@ -21,11 +21,6 @@ const CAPACITE_MAX_PORTS: u32 = 100;
 /// Nombre de résultats au plus par lecture : une bande en compte quelques dizaines.
 const CAPACITE_MAX_RESULTATS: u32 = 1000;
 
-/// Désarmement à la fermeture : essais au plus, et attente d'un événement.
-const ESSAIS_DESARMEMENT: usize = 3;
-const DELAI_EVENEMENT_FERMETURE: Duration = Duration::from_secs(5);
-const CODE_ETAT_INCOMPATIBLE: i32 = -9986;
-
 /// Type d'étalonnage « blanc » de `FDX_Calibration` ; les types 1 et 2
 /// (lumière ambiante, écran) ne sont jamais transmis.
 const ETALONNAGE_BLANC: i32 = 0;
@@ -238,6 +233,13 @@ impl SdkMyiro1 for FdxDll {
         verifier(unsafe { (self.arreter)() })
     }
 
+    fn deconnecter(&mut self) -> Result<i32, i32> {
+        // SAFETY : aucun argument ; ferme la session ouverte par FDX_Connect.
+        let code = verifier(unsafe { (self.deconnecter)() })?;
+        self.connecte = false;
+        Ok(code)
+    }
+
     fn lire(&mut self, condition: &ConditionCalcul, longueur: usize) -> Result<Lecture, i32> {
         // Appel en deux temps, comme MYIRO tools (fiche FDX_GetMeasureData).
         let mut nombre = 0u32;
@@ -295,25 +297,15 @@ impl SdkMyiro1 for FdxDll {
 
 impl Drop for FdxDll {
     fn drop(&mut self) {
+        // La fermeture normale (désarmement, attente du repos, déconnexion,
+        // résultat rapporté) appartient à `Session::fermer`. Ici, seulement une
+        // ultime tentative si la DLL est restée connectée (déconnexion échouée,
+        // arrêt brutal du pont) : un désarmement, sans attente ni nouvel essai,
+        // puis la déconnexion, sans résultat à rapporter. Une session fermée
+        // pendant une mesure laissait l'instrument bloqué (voyant blanc fixe).
         if self.connecte {
-            // Désarmer d'abord : une session fermée pendant une mesure laissait
-            // l'instrument bloqué en « mesure en cours » (voyant blanc fixe),
-            // sourd aux connexions suivantes. Juste après une mesure, l'arrêt est
-            // refusé (-9986) jusqu'au réarmement automatique : on attend alors
-            // l'événement suivant et on réessaie. Sans événement, il est au repos.
-            for _ in 0..ESSAIS_DESARMEMENT {
-                // SAFETY : aucun argument (fiche FDX_StopMeasurement).
-                let code = unsafe { (self.arreter)() };
-                if code >= 0 {
-                    let _ = self.attendre_evenement(DELAI_EVENEMENT_FERMETURE);
-                    break;
-                }
-                if code != CODE_ETAT_INCOMPATIBLE
-                    || self.attendre_evenement(DELAI_EVENEMENT_FERMETURE).is_none()
-                {
-                    break;
-                }
-            }
+            // SAFETY : aucun argument (fiche FDX_StopMeasurement).
+            unsafe { (self.arreter)() };
             // SAFETY : aucun argument ; ferme la session ouverte par FDX_Connect.
             unsafe { (self.deconnecter)() };
         }

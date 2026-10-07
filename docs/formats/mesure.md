@@ -59,7 +59,17 @@ Un champ que le format ne connaît pas est **refusé** : on ne devine pas ce qu'
 }
 ```
 
-Dans le protocole, la même mesure arrive dans une réponse `{"rep": "mesure", "mesure": { … }}`.
+Dans le protocole, la même mesure arrive dans une réponse `{"rep": "mesure", "mesure": { … }, "remise_au_repos": { … }}`.
+
+## Retour au repos (réponse du protocole seulement)
+
+`remise_au_repos` dit si l'instrument est revenu au repos après la lecture (ticket #24). Ce n'est **pas** une donnée de la mesure conservée : il est à côté de `mesure`, dans la réponse du pont, et ne change pas le format `myiro-libre/mesure/1`. Il est qualifié comme les autres données :
+
+- `{"statut": "confirmee", "valeur": {"etat": "au_repos"}}` : le pont a reçu la preuve du repos ;
+- `{"etat": "repos_non_signale"}`, `{"etat": "arret_refuse", "code": -9987}` ou `{"etat": "liaison_perdue"}` (toujours sous `statut` et `valeur`) : la mesure reste valable, mais la suivante sera refusée tant que le repos n'est pas prouvé ;
+- `{"statut": "inconnue"}` : réponse écrite par un pont antérieur. Une réponse `mesure` sans ce champ, ou une ligne du format initial, se relit ainsi : **inconnu, jamais « au repos »**.
+
+Une valeur nue (`{"etat": "au_repos"}` sans `statut`), un `etat` inconnu ou un champ en trop sont refusés.
 
 ## Confirmé, supposé, inconnu
 

@@ -28,6 +28,15 @@ pub struct SdkSimule {
     /// est dans l'état « mesure réussie », jusqu'à son réarmement automatique.
     pub arret_refuse_apres_mesure: bool,
     pub dernier_evenement: Option<i32>,
+    /// Mesure armée et pas encore désarmée : au repos, le vrai MYIRO-1 refuse
+    /// le désarmement (-9986), observé le 7 octobre 2026.
+    pub arme: bool,
+    /// Code négatif : le désarmement d'une mesure armée échoue avec ce code
+    /// (par exemple -9987, instrument muet) ; au repos, le refus reste -9986.
+    pub code_arret: i32,
+    /// Code négatif : `FDX_Disconnect` échoue avec ce code. SUPPOSÉ : la fiche
+    /// de `FDX_Disconnect` n'existe pas encore, ses codes d'échec sont inconnus.
+    pub code_deconnexion: i32,
     /// Sens de passage rendu par les lectures.
     pub sens: u32,
     /// La première valeur de chaque lecture est NaN, comme une DLL défaillante.
@@ -111,6 +120,7 @@ impl SdkMyiro1 for SdkSimule {
         if self.code_armement < 0 {
             return Err(self.code_armement);
         }
+        self.arme = true;
         if let Some(salve) = self.salves.pop_front() {
             self.evenements.extend(salve);
         }
@@ -121,17 +131,35 @@ impl SdkMyiro1 for SdkSimule {
         if self.code_armement < 0 {
             return Err(self.code_armement);
         }
+        self.arme = true;
         if let Some(salve) = self.salves.pop_front() {
             self.evenements.extend(salve);
         }
         Ok(0)
     }
+    /// Le retour au repos (événement 0) n'est émis que s'il figure dans les
+    /// salves : son absence se simule en l'omettant.
     fn arreter_mesure(&mut self) -> Result<i32, i32> {
         self.appels.push("arreter".into());
         if self.arret_refuse_apres_mesure && self.dernier_evenement == Some(3) {
             return Err(-9986);
         }
+        if !self.arme {
+            return Err(-9986);
+        }
+        if self.code_arret < 0 {
+            return Err(self.code_arret);
+        }
+        self.arme = false;
         Ok(0)
+    }
+    fn deconnecter(&mut self) -> Result<i32, i32> {
+        self.appels.push("deconnecter".into());
+        if self.code_deconnexion < 0 {
+            Err(self.code_deconnexion)
+        } else {
+            Ok(0)
+        }
     }
     /// Valeurs repérables : condition × 10 + type de données.
     fn lire(&mut self, condition: &ConditionCalcul, longueur: usize) -> Result<Lecture, i32> {

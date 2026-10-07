@@ -275,7 +275,7 @@ fn extraire_json(
         let reponse = lire_reponse(ligne).map_err(|e| format!("{} : {e}", lieu()))?;
         // Une mesure relue est déjà vérifiée (nombres finis, plages cohérentes,
         // format initial ou courant) ; restent les dimensions du jeu.
-        let Reponse::Mesure { mesure } = reponse else {
+        let Reponse::Mesure { mesure, .. } = reponse else {
             continue;
         };
         mesures += 1;
