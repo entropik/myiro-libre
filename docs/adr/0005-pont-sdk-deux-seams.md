@@ -29,7 +29,9 @@ Le pont MYIRO-1 sépare désormais trois choses : le **plafond** (fixé au lance
 - Une perte de liaison (événement 6, même pendant le désarmement ou le retour au repos) bloque tout jusqu'à une nouvelle connexion, sans appel à la DLL. Une mesure déjà rendue n'est pas touchée.
 - Le protocole distingue trois refus : `etalonnage_requis`, `instrument_perdu` (rendu aussi aux demandes suivantes) et `session_inexploitable`. Dans les trois cas, l'instrument n'est pas armé.
 
-Vérifié contre l'instrument simulé seulement ; le comportement du vrai MYIRO-1 après une perte de liaison reste à observer.
+La session n'a pas encore de déconnexion volontaire : seule la perte de liaison (événement 6) mène à l'état perdu ; la fermeture relève du ticket #24.
+
+Vérifié contre l'instrument simulé seulement ; le comportement du vrai MYIRO-1 après une perte de liaison reste à observer, de même que la réponse de la DLL à une reconnexion sans déconnexion préalable (supposée acceptée par le simulé, voir la fiche `FDX_Connect`).
 
 ## Options écartées
 

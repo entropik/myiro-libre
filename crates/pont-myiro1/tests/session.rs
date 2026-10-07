@@ -763,6 +763,21 @@ fn une_reconnexion_exige_un_nouvel_etalonnage_et_porte_la_nouvelle_identite() {
 }
 
 #[test]
+fn apres_reconnexion_la_date_d_etalonnage_vient_de_la_nouvelle_session() {
+    let mut session = session_etalonnee_salves(&[&[1, 2, 3, 6], &[1, 2, 3]]);
+    let avant = session.mesurer_ponctuelle().unwrap();
+    let ancienne = avant.provenance.etalonnage.clone().unwrap();
+    // La date est à la seconde : attendre d'en changer pour les distinguer.
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    session.connecter(0).unwrap();
+    session.sdk_mut().evenements.extend([7, 8].map(evenement));
+    session.etalonner().unwrap();
+    let apres = session.mesurer_ponctuelle().unwrap();
+    let nouvelle = apres.provenance.etalonnage.unwrap();
+    assert!(nouvelle > ancienne, "{nouvelle} après {ancienne}");
+}
+
+#[test]
 fn aucune_reconnexion_ne_releve_le_plafond() {
     let mut session = session_connectee(sdk_qui_etalonne(&[7, 6]), Palier::Etalonnage);
     assert_eq!(session.etalonner(), Err(ErreurPont::InstrumentPerdu));

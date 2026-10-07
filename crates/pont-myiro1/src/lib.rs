@@ -299,7 +299,7 @@ impl<S: SdkMyiro1> Session<S> {
                 }
                 self.franchir(Palier::Etalonnage);
             }
-            Err(ErreurPont::InstrumentPerdu) => self.etat = EtatInstrument::Perdu,
+            Err(ErreurPont::InstrumentPerdu) => self.perdre_liaison(),
             Err(_) => {}
         }
         resultat
@@ -408,6 +408,14 @@ impl<S: SdkMyiro1> Session<S> {
         }
     }
 
+    /// Liaison perdue (événement 6) : identité et étalonnage disparaissent,
+    /// tout est refusé jusqu'à une nouvelle connexion. Seul chemin vers `Perdu`.
+    fn perdre_liaison(&mut self) {
+        self.journal
+            .push("liaison perdue : reconnexion nécessaire".into());
+        self.etat = EtatInstrument::Perdu;
+    }
+
     /// L'étalonnage cesse d'être utilisable ; l'identité reste.
     fn invalider_etalonnage(&mut self) {
         if let EtatInstrument::Etalonne { identite, .. } = &self.etat {
@@ -473,7 +481,7 @@ impl<S: SdkMyiro1> Session<S> {
             Ok((plages, sens, evenements))
         });
         if resultat.as_ref().err() == Some(&ErreurPont::InstrumentPerdu) {
-            self.etat = EtatInstrument::Perdu;
+            self.perdre_liaison();
         }
         // Désarmer même après un échec.
         self.desarmer("après lecture");
@@ -555,7 +563,7 @@ impl<S: SdkMyiro1> Session<S> {
                             evenement.code
                         ));
                         if evenement.code == EVENEMENT_DECONNEXION {
-                            self.etat = EtatInstrument::Perdu;
+                            self.perdre_liaison();
                             return;
                         }
                     }
@@ -577,7 +585,7 @@ impl<S: SdkMyiro1> Session<S> {
             self.journal
                 .push(format!("événement {} (attente du repos)", evenement.code));
             if evenement.code == EVENEMENT_DECONNEXION {
-                self.etat = EtatInstrument::Perdu;
+                self.perdre_liaison();
                 break;
             }
             if evenement.code == EVENEMENT_REPOS {

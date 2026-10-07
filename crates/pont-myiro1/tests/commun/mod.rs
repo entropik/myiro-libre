@@ -71,6 +71,11 @@ impl SdkMyiro1 for SdkSimule {
         self.appels.push("ports".into());
         Ok(self.ports.clone())
     }
+    /// SUPPOSÉ : accepte un second `FDX_Connect` sans `FDX_Disconnect`
+    /// entre les deux (reconnexion après une perte de liaison ou une identité
+    /// illisible). La fiche `docs/abi/FDX_Connect.md` ne décrit pas ce cas ;
+    /// la vraie DLL peut le refuser. Ces tests vérifient la logique de la
+    /// session, pas ce comportement de la DLL.
     fn connecter(&mut self, _port: &Port, delai: u32) -> Result<i32, i32> {
         self.appels.push(format!("connecter {delai}"));
         if self.code_connexion < 0 {

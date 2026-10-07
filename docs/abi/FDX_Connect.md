@@ -48,6 +48,8 @@ Le 7 octobre 2026, MYIRO-1 en USB sur `COM3`, DLL 1.0.1.0 x64, délai 10 s, horl
 
 Reste à observer : le délai réel avant échec, instrument débranché.
 
+Reste aussi à observer (**inconnu**) : la réponse à un second `FDX_Connect` sans `FDX_Disconnect` entre les deux, par exemple après une perte de liaison ou une identité illisible. Le pont permet cette reconnexion ; l'instrument simulé des tests l'accepte, ce qui est **supposé**, non établi.
+
 ## Preuves (locales)
 
 - `fdx-x86/exports/FDX_Connect.asm.txt` : pointeur nul à `0x100355f3`, champ 0/1 à `0x10035604..0x1003560d`, bornes 1..60 à `0x10035621..0x1003562f`, bit 4 à `0x10035749..0x10035767`, `ret 8`.
