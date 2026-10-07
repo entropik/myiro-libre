@@ -4,7 +4,16 @@ mod commun;
 
 use commun::{evenement, SdkSimule, EMPREINTE_SIMULEE};
 use pont_myiro1::{Connexion, Evenement, Session};
-use pont_protocole::{ErreurPont, Geometrie, Palier};
+use pont_protocole::{ErreurPont, Geometrie, Horodatage, Info, Palier};
+
+/// La date d'étalonnage d'une mesure : le pont l'a observée, elle doit être
+/// confirmée, pas seulement présente.
+fn date_confirmee(etalonnage: &Info<Horodatage>) -> &str {
+    match etalonnage {
+        Info::Confirmee(date) => date.texte(),
+        autre => panic!("date d'étalonnage non confirmée : {autre:?}"),
+    }
+}
 
 #[test]
 fn la_progression_complete_donne_l_identite_de_l_instrument() {
@@ -82,7 +91,7 @@ fn designer_un_instrument_hors_de_la_liste_est_refuse_sans_toucher_la_dll() {
     let mut session = Session::new(SdkSimule::avec_un_myiro1(), Palier::Connexion);
     session.version().unwrap();
     session.detecter().unwrap();
-    assert_eq!(session.connecter(1), Err(ErreurPont::InstrumentInconnu));
+    assert_eq!(session.connecter(1), Err(ErreurPont::InstrumentInconnu {}));
     assert_eq!(session.sdk().appels, ["version", "ports"]);
 }
 
@@ -111,11 +120,11 @@ fn session_qui_echoue_a_la_connexion(code: i32) -> Result<Connexion, ErreurPont>
 fn les_codes_d_erreur_de_la_dll_sont_traduits() {
     assert_eq!(
         session_qui_echoue_a_la_connexion(-9992),
-        Err(ErreurPont::ParametreRefuse)
+        Err(ErreurPont::ParametreRefuse {})
     );
     assert_eq!(
         session_qui_echoue_a_la_connexion(-9986),
-        Err(ErreurPont::EtatIncompatible)
+        Err(ErreurPont::EtatIncompatible {})
     );
     assert_eq!(
         session_qui_echoue_a_la_connexion(-1),
@@ -206,13 +215,13 @@ fn l_etalonnage_echoue_a_l_evenement_9() {
 #[test]
 fn sans_reponse_de_l_instrument_l_etalonnage_expire() {
     let mut session = session_connectee(sdk_qui_etalonne(&[7]), Palier::Etalonnage);
-    assert_eq!(session.etalonner(), Err(ErreurPont::Delai));
+    assert_eq!(session.etalonner(), Err(ErreurPont::Delai {}));
 }
 
 #[test]
 fn une_deconnexion_pendant_l_etalonnage_est_signalee() {
     let mut session = session_connectee(sdk_qui_etalonne(&[7, 6]), Palier::Etalonnage);
-    assert_eq!(session.etalonner(), Err(ErreurPont::InstrumentPerdu));
+    assert_eq!(session.etalonner(), Err(ErreurPont::InstrumentPerdu {}));
 }
 
 #[test]
@@ -249,7 +258,7 @@ fn un_refus_immediat_de_la_dll_est_traduit() {
     let mut sdk = sdk_qui_etalonne(&[]);
     sdk.code_etalonnage = -9986;
     let mut session = session_connectee(sdk, Palier::Etalonnage);
-    assert_eq!(session.etalonner(), Err(ErreurPont::EtatIncompatible));
+    assert_eq!(session.etalonner(), Err(ErreurPont::EtatIncompatible {}));
 }
 
 #[test]
@@ -258,7 +267,7 @@ fn un_echec_d_etalonnage_ne_permet_pas_de_mesurer() {
     let _ = session.etalonner();
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::EtalonnageRequis)
+        Err(ErreurPont::EtalonnageRequis {})
     );
     assert!(!a_arme(&session));
 }
@@ -331,7 +340,7 @@ fn mesurer_sans_etalonnage_est_refuse_sans_toucher_la_dll() {
     let mut session = session_connectee(sdk_qui_etalonne(&[]), Palier::MesurePonctuelle);
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::EtalonnageRequis)
+        Err(ErreurPont::EtalonnageRequis {})
     );
     assert!(!a_arme(&session));
 }
@@ -370,7 +379,7 @@ fn une_mesure_echouee_est_signalee_et_l_etalonnage_reste_valable() {
 #[test]
 fn sans_appui_sur_le_bouton_la_mesure_expire_et_desarme() {
     let mut session = session_etalonnee(&[1]);
-    assert_eq!(session.mesurer_ponctuelle(), Err(ErreurPont::Delai));
+    assert_eq!(session.mesurer_ponctuelle(), Err(ErreurPont::Delai {}));
     assert_eq!(session.sdk().appels.last().unwrap(), "arreter");
 }
 
@@ -378,11 +387,14 @@ fn sans_appui_sur_le_bouton_la_mesure_expire_et_desarme() {
 fn un_instrument_qui_se_dit_non_etalonne_exige_un_nouvel_etalonnage() {
     let mut session = session_etalonnee(&[]);
     session.sdk_mut().code_armement = -9983;
-    assert_eq!(session.mesurer_ponctuelle(), Err(ErreurPont::NonEtalonne));
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::NonEtalonne {})
+    );
     let armements = session.sdk().appels.len();
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::EtalonnageRequis)
+        Err(ErreurPont::EtalonnageRequis {})
     );
     assert_eq!(session.sdk().appels.len(), armements, "DLL non appelée");
 }
@@ -392,7 +404,7 @@ fn une_deconnexion_pendant_la_mesure_est_signalee() {
     let mut session = session_etalonnee(&[1, 6]);
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::InstrumentPerdu)
+        Err(ErreurPont::InstrumentPerdu {})
     );
 }
 
@@ -579,7 +591,7 @@ fn une_mesure_ponctuelle_porte_sa_provenance() {
     assert_eq!(p.geometrie, Geometrie::Ponctuelle {});
     let horodatage = p.horodatage.texte();
     assert!(est_un_horodatage_avec_fuseau(horodatage), "{horodatage}");
-    let etalonnage = p.etalonnage.valeur().expect("date de l'étalonnage").texte();
+    let etalonnage = date_confirmee(&p.etalonnage);
     assert!(est_un_horodatage_avec_fuseau(etalonnage), "{etalonnage}");
     assert!(etalonnage <= horodatage);
     assert!(!p.version_pont.is_empty());
@@ -610,7 +622,7 @@ fn un_nouvel_etalonnage_echoue_interdit_la_mesure_avant_armement() {
     ));
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::EtalonnageRequis)
+        Err(ErreurPont::EtalonnageRequis {})
     );
     assert!(!a_arme(&session));
 }
@@ -619,7 +631,7 @@ fn un_nouvel_etalonnage_echoue_interdit_la_mesure_avant_armement() {
 fn un_nouvel_etalonnage_expire_interdit_la_mesure_meme_si_le_palier_reste_atteint() {
     let mut session = session_etalonnee(&[1, 2, 3]);
     session.sdk_mut().evenements.push_back(evenement(7));
-    assert_eq!(session.etalonner(), Err(ErreurPont::Delai));
+    assert_eq!(session.etalonner(), Err(ErreurPont::Delai {}));
     assert_eq!(
         session.palier_atteint(),
         Some(Palier::Etalonnage),
@@ -627,7 +639,7 @@ fn un_nouvel_etalonnage_expire_interdit_la_mesure_meme_si_le_palier_reste_attein
     );
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::EtalonnageRequis)
+        Err(ErreurPont::EtalonnageRequis {})
     );
     assert!(!a_arme(&session));
 }
@@ -636,10 +648,10 @@ fn un_nouvel_etalonnage_expire_interdit_la_mesure_meme_si_le_palier_reste_attein
 fn un_refus_immediat_d_un_nouvel_etalonnage_invalide_l_ancien() {
     let mut session = session_etalonnee(&[1, 2, 3]);
     session.sdk_mut().code_etalonnage = -9986;
-    assert_eq!(session.etalonner(), Err(ErreurPont::EtatIncompatible));
+    assert_eq!(session.etalonner(), Err(ErreurPont::EtatIncompatible {}));
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::EtalonnageRequis)
+        Err(ErreurPont::EtalonnageRequis {})
     );
 }
 
@@ -647,13 +659,13 @@ fn un_refus_immediat_d_un_nouvel_etalonnage_invalide_l_ancien() {
 fn apres_une_deconnexion_pendant_l_etalonnage_plus_rien_ne_touche_la_dll() {
     let mut session = session_etalonnee(&[1, 2, 3]);
     session.sdk_mut().evenements.extend([7, 6].map(evenement));
-    assert_eq!(session.etalonner(), Err(ErreurPont::InstrumentPerdu));
+    assert_eq!(session.etalonner(), Err(ErreurPont::InstrumentPerdu {}));
     let appels = session.sdk().appels.len();
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::InstrumentPerdu)
+        Err(ErreurPont::InstrumentPerdu {})
     );
-    assert_eq!(session.etalonner(), Err(ErreurPont::InstrumentPerdu));
+    assert_eq!(session.etalonner(), Err(ErreurPont::InstrumentPerdu {}));
     assert_eq!(session.sdk().appels.len(), appels);
 }
 
@@ -662,12 +674,12 @@ fn apres_une_deconnexion_pendant_la_mesure_la_suivante_n_arme_pas() {
     let mut session = session_etalonnee_salves(&[&[1, 6], &[1, 2, 3]]);
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::InstrumentPerdu)
+        Err(ErreurPont::InstrumentPerdu {})
     );
     let appels = session.sdk().appels.len();
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::InstrumentPerdu)
+        Err(ErreurPont::InstrumentPerdu {})
     );
     assert_eq!(session.sdk().appels.len(), appels);
 }
@@ -678,10 +690,10 @@ fn une_deconnexion_au_retour_au_repos_garde_la_mesure_et_bloque_la_suivante() {
     let mesure = session.mesurer_ponctuelle().unwrap();
     assert_eq!(mesure.m1, vec![20.0; 36]);
     assert_eq!(mesure.provenance.instrument.numero_serie, 12345678);
-    assert!(mesure.provenance.etalonnage.valeur().is_some());
+    date_confirmee(&mesure.provenance.etalonnage);
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::InstrumentPerdu)
+        Err(ErreurPont::InstrumentPerdu {})
     );
     let armements = session
         .sdk()
@@ -703,7 +715,7 @@ fn une_deconnexion_vue_avant_armement_empeche_d_armer() {
     sdk.evenements.push_back(evenement(6));
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::InstrumentPerdu)
+        Err(ErreurPont::InstrumentPerdu {})
     );
     assert!(!a_arme(&session));
 }
@@ -716,10 +728,13 @@ fn une_identite_illisible_rend_la_connexion_inexploitable() {
     session.version().unwrap();
     session.detecter().unwrap();
     assert_eq!(session.connecter(0), Err(ErreurPont::Sdk { code: -1 }));
-    assert_eq!(session.etalonner(), Err(ErreurPont::SessionInexploitable));
+    assert_eq!(
+        session.etalonner(),
+        Err(ErreurPont::SessionInexploitable {})
+    );
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::SessionInexploitable)
+        Err(ErreurPont::SessionInexploitable {})
     );
     assert!(!session
         .sdk()
@@ -735,7 +750,7 @@ fn une_reconnexion_sans_identite_ne_reutilise_pas_l_ancienne() {
     assert!(session.connecter(0).is_err());
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::SessionInexploitable)
+        Err(ErreurPont::SessionInexploitable {})
     );
     assert!(!a_arme(&session));
 }
@@ -749,7 +764,7 @@ fn une_reconnexion_exige_un_nouvel_etalonnage_et_porte_la_nouvelle_identite() {
     assert_eq!(connexion.infos.numero, 87654321);
     assert_eq!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::EtalonnageRequis),
+        Err(ErreurPont::EtalonnageRequis {}),
         "l'étalonnage de l'ancienne connexion ne vaut plus"
     );
     session.sdk_mut().evenements.extend([7, 8].map(evenement));
@@ -766,21 +781,21 @@ fn une_reconnexion_exige_un_nouvel_etalonnage_et_porte_la_nouvelle_identite() {
 fn apres_reconnexion_la_date_d_etalonnage_vient_de_la_nouvelle_session() {
     let mut session = session_etalonnee_salves(&[&[1, 2, 3, 6], &[1, 2, 3]]);
     let avant = session.mesurer_ponctuelle().unwrap();
-    let ancienne = avant.provenance.etalonnage.valeur().unwrap().texte();
+    let ancienne = date_confirmee(&avant.provenance.etalonnage);
     // La date est à la seconde : attendre d'en changer pour les distinguer.
     std::thread::sleep(std::time::Duration::from_millis(1100));
     session.connecter(0).unwrap();
     session.sdk_mut().evenements.extend([7, 8].map(evenement));
     session.etalonner().unwrap();
     let apres = session.mesurer_ponctuelle().unwrap();
-    let nouvelle = apres.provenance.etalonnage.valeur().unwrap().texte();
+    let nouvelle = date_confirmee(&apres.provenance.etalonnage);
     assert!(nouvelle > ancienne, "{nouvelle} après {ancienne}");
 }
 
 #[test]
 fn aucune_reconnexion_ne_releve_le_plafond() {
     let mut session = session_connectee(sdk_qui_etalonne(&[7, 6]), Palier::Etalonnage);
-    assert_eq!(session.etalonner(), Err(ErreurPont::InstrumentPerdu));
+    assert_eq!(session.etalonner(), Err(ErreurPont::InstrumentPerdu {}));
     session.connecter(0).unwrap();
     session.sdk_mut().evenements.extend([7, 8].map(evenement));
     session.etalonner().unwrap();

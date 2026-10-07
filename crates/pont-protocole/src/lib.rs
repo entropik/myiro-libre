@@ -132,39 +132,41 @@ pub enum Palier {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ErreurPont {
+    // Accolades vides sur les erreurs sans détail : sans elles, serde
+    // accepterait des champs en trop. Le JSON reste `{"type":"delai"}`.
     /// Appel hors de l'ordre des paliers ; la DLL n'a pas été appelée.
     EtatInvalide { attendu: Palier },
     /// Palier au-delà du plafond autorisé ; la DLL n'a pas été appelée.
     PalierNonAutorise { demande: Palier, plafond: Palier },
     /// Instrument désigné absent de la dernière détection.
-    InstrumentInconnu,
+    InstrumentInconnu {},
     /// Code -9992 de la DLL : valeur envoyée refusée.
-    ParametreRefuse,
+    ParametreRefuse {},
     /// Code -9986 de la DLL : appel refusé dans l'état actuel.
-    EtatIncompatible,
+    EtatIncompatible {},
     /// L'instrument a signalé l'échec de l'étalonnage (événement 9), avec
     /// le code d'erreur de la DLL à cet instant.
     EtalonnageEchoue { erreur: i32 },
     /// Code -9983 : l'instrument n'est pas (ou plus) étalonné.
-    NonEtalonne,
+    NonEtalonne {},
     /// Aucun étalonnage utilisable dans la connexion en cours (jamais fait,
     /// échoué, expiré, ou refusé par l'instrument) : étalonner avant de
     /// mesurer. La DLL n'a pas été appelée.
-    EtalonnageRequis,
+    EtalonnageRequis {},
     /// La connexion est ouverte mais l'identité de l'instrument n'a pas pu
     /// être lue : rien ne peut se faire avant une nouvelle connexion. La DLL
     /// n'a pas été appelée.
-    SessionInexploitable,
+    SessionInexploitable {},
     /// L'instrument a signalé l'échec de la mesure (événement 4).
     MesureEchouee { erreur: i32 },
     /// La DLL a rendu une réponse de forme imprévue (nombre ou taille de résultats).
     ReponseInattendue { detail: String },
     /// L'instrument n'a pas répondu dans le délai prévu.
-    Delai,
+    Delai {},
     /// L'instrument s'est déconnecté ou ne répond plus (événement 6). La
     /// session et son étalonnage sont invalidés : toute demande suivante reçoit
     /// cette même erreur, sans appel à la DLL, jusqu'à une nouvelle connexion.
-    InstrumentPerdu,
+    InstrumentPerdu {},
     /// Autre code d'erreur de la DLL, conservé brut.
     Sdk { code: i32 },
 }

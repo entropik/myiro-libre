@@ -89,6 +89,26 @@ fn une_erreur_s_ecrit_en_clair_pour_l_application() {
 }
 
 #[test]
+fn une_erreur_sans_detail_s_ecrit_par_son_seul_type() {
+    use pont_protocole::{ecrire_reponse, lire_reponse, ErreurPont, Reponse};
+    for (erreur, texte) in [
+        (ErreurPont::Delai {}, "delai"),
+        (ErreurPont::InstrumentPerdu {}, "instrument_perdu"),
+        (ErreurPont::InstrumentInconnu {}, "instrument_inconnu"),
+        (ErreurPont::ParametreRefuse {}, "parametre_refuse"),
+        (ErreurPont::EtatIncompatible {}, "etat_incompatible"),
+        (ErreurPont::NonEtalonne {}, "non_etalonne"),
+        (ErreurPont::EtalonnageRequis {}, "etalonnage_requis"),
+        (ErreurPont::SessionInexploitable {}, "session_inexploitable"),
+    ] {
+        let reponse = Reponse::Erreur { erreur };
+        let ligne = format!(r#"{{"rep":"erreur","erreur":{{"type":"{texte}"}}}}"#);
+        assert_eq!(ecrire_reponse(&reponse), ligne);
+        assert_eq!(lire_reponse(&ligne), Ok(reponse));
+    }
+}
+
+#[test]
 fn une_reponse_relue_par_l_application_redonne_la_meme() {
     use pont_protocole::{ecrire_reponse, lire_reponse, InstrumentDetecte, Reponse};
     let reponse = Reponse::Instruments {

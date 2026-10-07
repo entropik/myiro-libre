@@ -265,7 +265,10 @@ impl<S: SdkMyiro1> Session<S> {
     /// précédente ; la connexion n'est exploitable qu'une fois l'identité lue.
     pub fn connecter(&mut self, index: usize) -> Result<Connexion, ErreurPont> {
         self.autoriser(Palier::Connexion, Some(Palier::Detection))?;
-        let port = *self.ports.get(index).ok_or(ErreurPont::InstrumentInconnu)?;
+        let port = *self
+            .ports
+            .get(index)
+            .ok_or(ErreurPont::InstrumentInconnu {})?;
         self.etat = EtatInstrument::NonConnecte;
         let code = self
             .sdk
@@ -303,7 +306,7 @@ impl<S: SdkMyiro1> Session<S> {
                 }
                 self.franchir(Palier::Etalonnage);
             }
-            Err(ErreurPont::InstrumentPerdu) => self.perdre_liaison(),
+            Err(ErreurPont::InstrumentPerdu {}) => self.perdre_liaison(),
             Err(_) => {}
         }
         resultat
@@ -318,7 +321,7 @@ impl<S: SdkMyiro1> Session<S> {
             let evenement = self
                 .sdk
                 .attendre_evenement(reste)
-                .ok_or(ErreurPont::Delai)?;
+                .ok_or(ErreurPont::Delai {})?;
             evenements.push(evenement);
             match evenement.code {
                 EVENEMENT_ETALONNAGE_REUSSI => break,
@@ -327,7 +330,7 @@ impl<S: SdkMyiro1> Session<S> {
                         erreur: evenement.erreur,
                     })
                 }
-                EVENEMENT_DECONNEXION => return Err(ErreurPont::InstrumentPerdu),
+                EVENEMENT_DECONNEXION => return Err(ErreurPont::InstrumentPerdu {}),
                 _ => {}
             }
         }
@@ -393,7 +396,7 @@ impl<S: SdkMyiro1> Session<S> {
         self.exiger(true)?;
         match &self.etat {
             EtatInstrument::Etalonne { identite, date } => Ok((identite.clone(), date.clone())),
-            _ => Err(ErreurPont::EtalonnageRequis),
+            _ => Err(ErreurPont::EtalonnageRequis {}),
         }
     }
 
@@ -403,9 +406,9 @@ impl<S: SdkMyiro1> Session<S> {
         match &self.etat {
             EtatInstrument::Etalonne { .. } => Ok(()),
             EtatInstrument::Connecte { .. } if !etalonne => Ok(()),
-            EtatInstrument::Connecte { .. } => Err(ErreurPont::EtalonnageRequis),
-            EtatInstrument::Perdu => Err(ErreurPont::InstrumentPerdu),
-            EtatInstrument::Inexploitable => Err(ErreurPont::SessionInexploitable),
+            EtatInstrument::Connecte { .. } => Err(ErreurPont::EtalonnageRequis {}),
+            EtatInstrument::Perdu => Err(ErreurPont::InstrumentPerdu {}),
+            EtatInstrument::Inexploitable => Err(ErreurPont::SessionInexploitable {}),
             EtatInstrument::NonConnecte => Err(ErreurPont::EtatInvalide {
                 attendu: Palier::Connexion,
             }),
@@ -473,7 +476,7 @@ impl<S: SdkMyiro1> Session<S> {
         // seul après une mesure.
         self.desarmer("avant armement");
         if self.etat == EtatInstrument::Perdu {
-            return Err(ErreurPont::InstrumentPerdu);
+            return Err(ErreurPont::InstrumentPerdu {});
         }
         let armement = match mode {
             Mode::Ponctuelle => self.sdk.armer_ponctuelle(),
@@ -491,7 +494,7 @@ impl<S: SdkMyiro1> Session<S> {
             let (plages, sens) = self.lire_plages()?;
             Ok((plages, sens, evenements))
         });
-        if resultat.as_ref().err() == Some(&ErreurPont::InstrumentPerdu) {
+        if resultat.as_ref().err() == Some(&ErreurPont::InstrumentPerdu {}) {
             self.perdre_liaison();
         }
         // Désarmer même après un échec.
@@ -613,7 +616,7 @@ impl<S: SdkMyiro1> Session<S> {
             let evenement = self
                 .sdk
                 .attendre_evenement(reste)
-                .ok_or(ErreurPont::Delai)?;
+                .ok_or(ErreurPont::Delai {})?;
             // Les événements 2 se répètent à chaque donnée brute : un seul suffit.
             if evenements.last().map(|e: &Evenement| e.code) != Some(evenement.code) {
                 self.journal.push(format!(
@@ -629,7 +632,7 @@ impl<S: SdkMyiro1> Session<S> {
                         erreur: evenement.erreur,
                     })
                 }
-                EVENEMENT_DECONNEXION => return Err(ErreurPont::InstrumentPerdu),
+                EVENEMENT_DECONNEXION => return Err(ErreurPont::InstrumentPerdu {}),
                 _ => {}
             }
         }
@@ -673,9 +676,9 @@ fn code_de(resultat: Result<i32, i32>) -> i32 {
 
 fn traduire(code: i32) -> ErreurPont {
     match code {
-        -9992 => ErreurPont::ParametreRefuse,
-        CODE_ETAT_INCOMPATIBLE => ErreurPont::EtatIncompatible,
-        CODE_NON_ETALONNE => ErreurPont::NonEtalonne,
+        -9992 => ErreurPont::ParametreRefuse {},
+        CODE_ETAT_INCOMPATIBLE => ErreurPont::EtatIncompatible {},
+        CODE_NON_ETALONNE => ErreurPont::NonEtalonne {},
         code => ErreurPont::Sdk { code },
     }
 }

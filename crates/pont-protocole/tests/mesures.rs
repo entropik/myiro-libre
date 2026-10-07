@@ -167,6 +167,8 @@ fn une_reponse_du_protocole_avec_un_champ_inconnu_est_refusee() {
         r#"{"rep":"version","parties":[1,0,1],"protocole":2}"#,
         r#"{"rep":"instruments","liste":[{"liaison":"usb","port":"COM3","numero_serie":12345678,"x":1}]}"#,
         r#"{"rep":"erreur","erreur":{"type":"mesure_echouee","erreur":-1,"x":1}}"#,
+        r#"{"rep":"erreur","erreur":{"type":"delai","x":1}}"#,
+        r#"{"rep":"erreur","erreur":{"type":"instrument_perdu","x":1}}"#,
         r#"{"rep":"connecte","identite":{"numero_serie":12345678,"micrologiciel":"1.00","code_produit":"9C1D","adresse_mac":"02:00:00:00:00:01","date_initiale":null,"anomalie_date_initiale":false,"brute_hex":"00","x":1}}"#,
     ] {
         assert!(lire_reponse(ligne).is_err(), "{ligne}");
