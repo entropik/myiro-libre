@@ -73,15 +73,20 @@ pub fn architecture(fichier: &Path) -> Option<Architecture> {
 /// même dossier `target/<profil>` et dans `target/<cible>/<profil>`.
 /// L'architecture est lue dans l'en-tête ; un seul pont par architecture.
 pub fn chercher_ponts(dossier_exe: &Path) -> Vec<(Architecture, PathBuf)> {
-    let nom = |base: &str| format!("{base}{}", std::env::consts::EXE_SUFFIX);
+    chercher_ponts_nommes(dossier_exe, "pont-myiro1")
+}
+
+/// Comme [`chercher_ponts`], pour le pont nommé `base` (`pont-fd9`…).
+pub fn chercher_ponts_nommes(dossier_exe: &Path, base: &str) -> Vec<(Architecture, PathBuf)> {
+    let nom = |suffixe: &str| format!("{base}{suffixe}{}", std::env::consts::EXE_SUFFIX);
     let mut candidats = vec![
-        dossier_exe.join(nom("pont-myiro1-x64")),
-        dossier_exe.join(nom("pont-myiro1-x86")),
-        dossier_exe.join(nom("pont-myiro1")),
+        dossier_exe.join(nom("-x64")),
+        dossier_exe.join(nom("-x86")),
+        dossier_exe.join(nom("")),
     ];
     if let (Some(profil), Some(target)) = (dossier_exe.file_name(), dossier_exe.parent()) {
         for cible in ["x86_64-pc-windows-msvc", "i686-pc-windows-msvc"] {
-            candidats.push(target.join(cible).join(profil).join(nom("pont-myiro1")));
+            candidats.push(target.join(cible).join(profil).join(nom("")));
         }
     }
     let mut ponts: Vec<(Architecture, PathBuf)> = Vec::new();

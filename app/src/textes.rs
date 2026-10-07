@@ -113,6 +113,7 @@ const FRANCAIS: Catalogue = &[
     // Instrument : état dans la barre ({modele} et {etat} sont remplacés)
     ("instrument.recherche", "Recherche de l’instrument…"),
     ("instrument.barre", "{modele}, {etat}"),
+    ("instrument.etat.detecte", "détecté"),
     ("instrument.etat.connecte", "connecté"),
     ("instrument.etat.etalonnage_requis", "étalonnage requis"),
     ("instrument.etat.etalonne", "étalonné"),
@@ -371,6 +372,7 @@ const ANGLAIS: Catalogue = &[
     // Instrument: state in the top bar ({modele} and {etat} are replaced)
     ("instrument.recherche", "Looking for the instrument…"),
     ("instrument.barre", "{modele}, {etat}"),
+    ("instrument.etat.detecte", "detected"),
     ("instrument.etat.connecte", "connected"),
     ("instrument.etat.etalonnage_requis", "calibration required"),
     ("instrument.etat.etalonne", "calibrated"),
@@ -614,7 +616,7 @@ mod tests {
                 reste.split('"').next().map(String::from)
             })
             .collect();
-        for etat in ["connecte", "etalonnage_requis", "etalonne"] {
+        for etat in ["detecte", "connecte", "etalonnage_requis", "etalonne"] {
             demandees.push(format!("instrument.etat.{etat}"));
         }
         demandees.extend(

@@ -5,10 +5,11 @@ Usage (à la racine du dépôt) :
     python outils/preparer_installateur.py
     cargo tauri build --config app/tauri.installateur.json
 
-1. Compile le pont `pont-myiro1` en 64 bits et en 32 bits (i686-pc-windows-msvc)
-   et les dépose dans `app/binaries/` sous les noms attendus par Tauri
-   (`bundle.externalBin`) ; installés, ils deviennent `pont-myiro1-x64.exe` et
-   `pont-myiro1-x86.exe` à côté de l'application.
+1. Compile les ponts `pont-myiro1` et `pont-fd9` en 64 bits et en 32 bits
+   (i686-pc-windows-msvc ; la DLL du FD-9 de FD-S2w est 32 bits) et les dépose
+   dans `app/binaries/` sous les noms attendus par Tauri (`bundle.externalBin`) ;
+   installés, ils deviennent `pont-myiro1-x64.exe`, `pont-fd9-x86.exe`, etc.
+   à côté de l'application.
 2. Écrit `app/tauri.installateur.json`, la configuration complémentaire de
    l'installateur. Si le dossier `SDK/` du dépôt existe (ignoré par git), chacun
    de ses sous-dossiers qui contient FDXSDK.dll est embarqué entier dans
@@ -28,6 +29,7 @@ import sys
 RACINE = pathlib.Path(__file__).resolve().parent.parent
 APP = RACINE / "app"
 CIBLE_32 = "i686-pc-windows-msvc"
+PONTS = ("pont-myiro1", "pont-fd9")
 
 
 def architecture(fichier):
@@ -50,16 +52,17 @@ def compiler_ponts(triple_hote):
     target = pathlib.Path(os.environ.get("CARGO_TARGET_DIR", RACINE / "target"))
     binaires = APP / "binaries"
     binaires.mkdir(exist_ok=True)
-    for arch, cible in (("x64", None), ("x86", CIBLE_32)):
-        commande = ["cargo", "build", "--release", "-p", "pont-myiro1"]
-        if cible:
-            commande += ["--target", cible]
-        subprocess.run(commande, cwd=RACINE, check=True)
-        source = target / (cible or "") / "release" / "pont-myiro1.exe"
-        if architecture(source) != arch:
-            sys.exit(f"{source} n'est pas un exécutable {arch}")
-        shutil.copy2(source, binaires / f"pont-myiro1-{arch}-{triple_hote}.exe")
-        print(f"Pont {arch} : {source}")
+    for pont in PONTS:
+        for arch, cible in (("x64", None), ("x86", CIBLE_32)):
+            commande = ["cargo", "build", "--release", "-p", pont]
+            if cible:
+                commande += ["--target", cible]
+            subprocess.run(commande, cwd=RACINE, check=True)
+            source = target / (cible or "") / "release" / f"{pont}.exe"
+            if architecture(source) != arch:
+                sys.exit(f"{source} n'est pas un exécutable {arch}")
+            shutil.copy2(source, binaires / f"{pont}-{arch}-{triple_hote}.exe")
+            print(f"Pont {pont} {arch} : {source}")
 
 
 def dll_embarquees():
@@ -84,7 +87,7 @@ def main():
     bundle = {
         "active": True,
         "targets": ["nsis"],
-        "externalBin": ["binaries/pont-myiro1-x64", "binaries/pont-myiro1-x86"],
+        "externalBin": [f"binaries/{pont}-{arch}" for pont in PONTS for arch in ("x64", "x86")],
     }
     if ressources:
         bundle["resources"] = ressources
