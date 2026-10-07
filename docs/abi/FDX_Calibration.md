@@ -48,6 +48,7 @@ Le 7 octobre 2026, MYIRO-1 en USB posé sur son capuchon MY-A01, DLL 1.0.1.0 x64
 - `FDX_Calibration(0)` rend la main aussitôt ; le résultat arrive par événements : **asynchrone confirmé** ;
 - événements reçus : 0 (à la connexion), **7** (commencé), **8** (réussi), sans code d'erreur ;
 - durée de l'appel à l'événement 8 : **3,3 s** ;
+- voyant observé par l'opérateur conforme au manuel : jaune à la connexion, bleu clignotant pendant l'étalonnage, vert, puis bleu fixe ;
 - session ensuite fermée proprement ; aucune mesure faite.
 
 ## Reste à vérifier

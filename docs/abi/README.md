@@ -51,3 +51,6 @@ Les codes existent par plages : -9999 à -9981 (général), -9899 à -9892 (reco
 4. [FDX_GetDeviceInfo](FDX_GetDeviceInfo.md) : identité de l'instrument (palier Connexion)
 5. [FDX_RegisterDeviceEventHandler](FDX_RegisterDeviceEventHandler.md) : événements de l'instrument (tous les paliers à partir de la connexion)
 6. [FDX_Calibration](FDX_Calibration.md) : étalonnage sur le blanc (palier Étalonnage)
+7. [FDX_SetMeasureCondition](FDX_SetMeasureCondition.md) : armement d'une mesure ponctuelle ou d'une bande (palier Mesure ponctuelle)
+8. [FDX_StopMeasurement](FDX_StopMeasurement.md) : désarmement, retour au repos
+9. [FDX_GetMeasureData](FDX_GetMeasureData.md) : lecture des spectres M0/M1/M2 et des données brutes
