@@ -68,7 +68,7 @@ _Éviter_ : bridge, wrapper, driver, pilote (réservé au pilote Windows)
 _Éviter_ : phase (réservé au plan d'action), niveau, étape
 
 **Logiciel du fabricant** :
-Logiciel Konica Minolta (ou d'un partenaire) installé sur le poste qui contient `FDXSDK.dll` ; l'application l'y trouve seule et confie la DLL au pont de la même architecture. C'est le terme montré à l'opérateur ; « SDK » et « DLL » restent dans le code et le détail technique.
+Logiciel Konica Minolta (ou d'un partenaire) installé sur le poste qui contient `FDXSDK.dll` (MYIRO-1) ou `FD9SDK.dll` (FD-9, par exemple FD-S2w) ; l'application l'y trouve seule et confie la DLL au pont de la même architecture. C'est le terme montré à l'opérateur ; « SDK » et « DLL » restent dans le code et le détail technique.
 _Éviter_ : SDK, DLL, emplacement du SDK (à l'écran)
 
 **DLL embarquées** :
@@ -76,7 +76,7 @@ Copie locale des DLL du fabricant (dossier `SDK/` du dépôt, ignoré par git) i
 _Éviter_ : DLL fournies, DLL livrées
 
 **État de l'instrument** :
-Ce que la barre du haut dit de l'instrument, en un mot : non détecté, connecté, étalonnage requis ou étalonné. Il est établi par le module `instrument`, jamais par un écran.
+Ce que la barre du haut dit de l'instrument, en un mot : non détecté, détecté (vu par la détection mais pas connecté, comme le FD-9 tant que son pont s'arrête à ce palier), connecté, étalonnage requis ou étalonné. Il est établi par le module `instrument`, jamais par un écran.
 _Éviter_ : statut, mode
 
 **Plafond** :
@@ -94,6 +94,10 @@ _Éviter_ : statut, palier (réservé à la progression imposée)
 **Prise de main** :
 Droit exclusif d'un logiciel à piloter un FD-9 en réseau ; un seul l'a à la fois. Le pont l'obtient à la connexion et la rend à la déconnexion. FD-S2w resté connecté la garde.
 _Éviter_ : autorité, authority, verrou
+
+**Adresse réseau** :
+Paramètre de connexion propre au FD-9 : son adresse IP (par exemple 192.168.1.40) ou son nom sur le réseau, 23 caractères au plus. Saisie, elle dispense de la détection.
+_Éviter_ : IP (à l'écran), hôte, port
 
 **Armement** :
 Mise en attente de l'instrument pour une mesure ponctuelle ou une bande : il attend l'appui sur son bouton. Ne règle rien de permanent dans l'instrument.

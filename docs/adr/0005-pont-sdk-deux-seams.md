@@ -74,6 +74,16 @@ Le seam (a) existe (ticket #3). Le trait `Pont` (une requête, une réponse), `P
 
 Vérifié contre le pont simulé et le pont factice seulement ; l'écran et l'étalonnage sur le vrai MYIRO-1 restent à valider par le mainteneur.
 
+### Complément du 7 octobre 2026 : pont FD-9, paliers version et détection (ticket #13)
+
+- **`pont-fd9`**, même protocole et même option `--plafond` que `pont-myiro1`, déclare ses propres paliers : `version` et `detection`. Un autre plafond est refusé au lancement (code 2) ; toute demande de connexion, d'étalonnage ou de mesure reçoit `palier_non_autorise` (plafond `detection`) sans appel à la DLL. `fermer` est confirmé (`ferme`) : aucune session n'a été ouverte avec l'instrument.
+- **Trait `SdkFd9`** : deux méthodes seulement, `FD9_GetLastError` et `FD9_GetDeviceList` (capacité 10, comme FD-S2w). L'adapter réel résout au chargement les six exports de la liste blanche de `fd9-sys` pour vérifier que la DLL est complète, et charge la DLL en cherchant ses dépendances dans son propre dossier : FD9SDK importe des DLL livrées à côté d'elle (`DIColor.dll`, `FD9BarcodeManager.dll`, OpenCV, OpenMP). Supposé suffisant ; à vérifier au palier Version.
+- **Palier Version** (fiche `FD9_GetLastError`) : la version binaire de la ressource du fichier (`VS_FIXEDFILEINFO`, lue par l'outil de version de Windows sans exécuter la DLL) et l'empreinte SHA-256, puis un appel à `FD9_GetLastError`. Réponse `version_dll`, chaque donnée qualifiée ; illisible, elle est `inconnue`.
+- **Protocole, aux conventions du ticket #25**, sans changer aucune ligne existante : requête `connecter_adresse {"adresse": …}` (paramètre de connexion du FD-9 : 23 caractères ASCII visibles au plus, refusée à la lecture sinon ; le pont MYIRO-1 y répond `requete_invalide` sans appel à la DLL), réponses `version_dll` et `instruments_fd9` (liaison, adresse, identifiant gardé en texte : son sens en réseau est supposé). Un lecteur antérieur rejette ces nouvelles lignes : application et ponts se mettent à jour ensemble.
+- **Application** : le module `instrument` ouvre d'abord le MYIRO-1 ; s'il n'est pas détecté, il cherche `FD9SDK.dll` (dossier choisi, FD-S2w, puis Ergosoft 16), lance `pont-fd9` de la même architecture (FD-S2w est 32 bits : le pont est aussi compilé pour `i686-pc-windows-msvc`) et montre « FD-9, détecté ». Si aucun des deux n'est vu, le problème du MYIRO-1 reste celui qu'on montre. La DLL du FD-9 n'est pas retenue d'une fois sur l'autre. Le choix vit dans `app/src/instrument/fd9.rs`.
+
+Vérifié contre un FD-9 simulé seulement. Restent à observer sur le poste : le chargement de la DLL et de ses dépendances, la version lue, puis la détection du FD-9 du réseau, FD-S2w fermé.
+
 ## Options écartées
 
 - **Commande brute et catalogue dynamique** (appeler un export par son nom). Ils ouvrent un chemin vers des exports arbitraires, contraire à la règle de sécurité matérielle. Un banc d'exploration éventuel serait un binaire séparé, hors build de production.
