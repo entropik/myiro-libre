@@ -31,6 +31,12 @@ pub const DELAI_APPUI: Duration = Duration::from_secs(120);
 /// Délai maximal du retour au repos après un désarmement.
 pub const DELAI_REPOS: Duration = Duration::from_secs(5);
 
+/// Essais de désarmement au plus, quand l'instrument le refuse.
+const ESSAIS_DESARMEMENT: usize = 3;
+
+/// Code -9986 : opération interdite dans l'état actuel de l'instrument.
+const CODE_ETAT_INCOMPATIBLE: i32 = -9986;
+
 /// Code -9983 : mesure armée sans étalonnage valable.
 const CODE_NON_ETALONNE: i32 = -9983;
 
@@ -251,13 +257,30 @@ impl<S: SdkMyiro1> Session<S> {
     }
 
     /// `FDX_StopMeasurement`, puis attente du retour au repos s'il a été accepté :
-    /// sans cela, un nouvel armement est refusé (-9986).
+    /// sans cela, un nouvel armement est refusé (-9986). Juste après une mesure,
+    /// le MYIRO-1 refuse aussi le désarmement (état « mesure réussie ») jusqu'à
+    /// son réarmement automatique : on attend alors son prochain événement et
+    /// on réessaie.
     fn desarmer(&mut self, moment: &str) {
-        let arret = self.sdk.arreter_mesure();
-        self.journal
-            .push(format!("désarmement {moment} : code {}", code_de(arret)));
-        if arret.is_ok() {
-            self.attendre_repos();
+        for _ in 0..ESSAIS_DESARMEMENT {
+            let arret = self.sdk.arreter_mesure();
+            self.journal
+                .push(format!("désarmement {moment} : code {}", code_de(arret)));
+            match arret {
+                Ok(_) => {
+                    self.attendre_repos();
+                    return;
+                }
+                Err(CODE_ETAT_INCOMPATIBLE) => match self.sdk.attendre_evenement(DELAI_REPOS) {
+                    Some(evenement) => self.journal.push(format!(
+                        "événement {} (avant nouvel essai de désarmement)",
+                        evenement.code
+                    )),
+                    // Aucun événement : l'instrument est déjà au repos.
+                    None => return,
+                },
+                Err(_) => return,
+            }
         }
     }
 
@@ -345,7 +368,7 @@ fn code_de(resultat: Result<i32, i32>) -> i32 {
 fn traduire(code: i32) -> ErreurPont {
     match code {
         -9992 => ErreurPont::ParametreRefuse,
-        -9986 => ErreurPont::EtatIncompatible,
+        CODE_ETAT_INCOMPATIBLE => ErreurPont::EtatIncompatible,
         CODE_NON_ETALONNE => ErreurPont::NonEtalonne,
         code => ErreurPont::Sdk { code },
     }

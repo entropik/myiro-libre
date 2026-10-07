@@ -19,6 +19,10 @@ struct SdkSimule {
     evenements: VecDeque<Evenement>,
     /// Événements émis à chaque armement réussi, une salve par armement.
     salves: VecDeque<Vec<Evenement>>,
+    /// Comme le vrai MYIRO-1 : désarmement refusé (-9986) tant que l'instrument
+    /// est dans l'état « mesure réussie », jusqu'à son réarmement automatique.
+    arret_refuse_apres_mesure: bool,
+    dernier_evenement: Option<i32>,
     appels: Vec<String>,
 }
 
@@ -90,6 +94,9 @@ impl SdkMyiro1 for SdkSimule {
     }
     fn arreter_mesure(&mut self) -> Result<i32, i32> {
         self.appels.push("arreter".into());
+        if self.arret_refuse_apres_mesure && self.dernier_evenement == Some(3) {
+            return Err(-9986);
+        }
         Ok(0)
     }
     /// Valeurs repérables : condition × 10 + type de données.
@@ -106,7 +113,9 @@ impl SdkMyiro1 for SdkSimule {
     }
     /// Sans événement en attente, simule l'expiration du délai.
     fn attendre_evenement(&mut self, _delai: Duration) -> Option<Evenement> {
-        self.evenements.pop_front()
+        let evenement = self.evenements.pop_front()?;
+        self.dernier_evenement = Some(evenement.code);
+        Some(evenement)
     }
 }
 
@@ -543,4 +552,16 @@ fn le_journal_retrace_les_etapes_de_la_mesure() {
     let journal = session.journal().join("\n");
     assert!(journal.contains("armement : code 0"), "{journal}");
     assert!(journal.contains("événement 3"), "{journal}");
+}
+
+#[test]
+fn le_desarmement_refuse_apres_une_mesure_attend_le_rearmement_automatique() {
+    // Observé sur le MYIRO-1 : après l'événement 3, désarmer est refusé (-9986)
+    // jusqu'au réarmement automatique (événement 1) ; ensuite il est accepté.
+    let mut session = session_etalonnee_salves(&[&[1, 2, 3, 1, 0], &[1, 2, 3, 1, 0]]);
+    session.sdk_mut().arret_refuse_apres_mesure = true;
+    session.mesurer_ponctuelle().unwrap();
+    let seconde = session.mesurer_ponctuelle().unwrap();
+    let codes: Vec<i32> = seconde.evenements.iter().map(|e| e.code).collect();
+    assert_eq!(codes, [1, 2, 3]);
 }
