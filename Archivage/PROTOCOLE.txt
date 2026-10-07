@@ -1,0 +1,51 @@
+ARCHIVAGE COULEUR — version de travail 1
+
+But : conserver les preuves originales, comparer les contrôles dans le temps
+et produire une validation traçable. Ce protocole n'est pas une certification.
+
+Organisation
+Une session correspond à un appareil, une cible et un épisode de calibration
+ou de contrôle. Chaque ajout crée un lot daté unique ; aucun lot n'est remplacé.
+Les données sont dans Archivage/donnees, exclues du dépôt public.
+Le script et le protocole sont versionnés. Les originaux restent à leur place.
+Chaque copie possède sa taille, son origine et une empreinte SHA-256 vérifiée.
+Ne pas modifier les lots : une correction s'enregistre dans un nouveau lot,
+avec référence à l'ancien. Ce mécanisme n'est pas un stockage inviolable/WORM.
+
+À conserver pour chaque session
+- Identifiant appareil, modèle et série ; instrument et série ; logiciel/version.
+- Date réelle des mesures avec fuseau, distincte de la date d'archivage.
+- Cible complète et résultats obtenus, sans remplacer les données par la cible.
+- Profil ICC exact utilisé, export des réglages, rapport et mesures détaillées.
+- Mire/jeu de plages/version et ordre des plages ; formule de différence couleur.
+- Conditions : éclairage, chauffe, géométrie et position de sonde.
+- Pour les impressions : support/lot, encres, mode RIP, linéarisation, limites,
+  séchage, fond de mesure, M0/M1/M2, illuminant et observateur.
+  M1 ne doit pas être appliqué comme étiquette aux mesures d'écran émissives.
+- Statut : en attente, mesuré, validé ou non conforme. Un résultat manquant reste
+  inconnu : jamais remplacé par zéro ni déduit d'une capture de fin de calibration.
+- Seuils, formule et version du protocole annoncés avant le verdict.
+
+Comparaisons
+Comparer uniquement des sessions compatibles : même cible, jeu de plages,
+formule, instrument ou raccordement documenté, conditions et chaîne logicielle.
+Une modification ouvre une nouvelle série ; conserver l'ancienne.
+Comparer les valeurs par plage, les gris, le blanc, le noir, puis les statistiques.
+Une moyenne seule masque les dérives locales. Ne pas mélanger Delta E 76 et 00.
+Vérifier l'état AVANT recalibration pour mesurer la dérive réelle. Un contrôle
+après recalibration montre le résultat corrigé, pas la stabilité depuis le dernier.
+Pour l'écran : contrôler aussi après veille/redémarrage le mode et le profil actif.
+Une sonde utilisée pour calibrer puis contrôler prouve une cohérence interne ;
+un contrôle indépendant est nécessaire pour évaluer son propre biais.
+
+Protection des archives
+Les originaux peuvent contenir des numéros de série, des chemins locaux ou des
+informations client : produire un rapport client séparé et limité au nécessaire.
+Le stockage actuel est LOCAL : aucune sauvegarde externe n'est encore configurée.
+Prévoir une seconde copie versionnée sur un support/NAS désigné, et tester une
+restauration avec vérification des empreintes. Git ne sauvegarde pas donnees/.
+
+Utilisation depuis le dossier Codex
+py -3.13 Archivage/archiver.py --session IDENTIFIANT --nature validation --fichier CHEMIN_RAPPORT
+Répéter --fichier pour joindre mesures, ICC et capture au même lot.
+Le rapport de validation actuel à 134 plages sera ajouté après son export.

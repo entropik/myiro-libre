@@ -22,3 +22,7 @@ Audit-ColorGPS/
 Audit-MYIRO/analyse/
 Audit-MYIRO/retroanalyse/
 .scratch/
+
+# Inventaire du poste (numéros de série, adresses réseau, machines) et données d'archivage : locaux, jamais publiés
+Inventaire/
+Archivage/donnees/
