@@ -22,9 +22,8 @@ pub fn longueur_onde(indice: usize) -> u32 {
 
 /// Condition de mesure (ISO 13655) sous laquelle la DLL a calculé un spectre.
 ///
-/// **Supposé** : le pont demande les spectres avec `Illuminant` = 0, 1, 2 et les
-/// nomme M0, M1, M2 d'après la fiche `docs/abi/FDX_GetMeasureData.md` ; l'ADR 0005
-/// range cette correspondance parmi les points encore à confirmer sur l'instrument.
+/// **Confirmé** : le pont demande les spectres avec `Illuminant` = 0, 1, 2, qui
+/// donnent M0, M1, M2 d'après la fiche `docs/abi/FDX_GetMeasureData.md`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Condition {
     M0,
@@ -68,7 +67,7 @@ pub struct Paire {
     /// ne les porte pas (CSV des tests sur instrument).
     pub instrument: Option<Origine>,
     pub brutes: Vec<f32>,
-    /// Spectres M0, M1, M2 dans cet ordre (correspondance supposée, voir [`Condition`]).
+    /// Spectres M0, M1, M2 dans cet ordre (correspondance confirmée, voir [`Condition`]).
     pub spectres: [Vec<f32>; 3],
 }
 

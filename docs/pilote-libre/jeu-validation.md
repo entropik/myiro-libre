@@ -57,9 +57,11 @@ Un fichier JSON :
 | `plage` | nom de la plage dans ce fichier (`papier`, `1A1`…) ; pour les lignes JSON, `mesure-N/plage-K` |
 | `instrument` | `null` si la sortie ne le dit pas (CSV) ; sinon `pseudonyme`, `modele`, `micrologiciel`, `version_sdk`, `empreinte_dll` (SHA-256 de la DLL du fabricant), `calcul` (conditions de calcul demandées à la DLL) |
 | `brutes` | les 152 données brutes, telles que rendues par la DLL |
-| `spectres` | trois spectres, facteur de réflexion de 0 à 1, dans l'ordre M0, M1, M2 (**supposé**, voir ci-dessous) |
+| `spectres` | trois spectres, facteur de réflexion de 0 à 1, dans l'ordre M0, M1, M2 (**confirmé** depuis le 7 octobre 2026, voir ci-dessous) |
 
 **Ce qui est supposé.** Le pont demande les trois spectres à la DLL avec le réglage `Illuminant` à 0, 1 puis 2, et les nomme M0, M1, M2 d'après la fiche [`FDX_GetMeasureData`](../abi/FDX_GetMeasureData.md). L'ADR 0005 range cette correspondance parmi les points encore à confirmer sur l'instrument : tant qu'elle ne l'est pas, les noms M0, M1, M2 du jeu sont supposés. L'ordre des trois spectres, lui, est celui dans lequel le pont les a demandés.
+
+**Complément du 7 octobre 2026.** La fiche [`FDX_GetMeasureData`](../abi/FDX_GetMeasureData.md) range désormais cette correspondance parmi ce qui est confirmé sur l'instrument : `Illuminant` 0, 1, 2 donne M0, M1, M2, et l'illuminant des Lab (code 2) est D50. Les noms M0, M1, M2 du jeu sont donc confirmés. Seul l'observateur 2° (code 0) reste supposé.
 
 ## Le banc de comparaison
 
