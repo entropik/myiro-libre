@@ -22,9 +22,8 @@ pub fn longueur_onde(indice: usize) -> u32 {
 
 /// Condition de mesure (ISO 13655) sous laquelle la DLL a calculé un spectre.
 ///
-/// **Supposé** : le pont demande les spectres avec `Illuminant` = 0, 1, 2 et les
-/// nomme M0, M1, M2 d'après la fiche `docs/abi/FDX_GetMeasureData.md` ; l'ADR 0005
-/// range cette correspondance parmi les points encore à confirmer sur l'instrument.
+/// **Confirmé** : le pont demande les spectres avec `Illuminant` = 0, 1, 2, qui
+/// donnent M0, M1, M2 d'après la fiche `docs/abi/FDX_GetMeasureData.md`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Condition {
     M0,
@@ -68,7 +67,7 @@ pub struct Paire {
     /// ne les porte pas (CSV des tests sur instrument).
     pub instrument: Option<Origine>,
     pub brutes: Vec<f32>,
-    /// Spectres M0, M1, M2 dans cet ordre (correspondance supposée, voir [`Condition`]).
+    /// Spectres M0, M1, M2 dans cet ordre (correspondance confirmée, voir [`Condition`]).
     pub spectres: [Vec<f32>; 3],
 }
 
@@ -274,13 +273,13 @@ fn extraire_json(
         }
         let lieu = || format!("{}, ligne {}", sortie.nom, n + 1);
         let reponse = lire_reponse(ligne).map_err(|e| format!("{} : {e}", lieu()))?;
-        let Reponse::Mesure {
-            plages, provenance, ..
-        } = reponse
-        else {
+        // Une mesure relue est déjà vérifiée (nombres finis, plages cohérentes,
+        // format initial ou courant) ; restent les dimensions du jeu.
+        let Reponse::Mesure { mesure } = reponse else {
             continue;
         };
         mesures += 1;
+        let provenance = mesure.provenance();
         let serie = provenance.instrument.numero_serie;
         let rang = match series.iter().position(|&s| s == serie) {
             Some(rang) => rang,
@@ -291,19 +290,22 @@ fn extraire_json(
         };
         let origine = Origine {
             pseudonyme: format!("instrument-{}", rang + 1),
-            modele: provenance.instrument.modele,
-            micrologiciel: provenance.instrument.micrologiciel,
+            modele: provenance.instrument.modele.clone(),
+            micrologiciel: provenance.instrument.micrologiciel.clone(),
             version_sdk: provenance.version_sdk,
-            empreinte_dll: provenance.empreinte_dll,
-            calcul: provenance.calcul,
+            empreinte_dll: provenance
+                .empreinte_dll
+                .valeur()
+                .map(|e| e.texte().to_string()),
+            calcul: provenance.calcul.libelle.clone(),
         };
-        for (k, plage) in plages.into_iter().enumerate() {
+        for (k, plage) in mesure.plages().iter().enumerate() {
             let nom = format!("mesure-{mesures}/plage-{}", k + 1);
             for (quoi, valeurs, attendu) in [
-                ("données brutes", &plage.brutes, NOMBRE_BRUTES),
-                ("spectre M0", &plage.m0, NOMBRE_LONGUEURS),
-                ("spectre M1", &plage.m1, NOMBRE_LONGUEURS),
-                ("spectre M2", &plage.m2, NOMBRE_LONGUEURS),
+                ("données brutes", &plage.brutes()[..], NOMBRE_BRUTES),
+                ("spectre M0", &plage.m0()[..], NOMBRE_LONGUEURS),
+                ("spectre M1", &plage.m1()[..], NOMBRE_LONGUEURS),
+                ("spectre M2", &plage.m2()[..], NOMBRE_LONGUEURS),
             ] {
                 if valeurs.len() != attendu {
                     return Err(format!(
@@ -312,16 +314,17 @@ fn extraire_json(
                         valeurs.len()
                     ));
                 }
-                if valeurs.iter().any(|v| !v.is_finite()) {
-                    return Err(format!("{} : {nom}, {quoi} : valeur non finie", lieu()));
-                }
             }
             paires.push(Paire {
                 source: source.into(),
                 plage: nom,
                 instrument: Some(origine.clone()),
-                brutes: plage.brutes,
-                spectres: [plage.m0, plage.m1, plage.m2],
+                brutes: plage.brutes().to_vec(),
+                spectres: [
+                    plage.m0().to_vec(),
+                    plage.m1().to_vec(),
+                    plage.m2().to_vec(),
+                ],
             });
         }
     }

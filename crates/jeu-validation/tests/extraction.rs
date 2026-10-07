@@ -84,6 +84,26 @@ fn le_numero_de_serie_est_remplace_par_un_pseudonyme_stable() {
 }
 
 #[test]
+fn le_format_courant_du_pont_donne_les_memes_paires_que_le_format_initial() {
+    use pont_protocole::{ecrire_reponse, lire_reponse};
+    // Les lignes de `JSONL` sont au format initial (pont 0.1.0) ; relues puis
+    // réécrites, elles passent au format courant.
+    let courant: String = JSONL
+        .lines()
+        .map(|ligne| format!("{}\n", ecrire_reponse(&lire_reponse(ligne).unwrap())))
+        .collect();
+    assert!(courant.contains("myiro-libre/mesure/1"));
+    let lire = |contenu: &str| {
+        extraire(&[SortieArchivee {
+            nom: "seance",
+            contenu,
+        }])
+        .unwrap()
+    };
+    assert_eq!(lire(&courant), lire(JSONL));
+}
+
+#[test]
 fn une_ligne_json_illisible_est_refusee() {
     let abime = format!("{JSONL}{{\"rep\":\"mesure\"}}\n");
     assert!(extraire(&[SortieArchivee {

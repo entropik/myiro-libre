@@ -3,6 +3,11 @@
 //! Une ligne JSON par message, dans chaque sens. Ce crate ne dépend ni de
 //! Windows ni d'une DLL de fabricant.
 
+mod mesure;
+
+pub use mesure::*;
+use mesure::{est_mesure_initiale, mesure_initiale};
+
 use serde::{Deserialize, Serialize};
 
 /// Demandes de l'application au pont.
@@ -37,9 +42,10 @@ pub fn lire_requete(ligne: &str) -> Result<Requete, String> {
     serde_json::from_str(ligne).map_err(|erreur| erreur.to_string())
 }
 
-/// Réponses du pont, une par requête.
+/// Réponses du pont, une par requête. Comme pour les requêtes, un champ en
+/// trop est refusé à la lecture plutôt qu'ignoré.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "rep", rename_all = "snake_case")]
+#[serde(tag = "rep", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Reponse {
     /// Les trois nombres rendus par la DLL, tels quels.
     Version {
@@ -52,12 +58,10 @@ pub enum Reponse {
         identite: Identite,
     },
     Etalonne {},
-    /// Une plage en mesure ponctuelle, une par plage reconnue en bande.
-    /// Aucune mesure ne sort du pont sans sa provenance (ADR 0005).
+    /// Une plage en mesure ponctuelle, une par plage reconnue en bande, avec
+    /// sa provenance (ADR 0005), au format conservable versionné.
     Mesure {
-        plages: Vec<Plage>,
-        sens: u32,
-        provenance: Provenance,
+        mesure: Mesure,
     },
     Ferme {},
     Erreur {
@@ -73,11 +77,21 @@ pub fn ecrire_reponse(reponse: &Reponse) -> String {
     serde_json::to_string(reponse).expect("une réponse se sérialise toujours")
 }
 
+/// Lit une réponse du pont. Une réponse `mesure` du format initial (pont
+/// 0.1.0, sans numéro de format) est reprise par [`lire_mesure`].
 pub fn lire_reponse(ligne: &str) -> Result<Reponse, String> {
-    serde_json::from_str(ligne).map_err(|erreur| erreur.to_string())
+    let valeur: serde_json::Value =
+        serde_json::from_str(ligne).map_err(|erreur| erreur.to_string())?;
+    if est_mesure_initiale(&valeur) {
+        return mesure_initiale(valeur)
+            .map(|mesure| Reponse::Mesure { mesure })
+            .map_err(|erreur| erreur.to_string());
+    }
+    serde_json::from_value(valeur).map_err(|erreur| erreur.to_string())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct InstrumentDetecte {
     /// « usb », « reseau », ou « inconnue N ».
     pub liaison: String,
@@ -88,6 +102,7 @@ pub struct InstrumentDetecte {
 
 /// Identité de l'instrument connecté (fiche `docs/abi/FDX_GetDeviceInfo.md`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Identite {
     pub numero_serie: u32,
     pub micrologiciel: String,
@@ -98,50 +113,6 @@ pub struct Identite {
     pub anomalie_date_initiale: bool,
     /// Les 40 octets bruts, en hexadécimal, pour réinterprétation ultérieure.
     pub brute_hex: String,
-}
-
-/// Mesure d'une plage : spectres de 380 à 730 nm par 10 nm (échelle 0 à 1),
-/// données brutes de l'instrument et Lab D50/2° calculé par la DLL.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Plage {
-    pub m0: Vec<f32>,
-    pub m1: Vec<f32>,
-    pub m2: Vec<f32>,
-    pub brutes: Vec<f32>,
-    pub lab_m0: Vec<f32>,
-    pub lab_m1: Vec<f32>,
-    pub lab_m2: Vec<f32>,
-}
-
-/// Ce que le pont atteste sur une mesure (ADR 0005, GLOSSARY : Provenance).
-/// Posée par le pont, jamais reconstituée par l'application. Une valeur que le
-/// pont ne connaît pas est absente (`null`), jamais remplacée par zéro.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Provenance {
-    pub instrument: InstrumentMesurant,
-    /// Les trois nombres de `FDX_GetSDKVersion`, tels quels.
-    pub version_sdk: [u32; 3],
-    /// SHA-256 de la DLL chargée, en hexadécimal.
-    pub empreinte_dll: Option<String>,
-    pub version_pont: String,
-    /// « x86 » ou « x86_64 ».
-    pub architecture: String,
-    /// Fin de la mesure, heure de l'ordinateur, au format RFC 3339 avec fuseau.
-    pub horodatage: String,
-    /// Dernier étalonnage réussi de la session, même format.
-    pub etalonnage: Option<String>,
-    /// « ponctuelle » ou « bande ».
-    pub geometrie: String,
-    /// Conditions de calcul demandées à la DLL.
-    pub calcul: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InstrumentMesurant {
-    pub modele: String,
-    pub numero_serie: u32,
-    pub micrologiciel: String,
-    pub code_produit: String,
 }
 
 /// Étapes de la progression imposée sur instrument réel, dans l'ordre.
@@ -159,41 +130,43 @@ pub enum Palier {
 
 /// Erreurs qu'un pont peut renvoyer.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ErreurPont {
+    // Accolades vides sur les erreurs sans détail : sans elles, serde
+    // accepterait des champs en trop. Le JSON reste `{"type":"delai"}`.
     /// Appel hors de l'ordre des paliers ; la DLL n'a pas été appelée.
     EtatInvalide { attendu: Palier },
     /// Palier au-delà du plafond autorisé ; la DLL n'a pas été appelée.
     PalierNonAutorise { demande: Palier, plafond: Palier },
     /// Instrument désigné absent de la dernière détection.
-    InstrumentInconnu,
+    InstrumentInconnu {},
     /// Code -9992 de la DLL : valeur envoyée refusée.
-    ParametreRefuse,
+    ParametreRefuse {},
     /// Code -9986 de la DLL : appel refusé dans l'état actuel.
-    EtatIncompatible,
+    EtatIncompatible {},
     /// L'instrument a signalé l'échec de l'étalonnage (événement 9), avec
     /// le code d'erreur de la DLL à cet instant.
     EtalonnageEchoue { erreur: i32 },
     /// Code -9983 : l'instrument n'est pas (ou plus) étalonné.
-    NonEtalonne,
+    NonEtalonne {},
     /// Aucun étalonnage utilisable dans la connexion en cours (jamais fait,
     /// échoué, expiré, ou refusé par l'instrument) : étalonner avant de
     /// mesurer. La DLL n'a pas été appelée.
-    EtalonnageRequis,
+    EtalonnageRequis {},
     /// La connexion est ouverte mais l'identité de l'instrument n'a pas pu
     /// être lue : rien ne peut se faire avant une nouvelle connexion. La DLL
     /// n'a pas été appelée.
-    SessionInexploitable,
+    SessionInexploitable {},
     /// L'instrument a signalé l'échec de la mesure (événement 4).
     MesureEchouee { erreur: i32 },
     /// La DLL a rendu une réponse de forme imprévue (nombre ou taille de résultats).
     ReponseInattendue { detail: String },
     /// L'instrument n'a pas répondu dans le délai prévu.
-    Delai,
+    Delai {},
     /// L'instrument s'est déconnecté ou ne répond plus (événement 6). La
     /// session et son étalonnage sont invalidés : toute demande suivante reçoit
     /// cette même erreur, sans appel à la DLL, jusqu'à une nouvelle connexion.
-    InstrumentPerdu,
+    InstrumentPerdu {},
     /// Autre code d'erreur de la DLL, conservé brut.
     Sdk { code: i32 },
 }

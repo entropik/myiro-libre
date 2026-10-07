@@ -30,8 +30,13 @@ pub struct SdkSimule {
     pub dernier_evenement: Option<i32>,
     /// Sens de passage rendu par les lectures.
     pub sens: u32,
+    /// La première valeur de chaque lecture est NaN, comme une DLL défaillante.
+    pub valeur_non_finie: bool,
     pub appels: Vec<String>,
 }
+
+/// Motif répété 32 fois : l'empreinte SHA-256 fictive de la DLL simulée.
+pub const EMPREINTE_SIMULEE: &str = "5e";
 
 pub fn evenement(code: i32) -> Evenement {
     Evenement {
@@ -57,7 +62,7 @@ impl SdkSimule {
 
 impl SdkMyiro1 for SdkSimule {
     fn empreinte(&self) -> Option<String> {
-        Some("empreinte simulée".into())
+        Some(EMPREINTE_SIMULEE.repeat(32))
     }
     fn version(&mut self) -> Result<Version, i32> {
         self.appels.push("version".into());
@@ -135,8 +140,12 @@ impl SdkMyiro1 for SdkSimule {
             condition.illuminant, condition.type_donnees
         ));
         let valeur = (condition.illuminant * 10 + condition.type_donnees) as f32;
+        let mut resultat = vec![valeur; longueur];
+        if self.valeur_non_finie {
+            resultat[0] = f32::NAN;
+        }
         Ok(Lecture {
-            resultats: vec![vec![valeur; longueur]; self.resultats_par_lecture],
+            resultats: vec![resultat; self.resultats_par_lecture],
             sens: self.sens,
         })
     }

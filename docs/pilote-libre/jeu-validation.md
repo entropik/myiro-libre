@@ -15,7 +15,7 @@ cargo run -p jeu-validation --bin extraire-jeu -- <jeu.json> <sortie du pont>...
 Il accepte deux formes de sortie, reconnues d'après leur premier caractère :
 
 - **CSV des tests sur instrument** (`crates/pont-myiro1/tests/dll.rs`, paliers 4 et 5) : une en-tête `plage;donnees;L;a;b;nm380;…;nm730`, puis pour chaque plage quatre lignes `M0`, `M1`, `M2` (Lab puis 36 valeurs de spectre) et `brutes` (3 champs vides à la place de L, a, b, puis 152 valeurs). Ce CSV ne porte aucun identifiant d'instrument.
-- **Lignes JSON du protocole** (`pont-protocole`), une réponse par ligne : seules les réponses `mesure` donnent des paires, une par plage ; les autres sont ignorées.
+- **Lignes JSON du protocole** (`pont-protocole`), une réponse par ligne : seules les réponses `mesure` donnent des paires, une par plage ; les autres sont ignorées. Les mesures au [format courant](../formats/mesure.md) comme celles du format initial (pont 0.1.0) sont acceptées ; le champ `calcul` du jeu reprend le libellé du calcul.
 
 L'extraction échoue, sans rien deviner, si une plage est incomplète (spectre ou données brutes manquants), si une donnée est en double, si une plage revient plus loin dans le même fichier, si une liste n'a pas la bonne longueur, ou si une valeur n'est pas un nombre fini (`NaN`, `inf`).
 
@@ -57,9 +57,11 @@ Un fichier JSON :
 | `plage` | nom de la plage dans ce fichier (`papier`, `1A1`…) ; pour les lignes JSON, `mesure-N/plage-K` |
 | `instrument` | `null` si la sortie ne le dit pas (CSV) ; sinon `pseudonyme`, `modele`, `micrologiciel`, `version_sdk`, `empreinte_dll` (SHA-256 de la DLL du fabricant), `calcul` (conditions de calcul demandées à la DLL) |
 | `brutes` | les 152 données brutes, telles que rendues par la DLL |
-| `spectres` | trois spectres, facteur de réflexion de 0 à 1, dans l'ordre M0, M1, M2 (**supposé**, voir ci-dessous) |
+| `spectres` | trois spectres, facteur de réflexion de 0 à 1, dans l'ordre M0, M1, M2 (**confirmé** depuis le 7 octobre 2026, voir ci-dessous) |
 
 **Ce qui est supposé.** Le pont demande les trois spectres à la DLL avec le réglage `Illuminant` à 0, 1 puis 2, et les nomme M0, M1, M2 d'après la fiche [`FDX_GetMeasureData`](../abi/FDX_GetMeasureData.md). L'ADR 0005 range cette correspondance parmi les points encore à confirmer sur l'instrument : tant qu'elle ne l'est pas, les noms M0, M1, M2 du jeu sont supposés. L'ordre des trois spectres, lui, est celui dans lequel le pont les a demandés.
+
+**Complément du 7 octobre 2026.** La fiche [`FDX_GetMeasureData`](../abi/FDX_GetMeasureData.md) range désormais cette correspondance parmi ce qui est confirmé sur l'instrument : `Illuminant` 0, 1, 2 donne M0, M1, M2, et l'illuminant des Lab (code 2) est D50. Les noms M0, M1, M2 du jeu sont donc confirmés. Seul l'observateur 2° (code 0) reste supposé.
 
 ## Le banc de comparaison
 

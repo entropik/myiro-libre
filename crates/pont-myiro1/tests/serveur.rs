@@ -213,11 +213,11 @@ fn une_bande_rend_une_plage_par_resultat() {
         ],
     );
     assert_eq!(reponses[3], Reponse::Etalonne {});
-    let Reponse::Mesure { plages, .. } = &reponses[4] else {
+    let Reponse::Mesure { mesure } = &reponses[4] else {
         panic!("{:?}", reponses[4])
     };
+    let plages = mesure.plages();
     assert_eq!(plages.len(), 12);
-    assert_eq!(plages[0].m1.len(), 36);
-    assert_eq!(plages[0].brutes.len(), 152);
-    assert_eq!(plages[0].lab_m1.len(), 3);
+    assert_eq!(plages[0].m1().len(), 36);
+    assert_eq!(plages[0].brutes().len(), 152);
 }
