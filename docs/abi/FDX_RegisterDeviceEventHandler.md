@@ -43,9 +43,13 @@ int32_t __stdcall FDX_RegisterDeviceEventHandler(FDX_EventCallback rappel); /* x
 - Retirer le rappel (`NULL`) après `FDX_Disconnect`, avant de décharger la DLL.
 - Journaliser chaque événement avec ses trois valeurs.
 
-## À vérifier sur l'instrument
+## Vérifié sur l'instrument
 
-- Les événements effectivement reçus pendant un étalonnage (attendus : 7 puis 8 ou 9) et pendant une mesure ponctuelle (1, 2, 3).
+Le 7 octobre 2026 (DLL 1.0.1.0 x64, MYIRO-1 en USB) : le rappel `__cdecl`, enregistré avant la connexion, reçoit l'événement **0** à la connexion, puis **7** et **8** pendant un étalonnage réussi, avec un code d'erreur nul. Le retrait du rappel (`NULL`) à la fermeture ne provoque aucune erreur ; même comportement de connexion en x86.
+
+## Reste à vérifier
+
+- Les événements d'une mesure ponctuelle (1, 2, 3).
 - L'événement reçu quand on presse le bouton de l'instrument, et quand on débranche le câble.
 
 ## Preuves (locales)
