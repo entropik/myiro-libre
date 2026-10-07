@@ -523,7 +523,7 @@ fn plusieurs_resultats_pour_une_mesure_ponctuelle_sont_refuses() {
     session.sdk_mut().resultats_par_lecture = 2;
     assert!(matches!(
         session.mesurer_ponctuelle(),
-        Err(ErreurPont::ReponseInattendue(_))
+        Err(ErreurPont::ReponseInattendue { .. })
     ));
 }
 
@@ -641,7 +641,7 @@ fn une_bande_sans_plage_reconnue_est_refusee() {
     let mut session = session_pour_bande(&[1, 2, 3], 0);
     assert!(matches!(
         session.mesurer_bande(None),
-        Err(ErreurPont::ReponseInattendue(_))
+        Err(ErreurPont::ReponseInattendue { .. })
     ));
 }
 
@@ -672,6 +672,6 @@ fn une_bande_qui_ne_compte_pas_les_plages_attendues_est_refusee() {
     let mut session = session_pour_bande(&[1, 2, 3], 13);
     assert!(matches!(
         session.mesurer_bande(Some(12)),
-        Err(ErreurPont::ReponseInattendue(_))
+        Err(ErreurPont::ReponseInattendue { .. })
     ));
 }

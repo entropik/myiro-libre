@@ -47,3 +47,56 @@ fn chaque_requete_relue_redonne_la_meme() {
         assert_eq!(lire_requete(&texte), Ok(requete));
     }
 }
+
+#[test]
+fn les_requetes_de_mesure_sont_lues() {
+    assert_eq!(
+        lire_requete(r#"{"cmd":"etalonner"}"#),
+        Ok(Requete::Etalonner {})
+    );
+    assert_eq!(
+        lire_requete(r#"{"cmd":"mesurer_ponctuelle"}"#),
+        Ok(Requete::MesurerPonctuelle {})
+    );
+    assert_eq!(
+        lire_requete(r#"{"cmd":"mesurer_bande","plages_attendues":12}"#),
+        Ok(Requete::MesurerBande {
+            plages_attendues: Some(12)
+        })
+    );
+    assert_eq!(
+        lire_requete(r#"{"cmd":"mesurer_bande"}"#),
+        Ok(Requete::MesurerBande {
+            plages_attendues: None
+        })
+    );
+    assert_eq!(lire_requete(r#"{"cmd":"fermer"}"#), Ok(Requete::Fermer {}));
+}
+
+#[test]
+fn une_erreur_s_ecrit_en_clair_pour_l_application() {
+    use pont_protocole::{ecrire_reponse, ErreurPont, Palier, Reponse};
+    let reponse = Reponse::Erreur {
+        erreur: ErreurPont::PalierNonAutorise {
+            demande: Palier::Connexion,
+            plafond: Palier::Detection,
+        },
+    };
+    assert_eq!(
+        ecrire_reponse(&reponse),
+        r#"{"rep":"erreur","erreur":{"type":"palier_non_autorise","demande":"connexion","plafond":"detection"}}"#
+    );
+}
+
+#[test]
+fn une_reponse_relue_par_l_application_redonne_la_meme() {
+    use pont_protocole::{ecrire_reponse, lire_reponse, InstrumentDetecte, Reponse};
+    let reponse = Reponse::Instruments {
+        liste: vec![InstrumentDetecte {
+            liaison: "usb".into(),
+            port: "COM3".into(),
+            numero_serie: 12345678,
+        }],
+    };
+    assert_eq!(lire_reponse(&ecrire_reponse(&reponse)), Ok(reponse));
+}

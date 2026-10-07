@@ -258,7 +258,7 @@ impl<S: SdkMyiro1> Session<S> {
         self.autoriser(Palier::MesurePonctuelle, Some(Palier::Etalonnage))?;
         let (mut plages, _, evenements) = self.mesurer(Mode::Ponctuelle)?;
         if plages.len() != 1 {
-            return Err(ErreurPont::ReponseInattendue(format!(
+            return Err(inattendue(format!(
                 "{} résultats pour une mesure ponctuelle",
                 plages.len()
             )));
@@ -287,7 +287,7 @@ impl<S: SdkMyiro1> Session<S> {
             self.mesurer(Mode::Bande(plages_attendues.unwrap_or(0)))?;
         if let Some(attendues) = plages_attendues {
             if plages.len() != attendues as usize {
-                return Err(ErreurPont::ReponseInattendue(format!(
+                return Err(inattendue(format!(
                     "{} plages lues au lieu de {attendues}",
                     plages.len()
                 )));
@@ -336,9 +336,7 @@ impl<S: SdkMyiro1> Session<S> {
             self.lire_tout(&ConditionCalcul::spectre(CONDITION_M0), LONGUEUR_SPECTRE)?;
         let nombre = m0.len();
         if nombre == 0 {
-            return Err(ErreurPont::ReponseInattendue(
-                "aucune plage dans la mesure".into(),
-            ));
+            return Err(inattendue("aucune plage dans la mesure".into()));
         }
         let m1 = self.lire_n(
             &ConditionCalcul::spectre(CONDITION_M1),
@@ -377,7 +375,7 @@ impl<S: SdkMyiro1> Session<S> {
         if valeurs.len() == nombre {
             Ok(valeurs)
         } else {
-            Err(ErreurPont::ReponseInattendue(format!(
+            Err(inattendue(format!(
                 "{} plages au lieu de {nombre}",
                 valeurs.len()
             )))
@@ -465,7 +463,7 @@ impl<S: SdkMyiro1> Session<S> {
     ) -> Result<(Vec<Vec<f32>>, u32), ErreurPont> {
         let lecture = self.sdk.lire(condition, longueur).map_err(traduire)?;
         if let Some(mauvais) = lecture.resultats.iter().find(|v| v.len() != longueur) {
-            return Err(ErreurPont::ReponseInattendue(format!(
+            return Err(inattendue(format!(
                 "{} valeurs au lieu de {longueur}",
                 mauvais.len()
             )));
@@ -500,4 +498,8 @@ fn traduire(code: i32) -> ErreurPont {
         CODE_NON_ETALONNE => ErreurPont::NonEtalonne,
         code => ErreurPont::Sdk { code },
     }
+}
+
+fn inattendue(detail: String) -> ErreurPont {
+    ErreurPont::ReponseInattendue { detail }
 }
