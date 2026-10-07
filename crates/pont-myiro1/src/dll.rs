@@ -7,7 +7,7 @@
 use crate::{Evenement, Lecture, SdkMyiro1};
 use fdx_sys::{
     ConditionCalcul, ConditionMesure, DescripteurResultat, Port, Version, EXPORTS_AUTORISES,
-    MESURE_PONCTUELLE, TAILLE_TAMPON_INFOS,
+    MESURE_BANDE, MESURE_PONCTUELLE, TAILLE_TAMPON_INFOS,
 };
 use libloading::Library;
 use std::collections::VecDeque;
@@ -206,6 +206,15 @@ impl SdkMyiro1 for FdxDll {
     fn armer_ponctuelle(&mut self) -> Result<i32, i32> {
         let condition = ConditionMesure {
             type_mesure: MESURE_PONCTUELLE,
+            option: 0,
+        };
+        // SAFETY : pointeur vers 8 octets (fiche FDX_SetMeasureCondition).
+        verifier(unsafe { (self.armer)(&condition) })
+    }
+
+    fn armer_bande(&mut self) -> Result<i32, i32> {
+        let condition = ConditionMesure {
+            type_mesure: MESURE_BANDE,
             option: 0,
         };
         // SAFETY : pointeur vers 8 octets (fiche FDX_SetMeasureCondition).

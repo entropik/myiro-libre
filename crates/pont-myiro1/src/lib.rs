@@ -70,6 +70,9 @@ pub trait SdkMyiro1 {
     fn etalonner_blanc(&mut self) -> Result<i32, i32>;
     /// `FDX_SetMeasureCondition({0, 0})` : arme une mesure ponctuelle.
     fn armer_ponctuelle(&mut self) -> Result<i32, i32>;
+    /// `FDX_SetMeasureCondition({1, 0})` : arme une lecture de bande, sans
+    /// contrôle du nombre de plages par la DLL.
+    fn armer_bande(&mut self) -> Result<i32, i32>;
     /// `FDX_StopMeasurement` : désarme et ramène l'instrument au repos.
     fn arreter_mesure(&mut self) -> Result<i32, i32>;
     /// `FDX_GetMeasureData` en deux temps, chaque résultat préparé à `longueur` valeurs.
@@ -84,6 +87,32 @@ pub struct Lecture {
     pub resultats: Vec<Vec<f32>>,
     /// Sens de passage rendu par la DLL (`FDX_eMeasureDirection`), brut.
     pub sens: u32,
+}
+
+/// Ce que l'instrument a mesuré sur une plage : les trois spectres (380 à 730 nm
+/// par 10 nm), les données brutes (pilote libre, ADR 0006) et le Lab de la DLL.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MesurePlage {
+    pub m0: Vec<f32>,
+    pub m1: Vec<f32>,
+    pub m2: Vec<f32>,
+    pub brutes: Vec<f32>,
+    pub lab_dll: [Vec<f32>; 3],
+}
+
+/// Une lecture de bande : une mesure par plage, de gauche à droite selon le
+/// manuel, et le sens de passage rendu par la DLL.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MesureBande {
+    pub plages: Vec<MesurePlage>,
+    pub sens: u32,
+    pub evenements: Vec<Evenement>,
+}
+
+#[derive(Clone, Copy)]
+enum Mode {
+    Ponctuelle,
+    Bande,
 }
 
 /// Une mesure ponctuelle : les trois spectres (380 à 730 nm par 10 nm) et les
@@ -225,10 +254,48 @@ impl<S: SdkMyiro1> Session<S> {
     /// lit M0, M1, M2 et les données brutes, puis désarme dans tous les cas.
     pub fn mesurer_ponctuelle(&mut self) -> Result<MesurePonctuelle, ErreurPont> {
         self.autoriser(Palier::MesurePonctuelle, Some(Palier::Etalonnage))?;
+        let (mut plages, _, evenements) = self.mesurer(Mode::Ponctuelle)?;
+        if plages.len() != 1 {
+            return Err(ErreurPont::ReponseInattendue(format!(
+                "{} résultats pour une mesure ponctuelle",
+                plages.len()
+            )));
+        }
+        let plage = plages.remove(0);
+        Ok(MesurePonctuelle {
+            m0: plage.m0,
+            m1: plage.m1,
+            m2: plage.m2,
+            brutes: plage.brutes,
+            lab_dll: plage.lab_dll,
+            evenements,
+        })
+    }
+
+    /// Lecture de bande : l'opérateur fait glisser l'instrument le long d'une
+    /// rangée de plages ; la DLL les reconnaît et rend une mesure par plage.
+    pub fn mesurer_bande(&mut self) -> Result<MesureBande, ErreurPont> {
+        self.autoriser(Palier::Bande, Some(Palier::Etalonnage))?;
+        let (plages, sens, evenements) = self.mesurer(Mode::Bande)?;
+        Ok(MesureBande {
+            plages,
+            sens,
+            evenements,
+        })
+    }
+
+    /// Arme, attend la fin de la mesure, lit tout, puis désarme dans tous les cas.
+    fn mesurer(
+        &mut self,
+        mode: Mode,
+    ) -> Result<(Vec<MesurePlage>, u32, Vec<Evenement>), ErreurPont> {
         // Comme MYIRO tools : désarmer avant d'armer, l'instrument se réarmant
-        // parfois seul après une mesure.
+        // seul après une mesure.
         self.desarmer("avant armement");
-        let armement = self.sdk.armer_ponctuelle();
+        let armement = match mode {
+            Mode::Ponctuelle => self.sdk.armer_ponctuelle(),
+            Mode::Bande => self.sdk.armer_bande(),
+        };
         self.journal
             .push(format!("armement : code {}", code_de(armement)));
         if let Err(code) = armement {
@@ -238,22 +305,67 @@ impl<S: SdkMyiro1> Session<S> {
             return Err(traduire(code));
         }
         let resultat = self.attendre_mesure().and_then(|evenements| {
-            Ok(MesurePonctuelle {
-                m0: self.lire_un(&ConditionCalcul::spectre(CONDITION_M0), LONGUEUR_SPECTRE)?,
-                m1: self.lire_un(&ConditionCalcul::spectre(CONDITION_M1), LONGUEUR_SPECTRE)?,
-                m2: self.lire_un(&ConditionCalcul::spectre(CONDITION_M2), LONGUEUR_SPECTRE)?,
-                brutes: self.lire_un(&ConditionCalcul::brutes(), LONGUEUR_BRUTES)?,
-                lab_dll: [
-                    self.lire_un(&ConditionCalcul::lab(CONDITION_M0), LONGUEUR_LAB)?,
-                    self.lire_un(&ConditionCalcul::lab(CONDITION_M1), LONGUEUR_LAB)?,
-                    self.lire_un(&ConditionCalcul::lab(CONDITION_M2), LONGUEUR_LAB)?,
-                ],
-                evenements,
-            })
+            let (plages, sens) = self.lire_plages()?;
+            Ok((plages, sens, evenements))
         });
         // Désarmer même après un échec.
         self.desarmer("après lecture");
         resultat
+    }
+
+    /// Lit spectres, données brutes et Lab de toutes les plages de la dernière
+    /// mesure ; chaque lecture doit rendre le même nombre de plages, au moins une.
+    fn lire_plages(&mut self) -> Result<(Vec<MesurePlage>, u32), ErreurPont> {
+        let (m0, sens) =
+            self.lire_tout(&ConditionCalcul::spectre(CONDITION_M0), LONGUEUR_SPECTRE)?;
+        let nombre = m0.len();
+        if nombre == 0 {
+            return Err(ErreurPont::ReponseInattendue(
+                "aucune plage dans la mesure".into(),
+            ));
+        }
+        let m1 = self.lire_n(
+            &ConditionCalcul::spectre(CONDITION_M1),
+            LONGUEUR_SPECTRE,
+            nombre,
+        )?;
+        let m2 = self.lire_n(
+            &ConditionCalcul::spectre(CONDITION_M2),
+            LONGUEUR_SPECTRE,
+            nombre,
+        )?;
+        let brutes = self.lire_n(&ConditionCalcul::brutes(), LONGUEUR_BRUTES, nombre)?;
+        let lab0 = self.lire_n(&ConditionCalcul::lab(CONDITION_M0), LONGUEUR_LAB, nombre)?;
+        let lab1 = self.lire_n(&ConditionCalcul::lab(CONDITION_M1), LONGUEUR_LAB, nombre)?;
+        let lab2 = self.lire_n(&ConditionCalcul::lab(CONDITION_M2), LONGUEUR_LAB, nombre)?;
+        let plages = (0..nombre)
+            .map(|i| MesurePlage {
+                m0: m0[i].clone(),
+                m1: m1[i].clone(),
+                m2: m2[i].clone(),
+                brutes: brutes[i].clone(),
+                lab_dll: [lab0[i].clone(), lab1[i].clone(), lab2[i].clone()],
+            })
+            .collect();
+        Ok((plages, sens))
+    }
+
+    /// Lit tous les résultats et exige qu'il y en ait `nombre`.
+    fn lire_n(
+        &mut self,
+        condition: &ConditionCalcul,
+        longueur: usize,
+        nombre: usize,
+    ) -> Result<Vec<Vec<f32>>, ErreurPont> {
+        let (valeurs, _) = self.lire_tout(condition, longueur)?;
+        if valeurs.len() == nombre {
+            Ok(valeurs)
+        } else {
+            Err(ErreurPont::ReponseInattendue(format!(
+                "{} plages au lieu de {nombre}",
+                valeurs.len()
+            )))
+        }
     }
 
     /// `FDX_StopMeasurement`, puis attente du retour au repos s'il a été accepté :
@@ -329,20 +441,20 @@ impl<S: SdkMyiro1> Session<S> {
         }
     }
 
-    /// Lit un seul résultat de `longueur` valeurs ; toute autre forme est refusée.
-    fn lire_un(
+    /// Lit tous les résultats ; chacun doit compter exactement `longueur` valeurs.
+    fn lire_tout(
         &mut self,
         condition: &ConditionCalcul,
         longueur: usize,
-    ) -> Result<Vec<f32>, ErreurPont> {
+    ) -> Result<(Vec<Vec<f32>>, u32), ErreurPont> {
         let lecture = self.sdk.lire(condition, longueur).map_err(traduire)?;
-        match lecture.resultats.as_slice() {
-            [valeurs] if valeurs.len() == longueur => Ok(valeurs.clone()),
-            autre => Err(ErreurPont::ReponseInattendue(format!(
-                "{} résultat(s) au lieu d'un seul de {longueur} valeurs",
-                autre.len()
-            ))),
+        if let Some(mauvais) = lecture.resultats.iter().find(|v| v.len() != longueur) {
+            return Err(ErreurPont::ReponseInattendue(format!(
+                "{} valeurs au lieu de {longueur}",
+                mauvais.len()
+            )));
         }
+        Ok((lecture.resultats, lecture.sens))
     }
 
     fn autoriser(&self, demande: Palier, prealable: Option<Palier>) -> Result<(), ErreurPont> {

@@ -23,6 +23,8 @@ struct SdkSimule {
     /// est dans l'état « mesure réussie », jusqu'à son réarmement automatique.
     arret_refuse_apres_mesure: bool,
     dernier_evenement: Option<i32>,
+    /// Sens de passage rendu par les lectures.
+    sens: u32,
     appels: Vec<String>,
 }
 
@@ -92,6 +94,16 @@ impl SdkMyiro1 for SdkSimule {
         }
         Ok(0)
     }
+    fn armer_bande(&mut self) -> Result<i32, i32> {
+        self.appels.push("armer bande".into());
+        if self.code_armement < 0 {
+            return Err(self.code_armement);
+        }
+        if let Some(salve) = self.salves.pop_front() {
+            self.evenements.extend(salve);
+        }
+        Ok(0)
+    }
     fn arreter_mesure(&mut self) -> Result<i32, i32> {
         self.appels.push("arreter".into());
         if self.arret_refuse_apres_mesure && self.dernier_evenement == Some(3) {
@@ -108,7 +120,7 @@ impl SdkMyiro1 for SdkSimule {
         let valeur = (condition.illuminant * 10 + condition.type_donnees) as f32;
         Ok(Lecture {
             resultats: vec![vec![valeur; longueur]; self.resultats_par_lecture],
-            sens: 0,
+            sens: self.sens,
         })
     }
     /// Sans événement en attente, simule l'expiration du délai.
@@ -564,4 +576,81 @@ fn le_desarmement_refuse_apres_une_mesure_attend_le_rearmement_automatique() {
     let seconde = session.mesurer_ponctuelle().unwrap();
     let codes: Vec<i32> = seconde.evenements.iter().map(|e| e.code).collect();
     assert_eq!(codes, [1, 2, 3]);
+}
+
+/// Session étalonnée au plafond Bande, dont l'instrument rendra `plages`
+/// résultats par lecture après la salve d'événements `apres`.
+fn session_pour_bande(apres: &[i32], plages: usize) -> Session<SdkSimule> {
+    let mut sdk = sdk_qui_etalonne(&[7, 8]);
+    sdk.salves
+        .push_back(apres.iter().map(|&c| evenement(c)).collect());
+    sdk.resultats_par_lecture = plages;
+    sdk.sens = 2;
+    let mut session = session_connectee(sdk, Palier::Bande);
+    session.etalonner().unwrap();
+    session
+}
+
+#[test]
+fn une_bande_rend_une_mesure_par_plage() {
+    let mut session = session_pour_bande(&[1, 2, 3], 12);
+    let bande = session.mesurer_bande().unwrap();
+    assert_eq!(bande.plages.len(), 12);
+    for plage in &bande.plages {
+        assert_eq!(plage.m0, vec![10.0; 36]);
+        assert_eq!(plage.m1, vec![20.0; 36]);
+        assert_eq!(plage.m2, vec![30.0; 36]);
+        assert_eq!(plage.brutes, vec![21.0; 152]);
+        assert_eq!(plage.lab_dll[1], vec![10.0; 3]);
+    }
+    assert_eq!(bande.sens, 2);
+}
+
+#[test]
+fn la_bande_arme_l_instrument_en_mode_bande_puis_desarme() {
+    let mut session = session_pour_bande(&[1, 2, 3], 12);
+    session.mesurer_bande().unwrap();
+    let appels = &session.sdk().appels;
+    assert!(appels.contains(&"armer bande".to_string()));
+    assert!(!appels.contains(&"armer ponctuelle".to_string()));
+    assert_eq!(appels.last().unwrap(), "arreter");
+}
+
+#[test]
+fn la_bande_exige_le_palier_bande() {
+    let mut sdk = sdk_qui_etalonne(&[7, 8]);
+    sdk.salves.push_back([1, 2, 3].map(evenement).to_vec());
+    let mut session = session_connectee(sdk, Palier::MesurePonctuelle);
+    session.etalonner().unwrap();
+    assert_eq!(
+        session.mesurer_bande(),
+        Err(ErreurPont::PalierNonAutorise {
+            demande: Palier::Bande,
+            plafond: Palier::MesurePonctuelle
+        })
+    );
+    assert!(!session.sdk().appels.contains(&"armer bande".to_string()));
+}
+
+#[test]
+fn une_bande_sans_plage_reconnue_est_refusee() {
+    let mut session = session_pour_bande(&[1, 2, 3], 0);
+    assert!(matches!(
+        session.mesurer_bande(),
+        Err(ErreurPont::ReponseInattendue(_))
+    ));
+}
+
+#[test]
+fn une_bande_echouee_est_signalee() {
+    let mut session = session_pour_bande(&[1, 2], 12);
+    session.sdk_mut().salves[0].push(Evenement {
+        code: 4,
+        nb_donnees_brutes: 0,
+        erreur: -9898,
+    });
+    assert_eq!(
+        session.mesurer_bande(),
+        Err(ErreurPont::MesureEchouee { erreur: -9898 })
+    );
 }

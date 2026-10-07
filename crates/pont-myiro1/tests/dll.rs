@@ -217,3 +217,62 @@ fn palier_mesure_ponctuelle_avec_le_vrai_instrument() {
     }
     println!("résultats écrits dans {}", sortie.display());
 }
+
+/// Palier 5 : étalonnage puis lecture en bande des rangées de la mire de
+/// comparaison, une par passage (`MYIRO_RANGEES`, par défaut « 1,2,3 »). Pour
+/// chacune, l'opérateur fait glisser l'instrument le long de la rangée, du blanc
+/// au blanc (120 s au plus). Résultats dans `MYIRO_SORTIE` (CSV), plages nommées
+/// comme dans les exports FD-S2w (1A1, 1B1…).
+#[test]
+#[ignore = "étalonne puis lit des bandes avec le MYIRO-1 réel ; demande l'opérateur"]
+fn palier_bande_avec_le_vrai_instrument() {
+    use std::io::Write;
+    let rangees = std::env::var("MYIRO_RANGEES").unwrap_or("1,2,3".into());
+    let sortie = std::env::var("MYIRO_SORTIE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/bandes-myiro1.csv")
+        });
+    let dll = FdxDll::charger(dll_du_poste()).expect("chargement de FDXSDK.dll");
+    let mut session = Session::new(dll, Palier::Bande);
+    session.version().expect("FDX_GetSDKVersion");
+    session.detecter().expect("FDX_GetDevicePortList");
+    session
+        .connecter(0)
+        .expect("FDX_Connect + FDX_GetDeviceInfo");
+    session.etalonner().expect("étalonnage sur le blanc");
+    println!("étalonnage réussi");
+
+    let mut fichier = std::fs::File::create(&sortie).expect("fichier de sortie");
+    let longueurs: Vec<String> = (0..36).map(|i| format!("nm{}", 380 + 10 * i)).collect();
+    writeln!(fichier, "plage;donnees;L;a;b;{}", longueurs.join(";")).unwrap();
+    let texte = |v: &[f32]| {
+        v.iter()
+            .map(|x| format!("{x}"))
+            .collect::<Vec<_>>()
+            .join(";")
+    };
+    for rangee in rangees.split(',') {
+        println!("bande {rangee} : faites glisser l'instrument le long de la rangée");
+        let deja = session.journal().len();
+        let resultat = session.mesurer_bande();
+        for ligne in &session.journal()[deja..] {
+            println!("    journal : {ligne}");
+        }
+        let bande = resultat.expect("lecture de bande");
+        println!("  {} plages, sens {}", bande.plages.len(), bande.sens);
+        for (i, plage) in bande.plages.iter().enumerate() {
+            let nom = format!("{rangee}{}1", (b'A' + i as u8) as char);
+            for (cond, spectre, lab) in [
+                ("M0", &plage.m0, &plage.lab_dll[0]),
+                ("M1", &plage.m1, &plage.lab_dll[1]),
+                ("M2", &plage.m2, &plage.lab_dll[2]),
+            ] {
+                writeln!(fichier, "{nom};{cond};{};{}", texte(lab), texte(spectre)).unwrap();
+            }
+            writeln!(fichier, "{nom};brutes;;;;{}", texte(&plage.brutes)).unwrap();
+            println!("  {nom} M1 Lab {:?}", plage.lab_dll[1]);
+        }
+    }
+    println!("résultats écrits dans {}", sortie.display());
+}

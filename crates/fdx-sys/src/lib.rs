@@ -37,6 +37,7 @@ pub struct ConditionMesure {
 }
 
 pub const MESURE_PONCTUELLE: i32 = 0;
+pub const MESURE_BANDE: i32 = 1;
 
 /// Conditions de mesure ISO 13655, au sens du champ `Illuminant` de la DLL.
 pub const CONDITION_M0: i32 = 0;
