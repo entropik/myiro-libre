@@ -4,6 +4,8 @@
 //! avant tout appel à la DLL (ADR 0005, docs/abi/). Trois notions restent
 //! séparées : le plafond (fixe), la progression des paliers (historique) et
 //! l'état courant de l'instrument, seul à autoriser étalonnage et mesures.
+//! La politique de désarmement et de fermeture est ici, et seulement ici :
+//! l'adapter ne garde qu'une ultime tentative de nettoyage à sa destruction.
 
 pub mod dll;
 pub mod serveur;
@@ -16,7 +18,7 @@ use fdx_sys::{
 use pont_protocole::{
     Calcul, ConditionMesure, ConditionsCalcul, Echantillonnage, Empreinte, ErreurMesure,
     ErreurPont, Geometrie, Horodatage, Illuminant, Info, InstrumentMesurant, Observateur, Palier,
-    Provenance, MODELE_MYIRO1,
+    Provenance, RemiseAuRepos, MODELE_MYIRO1,
 };
 use std::time::{Duration, Instant};
 
@@ -35,11 +37,15 @@ pub const DELAI_ETALONNAGE: Duration = Duration::from_secs(30);
 /// Temps laissé à l'opérateur pour poser l'instrument et appuyer sur le bouton.
 pub const DELAI_APPUI: Duration = Duration::from_secs(120);
 
-/// Délai maximal du retour au repos après un désarmement.
+/// Délai maximal du retour au repos après un désarmement, et attente d'un
+/// événement entre deux essais refusés.
 pub const DELAI_REPOS: Duration = Duration::from_secs(5);
 
-/// Essais de désarmement au plus, quand l'instrument le refuse.
-const ESSAIS_DESARMEMENT: usize = 3;
+/// Essais de désarmement au plus, quand l'instrument le refuse (-9986). Un
+/// désarmement attend donc au plus trois fois `DELAI_REPOS` (un événement après
+/// chaque refus, ou le repos après l'essai accepté) : 15 s, sans compter le
+/// temps de réponse de la DLL à chaque appel.
+pub const ESSAIS_DESARMEMENT: usize = 3;
 
 /// Code -9986 : opération interdite dans l'état actuel de l'instrument.
 const CODE_ETAT_INCOMPATIBLE: i32 = -9986;
@@ -83,6 +89,8 @@ pub trait SdkMyiro1 {
     fn armer_bande(&mut self, plages_attendues: u32) -> Result<i32, i32>;
     /// `FDX_StopMeasurement` : désarme et ramène l'instrument au repos.
     fn arreter_mesure(&mut self) -> Result<i32, i32>;
+    /// `FDX_Disconnect` : ferme la session ouverte par `FDX_Connect`.
+    fn deconnecter(&mut self) -> Result<i32, i32>;
     /// `FDX_GetMeasureData` en deux temps, chaque résultat préparé à `longueur` valeurs.
     fn lire(&mut self, condition: &ConditionCalcul, longueur: usize) -> Result<Lecture, i32>;
     /// Prochain événement de l'instrument, ou `None` si le délai expire.
@@ -120,6 +128,17 @@ pub struct MesureBande {
     pub sens: u32,
     pub evenements: Vec<Evenement>,
     pub provenance: Provenance,
+    /// Désarmement qui a suivi la lecture : une plage acquise reste valable
+    /// même si le repos n'est pas prouvé.
+    pub remise_au_repos: RemiseAuRepos,
+}
+
+/// Ce qu'une mesure a acquis, et le désarmement qui l'a suivie.
+struct Acquisition {
+    plages: Vec<MesurePlage>,
+    sens: u32,
+    evenements: Vec<Evenement>,
+    remise_au_repos: RemiseAuRepos,
 }
 
 #[derive(Clone, Copy)]
@@ -142,6 +161,10 @@ pub struct MesurePonctuelle {
     pub lab_dll: [Vec<f32>; 3],
     pub evenements: Vec<Evenement>,
     pub provenance: Provenance,
+    /// Désarmement qui a suivi la lecture : la mesure reste valable même si le
+    /// repos n'est pas prouvé, mais la suivante est alors refusée tant qu'il
+    /// ne l'est pas.
+    pub remise_au_repos: RemiseAuRepos,
 }
 
 /// Résultat d'un étalonnage réussi.
@@ -195,6 +218,40 @@ pub struct Session<S: SdkMyiro1> {
     ports: Vec<Port>,
     journal: Vec<String>,
     version: Option<Version>,
+    /// Ce que la session sait du repos de l'instrument, entre deux désarmements.
+    repos: Repos,
+    /// `FDX_Connect` a réussi et `FDX_Disconnect` pas encore : la DLL garde une
+    /// session ouverte, même si l'état courant ne permet plus rien.
+    dll_connectee: bool,
+    /// Résultat du désarmement de fermeture, posé dès la demande de fermeture :
+    /// à partir de là, plus rien n'est transmis à la DLL hors déconnexion.
+    fermeture: Option<RemiseAuRepos>,
+}
+
+/// Ce que vaut un refus -9986 sans événement, selon ce qui s'est passé depuis
+/// le dernier repos.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Repos {
+    /// Rien n'a été armé depuis le lancement du pont ou la dernière
+    /// déconnexion : le refus vaut repos supposé.
+    Suppose,
+    /// Événement 0 reçu, rien armé depuis : le refus confirme ce repos.
+    Prouve,
+    /// Armé, ou armement tenté, depuis le dernier repos prouvé : le refus ne
+    /// prouve rien. Seuls l'événement 0 après un désarmement accepté, ou une
+    /// déconnexion faite, lèvent cette incertitude ; une reconnexion sans
+    /// `FDX_Disconnect` ne la lève pas.
+    Incertain,
+}
+
+/// Résultat d'une fermeture faite : la DLL est déconnectée.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Fermeture {
+    /// Rien n'était connecté, ou repos prouvé (événement 0) avant la déconnexion.
+    Confirmee,
+    /// Déconnecté, mais la remise au repos n'est pas prouvée : l'instrument peut
+    /// être resté armé (voyant fixe) et demander une intervention.
+    Incertaine { remise_au_repos: RemiseAuRepos },
 }
 
 impl<S: SdkMyiro1> Session<S> {
@@ -207,6 +264,9 @@ impl<S: SdkMyiro1> Session<S> {
             ports: Vec::new(),
             journal: Vec::new(),
             version: None,
+            repos: Repos::Suppose,
+            dll_connectee: false,
+            fermeture: None,
         }
     }
 
@@ -274,6 +334,9 @@ impl<S: SdkMyiro1> Session<S> {
             .sdk
             .connecter(&port, DELAI_CONNEXION)
             .map_err(traduire)?;
+        self.dll_connectee = true;
+        // L'incertitude sur le repos survit à une reconnexion faite sans
+        // `FDX_Disconnect` : seule une déconnexion faite la lève.
         self.etat = EtatInstrument::Inexploitable;
         let tampon = self.sdk.infos().map_err(traduire)?;
         let infos = lire_infos_instrument(&tampon);
@@ -342,7 +405,12 @@ impl<S: SdkMyiro1> Session<S> {
     pub fn mesurer_ponctuelle(&mut self) -> Result<MesurePonctuelle, ErreurPont> {
         self.autoriser(Palier::MesurePonctuelle, None)?;
         let garantie = self.garantie()?;
-        let (mut plages, _, evenements) = self.mesurer(Mode::Ponctuelle)?;
+        let Acquisition {
+            mut plages,
+            evenements,
+            remise_au_repos,
+            ..
+        } = self.mesurer(Mode::Ponctuelle)?;
         if plages.len() != 1 {
             return Err(inattendue(format!(
                 "{} résultats pour une mesure ponctuelle",
@@ -359,6 +427,7 @@ impl<S: SdkMyiro1> Session<S> {
             brutes: plage.brutes,
             lab_dll: plage.lab_dll,
             evenements,
+            remise_au_repos,
         })
     }
 
@@ -372,8 +441,12 @@ impl<S: SdkMyiro1> Session<S> {
     ) -> Result<MesureBande, ErreurPont> {
         self.autoriser(Palier::Bande, None)?;
         let garantie = self.garantie()?;
-        let (plages, sens, evenements) =
-            self.mesurer(Mode::Bande(plages_attendues.unwrap_or(0)))?;
+        let Acquisition {
+            plages,
+            sens,
+            evenements,
+            remise_au_repos,
+        } = self.mesurer(Mode::Bande(plages_attendues.unwrap_or(0)))?;
         if let Some(attendues) = plages_attendues {
             if plages.len() != attendues as usize {
                 return Err(inattendue(format!(
@@ -387,6 +460,55 @@ impl<S: SdkMyiro1> Session<S> {
             sens,
             evenements,
             provenance: self.provenance(garantie, Geometrie::Bande { sens })?,
+            remise_au_repos,
+        })
+    }
+
+    /// Ferme la session : désarme selon la même politique qu'après une mesure
+    /// (sauf liaison perdue), puis `FDX_Disconnect`. Rend `Confirmee` seulement
+    /// une fois la déconnexion faite et le repos prouvé. Dès l'appel, toute
+    /// autre demande est refusée sans appel à la DLL. Répétée, elle ne refait
+    /// pas ce qui est terminé : le désarmement une seule fois, la déconnexion
+    /// tant qu'elle a échoué. Le résultat est noté au journal.
+    pub fn fermer(&mut self) -> Result<Fermeture, ErreurPont> {
+        let resultat = self.tenter_fermeture();
+        self.journal
+            .push(format!("résultat de la fermeture : {resultat:?}"));
+        resultat
+    }
+
+    fn tenter_fermeture(&mut self) -> Result<Fermeture, ErreurPont> {
+        let remise_au_repos = match &self.fermeture {
+            Some(remise) => remise.clone(),
+            None => {
+                let remise = if !self.dll_connectee {
+                    RemiseAuRepos::AuRepos {}
+                } else if self.etat == EtatInstrument::Perdu {
+                    RemiseAuRepos::LiaisonPerdue {}
+                } else {
+                    self.desarmer("à la fermeture")
+                };
+                self.fermeture = Some(remise.clone());
+                remise
+            }
+        };
+        if self.dll_connectee {
+            let deconnexion = self.sdk.deconnecter();
+            self.journal
+                .push(format!("déconnexion : code {}", code_de(deconnexion)));
+            if let Err(code) = deconnexion {
+                return Err(ErreurPont::DeconnexionEchouee {
+                    code,
+                    remise_au_repos,
+                });
+            }
+            self.dll_connectee = false;
+            self.etat = EtatInstrument::NonConnecte;
+            self.repos = Repos::Suppose;
+        }
+        Ok(match remise_au_repos {
+            RemiseAuRepos::AuRepos {} => Fermeture::Confirmee,
+            remise_au_repos => Fermeture::Incertaine { remise_au_repos },
         })
     }
 
@@ -468,16 +590,25 @@ impl<S: SdkMyiro1> Session<S> {
     }
 
     /// Arme, attend la fin de la mesure, lit tout, puis désarme dans tous les cas.
-    fn mesurer(
-        &mut self,
-        mode: Mode,
-    ) -> Result<(Vec<MesurePlage>, u32, Vec<Evenement>), ErreurPont> {
+    /// Refuse d'armer, sans armer, si le repos n'est pas prouvé.
+    fn mesurer(&mut self, mode: Mode) -> Result<Acquisition, ErreurPont> {
         // Comme MYIRO tools : désarmer avant d'armer, l'instrument se réarmant
         // seul après une mesure.
-        self.desarmer("avant armement");
+        let avant = self.desarmer("avant armement");
         if self.etat == EtatInstrument::Perdu {
             return Err(ErreurPont::InstrumentPerdu {});
         }
+        if !matches!(
+            avant,
+            RemiseAuRepos::AuRepos {} | RemiseAuRepos::ReposSuppose {}
+        ) {
+            return Err(ErreurPont::ReposIncertain {
+                remise_au_repos: avant,
+            });
+        }
+        // Avant l'appel : un armement refusé ne prouve pas que rien n'a été
+        // armé, le repos prouvé ne vaut plus.
+        self.repos = Repos::Incertain;
         let armement = match mode {
             Mode::Ponctuelle => self.sdk.armer_ponctuelle(),
             Mode::Bande(attendues) => self.sdk.armer_bande(attendues),
@@ -497,9 +628,15 @@ impl<S: SdkMyiro1> Session<S> {
         if resultat.as_ref().err() == Some(&ErreurPont::InstrumentPerdu {}) {
             self.perdre_liaison();
         }
-        // Désarmer même après un échec.
-        self.desarmer("après lecture");
-        resultat
+        // Désarmer même après un échec ; le résultat est rendu à part.
+        let remise_au_repos = self.desarmer("après lecture");
+        let (plages, sens, evenements) = resultat?;
+        Ok(Acquisition {
+            plages,
+            sens,
+            evenements,
+            remise_au_repos,
+        })
     }
 
     /// Lit spectres, données brutes et Lab de toutes les plages de la dernière
@@ -555,42 +692,71 @@ impl<S: SdkMyiro1> Session<S> {
         }
     }
 
-    /// `FDX_StopMeasurement`, puis attente du retour au repos s'il a été accepté :
-    /// sans cela, un nouvel armement est refusé (-9986). Juste après une mesure,
-    /// le MYIRO-1 refuse aussi le désarmement (état « mesure réussie ») jusqu'à
-    /// son réarmement automatique : on attend alors son prochain événement et
-    /// on réessaie.
-    fn desarmer(&mut self, moment: &str) {
+    /// Politique unique de désarmement, avant un armement, après une lecture et
+    /// à la fermeture : `FDX_StopMeasurement`, puis attente de l'événement 0.
+    /// Juste après une mesure, le MYIRO-1 refuse le désarmement (-9986, état
+    /// « mesure réussie ») jusqu'à son réarmement automatique : on attend alors
+    /// son prochain événement et on réessaie, `ESSAIS_DESARMEMENT` fois au plus,
+    /// `DELAI_REPOS` par attente. Le résultat est rapporté, jamais supposé.
+    fn desarmer(&mut self, moment: &str) -> RemiseAuRepos {
+        let remise = self.tenter_desarmement(moment);
+        self.journal
+            .push(format!("remise au repos {moment} : {remise:?}"));
+        if matches!(remise, RemiseAuRepos::AuRepos {}) {
+            self.repos = Repos::Prouve;
+        }
+        remise
+    }
+
+    fn tenter_desarmement(&mut self, moment: &str) -> RemiseAuRepos {
+        let mut repos_vu = false;
         for _ in 0..ESSAIS_DESARMEMENT {
             let arret = self.sdk.arreter_mesure();
             self.journal
                 .push(format!("désarmement {moment} : code {}", code_de(arret)));
             match arret {
-                Ok(_) => {
-                    self.attendre_repos();
-                    return;
-                }
+                Ok(_) => return self.attendre_repos(),
                 Err(CODE_ETAT_INCOMPATIBLE) => match self.sdk.attendre_evenement(DELAI_REPOS) {
                     Some(evenement) => {
                         self.journal.push(format!(
                             "événement {} (avant nouvel essai de désarmement)",
                             evenement.code
                         ));
-                        if evenement.code == EVENEMENT_DECONNEXION {
-                            self.perdre_liaison();
-                            return;
+                        match evenement.code {
+                            EVENEMENT_DECONNEXION => {
+                                self.perdre_liaison();
+                                return RemiseAuRepos::LiaisonPerdue {};
+                            }
+                            // Seul le dernier événement compte : un autre
+                            // après l'événement 0 annule sa preuve.
+                            code => repos_vu = code == EVENEMENT_REPOS,
                         }
                     }
-                    // Aucun événement : l'instrument est déjà au repos.
-                    None => return,
+                    // Refus -9986 sans événement : c'est la réponse constatée au
+                    // repos, pas une preuve. Il confirme un repos déjà prouvé
+                    // (ou l'événement 0 qui vient d'arriver), laisse supposé un
+                    // repos que rien n'a démenti, et ne vaut rien après un
+                    // armement.
+                    None if repos_vu || self.repos == Repos::Prouve => {
+                        return RemiseAuRepos::AuRepos {}
+                    }
+                    None if self.repos == Repos::Suppose => return RemiseAuRepos::ReposSuppose {},
+                    None => {
+                        return RemiseAuRepos::ArretRefuse {
+                            code: CODE_ETAT_INCOMPATIBLE,
+                        }
+                    }
                 },
-                Err(_) => return,
+                Err(code) => return RemiseAuRepos::ArretRefuse { code },
             }
+        }
+        RemiseAuRepos::ArretRefuse {
+            code: CODE_ETAT_INCOMPATIBLE,
         }
     }
 
     /// Attend l'événement 0 (retour au repos), au plus `DELAI_REPOS`.
-    fn attendre_repos(&mut self) {
+    fn attendre_repos(&mut self) -> RemiseAuRepos {
         let echeance = Instant::now() + DELAI_REPOS;
         while let Some(evenement) = self
             .sdk
@@ -600,12 +766,13 @@ impl<S: SdkMyiro1> Session<S> {
                 .push(format!("événement {} (attente du repos)", evenement.code));
             if evenement.code == EVENEMENT_DECONNEXION {
                 self.perdre_liaison();
-                break;
+                return RemiseAuRepos::LiaisonPerdue {};
             }
             if evenement.code == EVENEMENT_REPOS {
-                break;
+                return RemiseAuRepos::AuRepos {};
             }
         }
+        RemiseAuRepos::ReposNonSignale {}
     }
 
     fn attendre_mesure(&mut self) -> Result<Vec<Evenement>, ErreurPont> {
@@ -655,6 +822,9 @@ impl<S: SdkMyiro1> Session<S> {
     }
 
     fn autoriser(&self, demande: Palier, prealable: Option<Palier>) -> Result<(), ErreurPont> {
+        if self.fermeture.is_some() {
+            return Err(ErreurPont::SessionFermee {});
+        }
         if demande > self.plafond {
             return Err(ErreurPont::PalierNonAutorise {
                 demande,

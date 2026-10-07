@@ -32,7 +32,9 @@ pub enum Requete {
         #[serde(default)]
         plages_attendues: Option<u32>,
     },
-    /// Désarme, se déconnecte et termine le pont.
+    /// Désarme, se déconnecte, puis répond `ferme` ou `fermeture_incertaine`
+    /// et termine le pont. Si la déconnexion échoue, le pont répond par une
+    /// erreur et reste à l'écoute : seul un nouveau `fermer` touche la DLL.
     Fermer {},
 }
 
@@ -62,8 +64,21 @@ pub enum Reponse {
     /// sa provenance (ADR 0005), au format conservable versionné.
     Mesure {
         mesure: Mesure,
+        /// Désarmement qui a suivi la lecture : la mesure reste valable même
+        /// si le repos n'est pas prouvé. Absent des réponses écrites avant le
+        /// ticket #24 : relu comme inconnu, jamais comme réussi. Ce n'est pas
+        /// une donnée de la mesure conservée (format `myiro-libre/mesure/1`).
+        #[serde(default = "Info::inconnue")]
+        remise_au_repos: Info<RemiseAuRepos>,
     },
+    /// Fermeture confirmée : désarmement prouvé puis déconnexion faite. Le pont
+    /// s'arrête.
     Ferme {},
+    /// Déconnexion faite, mais remise au repos non prouvée : l'instrument peut
+    /// demander une intervention. Le pont s'arrête aussi.
+    FermetureIncertaine {
+        remise_au_repos: RemiseAuRepos,
+    },
     Erreur {
         erreur: ErreurPont,
     },
@@ -84,7 +99,10 @@ pub fn lire_reponse(ligne: &str) -> Result<Reponse, String> {
         serde_json::from_str(ligne).map_err(|erreur| erreur.to_string())?;
     if est_mesure_initiale(&valeur) {
         return mesure_initiale(valeur)
-            .map(|mesure| Reponse::Mesure { mesure })
+            .map(|mesure| Reponse::Mesure {
+                mesure,
+                remise_au_repos: Info::Inconnue,
+            })
             .map_err(|erreur| erreur.to_string());
     }
     serde_json::from_value(valeur).map_err(|erreur| erreur.to_string())
@@ -113,6 +131,32 @@ pub struct Identite {
     pub anomalie_date_initiale: bool,
     /// Les 40 octets bruts, en hexadécimal, pour réinterprétation ultérieure.
     pub brute_hex: String,
+}
+
+/// Remise au repos : résultat d'un désarmement (`FDX_StopMeasurement`) et de
+/// l'attente du retour au repos (événement 0). `au_repos` et `repos_suppose`
+/// permettent d'armer ; seul `au_repos` confirme une fermeture ; les autres
+/// cas disent pourquoi le repos n'est pas prouvé. Une absence de preuve n'est
+/// jamais une réussite.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "etat", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RemiseAuRepos {
+    // Accolades vides : sans elles, serde accepterait des champs en trop.
+    /// Événement 0 reçu après un désarmement accepté ; ou désarmement refusé
+    /// (-9986) sans autre événement alors que le repos avait déjà été prouvé
+    /// par l'événement 0, sans armement depuis.
+    AuRepos {},
+    /// Désarmement refusé (-9986) sans événement, sans armement depuis le
+    /// lancement du pont ou la dernière déconnexion : le refus est constaté au repos (fiche `FDX_StopMeasurement`),
+    /// mais en déduire le repos est une supposition. Permet d'armer ; ne
+    /// confirme pas une fermeture.
+    ReposSuppose {},
+    /// Le désarmement accepté n'a pas été suivi de l'événement 0 dans le délai.
+    ReposNonSignale {},
+    /// La DLL a refusé le désarmement (code brut), essais épuisés.
+    ArretRefuse { code: i32 },
+    /// Liaison perdue (événement 6) avant la preuve du repos.
+    LiaisonPerdue {},
 }
 
 /// Étapes de la progression imposée sur instrument réel, dans l'ordre.
@@ -167,6 +211,22 @@ pub enum ErreurPont {
     /// session et son étalonnage sont invalidés : toute demande suivante reçoit
     /// cette même erreur, sans appel à la DLL, jusqu'à une nouvelle connexion.
     InstrumentPerdu {},
+    /// La remise au repos de l'instrument n'est pas prouvée (`remise_au_repos`
+    /// dit pourquoi) : l'instrument n'a pas été armé. Une mesure déjà rendue
+    /// reste valable. Une reconnexion ne lève pas cette incertitude : seul un
+    /// désarmement accepté suivi de l'événement 0 la lève, ou une fermeture
+    /// suivie d'un nouveau pont.
+    ReposIncertain { remise_au_repos: RemiseAuRepos },
+    /// `FDX_Disconnect` a échoué (code brut) : la fermeture n'est pas faite.
+    /// `remise_au_repos` est le résultat du désarmement qui l'a précédée ; une
+    /// nouvelle demande `fermer` ne refait que la déconnexion.
+    DeconnexionEchouee {
+        code: i32,
+        remise_au_repos: RemiseAuRepos,
+    },
+    /// Une fermeture a été demandée : plus rien n'est transmis à la DLL, sauf
+    /// une nouvelle demande `fermer` si la déconnexion a échoué.
+    SessionFermee {},
     /// Autre code d'erreur de la DLL, conservé brut.
     Sdk { code: i32 },
 }

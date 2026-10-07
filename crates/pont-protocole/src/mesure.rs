@@ -234,6 +234,11 @@ pub enum Info<T> {
 }
 
 impl<T> Info<T> {
+    /// `Info::Inconnue`, pour une valeur absente d'une ligne plus ancienne.
+    pub fn inconnue() -> Self {
+        Info::Inconnue
+    }
+
     /// La valeur, confirmée ou supposée.
     pub fn valeur(&self) -> Option<&T> {
         match self {

@@ -85,7 +85,7 @@ fn une_plage_relue_est_validee_comme_a_la_construction() {
 use pont_protocole::{
     ecrire_mesure, ecrire_reponse, lire_mesure, lire_reponse, Calcul, ConditionMesure,
     ConditionsCalcul, Echantillonnage, Empreinte, Geometrie, Horodatage, Illuminant, Info,
-    InstrumentMesurant, Mesure, Observateur, Provenance, Reponse, FORMAT_MESURE,
+    InstrumentMesurant, Mesure, Observateur, Provenance, RemiseAuRepos, Reponse, FORMAT_MESURE,
 };
 
 fn provenance(modele: &str, geometrie: Geometrie) -> Provenance {
@@ -147,16 +147,57 @@ fn une_mesure_enregistree_se_relit_sans_perte() {
 fn une_mesure_traverse_le_protocole_sans_perte() {
     let reponse = Reponse::Mesure {
         mesure: mesure_ponctuelle(),
+        remise_au_repos: Info::Confirmee(RemiseAuRepos::ArretRefuse { code: -9987 }),
     };
     let texte = ecrire_reponse(&reponse);
     assert!(texte.starts_with(r#"{"rep":"mesure","mesure":{"format":"myiro-libre/mesure/1","#));
+    assert!(texte.ends_with(
+        r#","remise_au_repos":{"statut":"confirmee","valeur":{"etat":"arret_refuse","code":-9987}}}"#
+    ));
     assert_eq!(lire_reponse(&texte), Ok(reponse));
+}
+
+#[test]
+fn une_reponse_mesure_sans_remise_au_repos_se_relit_avec_un_repos_inconnu() {
+    // Réponse écrite par un pont antérieur au ticket #24.
+    let texte = ecrire_reponse(&Reponse::Mesure {
+        mesure: mesure_ponctuelle(),
+        remise_au_repos: Info::Inconnue,
+    });
+    let ancienne = texte.replace(r#","remise_au_repos":{"statut":"inconnue"}"#, "");
+    assert_ne!(ancienne, texte);
+    let Ok(Reponse::Mesure {
+        remise_au_repos, ..
+    }) = lire_reponse(&ancienne)
+    else {
+        panic!("{ancienne}")
+    };
+    assert_eq!(remise_au_repos, Info::Inconnue, "jamais « au repos »");
+}
+
+#[test]
+fn une_remise_au_repos_nue_ou_avec_un_champ_inconnu_est_refusee() {
+    let texte = ecrire_reponse(&Reponse::Mesure {
+        mesure: mesure_ponctuelle(),
+        remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
+    });
+    let qualifie = r#""remise_au_repos":{"statut":"confirmee","valeur":{"etat":"au_repos"}}"#;
+    assert!(texte.contains(qualifie), "{texte}");
+    for abime in [
+        r#""remise_au_repos":{"etat":"au_repos"}"#,
+        r#""remise_au_repos":{"statut":"confirmee","valeur":{"etat":"au_repos","x":1}}"#,
+        r#""remise_au_repos":{"statut":"confirmee","valeur":{"etat":"repos_devine"}}"#,
+    ] {
+        let ligne = texte.replace(qualifie, abime);
+        assert!(lire_reponse(&ligne).is_err(), "{ligne}");
+    }
 }
 
 #[test]
 fn une_reponse_du_protocole_avec_un_champ_inconnu_est_refusee() {
     let texte = ecrire_reponse(&Reponse::Mesure {
         mesure: mesure_ponctuelle(),
+        remise_au_repos: Info::Inconnue,
     });
     let abime = texte.replacen(r#"{"rep":"mesure","#, r#"{"rep":"mesure","note":"x","#, 1);
     assert_ne!(abime, texte);
@@ -436,10 +477,19 @@ fn un_etalonnage_absent_du_format_initial_reste_inconnu() {
 #[test]
 fn le_format_initial_se_lit_aussi_comme_reponse_du_protocole() {
     let ligne = ligne_initiale("ponctuelle", 0, None).to_string();
-    let Ok(Reponse::Mesure { mesure }) = lire_reponse(&ligne) else {
+    let Ok(Reponse::Mesure {
+        mesure,
+        remise_au_repos,
+    }) = lire_reponse(&ligne)
+    else {
         panic!("{:?}", lire_reponse(&ligne))
     };
     assert_eq!(Ok(mesure), lire_mesure(&ligne));
+    assert_eq!(
+        remise_au_repos,
+        Info::Inconnue,
+        "le pont 0.1.0 ne le disait pas"
+    );
 }
 
 #[test]

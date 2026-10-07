@@ -5,7 +5,7 @@ mod commun;
 use commun::{evenement, SdkSimule};
 use pont_myiro1::serveur::servir;
 use pont_myiro1::Session;
-use pont_protocole::{lire_reponse, ErreurPont, Palier, Reponse};
+use pont_protocole::{lire_reponse, ErreurPont, Info, Palier, RemiseAuRepos, Reponse};
 
 /// Envoie `requetes` au pont et rend ses réponses décodées.
 fn dialoguer(sdk: SdkSimule, plafond: Palier, requetes: &[&str]) -> Vec<Reponse> {
@@ -139,7 +139,12 @@ fn chaque_requete_recoit_sa_reponse() {
     };
     assert_eq!(identite.numero_serie, 12345678);
     assert_eq!(identite.brute_hex.len(), 80, "40 octets en hexadécimal");
-    assert_eq!(reponses[3], Reponse::Ferme {});
+    assert_eq!(
+        reponses[3],
+        Reponse::FermetureIncertaine {
+            remise_au_repos: RemiseAuRepos::ReposSuppose {}
+        }
+    );
 }
 
 #[test]
@@ -195,6 +200,181 @@ fn rien_n_est_traite_apres_fermer() {
     assert_eq!(reponses, [Reponse::Ferme {}]);
 }
 
+fn appels(session: &Session<SdkSimule>, nom: &str) -> usize {
+    session.sdk().appels.iter().filter(|a| *a == nom).count()
+}
+
+#[test]
+fn ferme_n_est_repondu_qu_apres_la_deconnexion_et_un_repos_prouve() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements.extend([7, 8].map(evenement));
+    sdk.salves.push_back([1, 2, 3, 0].map(evenement).to_vec());
+    let (lignes, session) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[
+            r#"{"cmd":"etalonner"}"#,
+            r#"{"cmd":"mesurer_ponctuelle"}"#,
+            r#"{"cmd":"fermer"}"#,
+        ]),
+    );
+    assert_eq!(lignes[5], r#"{"rep":"ferme"}"#);
+    assert_eq!(session.sdk().appels.last().unwrap(), "deconnecter");
+}
+
+#[test]
+fn fermer_juste_apres_connecter_n_annonce_qu_un_repos_suppose() {
+    let (lignes, session) = dialoguer_brut(
+        SdkSimule::avec_un_myiro1(),
+        Palier::Connexion,
+        &sequence(&[r#"{"cmd":"fermer"}"#]),
+    );
+    assert_eq!(
+        lignes[3],
+        r#"{"rep":"fermeture_incertaine","remise_au_repos":{"etat":"repos_suppose"}}"#
+    );
+    assert_eq!(session.sdk().appels.last().unwrap(), "deconnecter");
+}
+
+#[test]
+fn une_deconnexion_echouee_n_est_pas_annoncee_fermee_et_le_pont_attend() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.code_deconnexion = -9987;
+    let (lignes, session) = dialoguer_brut(
+        sdk,
+        Palier::Connexion,
+        &sequence(&[
+            r#"{"cmd":"fermer"}"#,
+            r#"{"cmd":"version"}"#,
+            r#"{"cmd":"connecter","instrument":0}"#,
+        ]),
+    );
+    assert_eq!(
+        lignes[3],
+        r#"{"rep":"erreur","erreur":{"type":"deconnexion_echouee","code":-9987,"remise_au_repos":{"etat":"repos_suppose"}}}"#
+    );
+    let fermee = r#"{"rep":"erreur","erreur":{"type":"session_fermee"}}"#;
+    assert_eq!(lignes[4], fermee);
+    assert_eq!(lignes[5], fermee);
+    assert_eq!(appels(&session, "version"), 1);
+    assert_eq!(appels(&session, "connecter 10"), 1);
+}
+
+#[test]
+fn une_fermeture_reprise_apres_echec_finit_par_la_deconnexion() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.code_deconnexion = -9987;
+    let mut session = Session::new(sdk, Palier::Connexion);
+    let mut sortie = Vec::new();
+    servir(
+        &mut session,
+        sequence(&[r#"{"cmd":"fermer"}"#]).join("\n").as_bytes(),
+        &mut sortie,
+    )
+    .unwrap();
+    session.sdk_mut().code_deconnexion = 0;
+    let mut sortie = Vec::new();
+    servir(
+        &mut session,
+        &b"{\"cmd\":\"fermer\"}\n{\"cmd\":\"version\"}"[..],
+        &mut sortie,
+    )
+    .unwrap();
+    assert_eq!(
+        String::from_utf8(sortie).unwrap(),
+        "{\"rep\":\"fermeture_incertaine\",\"remise_au_repos\":{\"etat\":\"repos_suppose\"}}\n"
+    );
+    assert_eq!(appels(&session, "arreter"), 1, "désarmement fait une fois");
+}
+
+#[test]
+fn une_fermeture_sans_repos_prouve_est_rapportee_incertaine() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements.extend([7, 8].map(evenement));
+    sdk.salves.push_back([1, 2, 3].map(evenement).to_vec());
+    let (lignes, session) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[
+            r#"{"cmd":"etalonner"}"#,
+            r#"{"cmd":"mesurer_ponctuelle"}"#,
+            r#"{"cmd":"fermer"}"#,
+            r#"{"cmd":"version"}"#,
+        ]),
+    );
+    assert_eq!(lignes.len(), 6, "rien n'est traité après la fermeture");
+    assert_eq!(
+        lignes[5],
+        r#"{"rep":"fermeture_incertaine","remise_au_repos":{"etat":"arret_refuse","code":-9986}}"#
+    );
+    assert_eq!(session.sdk().appels.last().unwrap(), "deconnecter");
+}
+
+#[test]
+fn une_mesure_acquise_est_rendue_avec_un_repos_incertain_et_la_suivante_refusee() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements.extend([7, 8].map(evenement));
+    sdk.salves.push_back([1, 2, 3].map(evenement).to_vec());
+    sdk.salves.push_back([1, 2, 3, 0].map(evenement).to_vec());
+    let (lignes, session) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[
+            r#"{"cmd":"etalonner"}"#,
+            r#"{"cmd":"mesurer_ponctuelle"}"#,
+            r#"{"cmd":"mesurer_ponctuelle"}"#,
+        ]),
+    );
+    let Reponse::Mesure {
+        mesure,
+        remise_au_repos,
+    } = lire_reponse(&lignes[4]).unwrap()
+    else {
+        panic!("{}", lignes[4])
+    };
+    assert_eq!(mesure.plages()[0].m1().len(), 36);
+    assert_eq!(
+        remise_au_repos,
+        Info::Confirmee(RemiseAuRepos::ReposNonSignale {})
+    );
+    assert!(lignes[4].ends_with(
+        r#","remise_au_repos":{"statut":"confirmee","valeur":{"etat":"repos_non_signale"}}}"#
+    ));
+    assert_eq!(
+        lignes[5],
+        r#"{"rep":"erreur","erreur":{"type":"repos_incertain","remise_au_repos":{"etat":"arret_refuse","code":-9986}}}"#
+    );
+    assert_eq!(armements(&session), 1);
+}
+
+#[test]
+fn la_fin_de_l_entree_ferme_la_session_comme_fermer() {
+    let (lignes, session) = dialoguer_brut(
+        SdkSimule::avec_un_myiro1(),
+        Palier::Connexion,
+        &JUSQU_A_LA_CONNEXION,
+    );
+    assert_eq!(lignes.len(), 3, "aucune réponse sans requête");
+    let journal = session.journal().join("\n");
+    assert!(
+        journal.contains("résultat de la fermeture : Ok(Incertaine"),
+        "{journal}"
+    );
+    assert_eq!(session.sdk().appels.last().unwrap(), "deconnecter");
+    assert_eq!(appels(&session, "deconnecter"), 1);
+}
+
+#[test]
+fn apres_ferme_la_fin_de_l_entree_ne_rappelle_pas_la_dll() {
+    let (_, session) = dialoguer_brut(
+        SdkSimule::avec_un_myiro1(),
+        Palier::Connexion,
+        &sequence(&[r#"{"cmd":"fermer"}"#]),
+    );
+    assert_eq!(appels(&session, "deconnecter"), 1);
+    assert_eq!(appels(&session, "arreter"), 1);
+}
+
 #[test]
 fn une_bande_rend_une_plage_par_resultat() {
     let mut sdk = SdkSimule::avec_un_myiro1();
@@ -213,7 +393,7 @@ fn une_bande_rend_une_plage_par_resultat() {
         ],
     );
     assert_eq!(reponses[3], Reponse::Etalonne {});
-    let Reponse::Mesure { mesure } = &reponses[4] else {
+    let Reponse::Mesure { mesure, .. } = &reponses[4] else {
         panic!("{:?}", reponses[4])
     };
     let plages = mesure.plages();
