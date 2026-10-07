@@ -3,6 +3,8 @@
 //! La session impose l'ordre des paliers et le plafond fixé au lancement,
 //! avant tout appel à la DLL (ADR 0005, docs/abi/).
 
+pub mod dll;
+
 use fdx_sys::{lire_infos_instrument, InfosInstrument, Port, Version, TAILLE_TAMPON_INFOS};
 use pont_protocole::{ErreurPont, Palier};
 

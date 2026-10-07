@@ -9,3 +9,4 @@ repository.workspace = true
 [dependencies]
 fdx-sys = { path = "../fdx-sys" }
 pont-protocole = { path = "../pont-protocole" }
+libloading = "0.8"
