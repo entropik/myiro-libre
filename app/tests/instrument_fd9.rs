@@ -339,6 +339,81 @@ fn sans_myiro1_le_fd9_detecte_est_montre() {
 }
 
 #[test]
+fn sans_logiciel_myiro1_le_vrai_probleme_du_fd9_est_montre() {
+    // FD-S2w est installé, mais aucun pont 32 bits n'est livré pour sa DLL.
+    let mut lances = Vec::new();
+    let instrument = ouvrir_l_un_ou_l_autre(
+        Recherche {
+            emplacements: &[dossier_vide("fd9-sans-pont-myiro1")],
+            ponts: &ponts_myiro1(),
+        },
+        Recherche {
+            emplacements: &[fd_s2w("fd9-sans-pont")],
+            ponts: &[(Architecture::X64, PathBuf::from("pont-fd9-x64.exe"))],
+        },
+        |programme: &Path, _: &Path, _| -> Result<Simule, Panne> {
+            lances.push(programme.to_path_buf());
+            Ok(Simule::Fd9(PontFd9Simule::avec_un_fd9()))
+        },
+    );
+    assert!(lances.is_empty());
+    assert!(matches!(
+        instrument.probleme(),
+        Some(Probleme::PontIntrouvable { detail }) if detail.contains("pont-fd9")
+    ));
+}
+
+#[test]
+fn sans_logiciel_myiro1_une_detection_fd9_en_erreur_est_montree() {
+    let instrument = ouvrir_l_un_ou_l_autre(
+        Recherche {
+            emplacements: &[dossier_vide("fd9-erreur-myiro1")],
+            ponts: &ponts_myiro1(),
+        },
+        Recherche {
+            emplacements: &[fd_s2w("fd9-erreur")],
+            ponts: &ponts_fd9(),
+        },
+        |_: &Path, _: &Path, _| -> Result<Simule, Panne> {
+            let mut simule = PontFd9Simule::avec_un_fd9();
+            simule.detection = Some(Reponse::Erreur {
+                erreur: ErreurPont::Sdk { code: 1002 },
+            });
+            Ok(Simule::Fd9(simule))
+        },
+    );
+    assert!(matches!(
+        instrument.probleme(),
+        Some(Probleme::DetectionImpossible { .. })
+    ));
+}
+
+#[test]
+fn un_myiro1_en_echec_garde_son_probleme_devant_un_fd9_absent() {
+    // Logiciel du MYIRO-1 présent mais aucun MYIRO-1 ; FD-S2w présent mais
+    // aucun FD-9 : le problème du MYIRO-1, premier cherché, reste montré.
+    let instrument = ouvrir_l_un_ou_l_autre(
+        Recherche {
+            emplacements: &[logiciel_myiro1("deux-absents-myiro1")],
+            ponts: &ponts_myiro1(),
+        },
+        Recherche {
+            emplacements: &[fd_s2w("deux-absents-fd9")],
+            ponts: &ponts_fd9(),
+        },
+        |programme: &Path, _: &Path, _| -> Result<Simule, Panne> {
+            Ok(if programme.to_string_lossy().contains("fd9") {
+                Simule::Fd9(PontFd9Simule::default())
+            } else {
+                Simule::Myiro1(PontSimule::avec_instruments(&[]))
+            })
+        },
+    );
+    assert_eq!(instrument.probleme(), Some(&Probleme::AucunInstrument));
+    assert!(instrument.sdk().is_some(), "le problème vient du MYIRO-1");
+}
+
+#[test]
 fn sans_aucun_des_deux_le_probleme_du_myiro1_reste_montre() {
     let (instrument, _) = ouvrir_un_des_deux(
         &[dossier_vide("rien-myiro1")],

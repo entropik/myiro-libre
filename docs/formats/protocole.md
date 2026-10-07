@@ -22,7 +22,7 @@ Réponse du pont FD-9 à `version`. FD9SDK n'a pas de fonction publique de versi
 ```json
 {"rep": "version_dll",
  "version_fichier": {"statut": "confirmee", "valeur": [1, 3, 2, 3]},
- "empreinte": {"statut": "confirmee", "valeur": "5e5e…5e"}}
+ "empreinte": {"statut": "confirmee", "valeur": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}
 ```
 
 - `version_fichier` : majeur, mineur, révision, build. Illisible : `{"statut": "inconnue"}`.
