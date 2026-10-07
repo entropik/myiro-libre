@@ -121,6 +121,11 @@ tr.hl td { background: var(--color-hair); }
 .notice--bad { border-color: var(--color-bad); }
 .notice p + p { margin-top: var(--space-2); }
 
+/* ---- Détail replié : le détail technique sous une explication ---- */
+.replie { border-top: var(--rule) solid var(--color-hair); padding-top: var(--space-3); margin-top: var(--space-6); max-width: var(--measure); }
+.replie summary { cursor: pointer; font-size: var(--text-sm); color: var(--color-muted); }
+.replie pre { margin: var(--space-2) 0 0; font: inherit; font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* ---- Parcours numéroté ---- */
 .steps { display: grid; grid-template-columns: repeat(var(--n), 1fr); column-gap: var(--space-2); margin-bottom: var(--space-8); }
 .steps button {

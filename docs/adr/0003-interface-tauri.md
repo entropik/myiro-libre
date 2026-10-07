@@ -34,3 +34,11 @@ La maquette n'est pas du code de production : l'interface est réécrite dans l'
 - La langue se choisit dans la barre ou au lancement (`--langue en`) ; toute la fenêtre change de langue, jamais une partie.
 - Jetons et composants restent dans `design-system/` : la compilation recopie `tokens.css` et `components.css` dans la page sans les modifier. Les composants du cadre (bandeau, en-tête de feuille, état vide, cadre à trois zones) ont été ajoutés à `ui-kit.html`.
 - La fonte Inter (licence SIL Open Font License) est livrée avec l'application, et la politique de sécurité de la page interdit tout chargement extérieur : aucun appel réseau au lancement.
+
+## Textes de l'instrument et choix d'un dossier (7 octobre 2026)
+
+Après un premier essai refusé par l'utilisateur (un champ où coller le chemin du SDK) :
+
+- **Aucun mot technique à l'écran.** SDK, DLL, pont, palier et chemins n'apparaissent que dans le détail technique replié (composant « Détail replié »). La barre dit l'état de l'instrument en une phrase composée par le catalogue (`{modele}, {etat}`), ou « Logiciel du fabricant absent ».
+- **Rien à saisir.** L'application trouve seule le logiciel du fabricant (ADR 0005). Seulement si elle échoue, une phrase et un bouton « Choisir le dossier… » ouvrent le sélecteur de dossier de Windows (extension Tauri `dialog`, appelée depuis Rust ; la page n'a aucune permission de plus).
+- **Bouton inactif pendant la recherche**, avec sa raison écrite dessous.

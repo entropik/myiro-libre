@@ -38,7 +38,16 @@ Code Rust (espace de travail Cargo à la racine) :
 - `crates/jeu-validation` : jeu « données brutes → spectres » tiré des mesures archivées (outil `extraire-jeu`, identifiants retirés) et banc de comparaison d'un calcul candidat (ADR 0006) ; indépendant de Windows.
 - `crates/pont-protocole` : messages JSON entre l'application et les ponts (requêtes, réponses, provenance) ; indépendant de Windows.
 - `crates/pont-myiro1` : session (paliers, plafond, journal), adapter `FdxDll`, boucle du protocole et exécutable `pont-myiro1 --dll <FDXSDK.dll> [--plafond <palier>]`.
-- `app` : application de bureau Tauri 2 (seule crate qui dépend de Tauri), catalogue de textes `textes.rs`, page dans `app/interface/` ; lancer avec `cargo run -p app` (`-- --langue en` pour l'anglais).
+- `app` : application de bureau Tauri 2 (seule crate qui dépend de Tauri), catalogue de textes `textes.rs`, page dans `app/interface/` ; lancer avec `cargo run -p app` (`-- --langue en` pour l'anglais). Modules `instrument` et `pont` (sans Tauri) : l'application trouve seule `FDXSDK.dll` (dans l'ordre : dossier choisi, DLL embarquées `sdk/x64` et `sdk/x86` à côté de l'exécutable, `SDK/` du dépôt en développement, DLL retenue, emplacements connus Ergosoft, EIZO, MY-CT1), lit son architecture et lance le pont de la même architecture. Ponts cherchés à côté de l'exécutable (`pont-myiro1-x64.exe`, `pont-myiro1-x86.exe`), puis en développement dans `target/debug/` et `target/i686-pc-windows-msvc/debug/` : compiler avant `cargo run -p app` avec `cargo build -p pont-myiro1` et `cargo build -p pont-myiro1 --target i686-pc-windows-msvc`.
+
+Installateur Windows (NSIS, ponts 64 et 32 bits inclus) :
+
+```
+python outils/preparer_installateur.py                  # compile les deux ponts, écrit app/tauri.installateur.json
+cargo tauri build --config app/tauri.installateur.json  # tauri-cli 2
+```
+
+**Si `SDK/` existe, l'installateur embarque les DLL du fabricant : il est strictement local, à ne jamais publier (Releases GitHub comprises).** Sans `SDK/`, il n'en contient aucune. `verifier_docs.py` échoue si un fichier `.dll` est suivi ou non ignoré par git.
 
 ```
 cargo test                                     # tous les tests, contre un instrument simulé
@@ -84,6 +93,6 @@ Single-context : `GLOSSARY.md` et `docs/adr/` à la racine, créés au besoin. S
 
 - La documentation vit dans `docs/` : journal (`docs/blog/AAAA-MM-JJ.md`), décisions (`docs/adr/`), références ouvertes (`docs/references/`), fiches d'ABI (`docs/abi/`), système graphique de l'interface (`design-system/`, à ouvrir dans un navigateur), plus `GLOSSARY.md` et `PLAN-ACTION.md`. Elle est rédigée en français, avec des mots simples (l'utilisateur est imprimeur, pas développeur).
 - En fin de tâche importante, mettre à jour le journal du jour, l'ADR concerné et le glossaire ; la commande `/fin-de-journee` fait le tour complet.
-- `python outils/verifier_docs.py` contrôle les mots interdits (liste locale `.mots-interdits.local`, non versionnée), les liens cassés et rappelle le journal du jour. `python outils/verifier_docs.py --installer` le branche sur les commits (hooks locaux).
+- `python outils/verifier_docs.py` contrôle les mots interdits (liste locale `.mots-interdits.local`, non versionnée), les liens cassés, l'absence de tout fichier `.dll` suivi, et rappelle le journal du jour. `python outils/verifier_docs.py --installer` le branche sur les commits (hooks locaux).
 - `docs/sources/` est local et ignoré par git (documents de tiers) : ne jamais le versionner, ne jamais le citer par nom dans un fichier suivi. Les analyses de logiciels concurrents n'y nomment pas le produit dans les fichiers publiés : écrire « un logiciel concurrent ».
 - Les références externes (normes, projets libres) vont dans `docs/references/` sous forme de liens et de résumés, jamais de copies de contenu protégé.

@@ -12,7 +12,8 @@ Contrôles :
      donc le mot lui-même n'apparaît jamais dans un fichier versionné) ; sans cette liste (en CI),
      le contrôle est sauté, annoncé, et les autres contrôles continuent ;
   2. liens relatifs cassés dans les fichiers Markdown ;
-  3. rappel (non bloquant) si le journal du jour manque dans docs/blog/.
+  3. aucun fichier .dll suivi ou non ignoré (DLL du fabricant, sans droit de redistribution) ;
+  4. rappel (non bloquant) si le journal du jour manque dans docs/blog/.
 Code de sortie 1 si un contrôle bloquant échoue.
 """
 import datetime
@@ -96,6 +97,13 @@ def controle_liens(liste):
     return erreurs
 
 
+def controle_dll(liste):
+    """Aucune DLL suivie ou prête à l'être : celles du fabricant n'ont aucun droit
+    de redistribution (seul le poste local peut les embarquer)."""
+    return [f"{f.relative_to(RACINE).as_posix()} : fichier DLL suivi ou non ignoré par git (licence fabricant)"
+            for f in liste if f.suffix.lower() == ".dll"]
+
+
 def controle_message(chemin):
     mots = mots_interdits()
     texte = pathlib.Path(chemin).read_text(encoding="utf-8", errors="replace").lower()
@@ -122,7 +130,7 @@ def main(argv):
         liste = fichiers(staged)
         if not MOTS.exists():  # cas de la CI : la liste reste sur le poste
             print("Liste locale de mots interdits absente (.mots-interdits.local) : contrôle des mots sauté.")
-        erreurs = controle_mots(liste, staged) + controle_liens(liste)
+        erreurs = controle_mots(liste, staged) + controle_liens(liste) + controle_dll(liste)
         journal = RACINE / "docs" / "blog" / f"{datetime.date.today().isoformat()}.md"
         if not journal.exists() and "--staged" not in argv:
             print(f"Rappel : pas de journal du jour ({journal.relative_to(RACINE).as_posix()}). Commande : /fin-de-journee")

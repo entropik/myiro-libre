@@ -57,6 +57,28 @@ class SansListeDeMotsInterdits(unittest.TestCase):
         self.assertIn("lien cassé vers docs/absent.md", sortie)
 
 
+class BibliothequesDuFabricant(unittest.TestCase):
+    """Les DLL Konica Minolta n'ont aucun droit de redistribution : aucun fichier
+    .dll ne doit être suivi par git ni prêt à l'être."""
+
+    def test_une_dll_non_ignoree_bloque(self):
+        depot = DepotNeuf()
+        self.addCleanup(depot.effacer)
+        depot.ecrire("README.md", "Rien à signaler.\n")
+        depot.ecrire("app/sdk/x64/FDXSDK.DLL", "faux\n")
+        code, sortie = depot.verifier()
+        self.assertEqual(code, 1, sortie)
+        self.assertIn("app/sdk/x64/FDXSDK.DLL : fichier DLL", sortie)
+
+    def test_une_dll_ignoree_passe(self):
+        depot = DepotNeuf()
+        self.addCleanup(depot.effacer)
+        depot.ecrire(".gitignore", "*.dll\n")
+        depot.ecrire("SDK/FDXSDK.dll", "faux\n")
+        code, sortie = depot.verifier()
+        self.assertEqual(code, 0, sortie)
+
+
 class AvecListeDeMotsInterdits(unittest.TestCase):
     def test_un_mot_de_la_liste_bloque(self):
         depot = DepotNeuf()
