@@ -107,11 +107,18 @@ const FRANCAIS: Catalogue = &[
         "ecran.non_detecte.etape2",
         "Branchez l’instrument directement sur l’ordinateur, sans concentrateur ni rallonge.",
     ),
-    ("ecran.non_detecte.etape3", "Puis cliquez sur Réessayer."),
+    (
+        "ecran.non_detecte.etape3",
+        "Puis cliquez sur «\u{202f}Réessayer\u{202f}».",
+    ),
     ("ecran.reessayer", "Réessayer"),
     (
-        "ecran.choix.titre",
+        "ecran.choix.titre.logiciel_absent",
         "Le logiciel du fabricant du MYIRO-1 n’est pas installé sur ce poste.",
+    ),
+    (
+        "ecran.choix.titre.logiciel_inutilisable",
+        "Le logiciel du fabricant du MYIRO-1 est installé, mais il n’a pas pu être utilisé.",
     ),
     (
         "ecran.choix.explication",
@@ -256,11 +263,15 @@ const ANGLAIS: Catalogue = &[
         "ecran.non_detecte.etape2",
         "Plug the instrument directly into the computer, without a hub or extension cable.",
     ),
-    ("ecran.non_detecte.etape3", "Then click Try again."),
+    ("ecran.non_detecte.etape3", "Then click “Try again”."),
     ("ecran.reessayer", "Try again"),
     (
-        "ecran.choix.titre",
+        "ecran.choix.titre.logiciel_absent",
         "The MYIRO-1 manufacturer’s software is not installed on this computer.",
+    ),
+    (
+        "ecran.choix.titre.logiciel_inutilisable",
+        "The MYIRO-1 manufacturer’s software is installed, but it could not be used.",
     ),
     (
         "ecran.choix.explication",
@@ -405,6 +416,8 @@ mod tests {
                 "instrument.aucun",
                 "instrument.barre",
                 "instrument.logiciel_absent",
+                "ecran.choix.titre.logiciel_absent",
+                "ecran.choix.titre.logiciel_inutilisable",
             ]
             .map(String::from),
         );
@@ -420,6 +433,25 @@ mod tests {
             inconnues.is_empty(),
             "clés absentes du catalogue : {inconnues:?}"
         );
+    }
+
+    /// Un texte qui cite un bouton le met entre guillemets français :
+    /// « Puis cliquez sur «\u{202f}Réessayer\u{202f}». »
+    #[test]
+    fn un_bouton_cite_est_entre_guillemets() {
+        for bouton in ["ecran.reessayer", "ecran.choix.action"] {
+            let libelle = texte(Langue::Francais, bouton);
+            let cite = format!("«\u{202f}{libelle}\u{202f}»");
+            let fautes: Vec<_> = cles()
+                .filter(|c| *c != bouton)
+                .map(|c| texte(Langue::Francais, c))
+                .filter(|t| t.contains(libelle) && !t.contains(&cite))
+                .collect();
+            assert!(
+                fautes.is_empty(),
+                "« {libelle} » sans guillemets : {fautes:?}"
+            );
+        }
     }
 
     #[test]

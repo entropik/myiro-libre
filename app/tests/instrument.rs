@@ -116,6 +116,50 @@ fn le_logiciel_du_fabricant_est_trouve_seul_et_retenu() {
     assert_eq!(instrument.sdk(), Some(dll.as_path()));
 }
 
+/// Une DLL que le pont n'a pas pu charger n'est pas retenue : sinon elle
+/// serait réessayée en premier à chaque lancement.
+#[test]
+fn une_dll_refusee_n_est_pas_retenue() {
+    let sdk = sdk_factice("refusee-non-retenue");
+    let simule = PontSimule::avec_instruments(&[SERIE]).echouer_a(
+        Palier::Version,
+        Err(Panne::DllRefusee {
+            detail: "DllIntrouvable".into(),
+        }),
+    );
+
+    let instrument = ouvrir(simule, &sdk);
+
+    assert_eq!(instrument.sdk(), None);
+}
+
+/// Dès que le pont a lu la version, la DLL est bonne : elle est retenue même
+/// si l'instrument n'est pas branché.
+#[test]
+fn une_dll_qui_a_rendu_sa_version_est_retenue_meme_sans_instrument() {
+    let sdk = sdk_factice("retenue-sans-instrument");
+
+    let instrument = ouvrir(PontSimule::avec_instruments(&[]), &sdk);
+
+    assert!(instrument.sdk().is_some());
+}
+
+/// Le dossier choisi par l'opérateur (ou tout emplacement plus prioritaire)
+/// qui contient une DLL sans pont de son architecture arrête la recherche :
+/// on ne part pas en silence vers un autre logiciel.
+#[test]
+fn un_emplacement_avec_dll_sans_pont_arrete_la_recherche() {
+    let choisi = dossier_vide("choisi-x86");
+    fausse_dll(&choisi.join("FDXSDK.dll"), Architecture::X86);
+    let connu = dossier_vide("connu-x64");
+    fausse_dll(&connu.join("FDXSDK.dll"), Architecture::X64);
+    let seul_x64 = vec![(Architecture::X64, PathBuf::from("pont-myiro1-x64.exe"))];
+
+    let instrument = Instrument::ouvrir(&[choisi, connu], &seul_x64, ne_pas_lancer);
+
+    assert_eq!(instrument.probleme().unwrap().code(), "pont_introuvable");
+}
+
 #[test]
 fn sans_logiciel_du_fabricant_l_application_propose_de_choisir_un_dossier() {
     let vide = dossier_vide("sans-logiciel");
@@ -438,9 +482,21 @@ fn la_barre_recoit_le_modele_et_l_etat_sans_numero_de_serie() {
         serde_json::json!({
             "etat": "etalonnage_requis",
             "modele": "MYIRO-1",
+            "pret": false,
             "probleme": null,
         })
     );
+}
+
+/// « Prêt » est décidé par le module, pas par la page : un instrument qui
+/// demande son étalonnage, ou absent, n'est pas prêt.
+#[test]
+fn seul_le_module_dit_si_l_instrument_est_pret() {
+    let sdk = sdk_factice("pret");
+    let absent = ouvrir(PontSimule::avec_instruments(&[]), &sdk);
+    assert!(!absent.vue().pret);
+    let a_etalonner = ouvrir(PontSimule::avec_instruments(&[SERIE]), &sdk);
+    assert!(!a_etalonner.vue().pret);
 }
 
 #[test]
@@ -481,6 +537,27 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
         Probleme::DetectionImpossible { detail: d() },
         Probleme::ConnexionImpossible { detail: d() },
     ];
+    // Garde : ajouter une variante à `Probleme` casse la compilation ici ;
+    // on lui donne alors un numéro, et l'assertion exige qu'elle soit listée.
+    fn numero(p: &Probleme) -> usize {
+        match p {
+            Probleme::LogicielAbsent { .. } => 0,
+            Probleme::LogicielInutilisable { .. } => 1,
+            Probleme::PontIntrouvable { .. } => 2,
+            Probleme::PontEnPanne { .. } => 3,
+            Probleme::PontBloque { .. } => 4,
+            Probleme::AucunInstrument => 5,
+            Probleme::DetectionImpossible { .. } => 6,
+            Probleme::ConnexionImpossible { .. } => 7,
+        }
+    }
+    let mut numeros: Vec<usize> = tous.iter().map(numero).collect();
+    numeros.sort();
+    assert_eq!(
+        numeros,
+        (0..8).collect::<Vec<_>>(),
+        "chaque problème est listé une fois"
+    );
     for probleme in tous {
         for langue in [Langue::Francais, Langue::Anglais] {
             for partie in ["cause", "action"] {

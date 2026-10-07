@@ -176,6 +176,8 @@ impl Probleme {
 pub struct Vue {
     pub etat: &'static str,
     pub modele: Option<String>,
+    /// L'instrument peut mesurer (connecté sans étalonnage à faire, ou étalonné).
+    pub pret: bool,
     pub probleme: Option<VueProbleme>,
 }
 
@@ -237,8 +239,13 @@ impl<P: Pont> Instrument<P> {
         };
         let mut pont = match lancer(&programme, &dll, PLAFOND) {
             Ok(pont) => pont,
-            Err(panne) => return Self::en_echec(Some(dll), panne.into()),
+            Err(panne) => return Self::en_echec(None, panne.into()),
         };
+        // La DLL n'est retenue qu'une fois qu'elle a rendu sa version : une
+        // DLL refusée serait sinon réessayée en premier à chaque lancement.
+        if let Err(probleme) = lire_version(&mut pont) {
+            return Self::en_echec(None, probleme);
+        }
         match monter(&mut pont) {
             Ok(fiche) => Instrument {
                 pont: Some(pont),
@@ -283,6 +290,7 @@ impl<P: Pont> Instrument<P> {
         Vue {
             etat,
             modele: fiche.map(|f| f.modele.clone()),
+            pret: matches!(self.etat, Etat::Connecte(_) | Etat::Etalonne(_)),
             probleme: self.probleme.as_ref().map(|p| VueProbleme {
                 code: p.code(),
                 ecran: match p.ecran() {
@@ -298,7 +306,8 @@ impl<P: Pont> Instrument<P> {
 
 /// Choisit la DLL et le pont. Les emplacements sont essayés dans l'ordre ;
 /// dans chacun, une DLL 64 bits qui a son pont est préférée, sinon une
-/// 32 bits qui a le sien.
+/// 32 bits qui a le sien. Le premier emplacement qui contient une DLL
+/// décide : sans pont pour elle, la recherche s'arrête là.
 fn choisir(
     emplacements: &[PathBuf],
     ponts: &[(Architecture, PathBuf)],
@@ -333,6 +342,12 @@ fn choisir(
                 }
             }
         }
+        // Un emplacement qui a une DLL mais pas son pont arrête la recherche :
+        // le dossier choisi par l'opérateur ne cède pas en silence la place à
+        // un autre logiciel. C'est l'application qui est incomplète.
+        if !ici.is_empty() {
+            break;
+        }
     }
     let examines = examines.trim_end().to_string();
     if trouvees == 0 {
@@ -358,18 +373,20 @@ fn nom_architecture(arch: Architecture) -> &'static str {
     }
 }
 
-/// Monte les paliers dans l'ordre : version du SDK, détection, connexion au
-/// premier instrument détecté. Jamais plus loin que `PLAFOND`.
-fn monter(pont: &mut impl Pont) -> Result<Fiche, Probleme> {
+/// Premier palier : la version du SDK, preuve que la DLL est chargée.
+fn lire_version(pont: &mut impl Pont) -> Result<(), Probleme> {
     match pont.demander(&Requete::Version {})? {
-        Reponse::Version { .. } => {}
-        Reponse::Erreur { erreur } => {
-            return Err(Probleme::LogicielInutilisable {
-                detail: format!("version du SDK : {erreur:?}"),
-            })
-        }
-        autre => return Err(inattendue(autre)),
+        Reponse::Version { .. } => Ok(()),
+        Reponse::Erreur { erreur } => Err(Probleme::LogicielInutilisable {
+            detail: format!("version du SDK : {erreur:?}"),
+        }),
+        autre => Err(inattendue(autre)),
     }
+}
+
+/// Paliers suivants, dans l'ordre : détection, connexion au premier
+/// instrument détecté. Jamais plus loin que `PLAFOND`.
+fn monter(pont: &mut impl Pont) -> Result<Fiche, Probleme> {
     match pont.demander(&Requete::Detecter {})? {
         Reponse::Instruments { liste } if liste.is_empty() => {
             return Err(Probleme::AucunInstrument)
