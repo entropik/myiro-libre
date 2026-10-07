@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>myiro-libre</title>
+<!-- Styles : uniquement le système graphique (design-system/, copié à la compilation) et la fonte embarquée. -->
+<link rel="stylesheet" href="fontes/fontes.css">
+<link rel="stylesheet" href="systeme/tokens.css">
+<link rel="stylesheet" href="systeme/components.css">
+<script src="app.js" defer></script>
+</head>
+<!-- Les textes viennent du catalogue Rust (data-t) : la page reste masquée tant qu'il n'est pas appliqué. -->
+<body hidden>
+<header class="masthead"><div class="page"><div class="grid">
+  <div class="c-1-2 brand">myiro-libre</div>
+  <nav class="c-3-9 nav" data-t-aria="nav.libelle">
+    <button data-tache="mesurer" aria-current="page"><span class="label num">01</span><span data-t="tache.mesurer"></span></button>
+    <button data-tache="controler"><span class="label num">02</span><span data-t="tache.controler"></span></button>
+    <button data-tache="profiler"><span class="label num">03</span><span data-t="tache.profiler"></span></button>
+    <button data-tache="bibliotheque"><span class="label num">04</span><span data-t="tache.bibliotheque"></span></button>
+  </nav>
+  <div class="c-10-12 masthead__tools">
+    <span class="state state--warn" data-t-aria="instrument.libelle"><i></i><span data-t="instrument.aucun"></span></span>
+    <div class="seg" role="group" data-t-aria="theme.libelle">
+      <button data-theme-choix="light" data-t="theme.clair"></button><button data-theme-choix="dark" data-t="theme.sombre"></button>
+    </div>
+    <div class="seg" role="group" data-t-aria="langue.libelle">
+      <button data-langue-choix="fr" lang="fr">FR</button><button data-langue-choix="en" lang="en">EN</button>
+    </div>
+  </div>
+</div></div></header>
+
+<main class="page frame"><div class="grid">
+  <aside class="c-1-2 index">
+    <span class="label zone__title" data-t="bibliotheque.titre"></span>
+    <ol>
+      <li class="l1"><span class="num mute">1</span><span data-t="exemple.condition1"></span><span></span></li>
+      <li><span class="num mute">1.1</span><span data-t="bibliotheque.mires"></span><span class="num">0</span></li>
+      <li class="sel"><span class="num">1.2</span><span data-t="bibliotheque.mesures"></span><span class="num">0</span></li>
+      <li><span class="num mute">1.3</span><span data-t="bibliotheque.profils"></span><span class="num">0</span></li>
+      <li><span class="num mute">1.4</span><span data-t="bibliotheque.controles"></span><span class="num">0</span></li>
+      <li class="l1"><span class="num mute">2</span><span data-t="exemple.condition2"></span><span></span></li>
+    </ol>
+    <p class="why" data-t="bibliotheque.exemple"></p>
+  </aside>
+
+  <div class="c-3-9">
+    <div class="sheet-head"><span class="label label--ink" data-tache-courante></span><span class="label num" data-t="feuille.numero"></span></div>
+    <section class="empty" data-vue="mesurer">
+      <h2 class="empty__text" data-t="vide.mesurer.phrase"></h2>
+      <div class="actions"><button class="btn btn--primary" disabled data-t="vide.mesurer.action"></button></div>
+      <p class="why" data-t="raison.instrument"></p>
+    </section>
+    <section class="empty" data-vue="controler" hidden>
+      <h2 class="empty__text" data-t="vide.controler.phrase"></h2>
+      <div class="actions"><button class="btn btn--primary" disabled data-t="vide.controler.action"></button></div>
+      <p class="why" data-t="raison.instrument"></p>
+    </section>
+    <section class="empty" data-vue="profiler" hidden>
+      <h2 class="empty__text" data-t="vide.profiler.phrase"></h2>
+      <div class="actions"><button class="btn btn--primary" disabled data-t="vide.profiler.action"></button></div>
+      <p class="why" data-t="raison.instrument"></p>
+    </section>
+    <section class="empty" data-vue="bibliotheque" hidden>
+      <h2 class="empty__text" data-t="vide.bibliotheque.phrase"></h2>
+      <div class="actions"><button class="btn btn--primary" disabled data-t="vide.bibliotheque.action"></button></div>
+      <p class="why" data-t="raison.bientot"></p>
+    </section>
+  </div>
+
+  <aside class="c-10-12">
+    <span class="label zone__title" data-t="details.titre"></span>
+    <div class="cartouche">
+      <div class="cartouche__title"><span class="label" data-t="cartouche.libelle"></span><strong data-t="cartouche.titre"></strong></div>
+      <div class="cells">
+        <div class="cell"><span class="label" data-t="cartouche.instrument"></span><span data-t="cartouche.aucun"></span></div>
+        <div class="cell"><span class="label" data-t="cartouche.etalonnage"></span><span data-t="cartouche.non_fait"></span></div>
+        <div class="cell"><span class="label" data-t="cartouche.condition_mesure"></span><b>M1</b> · D50 · 2°</div>
+        <div class="cell"><span class="label" data-t="cartouche.reference"></span><span data-t="cartouche.aucune"></span></div>
+      </div>
+      <div class="cartouche__foot"><span>myiro-libre</span><span class="num">0.1.0</span></div>
+    </div>
+  </aside>
+</div></main>
+</body>
+</html>

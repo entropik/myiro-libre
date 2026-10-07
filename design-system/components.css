@@ -171,9 +171,18 @@ tr.hl td { background: var(--color-hair); }
 .nav button .label { display: block; margin-bottom: var(--space-1); }
 .nav button[aria-current="page"] { border-bottom-color: var(--color-ink); font-weight: 700; }
 .sheet-head { display: flex; justify-content: space-between; align-items: baseline; border-top: var(--rule-heavy) solid var(--color-rule); padding-top: var(--space-2); margin-bottom: var(--space-6); }
+.masthead__tools { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-4); }
 .section { margin-top: var(--space-12); }
 .section__head { display: flex; justify-content: space-between; align-items: baseline; border-top: var(--rule-strong) solid var(--color-rule); padding-top: var(--space-2); margin-bottom: var(--space-3); }
 .section__title { font-size: var(--text-xl); font-weight: 600; letter-spacing: var(--tracking-snug); line-height: var(--leading-snug); }
+
+/* ---- Cadre de l'application : trois zones sous le bandeau ---- */
+.frame { padding-top: var(--space-8); padding-bottom: var(--space-12); }
+.frame > .grid { align-items: start; }
+.zone__title { display: block; margin-bottom: var(--space-3); }
+
+/* ---- État vide : une phrase en grand corps, une action ---- */
+.empty__text { font-size: var(--text-3xl); font-weight: 600; letter-spacing: var(--tracking-snug); line-height: var(--leading-snug); max-width: var(--measure); }
 
 @media (max-width: 64rem) {
   .c-1-2, .c-3-9, .c-10-12, .c-1-6, .c-7-12, .c-1-4, .c-5-8, .c-9-12, .c-5-12 { grid-column: 1 / -1; }

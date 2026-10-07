@@ -27,4 +27,4 @@ Ouvrir `index.html` dans un navigateur (double-clic, sans compilation).
 
 ## Fonte
 
-Inter (variable, axe de corps optique), chargée depuis Google Fonts dans les pages de documentation. L'application embarquera la fonte localement (pas d'appel réseau, ADR 0003).
+Inter (variable, axe de corps optique), chargée depuis Google Fonts dans les pages de documentation. L'application embarque la fonte localement (`app/interface/fontes/`, pas d'appel réseau, ADR 0003).

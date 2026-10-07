@@ -36,6 +36,7 @@ Code Rust (espace de travail Cargo à la racine) :
 - `crates/fdx-sys` : liste blanche des exports de `FDXSDK.dll` et formes binaires ; ne charge jamais la DLL.
 - `crates/pont-protocole` : messages JSON entre l'application et les ponts (requêtes, réponses, provenance) ; indépendant de Windows.
 - `crates/pont-myiro1` : session (paliers, plafond, journal), adapter `FdxDll`, boucle du protocole et exécutable `pont-myiro1 --dll <FDXSDK.dll> [--plafond <palier>]`.
+- `app` : application de bureau Tauri 2 (seule crate qui dépend de Tauri), catalogue de textes `textes.rs`, page dans `app/interface/` ; lancer avec `cargo run -p app` (`-- --langue en` pour l'anglais).
 
 ```
 cargo test                                     # tous les tests, contre un instrument simulé
