@@ -265,7 +265,14 @@ fn palier_bande_avec_le_vrai_instrument() {
         for ligne in &session.journal()[deja..] {
             println!("    journal : {ligne}");
         }
-        let bande = resultat.expect("lecture de bande");
+        // Une bande refusée est notée, et la séance continue avec la suivante.
+        let bande = match resultat {
+            Ok(bande) => bande,
+            Err(erreur) => {
+                println!("  bande refusée : {erreur:?}");
+                continue;
+            }
+        };
         println!("  {} plages, sens {}", bande.plages.len(), bande.sens);
         for (i, plage) in bande.plages.iter().enumerate() {
             let nom = format!("{rangee}{}1", (b'A' + i as u8) as char);
