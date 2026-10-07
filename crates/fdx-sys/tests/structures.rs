@@ -1,6 +1,6 @@
 //! Formes binaires établies dans docs/abi/ : une erreur ici corromprait la mémoire du pont.
 
-use fdx_sys::{lire_infos_instrument, Port, Version, TAILLE_TAMPON_INFOS};
+use fdx_sys::{lire_infos_instrument, Liaison, Port, Version, TAILLE_TAMPON_INFOS};
 use std::mem::size_of;
 
 #[test]
@@ -13,7 +13,7 @@ fn la_version_du_sdk_fait_12_octets() {
     assert_eq!(size_of::<Version>(), 12);
 }
 
-// La DLL écrit au moins jusqu'à l'octet 0x21 ; on prévoit large (fiche FDX_GetDeviceInfo).
+// La structure fait 40 octets ; on prévoit large (fiche FDX_GetDeviceInfo).
 // Vérifié à la compilation : un tampon trop petit empêche de construire les tests.
 const _: () = assert!(TAILLE_TAMPON_INFOS >= 256);
 
@@ -24,7 +24,68 @@ fn tampon_exemple() -> [u8; TAILLE_TAMPON_INFOS] {
     t[8..12].copy_from_slice(&2u32.to_le_bytes());
     t[12..16].copy_from_slice(&3u32.to_le_bytes());
     t[0x18..0x1e].copy_from_slice(&[0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e]);
+    t[0x1e..0x22].copy_from_slice(b"ACJ1");
+    t[0x24..0x28].copy_from_slice(&20231015u32.to_le_bytes());
     t
+}
+
+#[test]
+fn le_code_produit_est_lu_a_l_octet_0x1e() {
+    assert_eq!(
+        lire_infos_instrument(&tampon_exemple()).code_produit,
+        "ACJ1"
+    );
+}
+
+#[test]
+fn la_date_initiale_est_lue_a_l_octet_0x24() {
+    assert_eq!(
+        lire_infos_instrument(&tampon_exemple()).date_initiale,
+        Some(20231015)
+    );
+}
+
+#[test]
+fn la_date_d_usine_veut_dire_jamais_posee() {
+    let mut t = tampon_exemple();
+    t[0x24..0x28].copy_from_slice(&20190101u32.to_le_bytes());
+    assert_eq!(lire_infos_instrument(&t).date_initiale, None);
+}
+
+fn port(liaison: i32, nom: &[u8], numero: u32) -> Port {
+    let mut opaque = [0u8; 40];
+    opaque[..nom.len()].copy_from_slice(nom);
+    opaque[36..40].copy_from_slice(&numero.to_le_bytes());
+    Port {
+        code_liaison: liaison,
+        opaque,
+    }
+}
+
+#[test]
+fn une_entree_usb_donne_son_port_et_son_numero() {
+    let p = port(1, b"COM3", 10002006);
+    assert_eq!(p.liaison(), Liaison::Usb);
+    assert_eq!(p.nom(), "COM3");
+    assert_eq!(p.numero_serie(), 10002006);
+}
+
+#[test]
+fn une_entree_reseau_donne_son_adresse() {
+    let p = port(0, b"192.168.1.40", 10002006);
+    assert_eq!(p.liaison(), Liaison::Reseau);
+    assert_eq!(p.nom(), "192.168.1.40");
+}
+
+#[test]
+fn un_code_de_liaison_inattendu_reste_visible() {
+    assert_eq!(port(7, b"", 0).liaison(), Liaison::Inconnue(7));
+}
+
+#[test]
+fn un_nom_de_port_sans_zero_final_ne_deborde_pas_sur_le_numero() {
+    let p = port(1, &[b'A'; 36], 0x31313131);
+    assert_eq!(p.nom(), "A".repeat(33));
 }
 
 #[test]

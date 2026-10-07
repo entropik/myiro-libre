@@ -19,6 +19,11 @@ Les preuves citées (`Audit-MYIRO/retroanalyse/…`) sont des désassemblages de
 | `fdx-x86` | MY-CT1 `FDXSDK.dll` | 1.0.1.0 | x86 |
 | `fdx-x64-101` | Ergosoft `FDXSDK.dll` | 1.0.1.0 | x64 |
 | `fdx-x64-103` | EIZO `FDXSDK.dll` | 1.0.3.0 | x64 |
+| MYIRO tools 1.5.0 Windows | `FDXSDK.dll` | 1.0.3.0 | x64 (identique à EIZO, signature mise à part) |
+| MYIRO tools 1.5.0 Mac | `libFDXSDK.dylib` | 1.0.5 | x86_64 + arm64, **symboles conservés** |
+| MY-CT1 1.1.0 Mac | `libFDXSDK.dylib` | 1.1.0 | x86_64, **symboles conservés** |
+
+Les bibliothèques Mac ont gardé les noms de leurs fonctions internes, avec les types des arguments, et les messages de journal nomment les champs des structures : elles confirment la plupart des signatures reconstituées sur Windows. Les mêmes 91 exports existent dans toutes les versions.
 
 ## Règles communes à toutes les fonctions
 
@@ -32,10 +37,11 @@ Les preuves citées (`Audit-MYIRO/retroanalyse/…`) sont des désassemblages de
 
 | Code | Hexadécimal | Sens | Niveau |
 |---|---|---|---|
-| -9992 | `0xFFFFD8F8` | paramètre invalide (pointeur nul, valeur hors bornes) | supposé, très probable : seul code émis par les contrôles d'arguments |
-| -9986 | `0xFFFFD8FE` | état incompatible (« device is connected. », « can not use. now status:%d ») | supposé, très probable : émis avec ces messages de journal |
+| -9992 | `0xFFFFD8F8` | argument invalide (pointeur nul, valeur hors bornes) | valeur confirmée ; sens confirmé par les contrôles d'arguments et les journaux du SDK Mac |
+| -9986 | `0xFFFFD8FE` | opération interdite dans l'état actuel (« device is connected. », « can not use. now status:%d ») | valeur confirmée ; sens tiré des journaux |
+| -9983 | `0xFFFFD901` | étalonnage requis (renvoyé par `SetMeasureCondition` en 1.0.5) | valeur confirmée ; sens tiré des journaux |
 
-Les autres codes ne sont pas encore inventoriés.
+Les codes existent par plages : -9999 à -9981 (général), -9899 à -9892 (reconnaissance de bande), -9793 à -9789. Leur inventaire complet, avec libellés supposés, est dans `retroanalyse/logiciels/my-ct1.md` et `myiro-tools.md`.
 
 ## Fiches
 

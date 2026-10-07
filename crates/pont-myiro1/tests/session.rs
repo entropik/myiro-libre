@@ -1,7 +1,7 @@
 //! Comportement de la session du pont MYIRO-1, contre un SDK simulé.
 
 use fdx_sys::{Port, Version, TAILLE_TAMPON_INFOS};
-use pont_myiro1::{SdkMyiro1, Session};
+use pont_myiro1::{Connexion, SdkMyiro1, Session};
 use pont_protocole::{ErreurPont, Palier};
 
 /// SDK simulé : répond comme FDXSDK d'après docs/abi/, et note chaque appel.
@@ -37,12 +37,12 @@ impl SdkMyiro1 for SdkSimule {
         self.appels.push("ports".into());
         Ok(self.ports.clone())
     }
-    fn connecter(&mut self, _port: &Port, delai: u32) -> Result<(), i32> {
+    fn connecter(&mut self, _port: &Port, delai: u32) -> Result<i32, i32> {
         self.appels.push(format!("connecter {delai}"));
         if self.code_connexion < 0 {
             Err(self.code_connexion)
         } else {
-            Ok(())
+            Ok(self.code_connexion)
         }
     }
     fn infos(&mut self) -> Result<[u8; TAILLE_TAMPON_INFOS], i32> {
@@ -59,8 +59,9 @@ fn la_progression_complete_donne_l_identite_de_l_instrument() {
     session.version().unwrap();
     let ports = session.detecter().unwrap();
     assert_eq!(ports.len(), 1);
-    let infos = session.connecter(0).unwrap();
-    assert_eq!(infos.numero, 10002006);
+    let connexion = session.connecter(0).unwrap();
+    assert_eq!(connexion.infos.numero, 10002006);
+    assert!(!connexion.anomalie_date_initiale);
 }
 
 #[test]
@@ -144,7 +145,7 @@ fn la_connexion_attend_10_comme_eizo() {
     );
 }
 
-fn session_qui_echoue_a_la_connexion(code: i32) -> Result<fdx_sys::InfosInstrument, ErreurPont> {
+fn session_qui_echoue_a_la_connexion(code: i32) -> Result<Connexion, ErreurPont> {
     let mut sdk = SdkSimule::avec_un_myiro1();
     sdk.code_connexion = code;
     let mut session = Session::new(sdk, Palier::Connexion);
@@ -181,5 +182,19 @@ fn apres_un_echec_de_connexion_on_peut_reessayer_sans_redetecter() {
     assert!(
         session.connecter(0).is_ok(),
         "la liste détectée reste valable"
+    );
+}
+
+#[test]
+fn le_bit_4_de_la_connexion_signale_une_anomalie_de_date_initiale() {
+    let connexion = session_qui_echoue_a_la_connexion(4).unwrap();
+    assert!(connexion.anomalie_date_initiale);
+}
+
+#[test]
+fn un_code_negatif_reste_un_echec_meme_avec_le_bit_4() {
+    assert_eq!(
+        session_qui_echoue_a_la_connexion(-9992 | 4),
+        Err(ErreurPont::Sdk { code: -9992 | 4 })
     );
 }

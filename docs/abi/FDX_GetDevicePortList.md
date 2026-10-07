@@ -1,49 +1,49 @@
 # FDX_GetDevicePortList
 
-**En clair** : demande à la DLL la liste des instruments qu'elle voit (branchés en USB ou, peut-être, sur le réseau). C'est le palier Détection. Une liste vide n'est pas une erreur : elle veut dire « rien de branché ».
+**En clair** : demande à la DLL la liste des instruments qu'elle voit, branchés en USB ou présents sur le réseau. C'est le palier Détection. Une liste vide n'est pas une erreur : elle veut dire « rien de branché ».
 
 ## Signature
 
 ```c
-int32_t __stdcall FDX_GetDevicePortList(RE_FDX_Port44 *out_ports,  /* tableau, peut être NULL */
-                                        uint32_t *out_count,       /* obligatoire */
-                                        uint32_t capacity_ports);  /* x86 : ret 12 */
-typedef struct { int32_t transport_code; uint8_t opaque[40]; } RE_FDX_Port44; /* 44 octets */
+int32_t __stdcall FDX_GetDevicePortList(FDX_PortInfo *out_ports,  /* tableau, peut être NULL */
+                                        uint32_t *out_count,      /* obligatoire */
+                                        uint32_t capacity_ports); /* x86 : ret 12 */
 ```
 
 ## Ce qui est confirmé
 
 - Trois arguments : le tableau à remplir, un pointeur vers le compteur, la capacité du tableau **en nombre d'entrées** (pas en octets).
-- Capacité supérieure à 100 : erreur -9992. Compteur nul (`out_count == NULL`) : erreur -9992. Capacité 0 acceptée.
-- **Appel en deux temps**, utilisé par MY-CT1 :
-  1. `(NULL, &count, 0)` : la DLL écrit seulement le nombre d'instruments trouvés ;
-  2. `(tableau, &count, 100)` : la DLL copie les entrées.
-- Si la capacité est trop petite, la DLL écrit le nombre trouvé mais ne copie pas le tableau : il faut toujours relire `count` avant d'utiliser les entrées.
-- Chaque entrée fait **44 octets** (pas de copie vérifié dans la DLL). EIZO réserve 20 entrées (880 octets), passe la capacité 20, et utilise la première entrée pour se connecter : preuve indépendante en x64.
-- **Refus pendant une connexion active** : si un instrument est connecté et que l'état interne n'est pas 1, 2, 3, 7 ou 8, erreur -9986 (« device is connected. »).
+- Capacité supérieure à 100 : erreur -9992. Compteur nul : erreur -9992. Capacité 0 acceptée.
+- **Appel en deux temps**, utilisé par MY-CT1 : `(NULL, &count, 0)` pour connaître le nombre, puis `(tableau, &count, 100)` pour les entrées.
+- Si la capacité est trop petite, la DLL écrit le nombre trouvé mais ne copie pas le tableau : toujours relire `count` avant d'utiliser les entrées.
+- **Refus pendant une connexion occupée** : si un instrument est connecté et que l'état interne n'est pas 1, 2, 3, 7 ou 8, erreur -9986.
+- **Détection USB** : VID `132B`, PID `210D` ou `210F`, n° de série USB commençant par `ACJ1` ou `9C1D` (les deux codes produit de la famille MYIRO-1). Le PID `210D` est aussi celui du FD-9 et du MYIRO-9, que leur SDK distingue par les préfixes `9C1A` et `A8AN` : **le PID seul n'identifie pas le modèle**, le préfixe du n° de série si.
+- **Détection réseau** : diffusion UDP du message « FDXSDK » vers le port 49152.
 
-## Contenu d'une entrée
+## Contenu d'une entrée (44 octets, confirmé par les SDK Mac non dépouillés)
 
-- `+0` : entier qui ne peut valoir que 0 ou 1 (contrôlé par `FDX_Connect`) : **confirmé**. Qu'il désigne le moyen de liaison (USB ou réseau) est **supposé** : la DLL importe aussi la bibliothèque réseau Windows.
-- `+4` : chaîne de caractères terminée par zéro, lue par `FDX_Connect` : **confirmé**. Son contenu (chemin de périphérique, nom de port…) et sa longueur maximale ne sont pas établis.
-- `+40` : nombre affiché par MY-CT1 dans sa liste : **confirmé** comme affichage. Qu'il s'agisse du numéro de série est **supposé**.
-- Le reste est opaque : le pont doit conserver les 44 octets intacts et les rendre tels quels à `FDX_Connect`.
+| Position | Taille | Contenu |
+|---|---|---|
+| `+0x00` | i32 | liaison : **0 = réseau (TCP), 1 = USB** |
+| `+0x04` | 33 octets max | nom du port, terminé par zéro : `COMn` sous Windows, `/dev/cu.usbmodem…` sur Mac, adresse IP en réseau |
+| `+0x25..+0x27` | 3 octets | remplissage |
+| `+0x28` | u32 | **n° de série** de l'instrument, 8 chiffres (en USB : chiffres du n° de série USB après le préfixe) |
 
 ## Pour le pont
 
 - Toujours faire l'appel en deux temps, avec une capacité ≤ 100.
-- Présenter chaque entrée à l'application comme un identifiant opaque, plus un libellé (le nombre à `+40`, marqué supposé).
+- Présenter chaque entrée à l'application avec sa liaison, son nom de port et son n° de série ; rendre les 44 octets intacts à `FDX_Connect`.
 - Appeler avant `FDX_Connect` ; ne pas rappeler pendant une mesure.
+- Ne jamais ouvrir un périphérique Konica Minolta de PID `210E` : aucun SDK ne le cherche, il s'agit probablement du mode de mise à jour du micrologiciel (`retroanalyse/logiciels/firmware-fd9.md`).
 
 ## À vérifier sur l'instrument
 
-- La valeur de `+0` pour le MYIRO-1 en USB (attendu : 0 ou 1).
-- Le contenu de la chaîne à `+4`, et si le nombre à `+40` est bien le n° de série (le poste connaît 10002006).
-- Le comportement avec deux instruments, ou avec le MYIRO-1 en réseau.
+- Le nom de port (`COM3` attendu d'après l'inventaire) et le n° de série 10002006.
+- Le comportement avec deux instruments, ou avec le MYIRO-1 en Wi-Fi.
 
 ## Preuves (locales)
 
 - `fdx-x86/exports/FDX_GetDevicePortList.asm.txt` : capacité ≤ 100 à `0x10035969`, compteur obligatoire à `0x1003597f`, `ret 0xc`.
-- `fdx-x86/internes/GetDevicePortList.asm.txt` : contrôle d'état à `0x1001c15a..0x1001c183`, refus « device is connected. » à `0x1001c1c4`, pas de 44 octets à `0x1001c282`.
+- `fdx-x86/internes/GetDevicePortList.asm.txt` : contrôle d'état à `0x1001c15a..0x1001c183`, pas de 44 octets à `0x1001c282`.
 - `preuves/myct1/enumeration-deux-passes.asm.txt` : appels à `0x402773` et `0x402800`.
-- `preuves/eizo-x64/enumeration.asm.txt`.
+- `retroanalyse/logiciels/my-ct1.md` § 5.1 : découpe de l'entrée, USB et réseau ; `retroanalyse/logiciels/fd-s2w.md` et `firmware-fd9.md` : PID partagé et PID `210E`.
