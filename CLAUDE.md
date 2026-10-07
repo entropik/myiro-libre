@@ -32,6 +32,7 @@ python Audit-MYIRO/outils/synthese.py  # régénère comparaison, indices-techni
 
 Code Rust (espace de travail Cargo à la racine) :
 
+- `crates/colorimetrie` : spectre → XYZ → Lab (D50, 2°), LCH, ΔE00, ΔC, ΔH ; contrat partagé avec le futur RIP (ADR 0004), sans Windows ni ponts. Ses tests `sharma.rs` et `mesures_archivees.rs` lisent des données locales non versionnées : ils sont `#[ignore]` et se lancent par `cargo test -p colorimetrie -- --ignored` (variables `SHARMA_CIEDE2000`, `MESURES_ARCHIVEES`).
 - `crates/fdx-sys` : liste blanche des exports de `FDXSDK.dll` et formes binaires ; ne charge jamais la DLL.
 - `crates/pont-protocole` : messages JSON entre l'application et les ponts (requêtes, réponses, provenance) ; indépendant de Windows.
 - `crates/pont-myiro1` : session (paliers, plafond, journal), adapter `FdxDll`, boucle du protocole et exécutable `pont-myiro1 --dll <FDXSDK.dll> [--plafond <palier>]`.

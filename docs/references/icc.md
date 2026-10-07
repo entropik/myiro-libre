@@ -48,6 +48,7 @@ Neuf notes thématiques, avec sources citées et faits marqués [établi], [prob
 - [Conditions de mesure M0 à M3 (ISO 13655)](icc-conditions-de-mesure.md)
 - [Densité (statuts E, T, A, M)](icc-densite.md)
 - [Écart de couleur CIEDE2000](icc-delta-e.md)
+- [Tables CIE pour passer d'un spectre à Lab (D50, 2°)](cie-tables-colorimetrie.md)
 - [Formats CGATS.17, .ti3 et .cal](icc-cgats-argyll-formats.md)
 - [Options d'ArgyllCMS](icc-argyll-options.md)
 - [Projets libres et pilotes](icc-projets-libres.md)

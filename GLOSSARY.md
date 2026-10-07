@@ -79,6 +79,16 @@ _Éviter_ : métadonnées, contexte
 État d'une donnée que l'instrument ou le SDK n'a pas fournie ou dont le sens n'est pas établi. Une donnée est confirmée, supposée ou inconnue ; une valeur inconnue n'est jamais remplacée par zéro, une chaîne vide ou une valeur par défaut.
 _Éviter_ : null, vide, zéro, par défaut
 
+### Couleur
+
+**Écart de couleur** :
+Différence chiffrée entre deux couleurs Lab. ΔE00 (CIEDE2000) par défaut ; ΔC (écart de chroma) et ΔH (écart de teinte) sont des critères distincts, signés, qu'on ne confond pas avec ΔE00. On dit toujours quelle formule est employée.
+_Éviter_ : delta E sans précision, différence de couleur
+
+**Teinte** :
+Angle de la couleur dans le plan a*b*, en degrés (0 à 360). Un gris parfait (chroma nulle) n'a pas de teinte : elle est inconnue, pas nulle.
+_Éviter_ : hue, nuance
+
 ### Impression
 
 **Condition d'impression** :
