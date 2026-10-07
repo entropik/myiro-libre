@@ -79,6 +79,14 @@ _Éviter_ : autorité, authority, verrou
 Mise en attente de l'instrument pour une mesure ponctuelle ou une bande : il attend l'appui sur son bouton. Ne règle rien de permanent dans l'instrument.
 _Éviter_ : réglage, condition (au sens de `SetMeasureCondition`)
 
+**Retour au repos** :
+Ce que le pont sait de l'instrument après un désarmement : au repos (prouvé par l'instrument), ou incertain, avec la raison (repos non signalé, arrêt refusé, liaison perdue). Une mesure déjà lue reste valable quand il est incertain, mais la suivante est refusée tant qu'il n'est pas prouvé.
+_Éviter_ : nettoyage réussi, arrêt (au sens du résultat)
+
+**Fermeture** :
+Fin volontaire de la session avec l'instrument : désarmement, puis déconnexion. Elle est confirmée seulement si les deux sont faits et le repos prouvé ; sinon elle est incertaine (déconnecté, repos non prouvé) ou en échec (déconnexion refusée, à redemander).
+_Éviter_ : arrêt, sortie, déconnexion (qui n'en est qu'une étape)
+
 **Données brutes** :
 Valeurs rendues par l'instrument avant tout calcul de spectre (152 par plage pour le MYIRO-1), conservées avec chaque mesure pour valider le pilote libre (ADR 0006).
 _Éviter_ : raw, données capteur
