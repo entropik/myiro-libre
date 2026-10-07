@@ -18,7 +18,7 @@ int32_t __stdcall FD9_Disconnect(void);   /* x86 : ret (aucun argument) */
 ## Propriété de la mémoire
 
 - Aucun argument, aucun pointeur rendu (confirmé).
-- La DLL libère elle-même ses objets de session : objet d'événements arrêté puis détruit (`0x1008afa3..0x1008afc2`), (confirmé) ; transport fermé par l'appel suivant (`0x1008aff5`, rôle supposé). L'appelant n'a rien à libérer.
+- La DLL libère elle-même ses objets de session : objet d'événements arrêté puis détruit (`0x1008afa3..0x1008afc2`) (confirmé) ; transport fermé par l'appel suivant (`0x1008aff5`, rôle supposé). L'appelant n'a rien à libérer.
 - L'adresse du rappel d'événements reste enregistrée (aucune écriture dans sa variable) : le pont la désinscrit lui-même ensuite (confirmé, voir [FD9_RegisterDeviceEventHandler](FD9_RegisterDeviceEventHandler.md)).
 
 ## Ce qui est supposé
