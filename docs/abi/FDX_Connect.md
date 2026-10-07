@@ -24,6 +24,10 @@ int32_t __stdcall FDX_Connect(const FDX_PortInfo *port,   /* une entrée de la l
 
 - La date initiale sert de date de mise en service (garantie, suivi d'étalonnage) ; elle n'a aucun effet sur la mesure.
 
+## Décision
+
+**Le 7 octobre 2026, le responsable du projet a accepté que `FDX_Connect` reste autorisé** malgré cette écriture possible : elle est prévue par le fabricant, faite par tous les logiciels officiels, limitée à un instrument resté à la date d'usine, et sans effet sur la mesure. Conditions : vérifier l'horloge de l'ordinateur avant la première connexion d'un instrument, et journaliser le bit 4 ainsi que la date initiale lue.
+
 ## Pour le pont
 
 - Passer l'entrée de 44 octets reçue de la détection, sans la modifier.
