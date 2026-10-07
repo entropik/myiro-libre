@@ -377,7 +377,7 @@ fn une_connexion_refusee_par_l_instrument_garde_le_detail_technique() {
     let simule = PontSimule::avec_instruments(&[SERIE]).echouer_a(
         Palier::Connexion,
         Ok(pont_protocole::Reponse::Erreur {
-            erreur: ErreurPont::Delai,
+            erreur: ErreurPont::Delai {},
         }),
     );
     let sdk = sdk_factice("connexion-refusee");
@@ -413,6 +413,28 @@ fn une_detection_en_echec_a_son_propre_probleme() {
         }
         autre => panic!("problème inattendu : {autre:?}"),
     }
+}
+
+/// Identité illisible après la connexion (#23) : l'instrument n'est pas
+/// exploitable, l'application le dit et ne le donne jamais pour prêt.
+#[test]
+fn une_session_inexploitable_n_est_jamais_prete() {
+    let simule = PontSimule::avec_instruments(&[SERIE]).echouer_a(
+        Palier::Connexion,
+        Ok(pont_protocole::Reponse::Erreur {
+            erreur: ErreurPont::SessionInexploitable {},
+        }),
+    );
+    let sdk = sdk_factice("inexploitable");
+
+    let instrument = ouvrir(simule, &sdk);
+
+    assert_eq!(instrument.etat(), &Etat::NonDetecte);
+    assert_eq!(
+        instrument.probleme().unwrap().code(),
+        "connexion_impossible"
+    );
+    assert!(!instrument.vue().pret);
 }
 
 /// Les étapes câble et port USB ne servent à rien quand c'est le programme
@@ -505,7 +527,7 @@ fn un_probleme_arrive_a_l_ecran_avec_son_ecran_et_son_detail_replie() {
     let simule = PontSimule::avec_instruments(&[SERIE]).echouer_a(
         Palier::Connexion,
         Ok(pont_protocole::Reponse::Erreur {
-            erreur: ErreurPont::InstrumentPerdu,
+            erreur: ErreurPont::InstrumentPerdu {},
         }),
     );
     let instrument = ouvrir(simule, &sdk);

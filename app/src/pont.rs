@@ -328,7 +328,7 @@ impl Pont for PontSimule {
                     },
                 },
                 None => Reponse::Erreur {
-                    erreur: ErreurPont::InstrumentInconnu,
+                    erreur: ErreurPont::InstrumentInconnu {},
                 },
             },
             // Le simulé ne va pas plus loin que la connexion, comme le plafond

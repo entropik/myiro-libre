@@ -7,6 +7,7 @@
 //! - `dll_refusee` : s'arrête comme `pont-myiro1` devant une DLL introuvable ;
 //! - `muet` : lit une requête puis s'arrête avec le code 1 ;
 //! - `illisible` : répond par une ligne hors protocole ;
+//! - `erreur_inconnue` : répond par une erreur d'un type inconnu du protocole ;
 //! - `bloque` : lit une requête et ne répond jamais (DLL bloquée) ;
 //! - `sortie_fermee` : lit une requête, ferme sa sortie et ne se termine pas.
 
@@ -61,6 +62,16 @@ fn main() -> ExitCode {
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(60));
                 }
+            }
+            "erreur_inconnue" => {
+                // Erreur d'un protocole plus récent, inconnue de l'application.
+                writeln!(
+                    sortie,
+                    r#"{{"rep":"erreur","erreur":{{"type":"panne_future"}}}}"#
+                )
+                .unwrap();
+                sortie.flush().unwrap();
+                continue;
             }
             "illisible" => {
                 writeln!(sortie, "pas du JSON").unwrap();

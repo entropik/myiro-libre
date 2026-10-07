@@ -234,6 +234,29 @@ fn un_pont_est_classe_par_son_en_tete() {
     assert_eq!(architecture(&dossier.join("absent.exe")), None);
 }
 
+/// Une erreur que l'application ne connaît pas (pont plus récent) devient un
+/// problème explicite, jamais un instrument prêt.
+#[test]
+fn une_erreur_inconnue_du_pont_devient_un_probleme_explicite() {
+    let programme = pont_factice();
+    let arch = architecture(&programme).expect("le pont factice est un exécutable");
+    let dossier = dossier_vide("erreur-inconnue");
+    faux_programme(&dossier.join("FDXSDK.dll"), arch);
+
+    let instrument = Instrument::ouvrir(&[dossier], &[(arch, programme)], |prog, _dll, plafond| {
+        PontProcessus::lancer(prog, Path::new("erreur_inconnue"), plafond)
+    });
+
+    assert_eq!(instrument.etat(), &Etat::NonDetecte);
+    match instrument.probleme() {
+        Some(Probleme::PontEnPanne { detail }) => {
+            assert!(detail.contains("panne_future"), "{detail}")
+        }
+        autre => panic!("problème inattendu : {autre:?}"),
+    }
+    assert!(!instrument.vue().pret);
+}
+
 /// De bout en bout : le module instrument, le vrai transport, un pont factice.
 #[test]
 fn l_instrument_s_ouvre_a_travers_un_vrai_processus() {
