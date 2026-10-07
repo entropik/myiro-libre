@@ -11,7 +11,8 @@ fn un_export_hors_liste_blanche_est_refuse_avant_toute_resolution() {
         "FDX_JIG_UpdateProgram",
         "FDX_JIG_SetFactoryCalib_WriteSector",
         "FDX_SetNetworkInfo",
-        "FDX_Calibration",
+        "FDX_SetCalibration",
+        "FDX_StartMeasurement",
     ] {
         assert_eq!(
             autoriser_export(nom),
@@ -129,4 +130,32 @@ fn palier_connexion_avec_le_vrai_instrument() {
         ports[0].numero_serie(),
         "n° de série incohérent"
     );
+}
+
+/// Palier 3 : étalonnage sur le blanc du MYIRO-1 réel. L'instrument doit être
+/// posé sur son capuchon MY-A01 avant le lancement (docs/abi/FDX_Calibration.md).
+/// Aucune mesure n'est faite.
+#[test]
+#[ignore = "étalonne le MYIRO-1 posé sur son capuchon"]
+fn palier_etalonnage_avec_le_vrai_instrument() {
+    let dll = FdxDll::charger(dll_du_poste()).expect("chargement de FDXSDK.dll");
+    let mut session = Session::new(dll, Palier::Etalonnage);
+    session.version().expect("FDX_GetSDKVersion");
+    session.detecter().expect("FDX_GetDevicePortList");
+    session
+        .connecter(0)
+        .expect("FDX_Connect + FDX_GetDeviceInfo");
+    let debut = std::time::Instant::now();
+    let resultat = session.etalonner();
+    println!("durée            : {:?}", debut.elapsed());
+    match &resultat {
+        Ok(etalonnage) => {
+            for e in &etalonnage.evenements {
+                println!("événement        : {e:?}");
+            }
+        }
+        Err(erreur) => println!("échec            : {erreur:?}"),
+    }
+    resultat.expect("étalonnage sur le blanc");
+    assert_eq!(session.palier_atteint(), Some(Palier::Etalonnage));
 }

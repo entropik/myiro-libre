@@ -17,6 +17,9 @@ pub const EXPORTS_AUTORISES: &[&str] = &[
     "FDX_Disconnect",
     "FDX_GetDeviceInfo",
     "FDX_GetError",
+    "FDX_RegisterDeviceEventHandler",
+    // Le pont ne l'appelle qu'avec le type 0 (blanc) : docs/abi/FDX_Calibration.md.
+    "FDX_Calibration",
 ];
 
 /// Entrée de `FDX_GetDevicePortList` (44 octets, fiche

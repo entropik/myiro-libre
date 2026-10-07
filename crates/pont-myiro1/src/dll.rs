@@ -4,13 +4,39 @@
 //! autre adresse n'est jamais demandée à la DLL. Conventions d'appel :
 //! `__stdcall` en x86, convention Windows en x64 (`extern "system"`).
 
-use crate::SdkMyiro1;
+use crate::{Evenement, SdkMyiro1};
 use fdx_sys::{Port, Version, EXPORTS_AUTORISES, TAILLE_TAMPON_INFOS};
 use libloading::Library;
+use std::collections::VecDeque;
 use std::path::Path;
+use std::sync::{Condvar, Mutex};
+use std::time::Duration;
 
 /// Capacité maximale admise par `FDX_GetDevicePortList`.
 const CAPACITE_MAX_PORTS: u32 = 100;
+
+/// Type d'étalonnage « blanc » de `FDX_Calibration` ; les types 1 et 2
+/// (lumière ambiante, écran) ne sont jamais transmis.
+const ETALONNAGE_BLANC: i32 = 0;
+
+// La DLL appelle le rappel depuis son propre fil d'exécution, sans contexte
+// utilisateur : les événements passent par cette file globale. La DLL ne
+// gère qu'une session à la fois, le pont aussi.
+static FILE_EVENEMENTS: Mutex<VecDeque<Evenement>> = Mutex::new(VecDeque::new());
+static NOUVEL_EVENEMENT: Condvar = Condvar::new();
+
+/// Rappel donné à la DLL : dépose l'événement et rend la main aussitôt,
+/// sans jamais rappeler la DLL (fiche FDX_RegisterDeviceEventHandler).
+extern "C" fn rappel(code: i32, nb_donnees_brutes: u32, erreur: i32) {
+    if let Ok(mut file) = FILE_EVENEMENTS.lock() {
+        file.push_back(Evenement {
+            code,
+            nb_donnees_brutes,
+            erreur,
+        });
+    }
+    NOUVEL_EVENEMENT.notify_all();
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ErreurChargement {
@@ -35,6 +61,9 @@ type FnPorts = unsafe extern "system" fn(*mut Port, *mut u32, u32) -> i32;
 type FnConnecter = unsafe extern "system" fn(*const Port, u32) -> i32;
 type FnSansArgument = unsafe extern "system" fn() -> i32;
 type FnInfos = unsafe extern "system" fn(*mut u8) -> i32;
+type FnRappel = extern "C" fn(i32, u32, i32);
+type FnEnregistrer = unsafe extern "system" fn(Option<FnRappel>) -> i32;
+type FnEtalonner = unsafe extern "system" fn(i32) -> i32;
 
 pub struct FdxDll {
     version: FnVersion,
@@ -42,6 +71,8 @@ pub struct FdxDll {
     connecter: FnConnecter,
     deconnecter: FnSansArgument,
     infos: FnInfos,
+    enregistrer: FnEnregistrer,
+    etalonner: FnEtalonner,
     connecte: bool,
     // Déclarée en dernier : la DLL reste chargée tant que les pointeurs vivent.
     _bibliotheque: Library,
@@ -55,15 +86,24 @@ impl FdxDll {
         // avec l'instrument avant FDX_GetDevicePortList ou FDX_Connect.
         let bibliotheque = unsafe { Library::new(chemin) }
             .map_err(|e| ErreurChargement::DllIntrouvable(format!("{}: {e}", chemin.display())))?;
-        Ok(FdxDll {
+        let dll = FdxDll {
             version: resoudre(&bibliotheque, "FDX_GetSDKVersion")?,
             ports: resoudre(&bibliotheque, "FDX_GetDevicePortList")?,
             connecter: resoudre(&bibliotheque, "FDX_Connect")?,
             deconnecter: resoudre(&bibliotheque, "FDX_Disconnect")?,
             infos: resoudre(&bibliotheque, "FDX_GetDeviceInfo")?,
+            enregistrer: resoudre(&bibliotheque, "FDX_RegisterDeviceEventHandler")?,
+            etalonner: resoudre(&bibliotheque, "FDX_Calibration")?,
             connecte: false,
             _bibliotheque: bibliotheque,
-        })
+        };
+        // Rappel enregistré avant toute connexion, comme EIZO et MYIRO tools.
+        if let Ok(mut file) = FILE_EVENEMENTS.lock() {
+            file.clear();
+        }
+        // SAFETY : `rappel` est une fonction statique, valide toute la session.
+        unsafe { (dll.enregistrer)(Some(rappel)) };
+        Ok(dll)
     }
 }
 
@@ -132,6 +172,19 @@ impl SdkMyiro1 for FdxDll {
         verifier(unsafe { (self.infos)(tampon.as_mut_ptr()) })?;
         Ok(tampon)
     }
+
+    fn etalonner_blanc(&mut self) -> Result<i32, i32> {
+        // SAFETY : un entier, toujours le type 0 (fiche FDX_Calibration).
+        verifier(unsafe { (self.etalonner)(ETALONNAGE_BLANC) })
+    }
+
+    fn attendre_evenement(&mut self, delai: Duration) -> Option<Evenement> {
+        let file = FILE_EVENEMENTS.lock().ok()?;
+        let (mut file, _) = NOUVEL_EVENEMENT
+            .wait_timeout_while(file, delai, |f| f.is_empty())
+            .ok()?;
+        file.pop_front()
+    }
 }
 
 impl Drop for FdxDll {
@@ -140,5 +193,7 @@ impl Drop for FdxDll {
             // SAFETY : aucun argument ; ferme la session ouverte par FDX_Connect.
             unsafe { (self.deconnecter)() };
         }
+        // SAFETY : retire le rappel avant que la DLL ne soit déchargée.
+        unsafe { (self.enregistrer)(None) };
     }
 }

@@ -9,6 +9,7 @@ use fdx_sys::{
     lire_infos_instrument, InfosInstrument, Port, Version, TAILLE_INFOS, TAILLE_TAMPON_INFOS,
 };
 use pont_protocole::{ErreurPont, Palier};
+use std::time::{Duration, Instant};
 
 /// Délai passé à `FDX_Connect`, en secondes : valeur des logiciels officiels
 /// (fiche `docs/abi/FDX_Connect.md`).
@@ -17,6 +18,23 @@ pub const DELAI_CONNEXION: u32 = 10;
 /// Bit ajouté par `FDX_Connect` à son code quand le contrôle de la date
 /// initiale de l'instrument a échoué.
 const BIT_ANOMALIE_DATE_INITIALE: i32 = 4;
+
+/// Durée maximale d'un étalonnage, événements compris. EIZO attend environ
+/// 10 s ; marge pour un instrument lent (fiche `docs/abi/FDX_Calibration.md`).
+pub const DELAI_ETALONNAGE: Duration = Duration::from_secs(30);
+
+/// Codes d'événement (fiche `docs/abi/FDX_RegisterDeviceEventHandler.md`).
+const EVENEMENT_DECONNEXION: i32 = 6;
+const EVENEMENT_ETALONNAGE_REUSSI: i32 = 8;
+const EVENEMENT_ETALONNAGE_ECHOUE: i32 = 9;
+
+/// Un appel du rappel d'événements de la DLL, tel quel.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Evenement {
+    pub code: i32,
+    pub nb_donnees_brutes: u32,
+    pub erreur: i32,
+}
 
 /// Les appels autorisés de `FDXSDK.dll`, un par export de la liste blanche.
 /// Les erreurs sont les codes négatifs bruts de la DLL.
@@ -27,6 +45,18 @@ pub trait SdkMyiro1 {
     /// Renvoie le code positif ou nul de la DLL, bit 4 compris.
     fn connecter(&mut self, port: &Port, delai: u32) -> Result<i32, i32>;
     fn infos(&mut self) -> Result<[u8; TAILLE_TAMPON_INFOS], i32>;
+    /// `FDX_Calibration(0)` : étalonnage sur le blanc, seul type autorisé.
+    /// Le résultat arrive ensuite par les événements.
+    fn etalonner_blanc(&mut self) -> Result<i32, i32>;
+    /// Prochain événement de l'instrument, ou `None` si le délai expire.
+    fn attendre_evenement(&mut self, delai: Duration) -> Option<Evenement>;
+}
+
+/// Résultat d'un étalonnage réussi.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Etalonnage {
+    /// Événements reçus pendant l'étalonnage, pour le journal.
+    pub evenements: Vec<Evenement>,
 }
 
 /// Résultat d'une connexion réussie.
@@ -66,6 +96,11 @@ impl<S: SdkMyiro1> Session<S> {
         &mut self.sdk
     }
 
+    /// Dernier palier franchi avec succès.
+    pub fn palier_atteint(&self) -> Option<Palier> {
+        self.atteint
+    }
+
     pub fn version(&mut self) -> Result<Version, ErreurPont> {
         self.autoriser(Palier::Version, None)?;
         let version = self.sdk.version().map_err(traduire)?;
@@ -100,6 +135,35 @@ impl<S: SdkMyiro1> Session<S> {
             identite_brute: tampon[..TAILLE_INFOS].to_vec(),
             anomalie_date_initiale: code & BIT_ANOMALIE_DATE_INITIALE != 0,
         })
+    }
+
+    /// Étalonnage sur le blanc : l'instrument doit être posé sur son capuchon.
+    /// Un échec laisse la session au palier Connexion.
+    pub fn etalonner(&mut self) -> Result<Etalonnage, ErreurPont> {
+        self.autoriser(Palier::Etalonnage, Some(Palier::Connexion))?;
+        self.sdk.etalonner_blanc().map_err(traduire)?;
+        let echeance = Instant::now() + DELAI_ETALONNAGE;
+        let mut evenements = Vec::new();
+        loop {
+            let reste = echeance.saturating_duration_since(Instant::now());
+            let evenement = self
+                .sdk
+                .attendre_evenement(reste)
+                .ok_or(ErreurPont::Delai)?;
+            evenements.push(evenement);
+            match evenement.code {
+                EVENEMENT_ETALONNAGE_REUSSI => break,
+                EVENEMENT_ETALONNAGE_ECHOUE => {
+                    return Err(ErreurPont::EtalonnageEchoue {
+                        erreur: evenement.erreur,
+                    })
+                }
+                EVENEMENT_DECONNEXION => return Err(ErreurPont::InstrumentPerdu),
+                _ => {}
+            }
+        }
+        self.atteint = Some(Palier::Etalonnage);
+        Ok(Etalonnage { evenements })
     }
 
     fn autoriser(&self, demande: Palier, prealable: Option<Palier>) -> Result<(), ErreurPont> {

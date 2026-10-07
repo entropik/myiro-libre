@@ -49,6 +49,13 @@ pub enum ErreurPont {
     ParametreRefuse,
     /// Code -9986 de la DLL : appel refusé dans l'état actuel (sens supposé).
     EtatIncompatible,
+    /// L'instrument a signalé l'échec de l'étalonnage (événement 9), avec
+    /// le code d'erreur de la DLL à cet instant.
+    EtalonnageEchoue { erreur: i32 },
+    /// L'instrument n'a pas répondu dans le délai prévu.
+    Delai,
+    /// L'instrument s'est déconnecté ou ne répond plus (événement 6).
+    InstrumentPerdu,
     /// Autre code d'erreur de la DLL, conservé brut.
     Sdk { code: i32 },
 }

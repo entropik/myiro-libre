@@ -1,15 +1,28 @@
 //! Comportement de la session du pont MYIRO-1, contre un SDK simulé.
 
 use fdx_sys::{Port, Version, TAILLE_TAMPON_INFOS};
-use pont_myiro1::{Connexion, SdkMyiro1, Session};
+use pont_myiro1::{Connexion, Evenement, SdkMyiro1, Session};
 use pont_protocole::{ErreurPont, Palier};
+use std::collections::VecDeque;
+use std::time::Duration;
 
 /// SDK simulé : répond comme FDXSDK d'après docs/abi/, et note chaque appel.
 #[derive(Default)]
 struct SdkSimule {
     ports: Vec<Port>,
     code_connexion: i32,
+    code_etalonnage: i32,
+    /// Événements que l'instrument simulé émettra, dans l'ordre.
+    evenements: VecDeque<Evenement>,
     appels: Vec<String>,
+}
+
+fn evenement(code: i32) -> Evenement {
+    Evenement {
+        code,
+        nb_donnees_brutes: 0,
+        erreur: 0,
+    }
 }
 
 impl SdkSimule {
@@ -50,6 +63,18 @@ impl SdkMyiro1 for SdkSimule {
         let mut t = [0u8; TAILLE_TAMPON_INFOS];
         t[0..4].copy_from_slice(&12345678u32.to_le_bytes());
         Ok(t)
+    }
+    fn etalonner_blanc(&mut self) -> Result<i32, i32> {
+        self.appels.push("etalonner blanc".into());
+        if self.code_etalonnage < 0 {
+            Err(self.code_etalonnage)
+        } else {
+            Ok(self.code_etalonnage)
+        }
+    }
+    /// Sans événement en attente, simule l'expiration du délai.
+    fn attendre_evenement(&mut self, _delai: Duration) -> Option<Evenement> {
+        self.evenements.pop_front()
     }
 }
 
@@ -207,4 +232,108 @@ fn la_connexion_garde_les_octets_bruts_de_l_identite() {
     let connexion = session.connecter(0).unwrap();
     assert_eq!(connexion.identite_brute.len(), 40);
     assert_eq!(connexion.identite_brute[0..4], 12345678u32.to_le_bytes());
+}
+
+fn session_connectee(sdk: SdkSimule, plafond: Palier) -> Session<SdkSimule> {
+    let mut session = Session::new(sdk, plafond);
+    session.version().unwrap();
+    session.detecter().unwrap();
+    session.connecter(0).unwrap();
+    session
+}
+
+fn sdk_qui_etalonne(codes: &[i32]) -> SdkSimule {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements = codes.iter().map(|&c| evenement(c)).collect();
+    sdk
+}
+
+#[test]
+fn l_etalonnage_reussit_a_l_evenement_8() {
+    let mut session = session_connectee(sdk_qui_etalonne(&[7, 8]), Palier::Etalonnage);
+    let etalonnage = session.etalonner().unwrap();
+    let codes: Vec<i32> = etalonnage.evenements.iter().map(|e| e.code).collect();
+    assert_eq!(codes, [7, 8]);
+    assert!(session
+        .sdk()
+        .appels
+        .contains(&"etalonner blanc".to_string()));
+}
+
+#[test]
+fn l_etalonnage_echoue_a_l_evenement_9() {
+    let mut sdk = sdk_qui_etalonne(&[7]);
+    sdk.evenements.push_back(Evenement {
+        code: 9,
+        nb_donnees_brutes: 0,
+        erreur: -9984,
+    });
+    let mut session = session_connectee(sdk, Palier::Etalonnage);
+    assert_eq!(
+        session.etalonner(),
+        Err(ErreurPont::EtalonnageEchoue { erreur: -9984 })
+    );
+}
+
+#[test]
+fn sans_reponse_de_l_instrument_l_etalonnage_expire() {
+    let mut session = session_connectee(sdk_qui_etalonne(&[7]), Palier::Etalonnage);
+    assert_eq!(session.etalonner(), Err(ErreurPont::Delai));
+}
+
+#[test]
+fn une_deconnexion_pendant_l_etalonnage_est_signalee() {
+    let mut session = session_connectee(sdk_qui_etalonne(&[7, 6]), Palier::Etalonnage);
+    assert_eq!(session.etalonner(), Err(ErreurPont::InstrumentPerdu));
+}
+
+#[test]
+fn le_plafond_connexion_interdit_l_etalonnage_sans_toucher_la_dll() {
+    let mut session = session_connectee(sdk_qui_etalonne(&[7, 8]), Palier::Connexion);
+    assert_eq!(
+        session.etalonner(),
+        Err(ErreurPont::PalierNonAutorise {
+            demande: Palier::Etalonnage,
+            plafond: Palier::Connexion
+        })
+    );
+    assert!(!session
+        .sdk()
+        .appels
+        .contains(&"etalonner blanc".to_string()));
+}
+
+#[test]
+fn etalonner_sans_connexion_est_refuse() {
+    let mut session = Session::new(sdk_qui_etalonne(&[7, 8]), Palier::Etalonnage);
+    session.version().unwrap();
+    session.detecter().unwrap();
+    assert_eq!(
+        session.etalonner(),
+        Err(ErreurPont::EtatInvalide {
+            attendu: Palier::Connexion
+        })
+    );
+}
+
+#[test]
+fn un_refus_immediat_de_la_dll_est_traduit() {
+    let mut sdk = sdk_qui_etalonne(&[]);
+    sdk.code_etalonnage = -9986;
+    let mut session = session_connectee(sdk, Palier::Etalonnage);
+    assert_eq!(session.etalonner(), Err(ErreurPont::EtatIncompatible));
+}
+
+#[test]
+fn un_echec_d_etalonnage_ne_permet_pas_de_mesurer() {
+    let mut session = session_connectee(sdk_qui_etalonne(&[7, 9]), Palier::MesurePonctuelle);
+    let _ = session.etalonner();
+    assert_eq!(session.palier_atteint(), Some(Palier::Connexion));
+}
+
+#[test]
+fn un_etalonnage_reussi_ouvre_le_palier_suivant() {
+    let mut session = session_connectee(sdk_qui_etalonne(&[7, 8]), Palier::Etalonnage);
+    session.etalonner().unwrap();
+    assert_eq!(session.palier_atteint(), Some(Palier::Etalonnage));
 }

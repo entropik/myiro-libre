@@ -34,6 +34,13 @@ fn les_exports_des_premiers_paliers_sont_autorises() {
 }
 
 #[test]
+fn les_exports_de_l_etalonnage_sont_autorises() {
+    for nom in ["FDX_RegisterDeviceEventHandler", "FDX_Calibration"] {
+        assert!(EXPORTS_AUTORISES.contains(&nom), "manque : {nom}");
+    }
+}
+
+#[test]
 fn chaque_export_autorise_existe_dans_la_dll_de_reference() {
     // Les 32 exports publics hors JIG relevés dans FDXSDK 1.0.1 x86
     // (Audit-MYIRO/retroanalyse/arguments-x86.csv).
