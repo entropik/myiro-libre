@@ -275,17 +275,23 @@ fn horodatage_valable(texte: &str) -> bool {
         std::str::from_utf8(morceau).ok()?.parse().ok()
     };
     let date_heure = (|| {
-        let (mois, jour) = (nombre(5, 7)?, nombre(8, 10)?);
+        let (annee, mois, jour) = (nombre(0, 4)?, nombre(5, 7)?, nombre(8, 10)?);
         let (h, m, s) = (nombre(11, 13)?, nombre(14, 16)?, nombre(17, 19)?);
-        nombre(0, 4)?;
+        let bissextile = annee % 4 == 0 && (annee % 100 != 0 || annee % 400 == 0);
+        let jours_du_mois = match mois {
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
+            2 if bissextile => 29,
+            2 => 28,
+            _ => return Some(false),
+        };
         Some(
             o[4] == b'-'
                 && o[7] == b'-'
                 && o[10] == b'T'
                 && o[13] == b':'
                 && o[16] == b':'
-                && (1..=12).contains(&mois)
-                && (1..=31).contains(&jour)
+                && (1..=jours_du_mois).contains(&jour)
                 && h < 24
                 && m < 60
                 && s <= 60,

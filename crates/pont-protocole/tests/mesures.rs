@@ -154,6 +154,26 @@ fn une_mesure_traverse_le_protocole_sans_perte() {
 }
 
 #[test]
+fn une_reponse_du_protocole_avec_un_champ_inconnu_est_refusee() {
+    let texte = ecrire_reponse(&Reponse::Mesure {
+        mesure: mesure_ponctuelle(),
+    });
+    let abime = texte.replacen(r#"{"rep":"mesure","#, r#"{"rep":"mesure","note":"x","#, 1);
+    assert_ne!(abime, texte);
+    assert!(lire_reponse(&abime).is_err(), "{abime}");
+    for ligne in [
+        r#"{"rep":"etalonne","force":true}"#,
+        r#"{"rep":"ferme","detail":"x"}"#,
+        r#"{"rep":"version","parties":[1,0,1],"protocole":2}"#,
+        r#"{"rep":"instruments","liste":[{"liaison":"usb","port":"COM3","numero_serie":12345678,"x":1}]}"#,
+        r#"{"rep":"erreur","erreur":{"type":"mesure_echouee","erreur":-1,"x":1}}"#,
+        r#"{"rep":"connecte","identite":{"numero_serie":12345678,"micrologiciel":"1.00","code_produit":"9C1D","adresse_mac":"02:00:00:00:00:01","date_initiale":null,"anomalie_date_initiale":false,"brute_hex":"00","x":1}}"#,
+    ] {
+        assert!(lire_reponse(ligne).is_err(), "{ligne}");
+    }
+}
+
+#[test]
 fn une_version_non_prise_en_charge_est_refusee_en_clair() {
     let texte = ecrire_mesure(&mesure_ponctuelle()).replace("mesure/1", "mesure/2");
     let erreur = lire_mesure(&texte).unwrap_err().to_string();
@@ -266,6 +286,30 @@ fn une_provenance_invalide_est_refusee() {
     );
     assert!(Horodatage::new("07/10/2026 15:04").is_err());
     assert!(Horodatage::new("2026-13-07T15:04:05+02:00").is_err());
+    assert!(
+        Horodatage::new("2026-02-31T15:04:05+02:00").is_err(),
+        "31 février"
+    );
+    assert!(
+        Horodatage::new("2026-04-31T15:04:05+02:00").is_err(),
+        "31 avril"
+    );
+    assert!(
+        Horodatage::new("2026-02-29T15:04:05+02:00").is_err(),
+        "2026 non bissextile"
+    );
+    assert!(
+        Horodatage::new("2028-02-29T15:04:05+02:00").is_ok(),
+        "2028 bissextile"
+    );
+    assert!(
+        Horodatage::new("2100-02-29T15:04:05+02:00").is_err(),
+        "2100 non bissextile"
+    );
+    assert!(
+        Horodatage::new("2000-02-29T15:04:05+02:00").is_ok(),
+        "2000 bissextile"
+    );
     assert!(Horodatage::new("2026-10-07T15:04:05Z").is_ok());
     assert!(Empreinte::new("empreinte").is_err());
     assert!(
