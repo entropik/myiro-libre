@@ -45,6 +45,8 @@ cargo test -p pont-myiro1 --test dll -- --ignored palier_version   # appels rée
 
 Les tests `--ignored` de `crates/pont-myiro1/tests/dll.rs` parlent au vrai MYIRO-1 et, à partir de l'étalonnage, demandent des gestes à l'opérateur : ne les lancer qu'avec son accord, palier par palier. Leurs sorties (mesures) vont dans `Archivage/donnees/`, local et non versionné.
 
+Intégration continue (`.github/workflows/ci.yml`, GitHub Actions) à chaque PR et à chaque poussée sur `main`. Job `windows` : `cargo fmt --all --check`, clippy, `cargo test` en 64 puis 32 bits. Job `linux` : fmt, clippy et tests limités aux crates qui doivent rester indépendantes de Windows (liste explicite `CRATES` dans le workflow, aujourd'hui `pont-protocole`). Les deux jobs lancent `python outils/test_verifier_docs.py` et `python outils/verifier_docs.py`. `main` exige ces deux contrôles verts : ne pas renommer les jobs. La CI ne couvre pas la DLL ni l'instrument (tests `--ignored`, aucun fichier Konica Minolta sur GitHub), ni les écrans, ni les mots interdits (la liste `.mots-interdits.local` reste sur le poste ; sans elle, le contrôle est sauté et annoncé).
+
 ## Points techniques établis par l'audit
 
 - Trois `FDXSDK.dll` (MY-CT1 x86 1.0.1, Ergosoft x64 1.0.1, EIZO x64 1.0.3) exportent les mêmes 91 noms ; cela ne garantit pas le même ABI (structures, conventions d'appel x86, codes d'erreur).

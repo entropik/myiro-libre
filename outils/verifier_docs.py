@@ -9,7 +9,8 @@ Sans dépendance externe (Python 3 seul). Usage :
 
 Contrôles :
   1. mots interdits : la liste est dans `.mots-interdits.local` (un mot par ligne, ignorée par git,
-     donc le mot lui-même n'apparaît jamais dans un fichier versionné) ;
+     donc le mot lui-même n'apparaît jamais dans un fichier versionné) ; sans cette liste (en CI),
+     le contrôle est sauté, annoncé, et les autres contrôles continuent ;
   2. liens relatifs cassés dans les fichiers Markdown ;
   3. rappel (non bloquant) si le journal du jour manque dans docs/blog/.
 Code de sortie 1 si un contrôle bloquant échoue.
@@ -119,6 +120,8 @@ def main(argv):
     else:
         staged = "--staged" in argv
         liste = fichiers(staged)
+        if not MOTS.exists():  # cas de la CI : la liste reste sur le poste
+            print("Liste locale de mots interdits absente (.mots-interdits.local) : contrôle des mots sauté.")
         erreurs = controle_mots(liste, staged) + controle_liens(liste)
         journal = RACINE / "docs" / "blog" / f"{datetime.date.today().isoformat()}.md"
         if not journal.exists() and "--staged" not in argv:
