@@ -50,3 +50,8 @@ Demandé par le mainteneur à la première revue de la bibliothèque à l'écran
 - L'application remplit exactement la fenêtre : le bandeau reste en place, la page ne défile jamais, et seule une zone trop longue défile à l'intérieur d'elle-même (classe `app` du système graphique). Sous 64 rem de large, les zones s'empilent et la page défile de nouveau.
 - La feuille du centre montre ce qui est choisi : pour une mesure, son en-tête (date, lecture, condition d'impression) puis le tableau des valeurs Lab par plage avec la bascule de condition de mesure, en grand ; l'emplacement de la courbe de spectre est réservé. Sans choix, un état vide juste (« Choisissez une mesure dans la bibliothèque. »), ou l'invitation à ajouter une première condition d'impression, avec une action active, jamais un bouton inactif en double.
 - Les détails, à droite, ne gardent que le cartouche de provenance.
+
+## Bandeau et étalonnage (7 octobre 2026, ticket #4)
+
+- Les tâches occupent cinq colonnes du bandeau (`c-3-7`) et l'instrument avec les réglages les cinq suivantes (`c-8-12`) : le bouton « Étalonner » tient à côté de l'état sans faire grandir le bandeau. Il n'apparaît que lorsque l'état est « étalonnage requis ».
+- L'étalonnage guidé occupe la feuille du centre, sans fenêtre par-dessus : trois étapes (poser sur le blanc, étalonnage, mesure), un schéma au trait maison (composant `schema`), une seule action principale à la fois.
