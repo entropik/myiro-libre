@@ -61,7 +61,7 @@ Un champ que le format ne connaît pas est **refusé** : on ne devine pas ce qu'
 
 Dans le protocole, la même mesure arrive dans une réponse `{"rep": "mesure", "mesure": { … }, "remise_au_repos": { … }}`.
 
-## Retour au repos (réponse du protocole seulement)
+## Remise au repos (réponse du protocole seulement)
 
 `remise_au_repos` dit si l'instrument est revenu au repos après la lecture (ticket #24). Ce n'est **pas** une donnée de la mesure conservée : il est à côté de `mesure`, dans la réponse du pont, et ne change pas le format `myiro-libre/mesure/1`. Il est qualifié comme les autres données :
 
@@ -70,6 +70,8 @@ Dans le protocole, la même mesure arrive dans une réponse `{"rep": "mesure", "
 - `{"statut": "inconnue"}` : réponse écrite par un pont antérieur. Une réponse `mesure` sans ce champ, ou une ligne du format initial, se relit ainsi : **inconnu, jamais « au repos »**.
 
 Une valeur nue (`{"etat": "au_repos"}` sans `statut`), un `etat` inconnu ou un champ en trop sont refusés.
+
+Hors de la réponse `mesure`, la même valeur, sans `statut`, accompagne la réponse `fermeture_incertaine` et les erreurs `repos_incertain` et `deconnexion_echouee`. Elle peut alors valoir aussi `{"etat": "repos_suppose"}` : le désarmement a été refusé (-9986) sans événement alors que rien n'avait été armé. Ce refus est constaté au repos ; en déduire le repos reste une supposition, qui permet d'armer mais ne confirme pas une fermeture. Après un armement, ce cas ne se présente pas.
 
 ## Confirmé, supposé, inconnu
 

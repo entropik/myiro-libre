@@ -218,9 +218,8 @@ pub struct Session<S: SdkMyiro1> {
     ports: Vec<Port>,
     journal: Vec<String>,
     version: Option<Version>,
-    /// Un armement a eu lieu sans retour au repos prouvé depuis : un refus
-    /// -9986 sans événement ne prouve alors plus rien.
-    repos_douteux: bool,
+    /// Ce que la session sait du repos de l'instrument, entre deux désarmements.
+    repos: Repos,
     /// `FDX_Connect` a réussi et `FDX_Disconnect` pas encore : la DLL garde une
     /// session ouverte, même si l'état courant ne permet plus rien.
     dll_connectee: bool,
@@ -229,12 +228,28 @@ pub struct Session<S: SdkMyiro1> {
     fermeture: Option<RemiseAuRepos>,
 }
 
+/// Ce que vaut un refus -9986 sans événement, selon ce qui s'est passé depuis
+/// le dernier repos.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Repos {
+    /// Rien n'a été armé depuis le lancement du pont ou la dernière
+    /// déconnexion : le refus vaut repos supposé.
+    Suppose,
+    /// Événement 0 reçu, rien armé depuis : le refus confirme ce repos.
+    Prouve,
+    /// Armé depuis le dernier repos prouvé (ou repos jamais prouvé ensuite) :
+    /// le refus ne prouve rien. Seuls l'événement 0 après un désarmement
+    /// accepté, ou une déconnexion faite, lèvent ce doute ; une reconnexion
+    /// sans `FDX_Disconnect` ne le lève pas.
+    Douteux,
+}
+
 /// Résultat d'une fermeture faite : la DLL est déconnectée.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Fermeture {
-    /// Rien n'était connecté, ou retour au repos prouvé avant la déconnexion.
+    /// Rien n'était connecté, ou repos prouvé (événement 0) avant la déconnexion.
     Confirmee,
-    /// Déconnecté, mais le retour au repos n'est pas prouvé : l'instrument peut
+    /// Déconnecté, mais la remise au repos n'est pas prouvée : l'instrument peut
     /// être resté armé (voyant fixe) et demander une intervention.
     Incertaine { remise_au_repos: RemiseAuRepos },
 }
@@ -249,7 +264,7 @@ impl<S: SdkMyiro1> Session<S> {
             ports: Vec::new(),
             journal: Vec::new(),
             version: None,
-            repos_douteux: false,
+            repos: Repos::Suppose,
             dll_connectee: false,
             fermeture: None,
         }
@@ -320,10 +335,9 @@ impl<S: SdkMyiro1> Session<S> {
             .connecter(&port, DELAI_CONNEXION)
             .map_err(traduire)?;
         self.dll_connectee = true;
+        // Le doute sur le repos survit à une reconnexion faite sans
+        // `FDX_Disconnect` : seule une déconnexion faite le lève.
         self.etat = EtatInstrument::Inexploitable;
-        // Supposé (à observer) : une connexion neuve trouve l'instrument au
-        // repos ; le désarmement avant armement le vérifie de toute façon.
-        self.repos_douteux = false;
         let tampon = self.sdk.infos().map_err(traduire)?;
         let infos = lire_infos_instrument(&tampon);
         self.etat = EtatInstrument::Connecte {
@@ -455,8 +469,15 @@ impl<S: SdkMyiro1> Session<S> {
     /// une fois la déconnexion faite et le repos prouvé. Dès l'appel, toute
     /// autre demande est refusée sans appel à la DLL. Répétée, elle ne refait
     /// pas ce qui est terminé : le désarmement une seule fois, la déconnexion
-    /// tant qu'elle a échoué.
+    /// tant qu'elle a échoué. Le résultat est noté au journal.
     pub fn fermer(&mut self) -> Result<Fermeture, ErreurPont> {
+        let resultat = self.tenter_fermeture();
+        self.journal
+            .push(format!("résultat de la fermeture : {resultat:?}"));
+        resultat
+    }
+
+    fn tenter_fermeture(&mut self) -> Result<Fermeture, ErreurPont> {
         let remise_au_repos = match &self.fermeture {
             Some(remise) => remise.clone(),
             None => {
@@ -483,6 +504,7 @@ impl<S: SdkMyiro1> Session<S> {
             }
             self.dll_connectee = false;
             self.etat = EtatInstrument::NonConnecte;
+            self.repos = Repos::Suppose;
         }
         Ok(match remise_au_repos {
             RemiseAuRepos::AuRepos {} => Fermeture::Confirmee,
@@ -576,7 +598,10 @@ impl<S: SdkMyiro1> Session<S> {
         if self.etat == EtatInstrument::Perdu {
             return Err(ErreurPont::InstrumentPerdu {});
         }
-        if !matches!(avant, RemiseAuRepos::AuRepos {}) {
+        if !matches!(
+            avant,
+            RemiseAuRepos::AuRepos {} | RemiseAuRepos::ReposSuppose {}
+        ) {
             return Err(ErreurPont::ReposIncertain {
                 remise_au_repos: avant,
             });
@@ -593,7 +618,7 @@ impl<S: SdkMyiro1> Session<S> {
             }
             return Err(traduire(code));
         }
-        self.repos_douteux = true;
+        self.repos = Repos::Douteux;
         let resultat = self.attendre_mesure().and_then(|evenements| {
             let (plages, sens) = self.lire_plages()?;
             Ok((plages, sens, evenements))
@@ -674,9 +699,9 @@ impl<S: SdkMyiro1> Session<S> {
     fn desarmer(&mut self, moment: &str) -> RemiseAuRepos {
         let remise = self.tenter_desarmement(moment);
         self.journal
-            .push(format!("retour au repos {moment} : {remise:?}"));
+            .push(format!("remise au repos {moment} : {remise:?}"));
         if matches!(remise, RemiseAuRepos::AuRepos {}) {
-            self.repos_douteux = false;
+            self.repos = Repos::Prouve;
         }
         remise
     }
@@ -704,11 +729,15 @@ impl<S: SdkMyiro1> Session<S> {
                             _ => {}
                         }
                     }
-                    // Refus -9986 sans événement : c'est la réponse observée au
-                    // repos. Elle ne prouve le repos que si rien n'a été armé
-                    // depuis le dernier repos prouvé, ou si l'événement 0 vient
-                    // d'être reçu.
-                    None if repos_vu || !self.repos_douteux => return RemiseAuRepos::AuRepos {},
+                    // Refus -9986 sans événement : c'est la réponse constatée au
+                    // repos, pas une preuve. Il confirme un repos déjà prouvé
+                    // (ou l'événement 0 qui vient d'arriver), laisse supposé un
+                    // repos que rien n'a démenti, et ne vaut rien après un
+                    // armement.
+                    None if repos_vu || self.repos == Repos::Prouve => {
+                        return RemiseAuRepos::AuRepos {}
+                    }
+                    None if self.repos == Repos::Suppose => return RemiseAuRepos::ReposSuppose {},
                     None => {
                         return RemiseAuRepos::ArretRefuse {
                             code: CODE_ETAT_INCOMPATIBLE,

@@ -139,7 +139,12 @@ fn chaque_requete_recoit_sa_reponse() {
     };
     assert_eq!(identite.numero_serie, 12345678);
     assert_eq!(identite.brute_hex.len(), 80, "40 octets en hexadécimal");
-    assert_eq!(reponses[3], Reponse::Ferme {});
+    assert_eq!(
+        reponses[3],
+        Reponse::FermetureIncertaine {
+            remise_au_repos: RemiseAuRepos::ReposSuppose {}
+        }
+    );
 }
 
 #[test]
@@ -200,13 +205,34 @@ fn appels(session: &Session<SdkSimule>, nom: &str) -> usize {
 }
 
 #[test]
-fn ferme_n_est_repondu_qu_apres_la_deconnexion() {
+fn ferme_n_est_repondu_qu_apres_la_deconnexion_et_un_repos_prouve() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements.extend([7, 8].map(evenement));
+    sdk.salves.push_back([1, 2, 3, 0].map(evenement).to_vec());
+    let (lignes, session) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[
+            r#"{"cmd":"etalonner"}"#,
+            r#"{"cmd":"mesurer_ponctuelle"}"#,
+            r#"{"cmd":"fermer"}"#,
+        ]),
+    );
+    assert_eq!(lignes[5], r#"{"rep":"ferme"}"#);
+    assert_eq!(session.sdk().appels.last().unwrap(), "deconnecter");
+}
+
+#[test]
+fn fermer_juste_apres_connecter_n_annonce_qu_un_repos_suppose() {
     let (lignes, session) = dialoguer_brut(
         SdkSimule::avec_un_myiro1(),
         Palier::Connexion,
         &sequence(&[r#"{"cmd":"fermer"}"#]),
     );
-    assert_eq!(lignes[3], r#"{"rep":"ferme"}"#);
+    assert_eq!(
+        lignes[3],
+        r#"{"rep":"fermeture_incertaine","remise_au_repos":{"etat":"repos_suppose"}}"#
+    );
     assert_eq!(session.sdk().appels.last().unwrap(), "deconnecter");
 }
 
@@ -225,7 +251,7 @@ fn une_deconnexion_echouee_n_est_pas_annoncee_fermee_et_le_pont_attend() {
     );
     assert_eq!(
         lignes[3],
-        r#"{"rep":"erreur","erreur":{"type":"deconnexion_echouee","code":-9987,"remise_au_repos":{"etat":"au_repos"}}}"#
+        r#"{"rep":"erreur","erreur":{"type":"deconnexion_echouee","code":-9987,"remise_au_repos":{"etat":"repos_suppose"}}}"#
     );
     let fermee = r#"{"rep":"erreur","erreur":{"type":"session_fermee"}}"#;
     assert_eq!(lignes[4], fermee);
@@ -235,7 +261,7 @@ fn une_deconnexion_echouee_n_est_pas_annoncee_fermee_et_le_pont_attend() {
 }
 
 #[test]
-fn une_fermeture_reprise_apres_echec_finit_par_ferme() {
+fn une_fermeture_reprise_apres_echec_finit_par_la_deconnexion() {
     let mut sdk = SdkSimule::avec_un_myiro1();
     sdk.code_deconnexion = -9987;
     let mut session = Session::new(sdk, Palier::Connexion);
@@ -254,7 +280,10 @@ fn une_fermeture_reprise_apres_echec_finit_par_ferme() {
         &mut sortie,
     )
     .unwrap();
-    assert_eq!(String::from_utf8(sortie).unwrap(), "{\"rep\":\"ferme\"}\n");
+    assert_eq!(
+        String::from_utf8(sortie).unwrap(),
+        "{\"rep\":\"fermeture_incertaine\",\"remise_au_repos\":{\"etat\":\"repos_suppose\"}}\n"
+    );
     assert_eq!(appels(&session, "arreter"), 1, "désarmement fait une fois");
 }
 
@@ -326,6 +355,11 @@ fn la_fin_de_l_entree_ferme_la_session_comme_fermer() {
         &JUSQU_A_LA_CONNEXION,
     );
     assert_eq!(lignes.len(), 3, "aucune réponse sans requête");
+    let journal = session.journal().join("\n");
+    assert!(
+        journal.contains("résultat de la fermeture : Ok(Incertaine"),
+        "{journal}"
+    );
     assert_eq!(session.sdk().appels.last().unwrap(), "deconnecter");
     assert_eq!(appels(&session, "deconnecter"), 1);
 }

@@ -20,6 +20,8 @@ pub fn servir<S: SdkMyiro1>(
     sortie: &mut impl Write,
 ) -> io::Result<()> {
     let resultat = repondre(session, entree, sortie);
+    // Sans demande, pas de réponse à écrire : `fermer` note son résultat au
+    // journal de la session.
     let _ = session.fermer();
     resultat
 }
@@ -125,7 +127,7 @@ fn identite(connexion: &Connexion) -> Identite {
 
 /// Vérifie la mesure avant qu'elle ne sorte du pont : une valeur non finie
 /// ou une forme imprévue de la DLL devient une erreur, jamais une mesure. Le
-/// retour au repos, observé par le pont, est rendu à côté de la mesure.
+/// résultat de la remise au repos, observé par le pont, est rendu à côté.
 fn reponse_mesure(
     plages: Vec<MesurePlage>,
     provenance: Provenance,

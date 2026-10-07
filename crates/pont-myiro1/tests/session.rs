@@ -757,8 +757,12 @@ fn une_reconnexion_sans_identite_ne_reutilise_pas_l_ancienne() {
 
 #[test]
 fn une_reconnexion_exige_un_nouvel_etalonnage_et_porte_la_nouvelle_identite() {
-    let mut session = session_etalonnee_salves(&[&[1, 2, 3, 6], &[1, 2, 3]]);
+    let mut session = session_etalonnee_salves(&[&[1, 2, 3, 0], &[1, 2, 3]]);
     let avant = session.mesurer_ponctuelle().unwrap();
+    // Repos prouvé après la mesure, puis liaison perdue pendant un nouvel
+    // étalonnage : la reconnexion ne porte que sur l'identité et l'étalonnage.
+    session.sdk_mut().evenements.extend([7, 6].map(evenement));
+    assert_eq!(session.etalonner(), Err(ErreurPont::InstrumentPerdu {}));
     session.sdk_mut().numero_serie = 87654321;
     let connexion = session.connecter(0).unwrap();
     assert_eq!(connexion.infos.numero, 87654321);
@@ -779,8 +783,12 @@ fn une_reconnexion_exige_un_nouvel_etalonnage_et_porte_la_nouvelle_identite() {
 
 #[test]
 fn apres_reconnexion_la_date_d_etalonnage_vient_de_la_nouvelle_session() {
-    let mut session = session_etalonnee_salves(&[&[1, 2, 3, 6], &[1, 2, 3]]);
+    let mut session = session_etalonnee_salves(&[&[1, 2, 3, 0], &[1, 2, 3]]);
     let avant = session.mesurer_ponctuelle().unwrap();
+    // Repos prouvé après la mesure, puis liaison perdue pendant un nouvel
+    // étalonnage : la reconnexion ne porte que sur l'identité et l'étalonnage.
+    session.sdk_mut().evenements.extend([7, 6].map(evenement));
+    assert_eq!(session.etalonner(), Err(ErreurPont::InstrumentPerdu {}));
     let ancienne = date_confirmee(&avant.provenance.etalonnage);
     // La date est à la seconde : attendre d'en changer pour les distinguer.
     std::thread::sleep(std::time::Duration::from_millis(1100));
@@ -883,7 +891,70 @@ fn le_desarmement_refuse_trop_longtemps_est_rapporte_sans_attente_sans_fin() {
     assert_eq!(arrets, 1 + 3, "un avant armement, trois après");
 }
 
+#[test]
+fn une_reconnexion_apres_une_perte_au_desarmement_garde_le_doute() {
+    let mut session = session_etalonnee_salves(&[&[1, 2, 3, 6], &[1, 2, 3, 0]]);
+    let mesure = session.mesurer_ponctuelle().unwrap();
+    assert_eq!(mesure.remise_au_repos, RemiseAuRepos::LiaisonPerdue {});
+    session.connecter(0).unwrap();
+    session.sdk_mut().evenements.extend([7, 8].map(evenement));
+    session.etalonner().unwrap();
+    assert!(matches!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::ReposIncertain { .. })
+    ));
+    assert_eq!(nombre_d_armements(&session), 1);
+}
+
+#[test]
+fn une_reconnexion_apres_un_repos_incertain_garde_le_doute() {
+    // Sans FDX_Disconnect, une nouvelle connexion ne prouve pas que
+    // l'instrument est revenu au repos : un refus -9986 sans événement ne
+    // suffit toujours pas pour armer.
+    let mut session = session_etalonnee_salves(&[&[1, 2, 3], &[1, 2, 3, 0]]);
+    session.mesurer_ponctuelle().unwrap();
+    assert!(matches!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::ReposIncertain { .. })
+    ));
+    session.connecter(0).unwrap();
+    session.sdk_mut().evenements.extend([7, 8].map(evenement));
+    session.etalonner().unwrap();
+    assert_eq!(
+        session.mesurer_ponctuelle(),
+        Err(ErreurPont::ReposIncertain {
+            remise_au_repos: RemiseAuRepos::ArretRefuse { code: -9986 }
+        })
+    );
+    assert_eq!(nombre_d_armements(&session), 1);
+}
+
 // Fermeture explicite.
+
+#[test]
+fn fermer_juste_apres_connecter_rapporte_un_repos_suppose() {
+    // Rien n'a été armé : l'arrêt est refusé (-9986) sans événement. La fiche
+    // constate ce refus au repos ; en déduire le repos reste une supposition.
+    let mut session = session_connectee(SdkSimule::avec_un_myiro1(), Palier::Connexion);
+    assert_eq!(
+        session.fermer(),
+        Ok(Fermeture::Incertaine {
+            remise_au_repos: RemiseAuRepos::ReposSuppose {}
+        })
+    );
+    assert_eq!(session.sdk().appels.last().unwrap(), "deconnecter");
+}
+
+#[test]
+fn la_fermeture_note_son_resultat_au_journal() {
+    let mut session = session_connectee(SdkSimule::avec_un_myiro1(), Palier::Connexion);
+    let _ = session.fermer();
+    let journal = session.journal().join("\n");
+    assert!(
+        journal.contains("résultat de la fermeture : Ok(Incertaine"),
+        "{journal}"
+    );
+}
 
 #[test]
 fn fermer_sans_connexion_est_confirme_sans_toucher_la_dll() {
@@ -950,14 +1021,15 @@ fn une_deconnexion_echouee_est_une_erreur_qui_garde_le_resultat_du_desarmement()
         session.fermer(),
         Err(ErreurPont::DeconnexionEchouee {
             code: -9987,
-            remise_au_repos: RemiseAuRepos::AuRepos {}
+            remise_au_repos: RemiseAuRepos::ReposSuppose {}
         })
     );
 }
 
 #[test]
 fn une_fermeture_partielle_reprise_ne_refait_que_la_deconnexion() {
-    let mut session = session_etalonnee(&[]);
+    let mut session = session_etalonnee(&[1, 2, 3, 0]);
+    session.mesurer_ponctuelle().unwrap();
     session.sdk_mut().code_deconnexion = -9987;
     assert!(session.fermer().is_err());
     session.sdk_mut().code_deconnexion = 0;

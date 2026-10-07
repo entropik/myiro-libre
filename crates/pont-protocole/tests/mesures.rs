@@ -158,7 +158,7 @@ fn une_mesure_traverse_le_protocole_sans_perte() {
 }
 
 #[test]
-fn une_reponse_mesure_sans_retour_au_repos_se_relit_avec_un_repos_inconnu() {
+fn une_reponse_mesure_sans_remise_au_repos_se_relit_avec_un_repos_inconnu() {
     // Réponse écrite par un pont antérieur au ticket #24.
     let texte = ecrire_reponse(&Reponse::Mesure {
         mesure: mesure_ponctuelle(),
@@ -176,7 +176,7 @@ fn une_reponse_mesure_sans_retour_au_repos_se_relit_avec_un_repos_inconnu() {
 }
 
 #[test]
-fn un_retour_au_repos_nu_ou_avec_un_champ_inconnu_est_refuse() {
+fn une_remise_au_repos_nue_ou_avec_un_champ_inconnu_est_refusee() {
     let texte = ecrire_reponse(&Reponse::Mesure {
         mesure: mesure_ponctuelle(),
         remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
@@ -186,7 +186,7 @@ fn un_retour_au_repos_nu_ou_avec_un_champ_inconnu_est_refuse() {
     for abime in [
         r#""remise_au_repos":{"etat":"au_repos"}"#,
         r#""remise_au_repos":{"statut":"confirmee","valeur":{"etat":"au_repos","x":1}}"#,
-        r#""remise_au_repos":{"statut":"confirmee","valeur":{"etat":"repos_suppose"}}"#,
+        r#""remise_au_repos":{"statut":"confirmee","valeur":{"etat":"repos_devine"}}"#,
     ] {
         let ligne = texte.replace(qualifie, abime);
         assert!(lire_reponse(&ligne).is_err(), "{ligne}");

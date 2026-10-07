@@ -74,7 +74,7 @@ pub enum Reponse {
     /// Fermeture confirmée : désarmement prouvé puis déconnexion faite. Le pont
     /// s'arrête.
     Ferme {},
-    /// Déconnexion faite, mais retour au repos non prouvé : l'instrument peut
+    /// Déconnexion faite, mais remise au repos non prouvée : l'instrument peut
     /// demander une intervention. Le pont s'arrête aussi.
     FermetureIncertaine {
         remise_au_repos: RemiseAuRepos,
@@ -133,17 +133,24 @@ pub struct Identite {
     pub brute_hex: String,
 }
 
-/// Résultat du retour au repos après un désarmement (`FDX_StopMeasurement`).
-/// Seul `au_repos` permet une nouvelle mesure ; les autres cas disent pourquoi
-/// le repos n'est pas prouvé. Une absence de preuve n'est jamais une réussite.
+/// Remise au repos : résultat d'un désarmement (`FDX_StopMeasurement`) et de
+/// l'attente du retour au repos (événement 0). `au_repos` et `repos_suppose`
+/// permettent d'armer ; seul `au_repos` confirme une fermeture ; les autres
+/// cas disent pourquoi le repos n'est pas prouvé. Une absence de preuve n'est
+/// jamais une réussite.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "etat", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RemiseAuRepos {
     // Accolades vides : sans elles, serde accepterait des champs en trop.
-    /// Désarmement accepté puis événement 0 reçu ; ou désarmement refusé
-    /// (-9986) sans autre événement alors que rien n'avait été armé depuis le
-    /// dernier repos prouvé.
+    /// Événement 0 reçu après un désarmement accepté ; ou désarmement refusé
+    /// (-9986) sans autre événement alors que le repos avait déjà été prouvé
+    /// par l'événement 0, sans armement depuis.
     AuRepos {},
+    /// Désarmement refusé (-9986) sans événement, sans armement depuis le
+    /// lancement du pont ou la dernière déconnexion : le refus est constaté au repos (fiche `FDX_StopMeasurement`),
+    /// mais en déduire le repos est une supposition. Permet d'armer ; ne
+    /// confirme pas une fermeture.
+    ReposSuppose {},
     /// Le désarmement accepté n'a pas été suivi de l'événement 0 dans le délai.
     ReposNonSignale {},
     /// La DLL a refusé le désarmement (code brut), essais épuisés.
@@ -204,9 +211,11 @@ pub enum ErreurPont {
     /// session et son étalonnage sont invalidés : toute demande suivante reçoit
     /// cette même erreur, sans appel à la DLL, jusqu'à une nouvelle connexion.
     InstrumentPerdu {},
-    /// Le retour au repos de l'instrument n'est pas prouvé (`remise_au_repos`
+    /// La remise au repos de l'instrument n'est pas prouvée (`remise_au_repos`
     /// dit pourquoi) : l'instrument n'a pas été armé. Une mesure déjà rendue
-    /// reste valable ; une nouvelle connexion rétablit l'état.
+    /// reste valable. Une reconnexion ne lève pas ce doute : seul un
+    /// désarmement accepté suivi de l'événement 0 le lève, ou une fermeture
+    /// suivie d'un nouveau pont.
     ReposIncertain { remise_au_repos: RemiseAuRepos },
     /// `FDX_Disconnect` a échoué (code brut) : la fermeture n'est pas faite.
     /// `remise_au_repos` est le résultat du désarmement qui l'a précédée ; une
