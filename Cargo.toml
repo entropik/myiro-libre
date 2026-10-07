@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/colorimetrie", "crates/fdx-sys", "crates/pont-protocole", "crates/pont-myiro1"]
+members = ["crates/colorimetrie", "crates/fdx-sys", "crates/fd9-sys", "crates/pont-protocole", "crates/pont-myiro1"]
 
 [workspace.package]
 edition = "2021"
