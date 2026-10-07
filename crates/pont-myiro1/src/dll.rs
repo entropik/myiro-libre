@@ -266,6 +266,12 @@ impl SdkMyiro1 for FdxDll {
 impl Drop for FdxDll {
     fn drop(&mut self) {
         if self.connecte {
+            // Désarmer d'abord : une session fermée sur une erreur pendant une
+            // mesure laissait l'instrument bloqué en « mesure en cours » (voyant
+            // blanc fixe), sourd aux connexions suivantes. Un refus au repos
+            // (-9986) est sans effet.
+            // SAFETY : aucun argument (fiche FDX_StopMeasurement).
+            unsafe { (self.arreter)() };
             // SAFETY : aucun argument ; ferme la session ouverte par FDX_Connect.
             unsafe { (self.deconnecter)() };
         }
