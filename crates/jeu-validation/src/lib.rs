@@ -21,6 +21,10 @@ pub fn longueur_onde(indice: usize) -> u32 {
 }
 
 /// Condition de mesure (ISO 13655) sous laquelle la DLL a calculé un spectre.
+///
+/// **Supposé** : le pont demande les spectres avec `Illuminant` = 0, 1, 2 et les
+/// nomme M0, M1, M2 d'après la fiche `docs/abi/FDX_GetMeasureData.md` ; l'ADR 0005
+/// range cette correspondance parmi les points encore à confirmer sur l'instrument.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Condition {
     M0,
@@ -55,7 +59,8 @@ pub struct JeuValidation {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Paire {
-    /// Nom de la sortie archivée d'où vient la plage.
+    /// Numéro d'ordre de la sortie archivée d'où vient la plage (« sortie-1 »…),
+    /// jamais son nom de fichier.
     pub source: String,
     /// Nom de la plage dans cette sortie (« papier », « 1A1 »…).
     pub plage: String,
@@ -63,7 +68,7 @@ pub struct Paire {
     /// ne les porte pas (CSV des tests sur instrument).
     pub instrument: Option<Origine>,
     pub brutes: Vec<f32>,
-    /// Spectres M0, M1, M2 dans cet ordre.
+    /// Spectres M0, M1, M2 dans cet ordre (correspondance supposée, voir [`Condition`]).
     pub spectres: [Vec<f32>; 3],
 }
 
@@ -139,6 +144,14 @@ pub fn comparer(jeu: &JeuValidation, candidat: &impl CalculSpectres) -> Rapport 
             plage: paire.plage.clone(),
             detail,
         };
+        // Un jeu relu depuis un fichier peut être abîmé : il est revérifié ici,
+        // car une valeur manquante ou non finie ne doit jamais compter comme un écart nul.
+        if let Some(defaut) = defaut_de_forme("données brutes", &paire.brutes, NOMBRE_BRUTES)
+            .or_else(|| defaut_des_spectres(&paire.spectres))
+        {
+            echecs.push(echec(format!("paire du jeu : {defaut}")));
+            continue;
+        }
         let calcule = match candidat.calculer(&paire.brutes) {
             Ok(spectres) => spectres,
             Err(detail) => {
@@ -146,16 +159,8 @@ pub fn comparer(jeu: &JeuValidation, candidat: &impl CalculSpectres) -> Rapport 
                 continue;
             }
         };
-        if let Some((c, s)) = calcule
-            .iter()
-            .enumerate()
-            .find(|(_, s)| s.len() != NOMBRE_LONGUEURS)
-        {
-            echecs.push(echec(format!(
-                "spectre {:?} de {} valeurs au lieu de {NOMBRE_LONGUEURS}",
-                Condition::TOUTES[c],
-                s.len()
-            )));
+        if let Some(defaut) = defaut_des_spectres(&calcule) {
+            echecs.push(echec(format!("candidat : {defaut}")));
             continue;
         }
         comparees += 1;
@@ -188,6 +193,27 @@ pub fn comparer(jeu: &JeuValidation, candidat: &impl CalculSpectres) -> Rapport 
     Rapport { conditions, echecs }
 }
 
+/// Décrit le défaut d'une suite de valeurs : mauvaise longueur ou valeur non finie.
+fn defaut_de_forme(quoi: &str, valeurs: &[f32], attendu: usize) -> Option<String> {
+    if valeurs.len() != attendu {
+        return Some(format!("{quoi} : {} valeurs au lieu de {attendu}", valeurs.len()));
+    }
+    valeurs
+        .iter()
+        .position(|v| !v.is_finite())
+        .map(|i| format!("{quoi} : valeur n° {} non finie", i + 1))
+}
+
+fn defaut_des_spectres(spectres: &Spectres) -> Option<String> {
+    Condition::TOUTES.iter().find_map(|&condition| {
+        defaut_de_forme(
+            &format!("spectre {condition:?}"),
+            &spectres[condition.indice()],
+            NOMBRE_LONGUEURS,
+        )
+    })
+}
+
 /// Ce que la provenance du pont dit de l'instrument et de la chaîne logicielle,
 /// une fois le numéro de série remplacé par un pseudonyme.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -210,11 +236,14 @@ pub fn extraire(sorties: &[SortieArchivee]) -> Result<JeuValidation, String> {
     let mut paires = Vec::new();
     // Numéros de série rencontrés, dans l'ordre : leur rang donne le pseudonyme.
     let mut series: Vec<u32> = Vec::new();
-    for sortie in sorties {
+    for (k, sortie) in sorties.iter().enumerate() {
+        // Un nom de fichier peut contenir un numéro de série : le jeu ne garde
+        // qu'un numéro d'ordre ; le nom ne sert qu'aux messages d'erreur.
+        let source = format!("sortie-{}", k + 1);
         if sortie.contenu.trim_start().starts_with('{') {
-            paires.extend(extraire_json(sortie, &mut series)?);
+            paires.extend(extraire_json(sortie, &source, &mut series)?);
         } else {
-            paires.extend(extraire_csv(sortie)?);
+            paires.extend(extraire_csv(sortie, &source)?);
         }
     }
     Ok(JeuValidation {
@@ -228,7 +257,11 @@ pub fn extraire(sorties: &[SortieArchivee]) -> Result<JeuValidation, String> {
 /// portent des paires ; le numéro de série de leur provenance est remplacé, et
 /// les autres identifiants (code produit, adresse MAC des réponses `connecte`)
 /// ne sont pas repris.
-fn extraire_json(sortie: &SortieArchivee, series: &mut Vec<u32>) -> Result<Vec<Paire>, String> {
+fn extraire_json(
+    sortie: &SortieArchivee,
+    source: &str,
+    series: &mut Vec<u32>,
+) -> Result<Vec<Paire>, String> {
     use pont_protocole::{lire_reponse, Reponse};
     let mut paires = Vec::new();
     let mut mesures = 0;
@@ -276,9 +309,12 @@ fn extraire_json(sortie: &SortieArchivee, series: &mut Vec<u32>) -> Result<Vec<P
                         valeurs.len()
                     ));
                 }
+                if valeurs.iter().any(|v| !v.is_finite()) {
+                    return Err(format!("{} : {nom}, {quoi} : valeur non finie", lieu()));
+                }
             }
             paires.push(Paire {
-                source: sortie.nom.into(),
+                source: source.into(),
                 plage: nom,
                 instrument: Some(origine.clone()),
                 brutes: plage.brutes,
@@ -296,7 +332,7 @@ struct PlageEnCours {
     brutes: Option<Vec<f32>>,
 }
 
-fn extraire_csv(sortie: &SortieArchivee) -> Result<Vec<Paire>, String> {
+fn extraire_csv(sortie: &SortieArchivee, source: &str) -> Result<Vec<Paire>, String> {
     let mut lignes = sortie.contenu.lines().enumerate();
     match lignes.next() {
         Some((_, entete)) if entete.starts_with("plage;donnees;") => {}
@@ -317,8 +353,18 @@ fn extraire_csv(sortie: &SortieArchivee) -> Result<Vec<Paire>, String> {
             .map(|v| v.trim().parse::<f32>())
             .collect::<Result<Vec<f32>, _>>()
             .map_err(|e| format!("{} : valeur illisible ({e})", lieu()))?;
+        // NaN et infinis se lisent comme des nombres : ce ne sont pas des mesures.
+        if valeurs.iter().any(|v| !v.is_finite()) {
+            return Err(format!("{} : valeur non finie", lieu()));
+        }
         let nom = champs[0];
         if plages.last().map(|p| p.nom.as_str()) != Some(nom) {
+            if plages.iter().any(|p| p.nom == nom) {
+                return Err(format!(
+                    "{} : la plage {nom} revient après une autre plage",
+                    lieu()
+                ));
+            }
             plages.push(PlageEnCours {
                 nom: nom.into(),
                 ..Default::default()
@@ -349,7 +395,7 @@ fn extraire_csv(sortie: &SortieArchivee) -> Result<Vec<Paire>, String> {
             let manque = |quoi: &str| format!("{} : plage {} sans {quoi}", sortie.nom, p.nom);
             let [m0, m1, m2] = p.spectres;
             Ok(Paire {
-                source: sortie.nom.into(),
+                source: source.into(),
                 instrument: None,
                 brutes: p.brutes.ok_or_else(|| manque("données brutes"))?,
                 spectres: [

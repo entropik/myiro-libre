@@ -103,3 +103,55 @@ fn un_spectre_de_mauvaise_longueur_est_un_echec_du_candidat() {
     assert_eq!(rapport.echecs.len(), 2);
     assert_eq!(rapport.condition(Condition::M1).paires, 0);
 }
+
+/// Candidat qui rend NaN à 550 nm en M1, et des valeurs exactes partout ailleurs.
+struct Troue;
+
+impl CalculSpectres for Troue {
+    fn calculer(&self, brutes: &[f32]) -> Result<Spectres, String> {
+        let [m0, mut m1, m2] = Plat.calculer(brutes)?;
+        m1[17] = f32::NAN;
+        Ok([m0, m1, m2])
+    }
+}
+
+#[test]
+fn une_valeur_non_finie_du_candidat_est_un_echec_jamais_un_ecart() {
+    let rapport = comparer(&jeu(), &Troue);
+    assert_eq!(rapport.echecs.len(), 2);
+    assert!(rapport.echecs[0].detail.contains("M1"), "{}", rapport.echecs[0].detail);
+    let m1 = rapport.condition(Condition::M1);
+    assert_eq!(m1.paires, 0);
+    assert_eq!(m1.par_longueur_onde[17].ecart_maximal, None);
+}
+
+#[test]
+fn une_paire_courte_du_jeu_est_un_echec_jamais_un_ecart() {
+    // Un jeu relu depuis un fichier peut avoir été abîmé.
+    let mut jeu = jeu();
+    jeu.paires[0].spectres[2].truncate(1);
+    let rapport = comparer(&jeu, &Plat);
+    assert_eq!(rapport.echecs.len(), 1);
+    assert_eq!(rapport.echecs[0].plage, "A");
+    assert_eq!(rapport.condition(Condition::M2).paires, 1);
+    // Seule B est comparée : son M2 est exact, l'écart de A à 380 nm n'apparaît pas.
+    assert_eq!(rapport.condition(Condition::M2).ecart_maximal, Some(0.0));
+}
+
+#[test]
+fn des_donnees_brutes_de_mauvaise_longueur_dans_le_jeu_sont_un_echec() {
+    let mut jeu = jeu();
+    jeu.paires[1].brutes.pop();
+    let rapport = comparer(&jeu, &Plat);
+    assert_eq!(rapport.echecs.len(), 1);
+    assert_eq!(rapport.echecs[0].plage, "B");
+}
+
+#[test]
+fn une_valeur_non_finie_dans_le_jeu_est_un_echec() {
+    let mut jeu = jeu();
+    jeu.paires[1].spectres[0][3] = f32::INFINITY;
+    let rapport = comparer(&jeu, &Plat);
+    assert_eq!(rapport.echecs.len(), 1);
+    assert_eq!(rapport.echecs[0].plage, "B");
+}

@@ -36,6 +36,10 @@ fn main() {
     if let Err(erreur) = std::fs::write(destination, texte) {
         echouer(&format!("{destination} : {erreur}"));
     }
+    // Correspondance affichée à l'écran seulement : le jeu ne garde que le numéro.
+    for (k, (nom, _)) in textes.iter().enumerate() {
+        println!("sortie-{} : {nom}", k + 1);
+    }
     println!(
         "{} paires extraites de {} sorties vers {destination}",
         jeu.paires.len(),
