@@ -118,6 +118,7 @@ pub struct Session<S: SdkMyiro1> {
     plafond: Palier,
     atteint: Option<Palier>,
     ports: Vec<Port>,
+    journal: Vec<String>,
 }
 
 impl<S: SdkMyiro1> Session<S> {
@@ -127,6 +128,7 @@ impl<S: SdkMyiro1> Session<S> {
             plafond,
             atteint: None,
             ports: Vec::new(),
+            journal: Vec::new(),
         }
     }
 
@@ -136,6 +138,11 @@ impl<S: SdkMyiro1> Session<S> {
 
     pub fn sdk_mut(&mut self) -> &mut S {
         &mut self.sdk
+    }
+
+    /// Étapes de la mesure, codes de retour et événements, dans l'ordre.
+    pub fn journal(&self) -> &[String] {
+        &self.journal
     }
 
     /// Dernier palier franchi avec succès.
@@ -212,7 +219,13 @@ impl<S: SdkMyiro1> Session<S> {
     /// lit M0, M1, M2 et les données brutes, puis désarme dans tous les cas.
     pub fn mesurer_ponctuelle(&mut self) -> Result<MesurePonctuelle, ErreurPont> {
         self.autoriser(Palier::MesurePonctuelle, Some(Palier::Etalonnage))?;
-        if let Err(code) = self.sdk.armer_ponctuelle() {
+        // Comme MYIRO tools : désarmer avant d'armer, l'instrument se réarmant
+        // parfois seul après une mesure.
+        self.desarmer("avant armement");
+        let armement = self.sdk.armer_ponctuelle();
+        self.journal
+            .push(format!("armement : code {}", code_de(armement)));
+        if let Err(code) = armement {
             if code == CODE_NON_ETALONNE {
                 self.atteint = Some(Palier::Connexion);
             }
@@ -232,12 +245,20 @@ impl<S: SdkMyiro1> Session<S> {
                 evenements,
             })
         });
-        // Désarmer même après un échec, puis attendre que l'instrument soit
-        // revenu au repos : sinon un nouvel armement est refusé (-9986).
-        if self.sdk.arreter_mesure().is_ok() {
+        // Désarmer même après un échec.
+        self.desarmer("après lecture");
+        resultat
+    }
+
+    /// `FDX_StopMeasurement`, puis attente du retour au repos s'il a été accepté :
+    /// sans cela, un nouvel armement est refusé (-9986).
+    fn desarmer(&mut self, moment: &str) {
+        let arret = self.sdk.arreter_mesure();
+        self.journal
+            .push(format!("désarmement {moment} : code {}", code_de(arret)));
+        if arret.is_ok() {
             self.attendre_repos();
         }
-        resultat
     }
 
     /// Attend l'événement 0 (retour au repos), au plus `DELAI_REPOS`.
@@ -247,6 +268,8 @@ impl<S: SdkMyiro1> Session<S> {
             .sdk
             .attendre_evenement(echeance.saturating_duration_since(Instant::now()))
         {
+            self.journal
+                .push(format!("événement {} (attente du repos)", evenement.code));
             if evenement.code == EVENEMENT_REPOS || evenement.code == EVENEMENT_DECONNEXION {
                 break;
             }
@@ -262,6 +285,13 @@ impl<S: SdkMyiro1> Session<S> {
                 .sdk
                 .attendre_evenement(reste)
                 .ok_or(ErreurPont::Delai)?;
+            // Les événements 2 se répètent à chaque donnée brute : un seul suffit.
+            if evenements.last().map(|e: &Evenement| e.code) != Some(evenement.code) {
+                self.journal.push(format!(
+                    "événement {} (erreur {})",
+                    evenement.code, evenement.erreur
+                ));
+            }
             evenements.push(evenement);
             match evenement.code {
                 EVENEMENT_MESURE_TERMINEE => return Ok(evenements),
@@ -306,6 +336,10 @@ impl<S: SdkMyiro1> Session<S> {
         }
         Ok(())
     }
+}
+
+fn code_de(resultat: Result<i32, i32>) -> i32 {
+    resultat.unwrap_or_else(|code| code)
 }
 
 fn traduire(code: i32) -> ErreurPont {

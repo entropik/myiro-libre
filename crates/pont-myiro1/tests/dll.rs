@@ -195,7 +195,11 @@ fn palier_mesure_ponctuelle_avec_le_vrai_instrument() {
     };
     for plage in plages.split(',') {
         println!("mesure de {plage} : posez l'instrument et appuyez sur le bouton");
-        let mesure = session.mesurer_ponctuelle().expect("mesure ponctuelle");
+        let resultat = session.mesurer_ponctuelle();
+        for ligne in session.journal() {
+            println!("    journal : {ligne}");
+        }
+        let mesure = resultat.expect("mesure ponctuelle");
         for (nom, spectre, lab) in [
             ("M0", &mesure.m0, &mesure.lab_dll[0]),
             ("M1", &mesure.m1, &mesure.lab_dll[1]),

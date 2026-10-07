@@ -17,6 +17,8 @@ struct SdkSimule {
     resultats_par_lecture: usize,
     /// Événements que l'instrument simulé émettra, dans l'ordre.
     evenements: VecDeque<Evenement>,
+    /// Événements émis à chaque armement réussi, une salve par armement.
+    salves: VecDeque<Vec<Evenement>>,
     appels: Vec<String>,
 }
 
@@ -79,10 +81,12 @@ impl SdkMyiro1 for SdkSimule {
     fn armer_ponctuelle(&mut self) -> Result<i32, i32> {
         self.appels.push("armer ponctuelle".into());
         if self.code_armement < 0 {
-            Err(self.code_armement)
-        } else {
-            Ok(0)
+            return Err(self.code_armement);
         }
+        if let Some(salve) = self.salves.pop_front() {
+            self.evenements.extend(salve);
+        }
+        Ok(0)
     }
     fn arreter_mesure(&mut self) -> Result<i32, i32> {
         self.appels.push("arreter".into());
@@ -366,10 +370,19 @@ fn un_etalonnage_reussi_ouvre_le_palier_suivant() {
     assert_eq!(session.palier_atteint(), Some(Palier::Etalonnage));
 }
 
-/// Session étalonnée, dont l'instrument émettra ensuite `apres` (codes d'événement).
+/// Session étalonnée dont l'instrument émettra `apres` (codes d'événement) au
+/// premier armement.
 fn session_etalonnee(apres: &[i32]) -> Session<SdkSimule> {
+    session_etalonnee_salves(&[apres])
+}
+
+/// Idem, avec une salve d'événements par armement successif.
+fn session_etalonnee_salves(salves: &[&[i32]]) -> Session<SdkSimule> {
     let mut sdk = sdk_qui_etalonne(&[7, 8]);
-    sdk.evenements.extend(apres.iter().map(|&c| evenement(c)));
+    sdk.salves = salves
+        .iter()
+        .map(|salve| salve.iter().map(|&c| evenement(c)).collect())
+        .collect();
     let mut session = session_connectee(sdk, Palier::MesurePonctuelle);
     session.etalonner().unwrap();
     session
@@ -431,7 +444,7 @@ fn mesurer_sans_etalonnage_est_refuse_sans_toucher_la_dll() {
 #[test]
 fn le_plafond_etalonnage_interdit_la_mesure() {
     let mut sdk = sdk_qui_etalonne(&[7, 8]);
-    sdk.evenements.extend([1, 2, 3].map(evenement));
+    sdk.salves.push_back([1, 2, 3].map(evenement).to_vec());
     let mut session = session_connectee(sdk, Palier::Etalonnage);
     session.etalonner().unwrap();
     assert_eq!(
@@ -446,7 +459,7 @@ fn le_plafond_etalonnage_interdit_la_mesure() {
 #[test]
 fn une_mesure_echouee_est_signalee_et_l_etalonnage_reste_valable() {
     let mut session = session_etalonnee(&[1, 2]);
-    session.sdk_mut().evenements.push_back(Evenement {
+    session.sdk_mut().salves[0].push(Evenement {
         code: 4,
         nb_donnees_brutes: 0,
         erreur: -9898,
@@ -507,9 +520,27 @@ fn apres_une_mesure_le_pont_attend_le_retour_au_repos() {
 
 #[test]
 fn deux_mesures_s_enchainent() {
-    let mut session = session_etalonnee(&[1, 2, 3, 0, 1, 2, 3, 0]);
+    let mut session = session_etalonnee_salves(&[&[1, 2, 3, 0], &[1, 2, 3, 0]]);
     session.mesurer_ponctuelle().unwrap();
     let seconde = session.mesurer_ponctuelle().unwrap();
     let codes: Vec<i32> = seconde.evenements.iter().map(|e| e.code).collect();
     assert_eq!(codes, [1, 2, 3]);
+}
+
+#[test]
+fn le_pont_desarme_avant_d_armer_comme_myiro_tools() {
+    let mut session = session_etalonnee(&[1, 2, 3]);
+    session.mesurer_ponctuelle().unwrap();
+    let appels = &session.sdk().appels;
+    let armer = appels.iter().position(|a| a == "armer ponctuelle").unwrap();
+    assert_eq!(appels[armer - 1], "arreter");
+}
+
+#[test]
+fn le_journal_retrace_les_etapes_de_la_mesure() {
+    let mut session = session_etalonnee(&[1, 2, 3]);
+    session.mesurer_ponctuelle().unwrap();
+    let journal = session.journal().join("\n");
+    assert!(journal.contains("armement : code 0"), "{journal}");
+    assert!(journal.contains("événement 3"), "{journal}");
 }
