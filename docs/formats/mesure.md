@@ -66,12 +66,14 @@ Dans le protocole, la même mesure arrive dans une réponse `{"rep": "mesure", "
 `remise_au_repos` dit si l'instrument est revenu au repos après la lecture (ticket #24). Ce n'est **pas** une donnée de la mesure conservée : il est à côté de `mesure`, dans la réponse du pont, et ne change pas le format `myiro-libre/mesure/1`. Il est qualifié comme les autres données :
 
 - `{"statut": "confirmee", "valeur": {"etat": "au_repos"}}` : le pont a reçu la preuve du repos ;
-- `{"etat": "repos_non_signale"}`, `{"etat": "arret_refuse", "code": -9987}` ou `{"etat": "liaison_perdue"}` (toujours sous `statut` et `valeur`) : la mesure reste valable, mais la suivante sera refusée tant que le repos n'est pas prouvé ;
+- `{"etat": "repos_non_signale"}`, `{"etat": "arret_refuse", "code": -9987}` ou `{"etat": "liaison_perdue"}` (toujours sous `statut` et `valeur`) : la mesure reste valable, mais la suivante sera refusée tant que le repos n'est pas prouvé. Le `code` est celui de la DLL, brut ; -9987 (instrument muet dans le délai) est un exemple, confirmé par la fiche [`FDX_StopMeasurement`](../abi/FDX_StopMeasurement.md) ;
 - `{"statut": "inconnue"}` : réponse écrite par un pont antérieur. Une réponse `mesure` sans ce champ, ou une ligne du format initial, se relit ainsi : **inconnu, jamais « au repos »**.
 
 Une valeur nue (`{"etat": "au_repos"}` sans `statut`), un `etat` inconnu ou un champ en trop sont refusés.
 
 Hors de la réponse `mesure`, la même valeur, sans `statut`, accompagne la réponse `fermeture_incertaine` et les erreurs `repos_incertain` et `deconnexion_echouee`. Elle peut alors valoir aussi `{"etat": "repos_suppose"}` : le désarmement a été refusé (-9986) sans événement alors que rien n'avait été armé. Ce refus est constaté au repos ; en déduire le repos reste une supposition, qui permet d'armer mais ne confirme pas une fermeture. Après un armement, ce cas ne se présente pas.
+
+**Compatibilité.** Depuis le ticket #25, un lecteur refuse les champs et les valeurs qu'il ne connaît pas. Un lecteur antérieur au ticket #24 rejettera donc une réponse `mesure` qui porte `remise_au_repos`, la réponse `fermeture_incertaine` et les erreurs `repos_incertain`, `deconnexion_echouee` et `session_fermee` : l'application et le pont doivent être mis à jour ensemble. Autre changement visible : `fermer` juste après `connecter`, sans mesure, ne répond plus `ferme` mais `fermeture_incertaine` avec `repos_suppose`.
 
 ## Confirmé, supposé, inconnu
 
