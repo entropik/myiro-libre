@@ -2,7 +2,7 @@
 
 **En clair** : une mesure, c'est les valeurs lues par l'instrument sur une ou plusieurs plages, plus sa **provenance** (quel instrument, quelle chaîne logicielle, quand, comment). Le pont l'envoie à l'application dans ce format, et la bibliothèque la conserve dans ce même format. Le numéro de format, écrit en tête, permet de relire une mesure après une évolution du logiciel.
 
-Le code est dans la crate `crates/pont-protocole` (fichier `src/mesure.rs`), indépendante de Windows, de la DLL et de l'application (ADR 0004).
+Le code est dans la crate `crates/pont-protocole` (fichier `src/mesure.rs`), indépendante de Windows, de la DLL et de l'application (ADR 0004). Les lignes du protocole propres au FD-9 (connexion par adresse, version, détection) sont décrites dans [protocole.md](protocole.md).
 
 ## Une mesure ne peut pas être mal formée
 

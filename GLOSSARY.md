@@ -96,7 +96,7 @@ Droit exclusif d'un logiciel à piloter un FD-9 en réseau ; un seul l'a à la f
 _Éviter_ : autorité, authority, verrou
 
 **Adresse réseau** :
-Paramètre de connexion propre au FD-9 : son adresse IP (par exemple 192.168.1.40) ou son nom sur le réseau, 23 caractères au plus. Saisie, elle dispense de la détection.
+Paramètre de connexion propre au FD-9 : son adresse IP (par exemple 192.0.2.40) ou son nom sur le réseau, 23 caractères au plus. Saisie, elle dispense de la détection.
 _Éviter_ : IP (à l'écran), hôte, port
 
 **Armement** :

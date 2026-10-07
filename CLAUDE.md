@@ -38,6 +38,7 @@ Code Rust (espace de travail Cargo à la racine) :
 - `crates/jeu-validation` : jeu « données brutes → spectres » tiré des mesures archivées (outil `extraire-jeu`, identifiants retirés) et banc de comparaison d'un calcul candidat (ADR 0006) ; indépendant de Windows.
 - `crates/pont-protocole` : messages JSON entre l'application et les ponts (requêtes, réponses, provenance) ; indépendant de Windows.
 - `crates/pont-myiro1` : session (paliers, plafond, journal), adapter `FdxDll`, boucle du protocole et exécutable `pont-myiro1 --dll <FDXSDK.dll> [--plafond <palier>]`.
+- `crates/pont-fd9` : même rôle pour le FD-9 (trait `SdkFd9`, adapter `Fd9Dll`, exécutable `pont-fd9 --dll <FD9SDK.dll> [--plafond version|detection]`) ; paliers version et détection seulement. La DLL de FD-S2w est 32 bits : `cargo build -p pont-fd9 --target i686-pc-windows-msvc`.
 - `app` : application de bureau Tauri 2 (seule crate qui dépend de Tauri), catalogue de textes `textes.rs`, page dans `app/interface/` ; lancer avec `cargo run -p app` (`-- --langue en` pour l'anglais). Modules `instrument` et `pont` (sans Tauri) : l'application trouve seule `FDXSDK.dll` (dans l'ordre : dossier choisi, DLL embarquées `sdk/x64` et `sdk/x86` à côté de l'exécutable, `SDK/` du dépôt en développement, DLL retenue, emplacements connus Ergosoft, EIZO, MY-CT1), lit son architecture et lance le pont de la même architecture. Ponts cherchés à côté de l'exécutable (`pont-myiro1-x64.exe`, `pont-myiro1-x86.exe`), puis en développement dans `target/debug/` et `target/i686-pc-windows-msvc/debug/` : compiler avant `cargo run -p app` avec `cargo build -p pont-myiro1` et `cargo build -p pont-myiro1 --target i686-pc-windows-msvc`.
 
 Installateur Windows (NSIS, ponts 64 et 32 bits inclus) :
@@ -54,9 +55,11 @@ cargo test                                     # tous les tests, contre un instr
 cargo clippy --all-targets -- -D warnings
 cargo test --target i686-pc-windows-msvc       # même chose en 32 bits (DLL de MY-CT1)
 cargo test -p pont-myiro1 --test dll -- --ignored palier_version   # appels réels à la DLL du poste
+cargo test -p pont-fd9 --target i686-pc-windows-msvc --test dll -- --ignored palier_version --nocapture    # FD-9 : charge la DLL de FD-S2w
+cargo test -p pont-fd9 --target i686-pc-windows-msvc --test dll -- --ignored palier_detection --nocapture  # FD-9 : détection USB et réseau
 ```
 
-Les tests `--ignored` de `crates/pont-myiro1/tests/dll.rs` parlent au vrai MYIRO-1 et, à partir de l'étalonnage, demandent des gestes à l'opérateur : ne les lancer qu'avec son accord, palier par palier. Leurs sorties (mesures) vont dans `Archivage/donnees/`, local et non versionné.
+Les tests `--ignored` de `crates/pont-myiro1/tests/dll.rs` parlent au vrai MYIRO-1 et, à partir de l'étalonnage, demandent des gestes à l'opérateur : ne les lancer qu'avec son accord, palier par palier. Leurs sorties (mesures) vont dans `Archivage/donnees/`, local et non versionné. Ceux de `crates/pont-fd9/tests/dll.rs` aussi, FD-S2w fermé ; `FD9SDK_DLL` désigne une autre DLL, et leurs sorties (adresse, identifiant réels) restent à l'écran.
 
 Intégration continue (`.github/workflows/ci.yml`, GitHub Actions) à chaque PR et à chaque poussée sur `main`. Job `windows` : `cargo fmt --all --check`, clippy, `cargo test` en 64 puis 32 bits. Job `linux` : fmt, clippy et tests limités aux crates qui doivent rester indépendantes de Windows (liste explicite `CRATES` dans le workflow, aujourd'hui `pont-protocole`, `jeu-validation` et `colorimetrie`). Les deux jobs lancent `python outils/test_verifier_docs.py` et `python outils/verifier_docs.py`. `main` exige ces deux contrôles verts : ne pas renommer les jobs. La CI ne couvre pas la DLL ni l'instrument (tests `--ignored`, aucun fichier Konica Minolta sur GitHub), ni les écrans, ni les mots interdits (la liste `.mots-interdits.local` reste sur le poste ; sans elle, le contrôle est sauté et annoncé).
 
