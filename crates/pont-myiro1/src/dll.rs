@@ -21,6 +21,11 @@ const CAPACITE_MAX_PORTS: u32 = 100;
 /// Nombre de résultats au plus par lecture : une bande en compte quelques dizaines.
 const CAPACITE_MAX_RESULTATS: u32 = 1000;
 
+/// Désarmement à la fermeture : essais au plus, et attente d'un événement.
+const ESSAIS_DESARMEMENT: usize = 3;
+const DELAI_EVENEMENT_FERMETURE: Duration = Duration::from_secs(5);
+const CODE_ETAT_INCOMPATIBLE: i32 = -9986;
+
 /// Type d'étalonnage « blanc » de `FDX_Calibration` ; les types 1 et 2
 /// (lumière ambiante, écran) ne sont jamais transmis.
 const ETALONNAGE_BLANC: i32 = 0;
@@ -266,12 +271,24 @@ impl SdkMyiro1 for FdxDll {
 impl Drop for FdxDll {
     fn drop(&mut self) {
         if self.connecte {
-            // Désarmer d'abord : une session fermée sur une erreur pendant une
-            // mesure laissait l'instrument bloqué en « mesure en cours » (voyant
-            // blanc fixe), sourd aux connexions suivantes. Un refus au repos
-            // (-9986) est sans effet.
-            // SAFETY : aucun argument (fiche FDX_StopMeasurement).
-            unsafe { (self.arreter)() };
+            // Désarmer d'abord : une session fermée pendant une mesure laissait
+            // l'instrument bloqué en « mesure en cours » (voyant blanc fixe),
+            // sourd aux connexions suivantes. Juste après une mesure, l'arrêt est
+            // refusé (-9986) jusqu'au réarmement automatique : on attend alors
+            // l'événement suivant et on réessaie. Sans événement, il est au repos.
+            for _ in 0..ESSAIS_DESARMEMENT {
+                // SAFETY : aucun argument (fiche FDX_StopMeasurement).
+                let code = unsafe { (self.arreter)() };
+                if code >= 0 {
+                    let _ = self.attendre_evenement(DELAI_EVENEMENT_FERMETURE);
+                    break;
+                }
+                if code != CODE_ETAT_INCOMPATIBLE
+                    || self.attendre_evenement(DELAI_EVENEMENT_FERMETURE).is_none()
+                {
+                    break;
+                }
+            }
             // SAFETY : aucun argument ; ferme la session ouverte par FDX_Connect.
             unsafe { (self.deconnecter)() };
         }
