@@ -9,7 +9,7 @@ use std::fmt;
 use std::path::Path;
 
 use pont_protocole::{ecrire_mesure, lire_mesure, Geometrie, Mesure};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde::Serialize;
 
 /// Nom du fichier de la base, dans le dossier de la bibliothèque.
@@ -133,16 +133,9 @@ impl Bibliotheque {
     pub fn ouvrir(dossier: &Path) -> Resultat<Self> {
         std::fs::create_dir_all(dossier)
             .map_err(|e| ErreurBibliotheque::Base(format!("{} : {e}", dossier.display())))?;
-        let base = Connection::open(dossier.join(FICHIER_BASE))?;
+        let mut base = Connection::open(dossier.join(FICHIER_BASE))?;
         base.pragma_update(None, "foreign_keys", true)?;
-        let version: i32 = base.pragma_query_value(None, "user_version", |l| l.get(0))?;
-        if version > VERSION_BASE {
-            return Err(ErreurBibliotheque::VersionBase(version));
-        }
-        if version < VERSION_BASE {
-            base.execute_batch(SCHEMA)?;
-            base.pragma_update(None, "user_version", VERSION_BASE)?;
-        }
+        migrer(&mut base)?;
         Ok(Bibliotheque { base })
     }
 
@@ -286,8 +279,7 @@ impl Bibliotheque {
         };
         let mut requete = self.base.prepare(
             "SELECT m.id, m.condition, m.horodatage, m.geometrie, m.plages, i.modele, i.numero_serie
-             FROM mesures m JOIN instruments i ON i.id = m.instrument
-             ORDER BY m.horodatage DESC, m.id DESC",
+             FROM mesures m JOIN instruments i ON i.id = m.instrument",
         )?;
         let lignes = requete.query_map([], |l| {
             Ok((
@@ -320,6 +312,9 @@ impl Bibliotheque {
             };
             mesures.push((condition, resume));
         }
+        // Les plus récentes d'abord, sur l'instant réel : deux fuseaux
+        // différents ne se comparent pas sur le texte de la date.
+        mesures.sort_by_key(|(_, m)| std::cmp::Reverse((instant(&m.horodatage), m.id)));
 
         let mut branches = Vec::new();
         for condition in self.conditions()? {
@@ -373,21 +368,62 @@ impl Bibliotheque {
         if nom.is_empty() {
             return Err(ErreurBibliotheque::NomVide);
         }
-        let porteur: Option<i64> = self
-            .base
-            .query_row(
-                "SELECT id FROM conditions WHERE nom = ?1",
-                params![nom],
-                |l| l.get(0),
-            )
-            .optional()?;
-        match porteur {
-            Some(id) if Some(IdCondition(id)) != sauf => {
-                Err(ErreurBibliotheque::NomDejaPris(nom.to_string()))
-            }
-            _ => Ok(nom.to_string()),
+        // Comparaison sans les majuscules : « Offset » et « offset » sont la
+        // même condition pour l'utilisateur.
+        let minuscules = nom.to_lowercase();
+        match self
+            .conditions()?
+            .into_iter()
+            .find(|c| c.nom.to_lowercase() == minuscules && Some(c.id) != sauf)
+        {
+            Some(porteuse) => Err(ErreurBibliotheque::NomDejaPris(porteuse.nom)),
+            None => Ok(nom.to_string()),
         }
     }
+}
+
+/// Instant UTC d'un horodatage RFC 3339 déjà vérifié par `pont-protocole` :
+/// secondes depuis 1970 et nanosecondes (au-delà de 9 chiffres, la fraction
+/// est tronquée).
+fn instant(texte: &str) -> (i64, u32) {
+    let o = texte.as_bytes();
+    let nombre = |debut: usize, fin: usize| -> i64 {
+        texte
+            .get(debut..fin)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0)
+    };
+    let (annee, mois, jour) = (nombre(0, 4), nombre(5, 7), nombre(8, 10));
+    let (h, m, s) = (nombre(11, 13), nombre(14, 16), nombre(17, 19));
+    // Jours depuis le 1er janvier 1970 (calendrier grégorien proleptique).
+    let (a, mo) = if mois <= 2 {
+        (annee - 1, mois + 9)
+    } else {
+        (annee, mois - 3)
+    };
+    let ere = a.div_euclid(400);
+    let annee_ere = a - ere * 400;
+    let jour_annee = (153 * mo + 2) / 5 + jour - 1;
+    let jour_ere = annee_ere * 365 + annee_ere / 4 - annee_ere / 100 + jour_annee;
+    let jours = ere * 146_097 + jour_ere - 719_468;
+
+    let mut i = 19;
+    let mut nanos = 0u32;
+    if o.get(i) == Some(&b'.') {
+        i += 1;
+        let mut echelle = 100_000_000u32;
+        while let Some(c) = o.get(i).filter(|c| c.is_ascii_digit()) {
+            nanos += u32::from(c - b'0') * echelle;
+            echelle /= 10;
+            i += 1;
+        }
+    }
+    let decalage = match o.get(i) {
+        Some(b'+') => nombre(i + 1, i + 3) * 3600 + nombre(i + 4, i + 6) * 60,
+        Some(b'-') => -(nombre(i + 1, i + 3) * 3600 + nombre(i + 4, i + 6) * 60),
+        _ => 0,
+    };
+    (jours * 86_400 + h * 3600 + m * 60 + s - decalage, nanos)
 }
 
 /// Texte ramené à une forme de comparaison : minuscules, sans accents, avec
@@ -413,18 +449,43 @@ fn replier(texte: &str) -> String {
     plie
 }
 
-const SCHEMA: &str = "
-CREATE TABLE conditions (
+/// Amène la base à [`VERSION_BASE`], une organisation après l'autre, dans une
+/// seule transaction : un arrêt en cours de route n'écrit rien, et la base
+/// garde son ancien numéro. Une base plus récente est refusée sans être
+/// touchée.
+fn migrer(base: &mut Connection) -> Resultat<()> {
+    let transaction = base.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let mut version: i32 = transaction.pragma_query_value(None, "user_version", |l| l.get(0))?;
+    if version > VERSION_BASE {
+        return Err(ErreurBibliotheque::VersionBase(version));
+    }
+    while version < VERSION_BASE {
+        match version {
+            0 => transaction.execute_batch(ORGANISATION_1)?,
+            autre => unreachable!("aucune migration depuis l'organisation {autre}"),
+        }
+        version += 1;
+        transaction.pragma_update(None, "user_version", version)?;
+    }
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Organisation 1. `IF NOT EXISTS` : la toute première version de cette
+/// crate créait les tables puis écrivait le numéro en deux temps, et pouvait
+/// laisser des tables complètes sous le numéro 0.
+const ORGANISATION_1: &str = "
+CREATE TABLE IF NOT EXISTS conditions (
     id INTEGER PRIMARY KEY,
     nom TEXT NOT NULL UNIQUE
 );
-CREATE TABLE instruments (
+CREATE TABLE IF NOT EXISTS instruments (
     id INTEGER PRIMARY KEY,
     modele TEXT NOT NULL,
     numero_serie INTEGER NOT NULL,
     UNIQUE (modele, numero_serie)
 );
-CREATE TABLE mesures (
+CREATE TABLE IF NOT EXISTS mesures (
     id INTEGER PRIMARY KEY,
     condition INTEGER NOT NULL REFERENCES conditions (id),
     instrument INTEGER NOT NULL REFERENCES instruments (id),
@@ -433,5 +494,5 @@ CREATE TABLE mesures (
     plages INTEGER NOT NULL,
     contenu TEXT NOT NULL
 );
-CREATE INDEX mesures_par_condition ON mesures (condition);
+CREATE INDEX IF NOT EXISTS mesures_par_condition ON mesures (condition);
 ";

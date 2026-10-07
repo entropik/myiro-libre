@@ -130,6 +130,124 @@ fn un_nom_vide_ou_deja_pris_est_refuse() {
 }
 
 #[test]
+fn deux_noms_qui_ne_different_que_par_les_majuscules_ne_coexistent_pas() {
+    let (_dossier, biblio) = bibliotheque_vide();
+    let ecran = biblio.creer_condition("Écran, adhésif").unwrap();
+    // Le refus cite le nom déjà en place.
+    assert_eq!(
+        biblio.creer_condition("écran, ADHÉSIF").unwrap_err(),
+        ErreurBibliotheque::NomDejaPris("Écran, adhésif".into())
+    );
+    // Changer les majuscules de son propre nom reste permis.
+    biblio
+        .renommer_condition(ecran.id, "écran, adhésif")
+        .unwrap();
+    assert_eq!(biblio.conditions().unwrap()[0].nom, "écran, adhésif");
+}
+
+#[test]
+fn une_creation_interrompue_laisse_une_bibliotheque_qui_s_ouvre() {
+    let dossier = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dossier.path()).unwrap();
+    // Arrêt après la création des tables, avant le numéro d'organisation : la
+    // base a ses tables mais reste au numéro 0.
+    let base = rusqlite::Connection::open(dossier.path().join(bibliotheque::FICHIER_BASE)).unwrap();
+    base.execute_batch(
+        "CREATE TABLE conditions (id INTEGER PRIMARY KEY, nom TEXT NOT NULL UNIQUE);",
+    )
+    .unwrap();
+    drop(base);
+
+    let biblio = Bibliotheque::ouvrir(dossier.path()).unwrap();
+    let offset = biblio.creer_condition("Offset").unwrap();
+    biblio
+        .enregistrer_mesure(
+            offset.id,
+            &ponctuelle(12345678, "2026-10-07T15:04:05+02:00"),
+        )
+        .unwrap();
+    drop(biblio);
+    assert_eq!(
+        Bibliotheque::ouvrir(dossier.path())
+            .unwrap()
+            .arborescence("")
+            .unwrap()[0]
+            .mesures
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn une_creation_annulee_en_cours_laisse_une_bibliotheque_qui_s_ouvre() {
+    let dossier = tempfile::tempdir().unwrap();
+    let mut base =
+        rusqlite::Connection::open(dossier.path().join(bibliotheque::FICHIER_BASE)).unwrap();
+    let transaction = base.transaction().unwrap();
+    transaction
+        .execute_batch("CREATE TABLE conditions (id INTEGER PRIMARY KEY, nom TEXT);")
+        .unwrap();
+    drop(transaction); // arrêt avant la fin : SQLite annule tout
+    drop(base);
+
+    let biblio = Bibliotheque::ouvrir(dossier.path()).unwrap();
+    biblio.creer_condition("Offset").unwrap();
+}
+
+#[test]
+fn une_bibliotheque_d_une_version_plus_recente_est_refusee_sans_etre_touchee() {
+    let dossier = tempfile::tempdir().unwrap();
+    let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
+    let base = rusqlite::Connection::open(&chemin).unwrap();
+    base.pragma_update(None, "user_version", 99).unwrap();
+    drop(base);
+
+    assert_eq!(
+        Bibliotheque::ouvrir(dossier.path()).err(),
+        Some(ErreurBibliotheque::VersionBase(99))
+    );
+    let base = rusqlite::Connection::open(&chemin).unwrap();
+    let tables: i64 = base
+        .query_row("SELECT count(*) FROM sqlite_master", [], |l| l.get(0))
+        .unwrap();
+    assert_eq!(tables, 0);
+}
+
+#[test]
+fn les_mesures_se_trient_sur_l_instant_reel_quel_que_soit_le_fuseau() {
+    let (_dossier, biblio) = bibliotheque_vide();
+    let offset = biblio.creer_condition("Offset").unwrap();
+    // 15:00 à Paris (13:00 UTC) est plus ancien que 14:30 UTC.
+    biblio
+        .enregistrer_mesure(
+            offset.id,
+            &ponctuelle(12345678, "2026-10-07T15:00:00+02:00"),
+        )
+        .unwrap();
+    biblio
+        .enregistrer_mesure(offset.id, &ponctuelle(12345678, "2026-10-07T14:30:00Z"))
+        .unwrap();
+    biblio
+        .enregistrer_mesure(
+            offset.id,
+            &ponctuelle(12345678, "2026-10-07T13:59:59.5+00:00"),
+        )
+        .unwrap();
+
+    assert_eq!(
+        noms(biblio.arborescence("").unwrap()),
+        vec![(
+            "Offset".to_string(),
+            vec![
+                "2026-10-07T14:30:00Z".to_string(),
+                "2026-10-07T13:59:59.5+00:00".to_string(),
+                "2026-10-07T15:00:00+02:00".to_string(),
+            ]
+        )]
+    );
+}
+
+#[test]
 fn on_renomme_une_condition_d_impression() {
     let (_dossier, biblio) = bibliotheque_vide();
     let offset = biblio.creer_condition("Offset").unwrap();
