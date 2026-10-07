@@ -13,7 +13,11 @@ use fdx_sys::{
     CONDITION_M1, CONDITION_M2, LONGUEUR_BRUTES, LONGUEUR_LAB, LONGUEUR_SPECTRE, TAILLE_INFOS,
     TAILLE_TAMPON_INFOS,
 };
-use pont_protocole::{ErreurPont, InstrumentMesurant, Palier, Provenance};
+use pont_protocole::{
+    Calcul, ConditionMesure, ConditionsCalcul, Echantillonnage, Empreinte, ErreurMesure,
+    ErreurPont, Geometrie, Horodatage, Illuminant, Info, InstrumentMesurant, Observateur, Palier,
+    Provenance, MODELE_MYIRO1,
+};
 use std::time::{Duration, Instant};
 
 /// Délai passé à `FDX_Connect`, en secondes : valeur des logiciels officiels
@@ -343,7 +347,7 @@ impl<S: SdkMyiro1> Session<S> {
             )));
         }
         let plage = plages.remove(0);
-        let provenance = self.provenance(garantie, "ponctuelle")?;
+        let provenance = self.provenance(garantie, Geometrie::Ponctuelle {})?;
         Ok(MesurePonctuelle {
             provenance,
             m0: plage.m0,
@@ -379,7 +383,7 @@ impl<S: SdkMyiro1> Session<S> {
             plages,
             sens,
             evenements,
-            provenance: self.provenance(garantie, "bande")?,
+            provenance: self.provenance(garantie, Geometrie::Bande { sens })?,
         })
     }
 
@@ -430,26 +434,33 @@ impl<S: SdkMyiro1> Session<S> {
     fn provenance(
         &self,
         (infos, etalonnage): (InfosInstrument, String),
-        geometrie: &str,
+        geometrie: Geometrie,
     ) -> Result<Provenance, ErreurPont> {
         let Some(version) = &self.version else {
             return Err(inattendue("mesure sans version du SDK".into()));
         };
+        let invalide = |erreur: ErreurMesure| inattendue(erreur.to_string());
+        let empreinte_dll = match self.sdk.empreinte() {
+            Some(texte) => Info::Confirmee(Empreinte::new(texte).map_err(invalide)?),
+            None => Info::Inconnue,
+        };
+        // Relevée avant armement : l'étalonnage qui garantit cette mesure.
+        let etalonnage = Info::Confirmee(Horodatage::new(etalonnage).map_err(invalide)?);
         Ok(Provenance {
             instrument: InstrumentMesurant {
-                modele: "MYIRO-1".into(),
+                modele: MODELE_MYIRO1.into(),
                 numero_serie: infos.numero,
                 micrologiciel: infos.micrologiciel.clone(),
                 code_produit: infos.code_produit.clone(),
             },
             version_sdk: [version.partie0, version.partie1, version.partie2],
-            empreinte_dll: self.sdk.empreinte(),
+            empreinte_dll,
             version_pont: env!("CARGO_PKG_VERSION").into(),
             architecture: std::env::consts::ARCH.into(),
-            horodatage: maintenant(),
-            etalonnage: Some(etalonnage),
-            geometrie: geometrie.into(),
-            calcul: CONDITIONS_DE_CALCUL.into(),
+            horodatage: Horodatage::new(maintenant()).map_err(invalide)?,
+            etalonnage,
+            geometrie,
+            calcul: conditions_de_calcul(),
         })
     }
 
@@ -669,9 +680,29 @@ fn traduire(code: i32) -> ErreurPont {
     }
 }
 
-/// Ce que le pont demande à la DLL, pour la provenance.
-const CONDITIONS_DE_CALCUL: &str =
-    "spectres : Illuminant 0/1/2 = M0/M1/M2, 380-730 nm par 10 nm ; Lab : D50, 2°";
+/// Ce que le pont demande à la DLL, pour la provenance, qualifié d'après la
+/// fiche `docs/abi/FDX_GetMeasureData.md`. Rien n'est relu sur l'instrument.
+fn conditions_de_calcul() -> Calcul {
+    Calcul {
+        libelle: "spectres : Illuminant 0/1/2 = M0/M1/M2, 380-730 nm par 10 nm ; Lab : D50, 2°"
+            .into(),
+        demande: Info::Confirmee(ConditionsCalcul {
+            conditions_spectres: [
+                Info::Confirmee(ConditionMesure::M0),
+                Info::Confirmee(ConditionMesure::M1),
+                Info::Confirmee(ConditionMesure::M2),
+            ],
+            longueurs_onde: Info::Confirmee(Echantillonnage {
+                debut_nm: 380,
+                pas_nm: 10,
+            }),
+            illuminant_lab: Info::Confirmee(Illuminant::D50),
+            // « 0 = 2° » : supposé fort, pas confirmé.
+            observateur_lab: Info::Supposee(Observateur::DeuxDegres),
+        }),
+        observe: Info::Inconnue,
+    }
+}
 
 /// Heure de l'ordinateur, RFC 3339 à la seconde, avec fuseau.
 fn maintenant() -> String {

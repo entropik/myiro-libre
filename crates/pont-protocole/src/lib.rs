@@ -3,6 +3,11 @@
 //! Une ligne JSON par message, dans chaque sens. Ce crate ne dépend ni de
 //! Windows ni d'une DLL de fabricant.
 
+mod mesure;
+
+pub use mesure::*;
+use mesure::{est_mesure_initiale, mesure_initiale};
+
 use serde::{Deserialize, Serialize};
 
 /// Demandes de l'application au pont.
@@ -52,12 +57,10 @@ pub enum Reponse {
         identite: Identite,
     },
     Etalonne {},
-    /// Une plage en mesure ponctuelle, une par plage reconnue en bande.
-    /// Aucune mesure ne sort du pont sans sa provenance (ADR 0005).
+    /// Une plage en mesure ponctuelle, une par plage reconnue en bande, avec
+    /// sa provenance (ADR 0005), au format conservable versionné.
     Mesure {
-        plages: Vec<Plage>,
-        sens: u32,
-        provenance: Provenance,
+        mesure: Mesure,
     },
     Ferme {},
     Erreur {
@@ -73,8 +76,17 @@ pub fn ecrire_reponse(reponse: &Reponse) -> String {
     serde_json::to_string(reponse).expect("une réponse se sérialise toujours")
 }
 
+/// Lit une réponse du pont. Une réponse `mesure` du format initial (pont
+/// 0.1.0, sans numéro de format) est reprise par [`lire_mesure`].
 pub fn lire_reponse(ligne: &str) -> Result<Reponse, String> {
-    serde_json::from_str(ligne).map_err(|erreur| erreur.to_string())
+    let valeur: serde_json::Value =
+        serde_json::from_str(ligne).map_err(|erreur| erreur.to_string())?;
+    if est_mesure_initiale(&valeur) {
+        return mesure_initiale(valeur)
+            .map(|mesure| Reponse::Mesure { mesure })
+            .map_err(|erreur| erreur.to_string());
+    }
+    serde_json::from_value(valeur).map_err(|erreur| erreur.to_string())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -98,50 +110,6 @@ pub struct Identite {
     pub anomalie_date_initiale: bool,
     /// Les 40 octets bruts, en hexadécimal, pour réinterprétation ultérieure.
     pub brute_hex: String,
-}
-
-/// Mesure d'une plage : spectres de 380 à 730 nm par 10 nm (échelle 0 à 1),
-/// données brutes de l'instrument et Lab D50/2° calculé par la DLL.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Plage {
-    pub m0: Vec<f32>,
-    pub m1: Vec<f32>,
-    pub m2: Vec<f32>,
-    pub brutes: Vec<f32>,
-    pub lab_m0: Vec<f32>,
-    pub lab_m1: Vec<f32>,
-    pub lab_m2: Vec<f32>,
-}
-
-/// Ce que le pont atteste sur une mesure (ADR 0005, GLOSSARY : Provenance).
-/// Posée par le pont, jamais reconstituée par l'application. Une valeur que le
-/// pont ne connaît pas est absente (`null`), jamais remplacée par zéro.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Provenance {
-    pub instrument: InstrumentMesurant,
-    /// Les trois nombres de `FDX_GetSDKVersion`, tels quels.
-    pub version_sdk: [u32; 3],
-    /// SHA-256 de la DLL chargée, en hexadécimal.
-    pub empreinte_dll: Option<String>,
-    pub version_pont: String,
-    /// « x86 » ou « x86_64 ».
-    pub architecture: String,
-    /// Fin de la mesure, heure de l'ordinateur, au format RFC 3339 avec fuseau.
-    pub horodatage: String,
-    /// Dernier étalonnage réussi de la session, même format.
-    pub etalonnage: Option<String>,
-    /// « ponctuelle » ou « bande ».
-    pub geometrie: String,
-    /// Conditions de calcul demandées à la DLL.
-    pub calcul: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InstrumentMesurant {
-    pub modele: String,
-    pub numero_serie: u32,
-    pub micrologiciel: String,
-    pub code_produit: String,
 }
 
 /// Étapes de la progression imposée sur instrument réel, dans l'ordre.

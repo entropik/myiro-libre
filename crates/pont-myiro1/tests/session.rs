@@ -2,9 +2,9 @@
 
 mod commun;
 
-use commun::{evenement, SdkSimule};
+use commun::{evenement, SdkSimule, EMPREINTE_SIMULEE};
 use pont_myiro1::{Connexion, Evenement, Session};
-use pont_protocole::{ErreurPont, Palier};
+use pont_protocole::{ErreurPont, Geometrie, Palier};
 
 #[test]
 fn la_progression_complete_donne_l_identite_de_l_instrument() {
@@ -572,16 +572,16 @@ fn une_mesure_ponctuelle_porte_sa_provenance() {
     assert_eq!(p.instrument.modele, "MYIRO-1");
     assert_eq!(p.instrument.numero_serie, 12345678);
     assert_eq!(p.version_sdk, [1, 1, 0]);
-    assert_eq!(p.empreinte_dll.as_deref(), Some("empreinte simulée"));
-    assert_eq!(p.geometrie, "ponctuelle");
-    assert!(
-        est_un_horodatage_avec_fuseau(&p.horodatage),
-        "{}",
-        p.horodatage
+    assert_eq!(
+        p.empreinte_dll.valeur().map(|e| e.texte()),
+        Some(EMPREINTE_SIMULEE.repeat(32).as_str())
     );
-    let etalonnage = p.etalonnage.as_deref().expect("date de l'étalonnage");
+    assert_eq!(p.geometrie, Geometrie::Ponctuelle {});
+    let horodatage = p.horodatage.texte();
+    assert!(est_un_horodatage_avec_fuseau(horodatage), "{horodatage}");
+    let etalonnage = p.etalonnage.valeur().expect("date de l'étalonnage").texte();
     assert!(est_un_horodatage_avec_fuseau(etalonnage), "{etalonnage}");
-    assert!(etalonnage <= p.horodatage.as_str());
+    assert!(etalonnage <= horodatage);
     assert!(!p.version_pont.is_empty());
 }
 
@@ -589,7 +589,7 @@ fn une_mesure_ponctuelle_porte_sa_provenance() {
 fn une_bande_porte_sa_provenance() {
     let mut session = session_pour_bande(&[1, 2, 3], 12);
     let bande = session.mesurer_bande(None).unwrap();
-    assert_eq!(bande.provenance.geometrie, "bande");
+    assert_eq!(bande.provenance.geometrie, Geometrie::Bande { sens: 2 });
     assert_eq!(bande.provenance.instrument.numero_serie, 12345678);
 }
 
@@ -678,7 +678,7 @@ fn une_deconnexion_au_retour_au_repos_garde_la_mesure_et_bloque_la_suivante() {
     let mesure = session.mesurer_ponctuelle().unwrap();
     assert_eq!(mesure.m1, vec![20.0; 36]);
     assert_eq!(mesure.provenance.instrument.numero_serie, 12345678);
-    assert!(mesure.provenance.etalonnage.is_some());
+    assert!(mesure.provenance.etalonnage.valeur().is_some());
     assert_eq!(
         session.mesurer_ponctuelle(),
         Err(ErreurPont::InstrumentPerdu)
@@ -766,14 +766,14 @@ fn une_reconnexion_exige_un_nouvel_etalonnage_et_porte_la_nouvelle_identite() {
 fn apres_reconnexion_la_date_d_etalonnage_vient_de_la_nouvelle_session() {
     let mut session = session_etalonnee_salves(&[&[1, 2, 3, 6], &[1, 2, 3]]);
     let avant = session.mesurer_ponctuelle().unwrap();
-    let ancienne = avant.provenance.etalonnage.clone().unwrap();
+    let ancienne = avant.provenance.etalonnage.valeur().unwrap().texte();
     // La date est à la seconde : attendre d'en changer pour les distinguer.
     std::thread::sleep(std::time::Duration::from_millis(1100));
     session.connecter(0).unwrap();
     session.sdk_mut().evenements.extend([7, 8].map(evenement));
     session.etalonner().unwrap();
     let apres = session.mesurer_ponctuelle().unwrap();
-    let nouvelle = apres.provenance.etalonnage.unwrap();
+    let nouvelle = apres.provenance.etalonnage.valeur().unwrap().texte();
     assert!(nouvelle > ancienne, "{nouvelle} après {ancienne}");
 }
 
