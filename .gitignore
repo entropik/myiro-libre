@@ -33,3 +33,6 @@ Audit-MYIRO/extraits/
 
 # Sources externes (manuels, captures, analyses) : copie locale de travail, droits des éditeurs, jamais publiées
 docs/sources/
+
+# Liste locale de mots interdits (voir outils/verifier_docs.py)
+.mots-interdits.local

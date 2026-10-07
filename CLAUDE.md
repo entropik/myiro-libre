@@ -60,3 +60,11 @@ Les tickets vivent dans les GitHub Issues du dépôt public `entropik/myiro-libr
 ### Domain docs
 
 Single-context : `GLOSSARY.md` et `docs/adr/` à la racine, créés au besoin. See `docs/agents/domain.md`.
+
+## Documentation
+
+- La documentation vit dans `docs/` : journal (`docs/blog/AAAA-MM-JJ.md`), décisions (`docs/adr/`), références ouvertes (`docs/references/`), fiches d'ABI (`docs/abi/`), plus `GLOSSARY.md` et `PLAN-ACTION.md`. Elle est rédigée en français, avec des mots simples (l'utilisateur est imprimeur, pas développeur).
+- En fin de tâche importante, mettre à jour le journal du jour, l'ADR concerné et le glossaire ; la commande `/fin-de-journee` fait le tour complet.
+- `python outils/verifier_docs.py` contrôle les mots interdits (liste locale `.mots-interdits.local`, non versionnée), les liens cassés et rappelle le journal du jour. `python outils/verifier_docs.py --installer` le branche sur les commits (hooks locaux).
+- `docs/sources/` est local et ignoré par git (documents de tiers) : ne jamais le versionner, ne jamais le citer par nom dans un fichier suivi. Les analyses de logiciels concurrents n'y nomment pas le produit dans les fichiers publiés : écrire « un logiciel concurrent ».
+- Les références externes (normes, projets libres) vont dans `docs/references/` sous forme de liens et de résumés, jamais de copies de contenu protégé.
