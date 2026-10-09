@@ -99,6 +99,10 @@ _Éviter_ : autorité, authority, verrou
 Paramètre de connexion propre au FD-9 : son adresse IP (par exemple 192.0.2.40) ou son nom sur le réseau, 23 caractères au plus. Saisie, elle dispense de la détection.
 _Éviter_ : IP (à l'écran), hôte, port
 
+**Autorisation du pare-feu** :
+Règle du pare-feu de Windows que myiro-libre ajoute pour laisser passer la réponse du FD-9 à la détection : entrante, UDP, port local 49152, réseau local, pour le seul programme pont du FD-9. Nom fixe « myiro-libre - FD-9 - detection (UDP 49152) ». Demandée une fois, par la fenêtre de contrôle de compte de Windows, à la première détection qui ne trouve rien.
+_Éviter_ : ouvrir les ports, exception, désactiver le pare-feu
+
 **Armement** :
 Mise en attente de l'instrument pour une mesure ponctuelle ou une bande : il attend l'appui sur son bouton. Ne règle rien de permanent dans l'instrument.
 _Éviter_ : réglage, condition (au sens de `SetMeasureCondition`)

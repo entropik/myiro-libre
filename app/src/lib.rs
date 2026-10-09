@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{mpsc, Mutex};
 
+use instrument::parefeu::{AutorisationPareFeu, PareFeuWindows};
 use instrument::{choix, emplacements_a_essayer, fd9, Accord, Geste, Gestes, Instrument, Vue};
 use pont::{chercher_ponts, chercher_ponts_nommes, PontProcessus};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -25,6 +26,18 @@ use textes::Langue;
 /// l'ancien pont.
 #[derive(Default)]
 struct Instruments(Mutex<Option<Instrument<PontProcessus>>>);
+
+/// Règle du pare-feu pour le FD-9 : demandée d'elle-même une seule fois
+/// pendant l'utilisation de l'application (ticket #47).
+struct PareFeuFd9(Mutex<AutorisationPareFeu<PareFeuWindows>>);
+
+impl Default for PareFeuFd9 {
+    fn default() -> Self {
+        PareFeuFd9(Mutex::new(AutorisationPareFeu::new(
+            PareFeuWindows::default(),
+        )))
+    }
+}
 
 /// Fichier où la DLL du fabricant trouvée est retenue pour la fois suivante.
 const FICHIER_SDK: &str = "emplacement-sdk.txt";
@@ -71,11 +84,29 @@ fn retenir_sdk(app: &AppHandle, dll: &std::path::Path) {
     }
 }
 
+/// `HWND` de la fenêtre de l'application, 0 si elle est introuvable.
+fn fenetre_principale(app: &AppHandle) -> isize {
+    #[cfg(windows)]
+    if let Some(fenetre) = app.webview_windows().values().next() {
+        if let Ok(hwnd) = fenetre.hwnd() {
+            return hwnd.0 as isize;
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = app;
+    0
+}
+
 /// Ferme l'instrument en cours, puis en ouvre un nouveau, en essayant les
 /// emplacements dans l'ordre de `emplacements_a_essayer`.
 fn ouvrir(app: &AppHandle, instruments: &Instruments, choisi: Option<PathBuf>) -> Vue {
     let mut courant = instruments.0.lock().unwrap_or_else(|e| e.into_inner());
     *courant = None;
+    let pare_feu = app.state::<PareFeuFd9>();
+    let mut autorisation = pare_feu.0.lock().unwrap_or_else(|e| e.into_inner());
+    // La fenêtre de contrôle de compte s'ouvre au premier plan, sur celle de
+    // l'application.
+    autorisation.pare_feu_mut().fenetre = fenetre_principale(app);
     let dossier_exe = std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(PathBuf::from))
@@ -98,6 +129,7 @@ fn ouvrir(app: &AppHandle, instruments: &Instruments, choisi: Option<PathBuf>) -
             ponts: &ponts_fd9,
         },
         PontProcessus::lancer,
+        &mut autorisation,
     );
     if let Some(dll) = instrument.sdk() {
         retenir_sdk(app, dll);
@@ -111,6 +143,22 @@ fn ouvrir(app: &AppHandle, instruments: &Instruments, choisi: Option<PathBuf>) -
 /// fenêtre : la connexion peut être longue.
 #[tauri::command(async)]
 fn ouvrir_instrument(app: AppHandle, instruments: State<'_, Instruments>) -> Vue {
+    ouvrir(&app, &instruments, None)
+}
+
+/// Bouton « Autoriser le FD-9 dans le pare-feu » : la règle sera redemandée
+/// une fois (fenêtre de contrôle de compte de Windows), puis l'instrument rouvert.
+#[tauri::command(async)]
+fn autoriser_pare_feu_fd9(
+    app: AppHandle,
+    instruments: State<'_, Instruments>,
+    pare_feu: State<'_, PareFeuFd9>,
+) -> Vue {
+    pare_feu
+        .0
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .autoriser_a_nouveau();
     ouvrir(&app, &instruments, None)
 }
 
@@ -201,12 +249,14 @@ pub fn lancer() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Instruments::default())
+        .manage(PareFeuFd9::default())
         .setup(ouvrir_bibliotheque)
         .manage(GesteEnAttente::default())
         .invoke_handler(tauri::generate_handler![
             catalogue,
             langue_demandee,
             ouvrir_instrument,
+            autoriser_pare_feu_fd9,
             choisir_dossier,
             colonne::version_application,
             colonne::bibliotheque_demonstration,

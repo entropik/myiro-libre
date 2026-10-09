@@ -112,6 +112,13 @@ function remplirEcran(section) {
   }
   const guide = section.querySelector("[data-guide-cablage]");
   if (guide) guide.hidden = !(concerne && probleme.guide_cablage);
+  // Pare-feu fermé pour le FD-9 : son bouton passe devant « Réessayer ».
+  const autoriser = section.querySelector("[data-action='autoriser_pare_feu']");
+  if (autoriser) {
+    const montre = concerne && probleme.autoriser_pare_feu;
+    autoriser.hidden = !montre;
+    section.querySelector("[data-action='reessayer']").classList.toggle("btn--primary", !montre);
+  }
   if (section.dataset.ecran === "etalonnage") remplirEtalonnage(section);
   const detail = concerne ? probleme.detail : null;
   section.querySelector("[data-details]").hidden = !detail;
@@ -260,6 +267,7 @@ document.addEventListener("click", (e) => {
   }
   if (cible.dataset.langueChoix) appliquerLangue(cible.dataset.langueChoix);
   if (cible.dataset.action === "reessayer") interrogerInstrument("ouvrir_instrument");
+  if (cible.dataset.action === "autoriser_pare_feu") interrogerInstrument("autoriser_pare_feu_fd9");
   if (cible.dataset.action === "choisir_dossier") interrogerInstrument("choisir_dossier");
   if (cible.hasAttribute("data-etalonner")) lancerEtalonnage(false);
   if (cible.dataset.geste) repondreGeste(cible.dataset.geste === "fait");
