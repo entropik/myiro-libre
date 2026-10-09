@@ -3,7 +3,9 @@
 //! - spectre de réflexion (380 à 730 nm par 10 nm) vers XYZ puis Lab, pour
 //!   l'illuminant D50 et l'observateur 2° ;
 //! - Lab vers LCH ;
-//! - écarts ΔE00 (CIEDE2000), ΔC et ΔH (CIELAB).
+//! - écarts ΔE00 (CIEDE2000), ΔC et ΔH (CIELAB) ;
+//! - densités par réflexion (statuts E et T, visuelle ISO), absolues ou
+//!   relatives au papier, depuis un spectre M0.
 //!
 //! Une valeur impossible à calculer est **inconnue** (voir `GLOSSARY.md`) :
 //! les fonctions rendent alors `Err(Inconnu)`, jamais zéro.
@@ -11,8 +13,11 @@
 //! La crate ne dépend ni de Windows, ni de l'interface, ni des ponts : son
 //! interface publique est un contrat.
 
+mod densite;
 mod tables;
+mod tables_densite;
 
+pub use densite::{densites, densites_relatives, Densites, StatutDensite};
 use tables::PONDERATIONS;
 
 /// Nombre de valeurs d'un spectre : 380 à 730 nm par pas de 10 nm.
