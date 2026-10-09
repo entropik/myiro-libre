@@ -137,6 +137,7 @@ const FRANCAIS: Catalogue = &[
         "Puis cliquez sur «\u{202f}Réessayer\u{202f}».",
     ),
     ("ecran.reessayer", "Réessayer"),
+    ("ecran.autoriser_pare_feu", "Autoriser le FD-9 dans le pare-feu"),
     (
         "ecran.choix.titre.logiciel_absent",
         "Le logiciel du fabricant du MYIRO-1 n’est pas installé sur ce poste.",
@@ -210,11 +211,19 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "probleme.aucun_fd9.cause",
-        "Aucun FD-9 n’a répondu sur le réseau. Le pare-feu de Windows bloque peut-être sa réponse.",
+        "Aucun FD-9 n’a répondu sur le réseau, alors que le pare-feu de Windows laisse passer sa réponse.",
     ),
     (
         "probleme.aucun_fd9.action",
-        "Vérifiez que le FD-9 est allumé et sur le même réseau, et que FD-S2w est fermé, puis réessayez. Si rien ne change, faites autoriser myiro-libre dans le pare-feu (voir le détail).",
+        "Vérifiez que le FD-9 est allumé et sur le même réseau, et que FD-S2w est fermé, puis réessayez.",
+    ),
+    (
+        "probleme.pare_feu_ferme.cause",
+        "Le pare-feu de Windows bloque la réponse du FD-9\u{202f}: myiro-libre n’a pas reçu l’autorisation de l’écouter.",
+    ),
+    (
+        "probleme.pare_feu_ferme.action",
+        "Cliquez sur «\u{202f}Autoriser le FD-9 dans le pare-feu\u{202f}», puis répondez «\u{202f}Oui\u{202f}» à la fenêtre de Windows.",
     ),
     (
         "probleme.connexion_impossible.cause",
@@ -401,6 +410,7 @@ const ANGLAIS: Catalogue = &[
     ),
     ("ecran.non_detecte.etape3", "Then click “Try again”."),
     ("ecran.reessayer", "Try again"),
+    ("ecran.autoriser_pare_feu", "Allow the FD-9 in the firewall"),
     (
         "ecran.choix.titre.logiciel_absent",
         "The MYIRO-1 manufacturer’s software is not installed on this computer.",
@@ -474,11 +484,19 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "probleme.aucun_fd9.cause",
-        "No FD-9 answered on the network. The Windows firewall may be blocking its reply.",
+        "No FD-9 answered on the network, although the Windows firewall lets its reply through.",
     ),
     (
         "probleme.aucun_fd9.action",
-        "Check that the FD-9 is on and on the same network, and that FD-S2w is closed, then try again. If nothing changes, have myiro-libre allowed in the firewall (see the details).",
+        "Check that the FD-9 is on and on the same network, and that FD-S2w is closed, then try again.",
+    ),
+    (
+        "probleme.pare_feu_ferme.cause",
+        "The Windows firewall blocks the FD-9 reply: myiro-libre was not allowed to listen for it.",
+    ),
+    (
+        "probleme.pare_feu_ferme.action",
+        "Click “Allow the FD-9 in the firewall”, then answer “Yes” in the Windows window.",
     ),
     (
         "probleme.connexion_impossible.cause",
@@ -667,6 +685,7 @@ mod tests {
     fn un_bouton_cite_est_entre_guillemets() {
         for bouton in [
             "ecran.reessayer",
+            "ecran.autoriser_pare_feu",
             "ecran.choix.action",
             "ecran.etalonnage.lancer",
         ] {

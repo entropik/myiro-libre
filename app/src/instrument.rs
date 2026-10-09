@@ -51,6 +51,8 @@ impl<F: FnMut(Geste) -> Accord> Gestes for F {
 pub mod choix;
 /// Le FD-9 : son pont et ses paliers (ticket #13).
 pub mod fd9;
+/// La règle du pare-feu de Windows pour la détection du FD-9 (ticket #47).
+pub mod parefeu;
 
 /// Nom de la DLL du MYIRO-1 cherchée dans le logiciel du fabricant.
 pub const NOM_DLL: &str = "FDXSDK.dll";
@@ -154,6 +156,11 @@ pub enum Probleme {
     /// Le pont FD-9 ne voit aucun FD-9 : sur le réseau, le pare-feu de
     /// Windows bloque peut-être la réponse (fiche `FD9_GetDeviceList`).
     AucunFd9 { detail: String },
+    /// La règle du pare-feu pour le FD-9 manque : l'opérateur a refusé la
+    /// fenêtre de contrôle de compte, ou l'ajout a échoué. Rien n'est
+    /// redemandé tout seul ; le bouton « Autoriser le FD-9 dans le pare-feu »
+    /// le fait. `detail` donne la commande équivalente et celle qui la retire.
+    PareFeuFerme { detail: String },
     /// La recherche des instruments branchés a échoué.
     DetectionImpossible { detail: String },
     /// L'instrument détecté a refusé la connexion ou ne répond pas.
@@ -185,6 +192,7 @@ impl Probleme {
             | Probleme::PontBloque { .. }
             | Probleme::AucunInstrument
             | Probleme::AucunFd9 { .. }
+            | Probleme::PareFeuFerme { .. }
             | Probleme::DetectionImpossible { .. }
             | Probleme::ConnexionImpossible { .. }
             | Probleme::InstrumentPerdu { .. } => Ecran::NonDetecte,
@@ -203,6 +211,11 @@ impl Probleme {
         )
     }
 
+    /// Le bouton « Autoriser le FD-9 dans le pare-feu » est-il montré ?
+    pub fn autoriser_pare_feu(&self) -> bool {
+        matches!(self, Probleme::PareFeuFerme { .. })
+    }
+
     /// Code du problème : les textes de l'écran sont les clés
     /// `probleme.<code>.cause` et `probleme.<code>.action` du catalogue.
     pub fn code(&self) -> &'static str {
@@ -214,6 +227,7 @@ impl Probleme {
             Probleme::PontBloque { .. } => "pont_bloque",
             Probleme::AucunInstrument => "aucun_instrument",
             Probleme::AucunFd9 { .. } => "aucun_fd9",
+            Probleme::PareFeuFerme { .. } => "pare_feu_ferme",
             Probleme::DetectionImpossible { .. } => "detection_impossible",
             Probleme::ConnexionImpossible { .. } => "connexion_impossible",
             Probleme::EtalonnageEchoue { .. } => "etalonnage_echoue",
@@ -232,6 +246,7 @@ impl Probleme {
             | Probleme::PontEnPanne { detail: d }
             | Probleme::PontBloque { detail: d }
             | Probleme::AucunFd9 { detail: d }
+            | Probleme::PareFeuFerme { detail: d }
             | Probleme::DetectionImpossible { detail: d }
             | Probleme::ConnexionImpossible { detail: d }
             | Probleme::EtalonnageEchoue { detail: d }
@@ -259,6 +274,8 @@ pub struct VueProbleme {
     pub ecran: &'static str,
     /// Montrer les étapes câble et port USB.
     pub guide_cablage: bool,
+    /// Montrer le bouton « Autoriser le FD-9 dans le pare-feu ».
+    pub autoriser_pare_feu: bool,
     pub detail: Option<String>,
 }
 
@@ -436,6 +453,7 @@ impl<P: Pont> Instrument<P> {
                     Ecran::Etalonnage => "etalonnage",
                 },
                 guide_cablage: p.guide_cablage(),
+                autoriser_pare_feu: p.autoriser_pare_feu(),
                 detail: p.detail().map(String::from),
             }),
         }

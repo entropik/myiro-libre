@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 use app::instrument::choix::{ouvrir_l_un_ou_l_autre, Recherche};
 use app::instrument::fd9::{emplacements_fd9, EMPLACEMENTS_FD9, PLAFOND_FD9};
+use app::instrument::parefeu::{AutorisationPareFeu, EchecPareFeu, PareFeuSimule, RegleFd9};
 use app::instrument::{Etat, Instrument, Probleme};
 use app::pont::{chercher_ponts_nommes, Architecture, Panne, Pont, PontSimule};
 use app::textes::{texte, Langue};
@@ -70,6 +71,9 @@ struct PontFd9Simule {
     liste: Vec<InstrumentFd9>,
     version: Option<Reponse>,
     detection: Option<Reponse>,
+    /// Nombre de détections qui reviennent vides avant de voir la liste
+    /// (réponse bloquée par le pare-feu, puis règle ajoutée).
+    vides_d_abord: usize,
     journal: Rc<RefCell<Vec<Requete>>>,
 }
 
@@ -98,6 +102,10 @@ impl Pont for PontFd9Simule {
                 version_fichier: Info::Confirmee([1, 3, 2, 3]),
                 empreinte: Info::Inconnue,
             }),
+            Requete::Detecter {} if self.vides_d_abord > 0 => {
+                self.vides_d_abord -= 1;
+                Reponse::InstrumentsFd9 { liste: Vec::new() }
+            }
             Requete::Detecter {} => self.detection.clone().unwrap_or(Reponse::InstrumentsFd9 {
                 liste: self.liste.clone(),
             }),
@@ -112,8 +120,29 @@ impl Pont for PontFd9Simule {
     }
 }
 
+/// Pare-feu simulé où la règle de myiro-libre existe déjà : rien n'est demandé.
+fn regle_presente() -> AutorisationPareFeu<PareFeuSimule> {
+    AutorisationPareFeu::new(PareFeuSimule {
+        presente: true,
+        ..Default::default()
+    })
+}
+
 fn ouvrir_fd9(simule: PontFd9Simule, sdk: &Path) -> Instrument<PontFd9Simule> {
-    Instrument::ouvrir_fd9(&[sdk.to_path_buf()], &ponts_fd9(), |_, _, _| Ok(simule))
+    ouvrir_fd9_avec(simule, sdk, &mut regle_presente())
+}
+
+fn ouvrir_fd9_avec(
+    simule: PontFd9Simule,
+    sdk: &Path,
+    autorisation: &mut AutorisationPareFeu<PareFeuSimule>,
+) -> Instrument<PontFd9Simule> {
+    Instrument::ouvrir_fd9(
+        &[sdk.to_path_buf()],
+        &ponts_fd9(),
+        |_, _, _| Ok(simule),
+        autorisation,
+    )
 }
 
 #[test]
@@ -129,6 +158,7 @@ fn un_fd9_du_reseau_est_detecte_et_la_barre_le_montre() {
             lance = Some((programme.to_path_buf(), dll.to_path_buf(), plafond));
             Ok(simule.clone())
         },
+        &mut regle_presente(),
     );
 
     assert_eq!(
@@ -247,6 +277,7 @@ fn la_recherche_du_fd9_ne_retient_que_fd9sdk() {
             recue = Some((programme.to_path_buf(), dll.to_path_buf()));
             Ok(PontFd9Simule::avec_un_fd9())
         },
+        &mut regle_presente(),
     );
     assert_eq!(
         recue,
@@ -288,7 +319,7 @@ fn les_ponts_fd9_sont_cherches_sous_leur_propre_nom() {
 /// Pont lancé par l'application : l'un ou l'autre selon le programme.
 enum Simule {
     Myiro1(PontSimule),
-    Fd9(PontFd9Simule),
+    Fd9(Box<PontFd9Simule>),
 }
 
 impl Pont for Simule {
@@ -319,11 +350,12 @@ fn ouvrir_un_des_deux(
         |programme: &Path, _: &Path, _| {
             lances.push(programme.to_path_buf());
             Ok(if programme.to_string_lossy().contains("fd9") {
-                Simule::Fd9(PontFd9Simule::avec_un_fd9())
+                Simule::Fd9(Box::new(PontFd9Simule::avec_un_fd9()))
             } else {
                 Simule::Myiro1(PontSimule::avec_instruments(series_myiro1))
             })
         },
+        &mut regle_presente(),
     );
     (instrument, lances)
 }
@@ -378,8 +410,9 @@ fn sans_logiciel_myiro1_le_vrai_probleme_du_fd9_est_montre() {
         },
         |programme: &Path, _: &Path, _| -> Result<Simule, Panne> {
             lances.push(programme.to_path_buf());
-            Ok(Simule::Fd9(PontFd9Simule::avec_un_fd9()))
+            Ok(Simule::Fd9(Box::new(PontFd9Simule::avec_un_fd9())))
         },
+        &mut regle_presente(),
     );
     assert!(lances.is_empty());
     assert!(matches!(
@@ -404,8 +437,9 @@ fn sans_logiciel_myiro1_une_detection_fd9_en_erreur_est_montree() {
             simule.detection = Some(Reponse::Erreur {
                 erreur: ErreurPont::Sdk { code: 1002 },
             });
-            Ok(Simule::Fd9(simule))
+            Ok(Simule::Fd9(Box::new(simule)))
         },
+        &mut regle_presente(),
     );
     assert!(matches!(
         instrument.probleme(),
@@ -428,11 +462,12 @@ fn un_myiro1_en_echec_garde_son_probleme_devant_un_fd9_absent() {
         },
         |programme: &Path, _: &Path, _| -> Result<Simule, Panne> {
             Ok(if programme.to_string_lossy().contains("fd9") {
-                Simule::Fd9(PontFd9Simule::default())
+                Simule::Fd9(Box::default())
             } else {
                 Simule::Myiro1(PontSimule::avec_instruments(&[]))
             })
         },
+        &mut regle_presente(),
     );
     assert_eq!(instrument.probleme(), Some(&Probleme::AucunInstrument));
     assert!(instrument.sdk().is_some(), "le problème vient du MYIRO-1");
@@ -450,4 +485,234 @@ fn sans_aucun_des_deux_le_probleme_du_myiro1_reste_montre() {
         instrument.probleme(),
         Some(Probleme::LogicielAbsent { examines }) if examines.contains("FDXSDK.dll")
     ));
+}
+
+// ---- Pare-feu (ticket #47) : à la première détection vide, l'application
+// demande à Windows d'ajouter sa règle, puis relance la détection une fois. ----
+
+/// Une détection vide (réponse bloquée), puis le FD-9 une fois la règle ajoutée.
+fn bloque_par_le_pare_feu() -> PontFd9Simule {
+    PontFd9Simule {
+        vides_d_abord: 1,
+        ..PontFd9Simule::avec_un_fd9()
+    }
+}
+
+fn regle_du_pont_x86() -> RegleFd9 {
+    RegleFd9 {
+        programme: PathBuf::from("pont-fd9-x86.exe"),
+    }
+}
+
+#[test]
+fn a_la_premiere_detection_vide_la_regle_est_demandee_puis_la_detection_relancee() {
+    let simule = bloque_par_le_pare_feu();
+    let journal = simule.journal.clone();
+    let mut autorisation = AutorisationPareFeu::new(PareFeuSimule::default());
+
+    let instrument = ouvrir_fd9_avec(simule, &fd_s2w("pare-feu-ouvert"), &mut autorisation);
+
+    assert_eq!(
+        instrument.etat(),
+        &Etat::Detecte {
+            modele: "FD-9".into(),
+            identifiant: Info::Supposee(IDENTIFIANT.into()),
+        }
+    );
+    assert_eq!(instrument.probleme(), None);
+    // Une seule demande, pour le pont lancé, et une seule nouvelle détection.
+    assert_eq!(autorisation.pare_feu().demandes, vec![regle_du_pont_x86()]);
+    assert_eq!(
+        *journal.borrow(),
+        vec![
+            Requete::Version {},
+            Requete::Detecter {},
+            Requete::Detecter {}
+        ]
+    );
+}
+
+#[test]
+fn une_regle_deja_presente_n_est_jamais_redemandee() {
+    let mut simule = PontFd9Simule::avec_un_fd9();
+    simule.liste.clear();
+    let journal = simule.journal.clone();
+    let mut autorisation = regle_presente();
+
+    let instrument = ouvrir_fd9_avec(simule, &fd_s2w("regle-presente"), &mut autorisation);
+
+    assert!(autorisation.pare_feu().demandes.is_empty());
+    assert_eq!(
+        *journal.borrow(),
+        vec![Requete::Version {}, Requete::Detecter {}]
+    );
+    // Le pare-feu n'est plus en cause : l'avis ordinaire, sans bouton.
+    assert!(matches!(
+        instrument.probleme(),
+        Some(Probleme::AucunFd9 { .. })
+    ));
+    assert!(!instrument.vue().probleme.unwrap().autoriser_pare_feu);
+}
+
+#[test]
+fn la_regle_ajoutee_sans_fd9_visible_n_est_pas_redemandee() {
+    let mut autorisation = AutorisationPareFeu::new(PareFeuSimule::default());
+    for essai in ["sans-fd9-1", "sans-fd9-2"] {
+        let mut simule = PontFd9Simule::avec_un_fd9();
+        simule.liste.clear();
+        let instrument = ouvrir_fd9_avec(simule, &fd_s2w(essai), &mut autorisation);
+        assert!(matches!(
+            instrument.probleme(),
+            Some(Probleme::AucunFd9 { .. })
+        ));
+    }
+    assert_eq!(autorisation.pare_feu().demandes, vec![regle_du_pont_x86()]);
+}
+
+#[test]
+fn un_refus_donne_un_probleme_redige_sans_nouvelle_demande_automatique() {
+    let mut autorisation = AutorisationPareFeu::new(PareFeuSimule {
+        echec: Some(EchecPareFeu::Refuse),
+        ..Default::default()
+    });
+    let simule = bloque_par_le_pare_feu();
+    let journal = simule.journal.clone();
+
+    let instrument = ouvrir_fd9_avec(simule, &fd_s2w("refus"), &mut autorisation);
+
+    assert!(matches!(
+        instrument.probleme(),
+        Some(Probleme::PareFeuFerme { .. })
+    ));
+    // Pas de nouvelle détection après un refus.
+    assert_eq!(
+        *journal.borrow(),
+        vec![Requete::Version {}, Requete::Detecter {}]
+    );
+    let vue = instrument.vue().probleme.unwrap();
+    assert_eq!(vue.code, "pare_feu_ferme");
+    assert_eq!(vue.ecran, "non_detecte");
+    assert!(vue.autoriser_pare_feu);
+    assert!(!vue.guide_cablage);
+    // Le détail replié donne la commande équivalente, et comment la retirer.
+    let detail = vue.detail.unwrap();
+    assert!(
+        detail.contains(&regle_du_pont_x86().commande_ajout()),
+        "{detail}"
+    );
+    assert!(detail.contains(&RegleFd9::commande_retrait()), "{detail}");
+
+    // « Réessayer » : la règle manque toujours, mais rien n'est redemandé.
+    let encore = ouvrir_fd9_avec(
+        bloque_par_le_pare_feu(),
+        &fd_s2w("refus-encore"),
+        &mut autorisation,
+    );
+    assert!(matches!(
+        encore.probleme(),
+        Some(Probleme::PareFeuFerme { .. })
+    ));
+    assert_eq!(autorisation.pare_feu().demandes.len(), 1);
+}
+
+#[test]
+fn un_echec_de_l_ajout_est_rapporte_avec_son_detail() {
+    let mut autorisation = AutorisationPareFeu::new(PareFeuSimule {
+        echec: Some(EchecPareFeu::Echec {
+            detail: "netsh : code 1".into(),
+        }),
+        ..Default::default()
+    });
+    let instrument = ouvrir_fd9_avec(
+        bloque_par_le_pare_feu(),
+        &fd_s2w("echec"),
+        &mut autorisation,
+    );
+    assert!(matches!(
+        instrument.probleme(),
+        Some(Probleme::PareFeuFerme { detail }) if detail.contains("netsh : code 1")
+    ));
+}
+
+#[test]
+fn le_bouton_autoriser_redemande_une_fois_apres_un_refus() {
+    let mut autorisation = AutorisationPareFeu::new(PareFeuSimule {
+        echec: Some(EchecPareFeu::Refuse),
+        ..Default::default()
+    });
+    ouvrir_fd9_avec(
+        bloque_par_le_pare_feu(),
+        &fd_s2w("bouton-1"),
+        &mut autorisation,
+    );
+    // L'opérateur accepte cette fois, depuis le bouton.
+    autorisation.pare_feu_mut().echec = None;
+    autorisation.autoriser_a_nouveau();
+    let instrument = ouvrir_fd9_avec(
+        bloque_par_le_pare_feu(),
+        &fd_s2w("bouton-2"),
+        &mut autorisation,
+    );
+    assert_eq!(instrument.vue().etat, "detecte");
+    assert_eq!(autorisation.pare_feu().demandes.len(), 2);
+}
+
+#[test]
+fn le_choix_des_ponts_passe_l_autorisation_au_fd9() {
+    let mut autorisation = AutorisationPareFeu::new(PareFeuSimule::default());
+    let instrument = ouvrir_l_un_ou_l_autre(
+        Recherche {
+            emplacements: &[dossier_vide("choix-pare-feu-myiro1")],
+            ponts: &ponts_myiro1(),
+        },
+        Recherche {
+            emplacements: &[fd_s2w("choix-pare-feu")],
+            ponts: &ponts_fd9(),
+        },
+        |_: &Path, _: &Path, _| -> Result<Simule, Panne> {
+            Ok(Simule::Fd9(Box::new(bloque_par_le_pare_feu())))
+        },
+        &mut autorisation,
+    );
+    assert_eq!(instrument.vue().etat, "detecte");
+    assert_eq!(autorisation.pare_feu().demandes, vec![regle_du_pont_x86()]);
+}
+
+#[test]
+fn la_regle_est_entrante_udp_49152_reseau_local_pour_le_seul_pont() {
+    let regle = RegleFd9 {
+        programme: PathBuf::from(r"C:\Program Files\myiro-libre\pont-fd9-x86.exe"),
+    };
+    assert_eq!(
+        regle.arguments_ajout(),
+        "advfirewall firewall add rule name=\"myiro-libre - FD-9 - detection (UDP 49152)\" \
+         dir=in action=allow protocol=UDP localport=49152 remoteip=localsubnet profile=any \
+         program=\"C:\\Program Files\\myiro-libre\\pont-fd9-x86.exe\""
+    );
+    assert_eq!(
+        RegleFd9::arguments_lecture(),
+        "advfirewall firewall show rule name=\"myiro-libre - FD-9 - detection (UDP 49152)\""
+    );
+    assert_eq!(
+        RegleFd9::commande_retrait(),
+        "netsh advfirewall firewall delete rule name=\"myiro-libre - FD-9 - detection (UDP 49152)\""
+    );
+}
+
+#[test]
+fn le_probleme_du_pare_feu_est_explique_en_francais_et_en_anglais() {
+    for (langue, mot) in [
+        (Langue::Francais, "pare-feu"),
+        (Langue::Anglais, "firewall"),
+    ] {
+        let cause = texte(langue, "probleme.pare_feu_ferme.cause");
+        let action = texte(langue, "probleme.pare_feu_ferme.action");
+        let bouton = texte(langue, "ecran.autoriser_pare_feu");
+        assert!(cause.contains(mot), "{cause}");
+        assert!(action.contains(bouton), "{action} / {bouton}");
+    }
+    assert_eq!(
+        texte(Langue::Francais, "ecran.autoriser_pare_feu"),
+        "Autoriser le FD-9 dans le pare-feu"
+    );
 }

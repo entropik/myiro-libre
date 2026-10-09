@@ -1,11 +1,13 @@
 //! Le FD-9 dans le module `instrument` (ticket #13) : son pont `pont-fd9` et
-//! ses paliers (version, détection). Isolé du reste du module : le MYIRO-1
-//! garde son chemin, `Instrument::ouvrir` ; le choix est dans `choix`.
+//! ses paliers (version, détection), et la règle du pare-feu (ticket #47).
+//! Isolé du reste du module : le MYIRO-1 garde son chemin,
+//! `Instrument::ouvrir` ; le choix est dans `choix`.
 
 use std::path::{Path, PathBuf};
 
 use pont_protocole::{Info, Palier, Reponse, Requete};
 
+use super::parefeu::{AutorisationPareFeu, EchecPareFeu, PareFeu, RegleFd9, PORT_DETECTION};
 use super::{choisir, inattendue, Etat, Instrument, Probleme};
 use crate::pont::{Architecture, Panne, Pont};
 
@@ -43,10 +45,16 @@ impl<P: Pont> Instrument<P> {
     /// Cherche `FD9SDK.dll`, lance `pont-fd9` de la même architecture avec le
     /// plafond Détection, puis demande la version et la détection. Un FD-9
     /// vu devient `Etat::Detecte` : ce pont ne connecte pas encore.
-    pub fn ouvrir_fd9(
+    ///
+    /// À la première détection vide, si la règle du pare-feu manque, elle est
+    /// demandée à Windows pour le pont lancé, puis la détection est relancée
+    /// une fois (ticket #47). `autorisation` garde la trace de la demande
+    /// d'une ouverture à l'autre : elle n'est jamais faite deux fois d'elle-même.
+    pub fn ouvrir_fd9<F: PareFeu>(
         emplacements: &[PathBuf],
         ponts: &[(Architecture, PathBuf)],
         lancer: impl FnOnce(&Path, &Path, Palier) -> Result<P, Panne>,
+        autorisation: &mut AutorisationPareFeu<F>,
     ) -> Self {
         let (programme, dll) = match choisir(NOM_DLL_FD9, NOM_PONT_FD9, emplacements, ponts) {
             Ok(choix) => choix,
@@ -56,7 +64,13 @@ impl<P: Pont> Instrument<P> {
             Ok(pont) => pont,
             Err(panne) => return Self::en_echec(None, panne.into()),
         };
-        match detecter(&mut pont) {
+        let vu = lire_version(&mut pont)
+            .and_then(|()| detecter(&mut pont))
+            .and_then(|vu| match vu {
+                Some(identifiant) => Ok(identifiant),
+                None => ouvrir_pare_feu(&mut pont, &programme, autorisation),
+            });
+        match vu {
             Ok(identifiant) => Instrument {
                 pont: Some(pont),
                 sdk: None,
@@ -72,34 +86,79 @@ impl<P: Pont> Instrument<P> {
     }
 }
 
-/// Détail technique quand la détection ne voit aucun FD-9 : sans règle
-/// entrante du pare-feu, la réponse à la diffusion est bloquée (confirmé sur
-/// le poste le 9 octobre 2026, fiche `FD9_GetDeviceList`).
+/// Détail technique quand la détection ne voit aucun FD-9 alors que la règle
+/// du pare-feu est en place : le FD-9 est éteint, sur un autre réseau, ou
+/// FD-S2w occupe le port.
 const DETAIL_AUCUN_FD9: &str = "détection du FD-9 : liste vide, sans erreur. \
-Le FD-9 répond sur le port UDP 49152 de l'ordinateur ; le pare-feu de Windows \
-bloque cette réponse sans règle entrante pour le programme pont-fd9 \
-(UDP, port local 49152, adresse du FD-9). FD-S2w doit aussi être fermé.";
+La règle du pare-feu de Windows pour le programme pont-fd9 (UDP, port local \
+49152, réseau local) est en place : le FD-9 n'a pas répondu. Il est peut-être \
+éteint ou sur un autre réseau ; FD-S2w, s'il est ouvert, occupe le port 49152.";
 
-/// Paliers du FD-9 : version (lue sur le fichier de la DLL), puis détection.
-/// Rend l'identifiant du premier FD-9 vu.
-fn detecter(pont: &mut impl Pont) -> Result<Info<String>, Probleme> {
-    match pont.demander(&Requete::Version {})? {
-        Reponse::VersionDll { .. } => {}
-        Reponse::Erreur { erreur } => {
-            return Err(Probleme::LogicielInutilisable {
-                detail: format!("version du SDK du FD-9 : {erreur:?}"),
-            })
-        }
-        autre => return Err(inattendue(autre)),
+/// La liste est vide. Sans règle du pare-feu, la réponse du FD-9 a été
+/// bloquée (confirmé sur le poste le 9 octobre 2026, fiche
+/// `FD9_GetDeviceList`) : la règle est demandée une fois, puis la détection
+/// relancée une fois.
+fn ouvrir_pare_feu<F: PareFeu>(
+    pont: &mut impl Pont,
+    programme: &Path,
+    autorisation: &mut AutorisationPareFeu<F>,
+) -> Result<Info<String>, Probleme> {
+    let aucun = || Probleme::AucunFd9 {
+        detail: DETAIL_AUCUN_FD9.into(),
+    };
+    if autorisation.pare_feu_mut().regle_presente() {
+        return Err(aucun());
     }
+    let regle = RegleFd9 {
+        programme: programme.to_path_buf(),
+    };
+    match autorisation.demander(&regle) {
+        Some(Ok(())) => detecter(pont)?.ok_or_else(aucun),
+        Some(Err(EchecPareFeu::Refuse)) => Err(pare_feu_ferme(
+            &regle,
+            "la fenêtre de contrôle de compte de Windows a été refusée",
+        )),
+        Some(Err(EchecPareFeu::Echec { detail })) => Err(pare_feu_ferme(&regle, &detail)),
+        None => Err(pare_feu_ferme(
+            &regle,
+            "la règle manque toujours ; elle a déjà été demandée",
+        )),
+    }
+}
+
+fn pare_feu_ferme(regle: &RegleFd9, raison: &str) -> Probleme {
+    Probleme::PareFeuFerme {
+        detail: format!(
+            "pare-feu de Windows : {raison}.\n\
+             Le FD-9 répond sur le port UDP {PORT_DETECTION} de l'ordinateur ; sans \
+             cette règle, Windows bloque sa réponse.\n\
+             Commande équivalente, dans une invite de commandes ouverte en administrateur :\n\
+             {}\n\
+             Pour retirer la règle :\n\
+             {}",
+            regle.commande_ajout(),
+            RegleFd9::commande_retrait()
+        ),
+    }
+}
+
+/// Premier palier : la version, lue sur le fichier de la DLL.
+fn lire_version(pont: &mut impl Pont) -> Result<(), Probleme> {
+    match pont.demander(&Requete::Version {})? {
+        Reponse::VersionDll { .. } => Ok(()),
+        Reponse::Erreur { erreur } => Err(Probleme::LogicielInutilisable {
+            detail: format!("version du SDK du FD-9 : {erreur:?}"),
+        }),
+        autre => Err(inattendue(autre)),
+    }
+}
+
+/// Détection : l'identifiant du premier FD-9 vu, `None` si la liste est vide.
+fn detecter(pont: &mut impl Pont) -> Result<Option<Info<String>>, Probleme> {
     match pont.demander(&Requete::Detecter {})? {
-        Reponse::InstrumentsFd9 { liste } => liste
-            .into_iter()
-            .next()
-            .map(|fd9| fd9.identifiant)
-            .ok_or_else(|| Probleme::AucunFd9 {
-                detail: DETAIL_AUCUN_FD9.into(),
-            }),
+        Reponse::InstrumentsFd9 { liste } => {
+            Ok(liste.into_iter().next().map(|fd9| fd9.identifiant))
+        }
         Reponse::Erreur { erreur } => Err(Probleme::DetectionImpossible {
             detail: format!("détection du FD-9 : {erreur:?}"),
         }),

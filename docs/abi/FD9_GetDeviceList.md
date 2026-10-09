@@ -62,6 +62,7 @@ Taille confirmée par le pas de 44 octets (`imul …, 0x2c`, `0x100ae273`) ; auc
 - Toujours relire le compteur ; ne lire que les entrées comptées.
 - Présenter chaque entrée avec sa liaison, son adresse et son identifiant ; rendre les 44 octets intacts à `FD9_Connect`.
 - Fermer FD-S2w avant la détection réseau.
+- Pare-feu : le pont ne crée aucune règle. L'application demande la sienne à la première détection vide (ADR 0005, complément du 9 octobre 2026, ticket #47).
 - Appeler avant `FD9_Connect`, jamais pendant une session.
 
 ## À vérifier sur l'instrument

@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use pont_protocole::Palier;
 
+use super::parefeu::{AutorisationPareFeu, PareFeu};
 use super::{Etat, Instrument, Probleme};
 use crate::pont::{Architecture, Panne, Pont};
 
@@ -18,16 +19,18 @@ pub struct Recherche<'a> {
 /// deux ne l'est, on montre le problème du MYIRO-1, sauf quand son logiciel
 /// est absent alors que celui du FD-9 a été trouvé : le vrai problème est
 /// alors celui du FD-9 (pont manquant, DLL refusée, détection en erreur…).
-pub fn ouvrir_l_un_ou_l_autre<P: Pont>(
+/// `pare_feu` sert au FD-9 seul (ticket #47).
+pub fn ouvrir_l_un_ou_l_autre<P: Pont, F: PareFeu>(
     myiro1: Recherche,
     fd9: Recherche,
     mut lancer: impl FnMut(&Path, &Path, Palier) -> Result<P, Panne>,
+    pare_feu: &mut AutorisationPareFeu<F>,
 ) -> Instrument<P> {
     let premier = Instrument::ouvrir(myiro1.emplacements, myiro1.ponts, &mut lancer);
     if premier.etat != Etat::NonDetecte {
         return premier;
     }
-    let second = Instrument::ouvrir_fd9(fd9.emplacements, fd9.ponts, &mut lancer);
+    let second = Instrument::ouvrir_fd9(fd9.emplacements, fd9.ponts, &mut lancer, pare_feu);
     let logiciel_absent =
         |i: &Instrument<P>| matches!(i.probleme(), Some(Probleme::LogicielAbsent { .. }));
     if second.etat != Etat::NonDetecte || (logiciel_absent(&premier) && !logiciel_absent(&second)) {

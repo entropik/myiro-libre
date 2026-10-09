@@ -85,8 +85,24 @@ Vérifié contre le pont simulé et le pont factice seulement ; l'écran et l'é
 Palier Version vérifié sur le poste le 9 octobre 2026 avec la DLL de FD-S2w (32 bits) : chargement avec ses dépendances, version 1.3.2.3 lue dans le fichier, `FD9_GetLastError` rend 0. Palier Détection vérifié le même jour : un FD-9 en réseau trouvé en 0,3 s, FD-S2w fermé, une fois ajoutée une règle entrante du pare-feu pour le pont. Sans elle, la liste revient vide, sans erreur : la DLL lit la réponse sur une autre socket que celle qui envoie, liée au port UDP 49152, et Windows la bloque (cause **confirmée** par l'essai ; règle et détails dans la fiche [`FD9_GetDeviceList`](../abi/FD9_GetDeviceList.md)). Le délai de lecture de 5 ms fixé dans la DLL a suffi. Le pont ne crée aucune règle ; quand la détection ne voit aucun FD-9, l'application cite le pare-feu comme cause possible (problème `aucun_fd9`, règle dans le détail replié).
 
 **Questions ouvertes.**
-- L'installateur doit-il créer la règle de pare-feu (UDP entrant, port local 49152, programme `pont-fd9`), avec l'accord de l'opérateur, ou passe-t-on par la connexion directe à l'adresse (`connecter_adresse`, TCP sortant, sans règle ; palier Connexion, futur ticket) ? À trancher par le mainteneur.
+- ~~L'installateur doit-il créer la règle de pare-feu ?~~ Tranché le 9 octobre 2026 : c'est l'application qui la demande (complément suivant).
 - FD-S2w trouve le FD-9 sans règle de pare-feu visible pour lui, avec le même appel : non expliqué.
+
+### Complément du 9 octobre 2026 : règle du pare-feu demandée par l'application (ticket #47)
+
+**Décision du mainteneur du 9 octobre 2026** : l'application installe elle-même la règle nécessaire à la détection du FD-9, automatiquement, à la première détection qui ne trouve rien.
+
+- **La règle.** Une seule, au nom fixe `myiro-libre - FD-9 - detection (UDP 49152)` (sans accent, pour passer tel quel dans `netsh` et le désinstallateur) : entrante, UDP, port local 49152, `remoteip=localsubnet`, tous profils, `program=` le pont `pont-fd9` que l'application lance, à côté d'elle (chemin réel calculé, en pratique `pont-fd9-x86.exe` pour la DLL de FD-S2w). L'application ne crée aucune autre règle et n'en modifie aucune.
+- **Quand.** Dans le module `instrument` (`app/src/instrument/fd9.rs`) : détection vide → lecture de la règle, sans droits (`netsh advfirewall firewall show rule`). Présente : rien n'est demandé, problème `aucun_fd9` (le pare-feu n'est plus en cause). Absente : demande d'ajout, puis **une seule** nouvelle détection sur le même pont. La demande automatique n'est faite qu'une fois par utilisation de l'application (`AutorisationPareFeu`, gardée par l'application d'une ouverture à l'autre).
+- **Refus ou échec.** Problème `pare_feu_ferme`, écran « non détecté » : message simple, bouton « Autoriser le FD-9 dans le pare-feu » (qui redemande une fois), détail replié avec la commande équivalente et celle qui retire la règle. « Réessayer » ne redemande rien.
+- **Deuxième seam : le trait `PareFeu`** (`app/src/instrument/parefeu.rs`), deux méthodes : `regle_presente` (lecture seule) et `ajouter`. Adapter réel `PareFeuWindows` : `netsh` de `System32`, ajout par `ShellExecuteExW` verbe `runas`, sans fenêtre ; la fenêtre de contrôle de compte de Windows est le seul dialogue montré. Il attend `netsh` au plus 60 s ; « Non » à la fenêtre (erreur 1223) est un refus, tout autre cas un échec avec son détail. Adapter de test `PareFeuSimule` : enregistre les demandes, ne lance jamais `netsh` ni d'élévation.
+- **Désinstallation.** Crochet NSIS `app/installateur/pare-feu.nsh` (`bundle > windows > nsis > installerHooks`) : si la règle existe, `netsh advfirewall firewall delete rule name=…` avec les droits d'administrateur. Il s'ajoute à la configuration de `outils/preparer_installateur.py`. Écrit mais **pas encore vérifié** : aucun installateur n'a encore été construit puis désinstallé avec ce crochet. Si une mise à jour passe par la désinstallation et retire la règle, l'application la redemande à la détection vide suivante. Sans installateur, la règle se retire à la main (commande dans le détail replié) :
+
+  ```
+  netsh advfirewall firewall delete rule name="myiro-libre - FD-9 - detection (UDP 49152)"
+  ```
+
+Vérifié contre le pont FD-9 simulé et le pare-feu simulé seulement. L'essai sur le poste (fenêtre de contrôle de compte, règle créée, FD-9 trouvé) reste à faire avec le mainteneur, après retrait de sa règle manuelle d'essai.
 
 ## Options écartées
 
