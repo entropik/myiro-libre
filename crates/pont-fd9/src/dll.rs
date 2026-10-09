@@ -53,8 +53,14 @@ impl Fd9Dll {
         // Lus avant le chargement, sur le fichier seul.
         let version_fichier = version_du_fichier(chemin);
         let empreinte = empreinte_fichier(chemin).ok();
-        let bibliotheque = ouvrir(chemin)
-            .map_err(|e| ErreurChargement::DllIntrouvable(format!("{}: {e}", chemin.display())))?;
+        let bibliotheque = ouvrir(chemin).map_err(|e| {
+            // libloading garde l'erreur Windows (126 : module introuvable,
+            // 193 : mauvaise architecture) dans la source de son erreur.
+            let cause = std::error::Error::source(&e)
+                .map(|s| format!(" ({s})"))
+                .unwrap_or_default();
+            ErreurChargement::DllIntrouvable(format!("{}: {e}{cause}", chemin.display()))
+        })?;
         for nom in EXPORTS_RESOLUS {
             verifier_presence(&bibliotheque, nom)?;
         }
@@ -75,16 +81,27 @@ fn ouvrir(chemin: &Path) -> Result<Library, libloading::Error> {
     #[cfg(windows)]
     {
         use libloading::os::windows::{Library as LibWin, LOAD_WITH_ALTERED_SEARCH_PATH};
+        let chemin = chemin_pour_chargement(chemin);
         // SAFETY : charger la DLL exécute son code d'initialisation et celui de
         // ses dépendances. FD9SDK n'ouvre aucune liaison avec l'instrument
         // avant FD9_GetDeviceList ou FD9_Connect (fiches docs/abi/FD9_*).
-        unsafe { LibWin::load_with_flags(chemin, LOAD_WITH_ALTERED_SEARCH_PATH) }.map(Into::into)
+        unsafe { LibWin::load_with_flags(&chemin, LOAD_WITH_ALTERED_SEARCH_PATH) }.map(Into::into)
     }
     #[cfg(not(windows))]
     {
         // SAFETY : idem ; hors Windows, aucune DLL du fabricant n'existe.
         unsafe { Library::new(chemin) }
     }
+}
+
+/// Chemin donné à `LoadLibraryExW` : absolu et écrit avec des « \ ». Avec
+/// `LOAD_WITH_ALTERED_SEARCH_PATH`, Windows ne cherche les dépendances dans le
+/// dossier de la DLL que pour un tel chemin ; avec des « / », la DLL de FD-S2w
+/// ne se charge pas (constaté sur le poste le 9 octobre 2026).
+#[cfg(windows)]
+pub fn chemin_pour_chargement(chemin: &Path) -> std::path::PathBuf {
+    let absolu = std::path::absolute(chemin).unwrap_or_else(|_| chemin.to_path_buf());
+    std::path::PathBuf::from(absolu.to_string_lossy().replace('/', "\\"))
 }
 
 /// Vérifie qu'un export autorisé existe, sans lui donner de forme d'appel :

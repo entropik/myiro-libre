@@ -32,6 +32,30 @@ fn les_exports_usine_et_d_ecriture_sont_refuses_avant_toute_resolution() {
     }
 }
 
+/// `LOAD_WITH_ALTERED_SEARCH_PATH` ne cherche les dépendances dans le dossier
+/// de la DLL que pour un chemin absolu écrit avec des « \ » : avec des « / »,
+/// le chargement de la DLL de FD-S2w échoue (constaté le 9 octobre 2026).
+#[cfg(windows)]
+#[test]
+fn le_chemin_de_la_dll_est_rendu_absolu_avec_des_barres_inverses() {
+    use pont_fd9::dll::chemin_pour_chargement;
+    use std::path::{Path, PathBuf};
+    assert_eq!(
+        chemin_pour_chargement(Path::new(
+            "C:/Program Files (x86)/KONICA MINOLTA/FD-S2w/Module/FD9SDK.dll"
+        )),
+        PathBuf::from(r"C:\Program Files (x86)\KONICA MINOLTA\FD-S2w\Module\FD9SDK.dll")
+    );
+    assert_eq!(
+        chemin_pour_chargement(Path::new(r"C:\Logiciel/Module\FD9SDK.dll")),
+        PathBuf::from(r"C:\Logiciel\Module\FD9SDK.dll")
+    );
+    let relatif = chemin_pour_chargement(Path::new("SDK/FD9SDK.dll"));
+    assert!(relatif.is_absolute(), "{}", relatif.display());
+    assert!(!relatif.to_string_lossy().contains('/'));
+    assert!(relatif.ends_with(r"SDK\FD9SDK.dll"));
+}
+
 #[cfg(windows)]
 #[test]
 fn la_version_est_lue_dans_la_ressource_sans_charger_le_fichier() {
