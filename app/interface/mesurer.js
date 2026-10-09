@@ -1,6 +1,7 @@
 // Tâche Mesurer : mesure ponctuelle au centre (un seul bouton principal, les mesures de la
 // séance empilées en dessous, noms modifiables), valeurs et provenance de la mesure choisie à
-// droite. Mesures, valeurs et état de l'instrument viennent des modules Rust `mesurer` et
+// droite. Une mesure peut être la couleur de référence : les autres montrent leur écart et leur
+// verdict, calculés en Rust (module `mesurer`, crate `colorimetrie`). Mesures, valeurs et état de l'instrument viennent des modules Rust `mesurer` et
 // `instrument` ; la page ne calcule rien. Les textes viennent du catalogue (chargé par app.js).
 "use strict";
 
@@ -31,6 +32,8 @@
   let spectreChoisi = 0; // spectre 1, 2 ou 3 de la plage
   let enCours = false; // la commande `mesurer` n'a pas encore répondu
   let erreur = null; // clé du catalogue d'un refus de la commande
+  let reference = null; // couleur de référence de la séance : numéro, nom, seuil écrit
+  let erreurReference = null; // clé du catalogue d'un refus sur la référence ou son seuil
   let version = "";
 
   const langue = () => document.documentElement.lang || "fr";
@@ -63,6 +66,12 @@
   function etalonnage(info) {
     if (info.statut === "inconnue") return t("cartouche.inconnu");
     return info.statut === "supposee" ? `${date(info.valeur)} (${t("details.a_confirmer")})` : date(info.valeur);
+  }
+
+  // Écran rendu par une commande du module `mesurer` : mesures et couleur de référence.
+  function recevoirEcran(r) {
+    fiches = r.mesures;
+    reference = r.reference;
   }
 
   // Refus d'une commande : un code `mesurer.erreur.*` a sa cause et son action.
@@ -123,10 +132,12 @@
         carre.style.setProperty("--c", v.ecran);
         couleur.append(carre);
       }
-      tr.append(el("td", "id num", String(f.numero)), couleur, nomCellule, el("td", "num", date(f.horodatage)), el("td", "", range));
+      const [ecartCellule, verdictCellule] = ecartEnListe(f);
+      tr.append(el("td", "id num", String(f.numero)), couleur, nomCellule, ecartCellule, verdictCellule, el("td", "num", date(f.horodatage)), el("td", "", range));
       tr.addEventListener("click", (e) => {
         if (e.target === nom) return;
         choisie = f.numero;
+        erreurReference = null;
         dessiner();
       });
       lignes.append(tr);
@@ -138,7 +149,168 @@
     rangerBouton.disabled = enCours;
   }
 
-  // ---- Détails à droite : valeurs, puis cartouche de provenance ----
+  // ---- Couleur de référence et écart ----
+  const CLASSES_VERDICT = { conforme: "ok", proche_de_la_limite: "warn", hors_tolerance: "bad" };
+  const SYMBOLES = { ok: "M4 12.5l5 5L20 6.5", warn: "M12 5v9M12 17.5v2", bad: "M6 6l12 12M18 6L6 18" };
+
+  // Petit état (carré et mot) : jamais la couleur seule.
+  function etat(e) {
+    if (e.verdict === "seuil_non_fixe") return el("span", "state state--none", t("mesurer.reference.seuil_non_fixe"));
+    const classe = CLASSES_VERDICT[e.verdict];
+    if (!classe) return el("span", "why", textes["verdict." + e.verdict]);
+    return el("span", "state state--" + classe, textes["verdict." + e.verdict]);
+  }
+  function avecCarre(span) {
+    if (span.classList.contains("state")) span.prepend(el("i"));
+    return span;
+  }
+
+  function ecartEnListe(f) {
+    const ecartCellule = el("td", "r num");
+    const verdictCellule = el("td");
+    if (f.reference) {
+      verdictCellule.append(el("span", "label label--ink", t("mesurer.reference.marque")));
+    } else {
+      const e = f.spectres[spectreChoisi].ecart;
+      if (e) {
+        ecartCellule.textContent = e.delta_e00 || t("cartouche.inconnu");
+        verdictCellule.append(avecCarre(etat(e)));
+      }
+    }
+    return [ecartCellule, verdictCellule];
+  }
+
+  async function commandeReference(commande, arguments_) {
+    try {
+      recevoirEcran(await invoke(commande, { ...arguments_, langue: langue() }));
+      erreurReference = null;
+      document.dispatchEvent(new CustomEvent("bibliotheque-modifiee"));
+    } catch (cle) {
+      erreurReference = cle;
+    }
+    dessiner();
+  }
+
+  // Le verdict en grand, doublé d'un carré à symbole ; sans seuil, aucun verdict inventé.
+  function blocVerdict(e) {
+    const bloc = el("section", "verdict");
+    bloc.append(el("span", "label", t("mesurer.ecart.titre")));
+    const classe = CLASSES_VERDICT[e.verdict];
+    if (!classe) {
+      const texte = e.verdict === "seuil_non_fixe" ? t("mesurer.reference.seuil_non_fixe_texte") : t("mesurer.verdict.inconnu");
+      const p = el("p", "prose");
+      p.append(avecCarre(etat(e)));
+      bloc.append(p, el("p", "why", texte));
+      return bloc;
+    }
+    bloc.classList.add("verdict--" + classe);
+    bloc.append(el("h2", "verdict__word verdict__word--m", textes["verdict." + e.verdict]));
+    const ligne = el("div", "verdict__row");
+    const marque = el("span", classe === "ok" ? "mark" : "mark mark--" + classe);
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    const trace = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    trace.setAttribute("d", SYMBOLES[classe]);
+    svg.append(trace);
+    marque.append(svg);
+    ligne.append(marque, el("p", "prose", textes["mesurer.verdict." + e.verdict]));
+    bloc.append(ligne);
+    return bloc;
+  }
+
+  // Détail d'une mesure comparée à la référence : verdict, carré partagé, écarts et formule.
+  function detailEcart(f, e) {
+    const bloc = el("div");
+    bloc.append(blocVerdict(e));
+    if (e.comparaison !== "meme_condition") {
+      const avis = el("div", "notice notice--warn");
+      avis.append(el("p", "", t(e.comparaison === "condition_differente" ? "mesurer.ecart.condition_differente" : "mesurer.ecart.non_confirmee")));
+      bloc.append(avis);
+    }
+    const ref = fiches.find((m) => m.numero === reference.numero);
+    const vRef = ref && ref.spectres[spectreChoisi].valeurs;
+    const vMes = f.spectres[spectreChoisi].valeurs;
+    if (vRef && vMes) {
+      const carre = el("span", "apercu apercu--comparaison");
+      carre.style.setProperty("--ref", vRef.ecran);
+      carre.style.setProperty("--mes", vMes.ecran);
+      carre.setAttribute("role", "img");
+      carre.setAttribute("aria-label", t("mesurer.ecart.comparaison"));
+      bloc.append(el("p", "label", reference.nom), carre);
+    }
+    const inconnu = t("cartouche.inconnu");
+    const corps = el("tbody");
+    for (const [libelle, valeur, fort] of [
+      [t("mesurer.ecart.de00"), e.delta_e00 || inconnu, true],
+      [t("mesurer.ecart.dc"), e.delta_c || inconnu],
+      [t("mesurer.ecart.dh"), e.delta_h || inconnu],
+      [t("mesurer.ecart.accepte"), reference.seuil || t("mesurer.reference.seuil_non_fixe")],
+    ]) {
+      const tr = el("tr");
+      const td = el("td", "r num");
+      td.append(fort ? el("b", "", valeur) : document.createTextNode(valeur));
+      tr.append(el("td", "", libelle), td);
+      corps.append(tr);
+    }
+    const table = el("table");
+    table.append(corps);
+    const replie = el("details", "replie");
+    replie.append(el("summary", "", t("mesurer.ecart.calcul_titre")), el("pre", "", t("mesurer.ecart.calcul")));
+    const actions = el("div", "actions");
+    const designer = el("button", "btn", t("mesurer.reference.designer"));
+    designer.addEventListener("click", () => commandeReference("designer_reference", { numero: f.numero }));
+    actions.append(designer);
+    bloc.append(table, replie, actions);
+    return bloc;
+  }
+
+  // Sur la couleur de référence : l'écart accepté, saisi à la main, et le retrait.
+  function detailReference() {
+    const bloc = el("div");
+    const tete = el("div", "section__head");
+    tete.append(el("span", "label label--ink", t("mesurer.reference.titre")));
+    const champ = el("div", "field");
+    const libelle = el("label", "label", t("mesurer.reference.seuil"));
+    libelle.htmlFor = "seuil-reference";
+    const saisie = el("input", erreurReference ? "input num input--error" : "input num");
+    saisie.id = "seuil-reference";
+    saisie.inputMode = "decimal";
+    saisie.autocomplete = "off";
+    saisie.value = reference.seuil || "";
+    saisie.addEventListener("change", () => commandeReference("regler_seuil", { seuil: saisie.value }));
+    saisie.addEventListener("keydown", (e) => { if (e.key === "Enter") saisie.blur(); });
+    champ.append(libelle, saisie, el("p", "", t("mesurer.reference.seuil_aide")));
+    const actions = el("div", "actions");
+    const retirer = el("button", "btn", t("mesurer.reference.retirer"));
+    retirer.addEventListener("click", () => commandeReference("retirer_reference", {}));
+    actions.append(retirer);
+    bloc.append(tete, el("p", "prose", t("mesurer.reference.est")), champ, actions);
+    return bloc;
+  }
+
+  function detailSansReference(f) {
+    const bloc = el("div");
+    const tete = el("div", "section__head");
+    tete.append(el("span", "label label--ink", t("mesurer.reference.titre")));
+    const actions = el("div", "actions");
+    const designer = el("button", "btn", t("mesurer.reference.designer"));
+    designer.addEventListener("click", () => commandeReference("designer_reference", { numero: f.numero }));
+    actions.append(designer);
+    bloc.append(tete, el("p", "why", t("mesurer.reference.aucune_texte")), actions);
+    return bloc;
+  }
+
+  function blocReference(f) {
+    let bloc;
+    if (f.reference) bloc = detailReference();
+    else if (reference && f.spectres[spectreChoisi].ecart) bloc = detailEcart(f, f.spectres[spectreChoisi].ecart);
+    else bloc = detailSansReference(f);
+    if (erreurReference) bloc.append(el("p", "why", t(erreurReference)));
+    return bloc;
+  }
+
+  // ---- Détails à droite : référence et écart, valeurs, puis cartouche de provenance ----
   function cellule(libelle, valeur, large) {
     const c = el("div", large ? "cell cell--wide" : "cell");
     c.append(el("span", "label", libelle), el("span", "", valeur));
@@ -217,7 +389,9 @@
     cartouche.append(titre, cells, pied);
     const espace = el("div", "section");
     espace.append(cartouche);
-    detail.replaceChildren(valeurs, espace);
+    const sectionValeurs = el("div", "section");
+    sectionValeurs.append(valeurs);
+    detail.replaceChildren(blocReference(f), sectionValeurs, espace);
   }
 
   function dessiner() {
@@ -256,7 +430,7 @@
 
   async function chargerMesures() {
     try {
-      fiches = (await invoke("mesures_seance", { langue: langue() })).mesures;
+      recevoirEcran(await invoke("mesures_seance", { langue: langue() }));
     } catch (e) {
       console.error("mesures_seance", e);
     }
@@ -277,7 +451,7 @@
         choisie = r.mesures[0].numero;
         document.dispatchEvent(new CustomEvent("bibliotheque-modifiee"));
       }
-      fiches = r.mesures;
+      recevoirEcran(r);
     } catch (cle) {
       erreur = cle;
     }
@@ -288,7 +462,7 @@
 
   async function renommer(numero, champ) {
     try {
-      fiches = (await invoke("renommer_mesure", { numero, nom: champ.value, langue: langue() })).mesures;
+      recevoirEcran(await invoke("renommer_mesure", { numero, nom: champ.value, langue: langue() }));
       erreur = null;
       dessiner();
       document.dispatchEvent(new CustomEvent("bibliotheque-modifiee")); // le nom, à gauche
@@ -308,7 +482,7 @@
   bouton.addEventListener("click", mesurer);
   rangerBouton.addEventListener("click", async () => {
     try {
-      fiches = (await invoke("ranger_a_nouveau", { langue: langue() })).mesures;
+      recevoirEcran(await invoke("ranger_a_nouveau", { langue: langue() }));
       document.dispatchEvent(new CustomEvent("bibliotheque-modifiee"));
     } catch (e) {
       console.error("ranger_a_nouveau", e);

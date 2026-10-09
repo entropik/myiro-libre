@@ -110,6 +110,18 @@ impl BibliothequeOuverte {
     }
 }
 
+/// La couleur de référence de Mesurer est conservée dans la bibliothèque
+/// ouverte (ticket #8).
+impl crate::mesurer::ReferencesConservees for BibliothequeOuverte {
+    fn designer(&self, id: IdMesure, seuil: Option<f64>) -> Result<(), String> {
+        self.avec(|b| b.designer_reference(id, seuil))
+    }
+
+    fn retirer(&self, id: IdMesure) -> Result<(), String> {
+        self.avec(|b| b.retirer_reference(id))
+    }
+}
+
 /// Clé du catalogue qui explique une erreur à l'utilisateur. Le détail
 /// technique part dans la console, pas à l'écran.
 pub fn cle_erreur(erreur: &ErreurBibliotheque) -> &'static str {

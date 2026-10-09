@@ -5,8 +5,13 @@
 //!
 //! Une mesure lue par l'instrument n'est jamais perdue : elle entre dans la
 //! séance avant d'être rangée, et y reste si la bibliothèque la refuse.
+//!
+//! Une mesure rangée peut être désignée couleur de référence (ticket #8) :
+//! les autres affichent leur écart à elle (ΔE00, ΔC, ΔH) et un verdict selon
+//! le seuil choisi, conservé avec la référence dans la bibliothèque.
 
-use bibliotheque::{ConditionImpression, IdMesure};
+use bibliotheque::{Bibliotheque, ConditionImpression, IdMesure};
+use colorimetrie::{Seuil, Verdict};
 use pont_protocole::{ConditionMesure, Echantillonnage, Horodatage, Info, Mesure};
 use serde::Serialize;
 
@@ -55,15 +60,89 @@ pub fn choisir_condition(
 struct MesureDeSeance {
     numero: usize,
     nom: String,
-    acquise: MesureAcquise,
+    mesure: Mesure,
     condition: ConditionImpression,
     rangee: Option<IdMesure>,
+}
+
+/// La couleur de référence de la séance et son seuil (aucun tant que
+/// l'utilisateur n'en a pas fixé).
+#[derive(Clone, Copy)]
+struct ReferenceDeSeance {
+    numero: usize,
+    seuil: Option<Seuil>,
 }
 
 /// Les mesures faites depuis le lancement de l'application, dans l'ordre.
 #[derive(Default)]
 pub struct Seance {
     mesures: Vec<MesureDeSeance>,
+    reference: Option<ReferenceDeSeance>,
+}
+
+/// Là où la couleur de référence et son seuil sont conservés : la
+/// bibliothèque. Les refus sont des phrases techniques, pour la console.
+pub trait ReferencesConservees {
+    fn designer(&self, id: IdMesure, seuil: Option<f64>) -> Result<(), String>;
+    fn retirer(&self, id: IdMesure) -> Result<(), String>;
+}
+
+impl ReferencesConservees for Bibliotheque {
+    fn designer(&self, id: IdMesure, seuil: Option<f64>) -> Result<(), String> {
+        self.designer_reference(id, seuil)
+            .map_err(|e| e.to_string())
+    }
+
+    fn retirer(&self, id: IdMesure) -> Result<(), String> {
+        self.retirer_reference(id).map_err(|e| e.to_string())
+    }
+}
+
+/// La couleur de référence, telle que la feuille Mesurer la montre.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct FicheReference {
+    pub numero: usize,
+    pub nom: String,
+    /// Seuil ΔE00 écrit dans la langue de l'écran ; aucun s'il n'est pas fixé.
+    pub seuil: Option<String>,
+}
+
+/// Verdict d'un écart à la référence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VerdictEcart {
+    Conforme,
+    ProcheDeLaLimite,
+    HorsTolerance,
+    /// Aucun seuil fixé : pas de verdict.
+    SeuilNonFixe,
+    /// Écart inconnu (valeurs d'une des deux mesures inconnues).
+    Inconnu,
+}
+
+/// Les deux spectres comparés ont-ils la même condition de mesure ?
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Comparaison {
+    /// Même condition, confirmée pour les deux mesures.
+    MemeCondition,
+    /// Conditions connues et différentes : l'écart ne veut pas dire grand-chose.
+    ConditionDifferente,
+    /// La condition d'au moins une des deux mesures n'est pas confirmée.
+    NonConfirmee,
+}
+
+/// Écart d'un spectre à celui de la couleur de référence, écrit à deux
+/// décimales dans la langue de l'écran. ΔE00 (CIEDE2000) ; ΔC et ΔH
+/// (CIELAB), signés : positifs quand la mesure est plus saturée, ou que sa
+/// teinte tourne dans le sens direct. Inconnus si un des Lab l'est.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct FicheEcart {
+    pub delta_e00: Option<String>,
+    pub delta_c: Option<String>,
+    pub delta_h: Option<String>,
+    pub verdict: VerdictEcart,
+    pub comparaison: Comparaison,
 }
 
 /// Ce que la feuille Mesurer et les détails montrent d'une mesure.
@@ -85,6 +164,8 @@ pub struct FicheMesure {
     pub etalonnage: Info<Horodatage>,
     /// Les trois spectres de la plage, dans l'ordre où le pont les a rendus.
     pub spectres: Vec<FicheSpectre>,
+    /// La mesure est la couleur de référence de la séance.
+    pub reference: bool,
 }
 
 /// Un spectre de la mesure : sa condition de mesure, telle que le pont l'a
@@ -95,6 +176,9 @@ pub struct FicheSpectre {
     /// Inconnues si les longueurs d'onde du spectre ne sont pas établies ou
     /// si le calcul est impossible.
     pub valeurs: Option<Valeurs>,
+    /// Écart à la couleur de référence ; aucun sans référence, ou pour la
+    /// référence elle-même.
+    pub ecart: Option<FicheEcart>,
 }
 
 /// Valeurs d'un spectre, écrites à deux décimales dans la langue de l'écran.
@@ -140,6 +224,12 @@ pub fn decimal(valeur: f64, langue: Langue) -> String {
     }
 }
 
+/// Lab d'un spectre (D50, 2°), ou `None` s'il est inconnu.
+fn lab(spectre: &[f32]) -> Option<colorimetrie::Lab> {
+    let spectre: Vec<f64> = spectre.iter().map(|&v| f64::from(v)).collect();
+    colorimetrie::spectre_vers_lab(&spectre).ok()
+}
+
 /// Lab, LCH et XYZ d'un spectre (D50, 2°), ou `None` si l'un est inconnu.
 fn valeurs(spectre: &[f32], langue: Langue) -> Option<Valeurs> {
     let spectre: Vec<f64> = spectre.iter().map(|&v| f64::from(v)).collect();
@@ -175,27 +265,138 @@ impl Seance {
         ranger: impl FnOnce(&Mesure, &str) -> Result<IdMesure, String>,
         langue: Langue,
     ) -> Option<usize> {
-        let acquise = instrument.mesurer_ponctuelle(gestes)?;
+        let acquise: MesureAcquise = instrument.mesurer_ponctuelle(gestes)?;
+        Some(self.ajouter(acquise.mesure, condition, ranger, langue))
+    }
+
+    /// Ajoute à la séance une mesure ponctuelle déjà lue, puis la range
+    /// comme [`Seance::mesurer`]. Rend son numéro.
+    pub fn ajouter(
+        &mut self,
+        mesure: Mesure,
+        condition: &ConditionImpression,
+        ranger: impl FnOnce(&Mesure, &str) -> Result<IdMesure, String>,
+        langue: Langue,
+    ) -> usize {
         let numero = self.mesures.len() + 1;
         // La mesure entre dans la séance avant d'être rangée.
         self.mesures.push(MesureDeSeance {
             numero,
             nom: texte(langue, "mesurer.nom_defaut").replace("{n}", &numero.to_string()),
-            acquise,
+            mesure,
             condition: condition.clone(),
             rangee: None,
         });
         let derniere = self.mesures.last_mut().expect("mesure ajoutée");
-        match ranger(&derniere.acquise.mesure, &derniere.nom) {
+        match ranger(&derniere.mesure, &derniere.nom) {
             Ok(id) => derniere.rangee = Some(id),
             Err(detail) => eprintln!("rangement de la mesure {numero} : {detail}"),
         }
-        Some(numero)
+        numero
     }
 
     /// La mesure n° `numero` de la séance, telle que le pont l'a rendue.
     pub fn mesure(&self, numero: usize) -> Option<&Mesure> {
-        self.trouver(numero).map(|m| &m.acquise.mesure)
+        self.trouver(numero).map(|m| &m.mesure)
+    }
+
+    /// Désigne la mesure n° `numero` couleur de référence, sans seuil. Elle
+    /// doit être rangée : la référence est conservée dans la bibliothèque.
+    /// L'ancienne référence, s'il y en a une, est retirée. Si la
+    /// bibliothèque refuse, rien ne change. Les refus sont des clés du
+    /// catalogue.
+    pub fn designer_reference(
+        &mut self,
+        numero: usize,
+        conserver: &impl ReferencesConservees,
+    ) -> Result<(), &'static str> {
+        if self.reference.is_some_and(|r| r.numero == numero) {
+            return Ok(()); // déjà la référence : son seuil reste
+        }
+        let id = self
+            .trouver(numero)
+            .ok_or("bibliotheque.erreur.autre")?
+            .rangee
+            .ok_or("mesurer.reference.non_rangee")?;
+        conserver.designer(id, None).map_err(|detail| {
+            eprintln!("référence {numero} : {detail}");
+            "bibliotheque.erreur.autre"
+        })?;
+        let ancienne = self.reference.replace(ReferenceDeSeance {
+            numero,
+            seuil: None,
+        });
+        if let Some(ancienne) = ancienne.filter(|a| a.numero != numero) {
+            if let Some(id) = self.trouver(ancienne.numero).and_then(|m| m.rangee) {
+                if let Err(detail) = conserver.retirer(id) {
+                    eprintln!("retrait de la référence {} : {detail}", ancienne.numero);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// La séance n'a plus de couleur de référence. Si la bibliothèque
+    /// refuse, rien ne change.
+    pub fn retirer_reference(
+        &mut self,
+        conserver: &impl ReferencesConservees,
+    ) -> Result<(), &'static str> {
+        let Some(reference) = self.reference else {
+            return Ok(());
+        };
+        if let Some(id) = self.trouver(reference.numero).and_then(|m| m.rangee) {
+            conserver.retirer(id).map_err(|detail| {
+                eprintln!("retrait de la référence {} : {detail}", reference.numero);
+                "bibliotheque.erreur.autre"
+            })?;
+        }
+        self.reference = None;
+        Ok(())
+    }
+
+    /// Règle le seuil ΔE00 de la référence, tel que l'utilisateur l'a écrit
+    /// (virgule ou point) ; un texte vide retire le seuil. Un seuil qui n'est
+    /// pas un nombre strictement positif est refusé et rien ne change.
+    pub fn regler_seuil(
+        &mut self,
+        texte: &str,
+        conserver: &impl ReferencesConservees,
+    ) -> Result<(), &'static str> {
+        let reference = self.reference.ok_or("mesurer.reference.aucune")?;
+        let texte = texte.trim();
+        let seuil = if texte.is_empty() {
+            None
+        } else {
+            let valeur: f64 = texte
+                .replace(',', ".")
+                .parse()
+                .map_err(|_| "mesurer.reference.seuil_invalide")?;
+            Some(Seuil::new(valeur).ok_or("mesurer.reference.seuil_invalide")?)
+        };
+        let id = self
+            .trouver(reference.numero)
+            .and_then(|m| m.rangee)
+            .ok_or("bibliotheque.erreur.autre")?;
+        conserver
+            .designer(id, seuil.map(Seuil::valeur))
+            .map_err(|detail| {
+                eprintln!("seuil de la référence {} : {detail}", reference.numero);
+                "bibliotheque.erreur.autre"
+            })?;
+        self.reference = Some(ReferenceDeSeance { seuil, ..reference });
+        Ok(())
+    }
+
+    /// La couleur de référence de la séance, s'il y en a une.
+    pub fn reference(&self, langue: Langue) -> Option<FicheReference> {
+        let reference = self.reference?;
+        let mesure = self.trouver(reference.numero)?;
+        Some(FicheReference {
+            numero: reference.numero,
+            nom: mesure.nom.clone(),
+            seuil: reference.seuil.map(|s| decimal(s.valeur(), langue)),
+        })
     }
 
     /// Renomme une mesure de la séance ; le nom est débarrassé de ses espaces
@@ -236,7 +437,7 @@ impl Seance {
     ) -> usize {
         let mut restantes = 0;
         for m in self.mesures.iter_mut().filter(|m| m.rangee.is_none()) {
-            match ranger(&m.condition, &m.acquise.mesure, &m.nom) {
+            match ranger(&m.condition, &m.mesure, &m.nom) {
                 Ok(id) => m.rangee = Some(id),
                 Err(detail) => {
                     eprintln!("rangement de la mesure {} : {detail}", m.numero);
@@ -253,24 +454,23 @@ impl Seance {
 
     /// Les mesures de la séance, la plus récente d'abord.
     pub fn fiches(&self, langue: Langue) -> Vec<FicheMesure> {
+        let reference = self
+            .reference
+            .and_then(|r| Some((self.trouver(r.numero)?, r.seuil)));
         self.mesures
             .iter()
             .rev()
-            .map(|m| fiche(m, langue))
+            .map(|m| fiche(m, reference, langue))
             .collect()
     }
 }
 
-/// Texte rendu par le pont, ou `None` s'il est vide.
-fn renseigne(texte: &str) -> Option<String> {
-    let texte = texte.trim();
-    (!texte.is_empty()).then(|| texte.to_string())
-}
-
-fn fiche(m: &MesureDeSeance, langue: Langue) -> FicheMesure {
-    let p = m.acquise.mesure.provenance();
-    // Ce que le pont a demandé ; une demande supposée rend chaque condition
-    // supposée au mieux. Jamais devinée d'après la place du spectre.
+/// Conditions de mesure des trois spectres, telles que le pont les a
+/// demandées (une demande supposée rend chaque condition supposée au mieux),
+/// et si nos tables couvrent ses longueurs d'onde.
+fn conditions_spectres(mesure: &Mesure) -> ([Info<ConditionMesure>; 3], bool) {
+    let p = mesure.provenance();
+    // Jamais devinées d'après la place du spectre.
     let (conditions, echantillonnage) = match &p.calcul.demande {
         Info::Confirmee(c) => (c.conditions_spectres.clone(), c.longueurs_onde.valeur()),
         Info::Supposee(c) => (
@@ -282,15 +482,111 @@ fn fiche(m: &MesureDeSeance, langue: Langue) -> FicheMesure {
         ),
         Info::Inconnue => ([Info::Inconnue, Info::Inconnue, Info::Inconnue], None),
     };
-    let calculable = echantillonnage == Some(&ECHANTILLONNAGE);
+    (conditions, echantillonnage == Some(&ECHANTILLONNAGE))
+}
+
+/// Spectres de la plage unique d'une mesure ponctuelle.
+fn spectres(mesure: &Mesure) -> [&[f32]; 3] {
     // Une mesure ponctuelle a exactement une plage (format `myiro-libre/mesure/1`).
-    let plage = &m.acquise.mesure.plages()[0];
-    let spectres = [plage.m0(), plage.m1(), plage.m2()]
+    let plage = &mesure.plages()[0];
+    [plage.m0(), plage.m1(), plage.m2()]
+}
+
+/// Écart du spectre n° `i` de `mesure` au spectre de même condition de
+/// mesure de la référence ; à défaut, au spectre de même place, avec
+/// l'avertissement qui convient.
+fn ecart(
+    mesure: &Mesure,
+    i: usize,
+    reference: &Mesure,
+    seuil: Option<Seuil>,
+    langue: Langue,
+) -> FicheEcart {
+    let (conditions, calculable) = conditions_spectres(mesure);
+    let (conditions_ref, calculable_ref) = conditions_spectres(reference);
+    let (j, comparaison) = match &conditions[i] {
+        Info::Confirmee(c) => match conditions_ref
+            .iter()
+            .position(|r| *r == Info::Confirmee(*c))
+        {
+            Some(j) => (j, Comparaison::MemeCondition),
+            None => (i, comparer(&conditions[i], &conditions_ref[i])),
+        },
+        autre => (i, comparer(autre, &conditions_ref[i])),
+    };
+    let labs = (calculable && calculable_ref)
+        .then(|| Some((lab(spectres(reference)[j])?, lab(spectres(mesure)[i])?)))
+        .flatten();
+    let Some((lab_ref, lab_mes)) = labs else {
+        return FicheEcart {
+            delta_e00: None,
+            delta_c: None,
+            delta_h: None,
+            verdict: VerdictEcart::Inconnu,
+            comparaison,
+        };
+    };
+    let d = |v: Result<f64, colorimetrie::Inconnu>| v.ok().map(|v| decimal(v, langue));
+    let de00 = colorimetrie::delta_e00(lab_ref, lab_mes).ok();
+    // Le verdict porte sur l'écart tel qu'il est écrit, à deux décimales.
+    let verdict = match (de00, seuil) {
+        (None, _) => VerdictEcart::Inconnu,
+        (Some(_), None) => VerdictEcart::SeuilNonFixe,
+        (Some(e), Some(s)) => match s.verdict((e * 100.0).round() / 100.0) {
+            Ok(Verdict::Conforme) => VerdictEcart::Conforme,
+            Ok(Verdict::ProcheDeLaLimite) => VerdictEcart::ProcheDeLaLimite,
+            Ok(Verdict::HorsTolerance) => VerdictEcart::HorsTolerance,
+            Err(_) => VerdictEcart::Inconnu,
+        },
+    };
+    FicheEcart {
+        delta_e00: de00.map(|v| decimal(v, langue)),
+        delta_c: d(colorimetrie::delta_c(lab_ref, lab_mes)),
+        delta_h: d(colorimetrie::delta_h(lab_ref, lab_mes)),
+        verdict,
+        comparaison,
+    }
+}
+
+/// Deux conditions de mesure qui ne sont pas toutes deux confirmées et
+/// égales : différentes si elles sont connues (même supposées) et
+/// différentes, non confirmées sinon.
+fn comparer(a: &Info<ConditionMesure>, b: &Info<ConditionMesure>) -> Comparaison {
+    match (a, b) {
+        (Info::Confirmee(x), Info::Confirmee(y)) if x == y => Comparaison::MemeCondition,
+        (Info::Confirmee(x) | Info::Supposee(x), Info::Confirmee(y) | Info::Supposee(y))
+            if x != y =>
+        {
+            Comparaison::ConditionDifferente
+        }
+        _ => Comparaison::NonConfirmee,
+    }
+}
+
+/// Texte rendu par le pont, ou `None` s'il est vide.
+fn renseigne(texte: &str) -> Option<String> {
+    let texte = texte.trim();
+    (!texte.is_empty()).then(|| texte.to_string())
+}
+
+fn fiche(
+    m: &MesureDeSeance,
+    reference: Option<(&MesureDeSeance, Option<Seuil>)>,
+    langue: Langue,
+) -> FicheMesure {
+    let p = m.mesure.provenance();
+    let (conditions, calculable) = conditions_spectres(&m.mesure);
+    let est_reference = reference.is_some_and(|(r, _)| r.numero == m.numero);
+    let spectres = spectres(&m.mesure)
         .into_iter()
         .zip(conditions)
-        .map(|(spectre, condition)| FicheSpectre {
+        .enumerate()
+        .map(|(i, (spectre, condition))| FicheSpectre {
             condition,
             valeurs: calculable.then(|| valeurs(spectre, langue)).flatten(),
+            ecart: reference
+                .filter(|_| !est_reference)
+                .map(|(r, seuil)| ecart(&m.mesure, i, &r.mesure, seuil, langue)),
         })
         .collect();
     FicheMesure {
@@ -304,5 +600,6 @@ fn fiche(m: &MesureDeSeance, langue: Langue) -> FicheMesure {
         micrologiciel: renseigne(&p.instrument.micrologiciel),
         etalonnage: p.etalonnage.clone(),
         spectres,
+        reference: est_reference,
     }
 }
