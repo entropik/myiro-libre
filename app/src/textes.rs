@@ -317,6 +317,35 @@ const FRANCAIS: Catalogue = &[
     // Mesure ponctuelle : feuille Mesurer ({n} est remplacé)
     ("mesurer.nom_defaut", "Couleur {n}"),
     (
+        "mesurer.consigne",
+        "Posez le MYIRO-1 bien à plat sur la couleur, cliquez sur «\u{202f}Mesurer\u{202f}», puis appuyez sur le bouton de l’instrument.",
+    ),
+    ("mesurer.action", "Mesurer"),
+    (
+        "mesurer.en_cours",
+        "Appuyez sur le bouton du MYIRO-1 et gardez-le immobile jusqu’à la fin de la mesure.",
+    ),
+    ("mesurer.liste", "Dernières mesures"),
+    ("mesurer.non_rangee", "Pas rangée"),
+    (
+        "mesurer.raison.aucune_condition",
+        "Disponible quand une condition d’impression existe. Ajoutez-en une à gauche.",
+    ),
+    (
+        "mesurer.raison.repos",
+        "Disponible une fois l’instrument reconnecté.",
+    ),
+    ("mesurer.valeurs", "Valeurs"),
+    (
+        "mesurer.calcul",
+        "Calculées à partir du spectre\u{202f}: illuminant D50, observateur 2°.",
+    ),
+    ("mesurer.lab", "L*, a*, b*"),
+    ("mesurer.lch", "L*, C*, h°"),
+    ("mesurer.xyz", "X, Y, Z"),
+    ("cartouche.micrologiciel", "Micrologiciel"),
+    ("cartouche.date", "Date"),
+    (
         "mesurer.erreur.rangement",
         "La bibliothèque n’a pas pu ranger cette mesure. Elle reste affichée ici jusqu’à la fermeture de myiro-libre.",
     ),
@@ -629,6 +658,35 @@ const ANGLAIS: Catalogue = &[
     // Spot measurement: Measure sheet ({n} is replaced)
     ("mesurer.nom_defaut", "Colour {n}"),
     (
+        "mesurer.consigne",
+        "Set the MYIRO-1 flat on the colour, click “Measure”, then press the instrument’s button.",
+    ),
+    ("mesurer.action", "Measure"),
+    (
+        "mesurer.en_cours",
+        "Press the MYIRO-1 button and keep it still until the measurement is over.",
+    ),
+    ("mesurer.liste", "Latest measurements"),
+    ("mesurer.non_rangee", "Not stored"),
+    (
+        "mesurer.raison.aucune_condition",
+        "Available once a printing condition exists. Add one on the left.",
+    ),
+    (
+        "mesurer.raison.repos",
+        "Available once the instrument is reconnected.",
+    ),
+    ("mesurer.valeurs", "Values"),
+    (
+        "mesurer.calcul",
+        "Computed from the spectrum: illuminant D50, 2° observer.",
+    ),
+    ("mesurer.lab", "L*, a*, b*"),
+    ("mesurer.lch", "L*, C*, h°"),
+    ("mesurer.xyz", "X, Y, Z"),
+    ("cartouche.micrologiciel", "Firmware"),
+    ("cartouche.date", "Date"),
+    (
         "mesurer.erreur.rangement",
         "The library could not store this measurement. It stays shown here until myiro-libre is closed.",
     ),
@@ -779,6 +837,33 @@ mod tests {
                 "« {libelle} » sans guillemets : {fautes:?}"
             );
         }
+    }
+
+    /// Chaque texte demandé par la feuille Mesurer (`t("…")` dans
+    /// `mesurer.js`) existe au catalogue.
+    #[test]
+    fn la_feuille_mesurer_ne_demande_que_des_cles_du_catalogue() {
+        let script = include_str!("../interface/mesurer.js");
+        // `t("…")` seul, pas la fin d'un autre nom (`CustomEvent("…")`).
+        let demandees: Vec<&str> = script
+            .match_indices("t(\"")
+            .filter(|(i, _)| {
+                !script[..*i]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.')
+            })
+            .filter_map(|(i, _)| script[i + 3..].split('"').next())
+            .collect();
+        assert!(demandees.len() > 10, "clés lues : {demandees:?}");
+        let inconnues: Vec<_> = demandees
+            .iter()
+            .filter(|c| !cles().any(|k| k == **c))
+            .collect();
+        assert!(
+            inconnues.is_empty(),
+            "clés absentes du catalogue : {inconnues:?}"
+        );
     }
 
     #[test]

@@ -131,7 +131,10 @@ fn les_mesures_s_empilent_la_plus_recente_en_haut_avec_un_nom_modifiable() {
         seance.renommer(2, "   "),
         Err("bibliotheque.erreur.nom_vide")
     );
-    assert_eq!(seance.renommer(9, "Absente"), Err("bibliotheque.erreur.autre"));
+    assert_eq!(
+        seance.renommer(9, "Absente"),
+        Err("bibliotheque.erreur.autre")
+    );
     assert_eq!(noms(&seance), ["Couleur 2", "Magenta du logo"]);
 }
 
@@ -264,14 +267,21 @@ fn les_valeurs_viennent_du_spectre_a_deux_decimales() {
     let fiche = fiche_du_gris("gris-fr", demande_myiro1(), Langue::Francais);
 
     assert_eq!(fiche.spectres.len(), 3);
-    for (i, condition) in [ConditionMesure::M0, ConditionMesure::M1, ConditionMesure::M2]
-        .into_iter()
-        .enumerate()
+    for (i, condition) in [
+        ConditionMesure::M0,
+        ConditionMesure::M1,
+        ConditionMesure::M2,
+    ]
+    .into_iter()
+    .enumerate()
     {
         let spectre = &fiche.spectres[i];
         assert_eq!(spectre.condition, Info::Confirmee(condition));
         let v = spectre.valeurs.as_ref().expect("valeurs calculées");
-        assert_eq!([v.l.as_str(), v.a.as_str(), v.b.as_str()], ["49,50", "0,00", "0,00"]);
+        assert_eq!(
+            [v.l.as_str(), v.a.as_str(), v.b.as_str()],
+            ["49,50", "0,00", "0,00"]
+        );
         assert_eq!(v.c, "0,00");
         assert_eq!(v.h, None, "un gris n'a pas de teinte");
         assert_eq!(v.y, "18,00");

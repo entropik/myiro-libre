@@ -288,10 +288,18 @@ fn spectre_simule(uv: f32) -> Spectre {
 fn mesure_simulee(serie: u32, etalonnage: Option<Horodatage>) -> Mesure {
     let lab = |l, a, b| Lab::new([l, a, b]).expect("Lab fictif fini");
     let plage = Plage::new(
-        [spectre_simule(0.5), spectre_simule(1.0), spectre_simule(0.0)],
+        [
+            spectre_simule(0.5),
+            spectre_simule(1.0),
+            spectre_simule(0.0),
+        ],
         DonneesBrutes::new((0..152).map(|i| 30_000.0 + i as f32).collect()).unwrap(),
         // Lab « de la DLL », fictifs : l'application calcule les siens.
-        [lab(50.0, 60.0, -5.0), lab(50.1, 60.2, -5.6), lab(49.9, 59.9, -4.8)],
+        [
+            lab(50.0, 60.0, -5.0),
+            lab(50.1, 60.2, -5.6),
+            lab(49.9, 59.9, -4.8),
+        ],
     )
     .expect("plage fictive valable");
     let provenance = Provenance {
@@ -440,13 +448,13 @@ impl Pont for PontSimule {
                     self.connecte = Some(*serie);
                     self.etalonnage = None;
                     Reponse::Connecte {
-                    identite: Identite {
-                        numero_serie: *serie,
-                        micrologiciel: "1.00".into(),
-                        code_produit: "simule".into(),
-                        adresse_mac: "00:00:00:00:00:00".into(),
-                        date_initiale: None,
-                        anomalie_date_initiale: false,
+                        identite: Identite {
+                            numero_serie: *serie,
+                            micrologiciel: "1.00".into(),
+                            code_produit: "simule".into(),
+                            adresse_mac: "00:00:00:00:00:00".into(),
+                            date_initiale: None,
+                            anomalie_date_initiale: false,
                             brute_hex: String::new(),
                         },
                     }

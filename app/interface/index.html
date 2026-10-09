@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="systeme/components.css">
 <script src="app.js" defer></script>
 <script src="bibliotheque.js" defer></script>
+<script src="mesurer.js" defer></script>
 </head>
 <!-- Les textes viennent du catalogue Rust (data-t) : la page reste masquée tant qu'il n'est pas appliqué. -->
 <body class="app" hidden>
@@ -125,10 +126,30 @@
       <p class="why" data-raison-recherche data-t="raison.recherche" hidden></p>
       <details class="replie" data-details hidden><summary data-t="ecran.details"></summary><pre data-details-texte></pre></details>
     </section>
-    <section class="empty" data-vue="mesurer">
-      <h2 class="empty__text" data-t="vide.mesurer.phrase"></h2>
-      <div class="actions"><button class="btn btn--primary" disabled data-t="vide.mesurer.action"></button></div>
-      <p class="why" data-t="raison.instrument"></p>
+    <!-- Mesure ponctuelle (mesurer.js) : une seule action principale, les mesures de la séance en dessous. -->
+    <section data-vue="mesurer">
+      <div class="field">
+        <label class="label" for="condition-mesure" data-t="details.condition"></label>
+        <select class="input" id="condition-mesure" data-mesurer-condition></select>
+      </div>
+      <p class="prose" data-mesurer-consigne data-t="mesurer.consigne"></p>
+      <div class="notice notice--warn" data-mesurer-avis hidden><p><b data-avis-cause></b> <span data-avis-action></span></p></div>
+      <div class="actions">
+        <button class="btn btn--primary" data-mesurer data-t="mesurer.action" disabled></button>
+        <button class="btn" data-action="reessayer" data-mesurer-reessayer data-t="ecran.reessayer" hidden></button>
+      </div>
+      <p class="why" data-mesurer-raison></p>
+      <p class="prose" role="status" data-mesurer-en-cours data-t="mesurer.en_cours" hidden></p>
+      <details class="replie" data-mesurer-details-techniques hidden><summary data-t="ecran.details"></summary><pre data-details-texte></pre></details>
+      <h2 class="empty__text" data-mesurer-vide data-t="vide.mesurer.phrase"></h2>
+      <div class="section" data-mesurer-liste hidden>
+        <div class="section__head"><span class="label label--ink" data-t="mesurer.liste"></span></div>
+        <table>
+          <thead><tr><th></th><th data-t="details.nom"></th><th data-t="cartouche.date"></th><th data-t="details.condition"></th></tr></thead>
+          <tbody data-mesurer-lignes></tbody>
+        </table>
+        <p class="why" data-mesurer-erreur hidden></p>
+      </div>
     </section>
     <section class="empty" data-vue="controler" hidden>
       <h2 class="empty__text" data-t="vide.controler.phrase"></h2>
@@ -152,6 +173,9 @@
 
   <aside class="c-10-12">
     <span class="label zone__title" data-t="details.titre"></span>
+    <!-- Détails de la tâche Mesurer (mesurer.js) : valeurs et provenance de la mesure choisie. -->
+    <div data-details-tache="mesurer" data-mesurer-detail hidden></div>
+    <div data-details-tache="autres">
     <div data-details-choix hidden></div>
     <div class="cartouche" data-details-vide>
       <div class="cartouche__title"><span class="label" data-t="cartouche.libelle"></span><strong data-t="cartouche.titre"></strong></div>
@@ -162,6 +186,7 @@
         <div class="cell"><span class="label" data-t="cartouche.reference"></span><span data-t="cartouche.aucune"></span></div>
       </div>
       <div class="cartouche__foot"><span>myiro-libre</span><span class="num" data-version></span></div>
+    </div>
     </div>
   </aside>
 </div></main>

@@ -159,6 +159,7 @@ tr.hl td { background: var(--color-hair); }
 .field p { font-size: var(--text-sm); color: var(--color-muted); margin-top: var(--space-2); max-width: var(--measure); }
 .input { width: 100%; padding: var(--space-2) 0; border: 0; border-bottom: var(--rule-strong) solid var(--color-rule); background: transparent; color: var(--color-ink); font: inherit; border-radius: var(--radius); }
 .input--error { border-bottom-color: var(--color-bad); }
+select.input option { background: var(--color-paper); color: var(--color-ink); }
 .checkrow { display: grid; grid-template-columns: var(--space-6) 1fr; column-gap: var(--space-3); padding: var(--space-3) 0; border-top: var(--rule) solid var(--color-hair); max-width: var(--measure); }
 .checkrow input { width: var(--space-4); height: var(--space-4); accent-color: var(--color-ink); margin-top: var(--space-1); }
 

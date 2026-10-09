@@ -906,7 +906,10 @@ fn une_mesure_ponctuelle_demande_de_poser_sur_la_couleur_puis_rend_la_mesure_du_
     );
     assert!(matches!(instrument.etat(), Etat::Etalonne(_)));
     assert_eq!(instrument.probleme(), None);
-    assert!(instrument.vue().mesurable, "la mesure suivante est possible");
+    assert!(
+        instrument.vue().mesurable,
+        "la mesure suivante est possible"
+    );
 }
 
 /// Le bouton « Mesurer » est inactif avant l'étalonnage ; le module refuse
@@ -1105,7 +1108,10 @@ fn une_panne_du_pont_pendant_la_mesure_est_signalee() {
             "pont_en_panne",
         ),
         (Ok(Reponse::Ferme {}), "pont_en_panne"),
-        (erreur(ErreurPont::SessionInexploitable {}), "connexion_impossible"),
+        (
+            erreur(ErreurPont::SessionInexploitable {}),
+            "connexion_impossible",
+        ),
     ]
     .into_iter()
     .enumerate()

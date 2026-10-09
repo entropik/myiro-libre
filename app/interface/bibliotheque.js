@@ -373,6 +373,8 @@
     afficherChoix();
   }
   document.addEventListener("langue-appliquee", langueAppliquee);
+  // Une mesure vient d'être rangée (mesurer.js) : l'arborescence la montre.
+  document.addEventListener("bibliotheque-modifiee", chargerArbre);
   // Le catalogue a pu arriver avant le chargement de ce script.
   if (Object.keys(textes).length > 0) langueAppliquee();
 })();

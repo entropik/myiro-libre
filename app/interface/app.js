@@ -64,6 +64,7 @@ function afficherTache(tache) {
   }
   document.querySelector("[data-tache-courante]").textContent = textes["tache." + tache] || "";
   afficherFeuille();
+  document.dispatchEvent(new CustomEvent("tache-affichee", { detail: tache }));
 }
 
 // ---- Instrument : l'état vient du module Rust `instrument`, la page ne fait qu'afficher ----
@@ -72,9 +73,10 @@ let occupe = true; // recherche de l'instrument en cours
 const TACHES_SANS_INSTRUMENT = ["bibliotheque"];
 
 // L'écran d'étalonnage ne s'ouvre que sur demande de l'opérateur (bouton « Étalonner »).
+// Un problème de mesure s'affiche sur la feuille Mesurer elle-même (mesurer.js).
 function ecranInstrument() {
   const ecran = vueInstrument && vueInstrument.probleme ? vueInstrument.probleme.ecran : null;
-  return ecran === "etalonnage" ? null : ecran;
+  return ecran === "etalonnage" || ecran === "mesure" ? null : ecran;
 }
 
 // Feuille du centre : l'écran de l'instrument remplace celle des tâches qui en ont besoin.
@@ -87,6 +89,10 @@ function afficherFeuille() {
       ? null
       : ecranInstrument();
   for (const v of document.querySelectorAll("[data-vue]")) v.hidden = ecran !== null || v.dataset.vue !== tache;
+  // Détails à droite : ceux de la mesure en cours pour la tâche Mesurer, sinon ceux de la bibliothèque.
+  for (const d of document.querySelectorAll("[data-details-tache]")) {
+    d.hidden = (d.dataset.detailsTache === "mesurer") !== (tache === "mesurer" && ecran === null);
+  }
   for (const e of document.querySelectorAll("[data-ecran]")) {
     e.hidden = e.dataset.ecran !== ecran;
     remplirEcran(e);
@@ -151,6 +157,8 @@ function afficherInstrument() {
   const raison = vue && vue.etat === "etalonnage_requis" ? "raison.etalonnage" : "raison.instrument";
   for (const p of document.querySelectorAll("[data-t='raison.instrument']")) p.textContent = textes[raison];
   afficherFeuille();
+  // La feuille Mesurer (mesurer.js) suit l'état de l'instrument.
+  document.dispatchEvent(new CustomEvent("instrument-affiche"));
 }
 
 // ---- Étalonnage guidé : le module `instrument` demande le geste (événement « geste »),

@@ -18,6 +18,7 @@ use std::sync::{mpsc, Mutex};
 
 use instrument::parefeu::{AutorisationPareFeu, PareFeuWindows};
 use instrument::{choix, emplacements_a_essayer, fd9, Accord, Geste, Gestes, Instrument, Vue};
+use mesurer::{FicheMesure, Seance};
 use pont::{chercher_ponts, chercher_ponts_nommes, PontProcessus};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -235,6 +236,86 @@ fn etalonner(
     Some(instrument.vue())
 }
 
+/// Mesures ponctuelles faites depuis le lancement (tâche Mesurer).
+#[derive(Default)]
+struct SeanceMesures(Mutex<Seance>);
+
+/// Ce que la feuille Mesurer reçoit : l'état de l'instrument, s'il a pu
+/// changer, et les mesures de la séance, la plus récente d'abord.
+#[derive(serde::Serialize)]
+struct EcranMesurer {
+    instrument: Option<Vue>,
+    mesures: Vec<FicheMesure>,
+}
+
+fn langue(code: &str) -> Langue {
+    Langue::depuis_code(code).unwrap_or(Langue::Francais)
+}
+
+/// Mesure ponctuelle : l'écran demande de poser le MYIRO-1 sur la couleur,
+/// le pont attend l'appui sur son bouton, puis la mesure est rangée dans la
+/// condition d'impression `condition`. Les refus sont des clés du catalogue.
+#[tauri::command(async)]
+fn mesurer(
+    app: AppHandle,
+    instruments: State<'_, Instruments>,
+    attente: State<'_, GesteEnAttente>,
+    bibliotheque: State<'_, colonne::BibliothequeOuverte>,
+    seance: State<'_, SeanceMesures>,
+    condition: i64,
+    langue: &str,
+) -> Result<EcranMesurer, String> {
+    let langue = self::langue(langue);
+    let condition = bibliotheque
+        .conditions()?
+        .into_iter()
+        .find(|c| c.id.0 == condition)
+        .ok_or("bibliotheque.erreur.autre")?;
+    let mut courant = instruments.0.lock().unwrap_or_else(|e| e.into_inner());
+    let instrument = courant.as_mut().ok_or("bibliotheque.erreur.autre")?;
+    let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
+    seance.mesurer(
+        instrument,
+        &mut GestesEcran {
+            app: &app,
+            attente: &attente,
+        },
+        &condition,
+        |mesure| bibliotheque.enregistrer_mesure(condition.id, mesure),
+        langue,
+    );
+    Ok(EcranMesurer {
+        instrument: Some(instrument.vue()),
+        mesures: seance.fiches(langue),
+    })
+}
+
+/// Mesures de la séance, dans la langue de l'écran.
+#[tauri::command]
+fn mesures_seance(seance: State<'_, SeanceMesures>, langue: &str) -> EcranMesurer {
+    let seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
+    EcranMesurer {
+        instrument: None,
+        mesures: seance.fiches(self::langue(langue)),
+    }
+}
+
+/// Renomme une mesure de la séance.
+#[tauri::command]
+fn renommer_mesure(
+    seance: State<'_, SeanceMesures>,
+    numero: usize,
+    nom: &str,
+    langue: &str,
+) -> Result<EcranMesurer, &'static str> {
+    let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
+    seance.renommer(numero, nom)?;
+    Ok(EcranMesurer {
+        instrument: None,
+        mesures: seance.fiches(self::langue(langue)),
+    })
+}
+
 /// Réponse de l'opérateur au geste en attente : fait, ou annulé. Sans geste
 /// en attente, rien ne se passe.
 #[tauri::command]
@@ -253,7 +334,11 @@ pub fn lancer() {
         .manage(PareFeuFd9::default())
         .setup(ouvrir_bibliotheque)
         .manage(GesteEnAttente::default())
+        .manage(SeanceMesures::default())
         .invoke_handler(tauri::generate_handler![
+            mesurer,
+            mesures_seance,
+            renommer_mesure,
             catalogue,
             langue_demandee,
             ouvrir_instrument,

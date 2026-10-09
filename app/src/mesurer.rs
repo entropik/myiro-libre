@@ -86,7 +86,11 @@ const ECHANTILLONNAGE: Echantillonnage = Echantillonnage {
 /// s'écrit comme un zéro.
 pub fn decimal(valeur: f64, langue: Langue) -> String {
     let mut texte = format!("{valeur:.2}");
-    if texte.trim_start_matches('-').bytes().all(|o| o == b'0' || o == b'.') {
+    if texte
+        .trim_start_matches('-')
+        .bytes()
+        .all(|o| o == b'0' || o == b'.')
+    {
         texte = texte.trim_start_matches('-').to_string();
     }
     match langue {
@@ -171,7 +175,11 @@ impl Seance {
 
     /// Les mesures de la séance, la plus récente d'abord.
     pub fn fiches(&self, langue: Langue) -> Vec<FicheMesure> {
-        self.mesures.iter().rev().map(|m| fiche(m, langue)).collect()
+        self.mesures
+            .iter()
+            .rev()
+            .map(|m| fiche(m, langue))
+            .collect()
     }
 }
 
