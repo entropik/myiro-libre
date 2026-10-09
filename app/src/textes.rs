@@ -85,7 +85,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "bibliotheque.erreur.cgats_trop_gros",
-        "Ce fichier est trop gros pour un fichier de mesures (plus de 16\u{202f}Mo). Rien n’a été importé.",
+        "Ce fichier est trop gros pour un fichier de mesures (plus de 16\u{202f}Mio). Rien n’a été importé.",
     ),
     ("bibliotheque.erreur.export", "Le fichier n’a pas pu être écrit."),
     // Bibliothèque, section Export et sauvegarde
@@ -131,7 +131,7 @@ const FRANCAIS: Catalogue = &[
     ("export.restaurer", "Restaurer une sauvegarde…"),
     (
         "export.restaurer.avertissement",
-        "Toute la bibliothèque actuelle sera remplacée par la sauvegarde choisie. Si vous voulez la garder, sauvegardez-la d’abord.",
+        "Toute la bibliothèque actuelle sera remplacée par la sauvegarde choisie. Une copie de secours datée de la bibliothèque actuelle est d’abord faite automatiquement dans son dossier.",
     ),
     (
         "export.restaurer.confirmer",
@@ -654,7 +654,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "bibliotheque.erreur.cgats_trop_gros",
-        "This file is too large for a measurement file (over 16 MB). Nothing was imported.",
+        "This file is too large for a measurement file (over 16 MiB). Nothing was imported.",
     ),
     ("bibliotheque.erreur.export", "The file could not be written."),
     ("export.titre", "Export and backup"),
@@ -696,7 +696,7 @@ const ANGLAIS: Catalogue = &[
     ("export.restaurer", "Restore a backup…"),
     (
         "export.restaurer.avertissement",
-        "The whole current library will be replaced by the chosen backup. If you want to keep it, back it up first.",
+        "The whole current library will be replaced by the chosen backup. A dated safety copy of the current library is made automatically in its folder.",
     ),
     (
         "export.restaurer.confirmer",

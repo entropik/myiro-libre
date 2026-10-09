@@ -174,7 +174,19 @@ impl BibliothequeOuverte {
             eprintln!("{} : {taille} octets", fichier.display());
             return Err("bibliotheque.erreur.cgats_trop_gros".to_string());
         }
-        let octets = std::fs::read(fichier).map_err(illisible)?;
+        // Lecture bornée aussi : le fichier a pu grossir depuis sa taille lue.
+        let mut octets = Vec::new();
+        std::io::Read::read_to_end(
+            &mut std::io::Read::take(
+                std::fs::File::open(fichier).map_err(illisible)?,
+                TAILLE_MAX_CGATS + 1,
+            ),
+            &mut octets,
+        )
+        .map_err(illisible)?;
+        if octets.len() as u64 > TAILLE_MAX_CGATS {
+            return Err("bibliotheque.erreur.cgats_trop_gros".to_string());
+        }
         // UTF-8, ou Latin-1 de Windows sans abîmer les accents.
         let texte = cgats::decoder(&octets);
         self.avec(|b| b.importer_mesure(condition, &nom_de(fichier), &texte))

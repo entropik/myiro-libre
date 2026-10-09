@@ -893,11 +893,59 @@ fn une_restauration_qui_echoue_en_route_remet_la_bibliotheque_d_avant() {
     assert!(biblio.restaurer(&piegee).is_err());
     assert_eq!(contenu(&biblio), attendu);
     // La copie de secours reste dans le dossier de la bibliothèque.
-    assert!(dossier
-        .path()
-        .join("bibliotheque.sqlite.avant-restauration")
-        .is_file());
+    assert_eq!(copies_de_secours(dossier.path()).len(), 1);
     biblio.creer_condition("Après l'échec").unwrap();
+}
+
+/// Copies de secours laissées par les restaurations dans le dossier.
+fn copies_de_secours(dossier: &std::path::Path) -> Vec<String> {
+    let mut noms: Vec<String> = std::fs::read_dir(dossier)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("bibliotheque.sqlite.avant-restauration-"))
+        .collect();
+    noms.sort();
+    noms
+}
+
+#[test]
+fn chaque_restauration_garde_sa_propre_copie_de_secours_datee() {
+    let (dossier, mut biblio) = bibliotheque_garnie();
+    let fichier = dossier.path().join("sauvegarde.sqlite");
+    biblio.sauvegarder(&fichier).unwrap();
+    biblio.restaurer(&fichier).unwrap();
+    biblio.restaurer(&fichier).unwrap();
+
+    let copies = copies_de_secours(dossier.path());
+    assert_eq!(copies.len(), 2, "{copies:?}");
+    // bibliotheque.sqlite.avant-restauration-AAAA-MM-JJ-HHMMSS…
+    let date = &copies[0]["bibliotheque.sqlite.avant-restauration-".len()..];
+    let o = date.as_bytes();
+    assert!(
+        date.len() >= 17
+            && o[4] == b'-'
+            && o[7] == b'-'
+            && o[10] == b'-'
+            && o[..17]
+                .iter()
+                .enumerate()
+                .all(|(i, c)| [4, 7, 10].contains(&i) || c.is_ascii_digit()),
+        "{date}"
+    );
+}
+
+#[test]
+fn une_mesure_importee_ne_se_renomme_pas() {
+    let (_dossier, biblio) = bibliotheque_garnie();
+    let jet = biblio.conditions().unwrap()[0].id;
+    let id = biblio
+        .importer_mesure(jet, "lab.txt", &cgats_lab_seul())
+        .unwrap();
+    assert_eq!(
+        biblio.renommer_mesure(id, "Autre nom"),
+        Err(ErreurBibliotheque::MesureInconnue(id))
+    );
+    assert_eq!(biblio.mesure_importee(id).unwrap().fichier, "lab.txt");
 }
 
 /// Tout ce que la bibliothèque montre : arborescence, instruments, mesures.

@@ -16,9 +16,51 @@ use serde::Serialize;
 /// Nom du fichier de la base, dans le dossier de la bibliothèque.
 pub const FICHIER_BASE: &str = "bibliotheque.sqlite";
 
-/// Copie de la bibliothèque faite juste avant une restauration, dans son
-/// dossier : remise en place si la restauration échoue, et gardée ensuite.
+/// Début du nom de la copie de la bibliothèque faite juste avant une
+/// restauration, dans son dossier, suivi de la date et de l'heure UTC
+/// (`bibliotheque.sqlite.avant-restauration-2026-10-09-133405Z`) : remise en
+/// place si la restauration échoue, et gardée ensuite.
 pub const FICHIER_SECOURS: &str = "bibliotheque.sqlite.avant-restauration";
+
+/// Date et heure UTC d'un instant, pour un nom de fichier :
+/// `2026-10-09-133405Z`. Calendrier grégorien.
+fn date_heure_utc(instant: std::time::SystemTime) -> String {
+    let secondes = instant
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let (jours, reste) = (secondes / 86_400, secondes % 86_400);
+    // Jours depuis 1970 vers année, mois, jour (algorithme des ères de 400 ans).
+    let z = jours as i64 + 719_468;
+    let ere = z.div_euclid(146_097);
+    let jour_ere = z - ere * 146_097;
+    let annee_ere = (jour_ere - jour_ere / 1460 + jour_ere / 36_524 - jour_ere / 146_096) / 365;
+    let jour_annee = jour_ere - (365 * annee_ere + annee_ere / 4 - annee_ere / 100);
+    let m = (5 * jour_annee + 2) / 153;
+    let jour = jour_annee - (153 * m + 2) / 5 + 1;
+    let mois = if m < 10 { m + 3 } else { m - 9 };
+    let annee = annee_ere + ere * 400 + i64::from(mois <= 2);
+    format!(
+        "{annee:04}-{mois:02}-{jour:02}-{:02}{:02}{:02}Z",
+        reste / 3600,
+        reste % 3600 / 60,
+        reste % 60
+    )
+}
+
+/// Le chemin s'il est libre, sinon le même suivi de `-2`, `-3`…
+fn fichier_libre(chemin: &Path) -> std::path::PathBuf {
+    if !chemin.exists() {
+        return chemin.to_path_buf();
+    }
+    (2..)
+        .map(|n| {
+            let mut nom = chemin.as_os_str().to_owned();
+            nom.push(format!("-{n}"));
+            std::path::PathBuf::from(nom)
+        })
+        .find(|c| !c.exists())
+        .expect("un nom libre finit par se trouver")
+}
 
 /// Version de l'organisation de la base ; une base plus récente est refusée.
 const VERSION_BASE: i32 = 3;
@@ -266,11 +308,13 @@ impl Bibliotheque {
         self.enregistrer(condition, mesure, Some(nom))
     }
 
-    /// Renomme une mesure ; la mesure elle-même n'est pas touchée.
+    /// Renomme une mesure du pont ; la mesure elle-même n'est pas touchée.
+    /// Une mesure importée n'a pas de nom de mesure (elle est désignée par
+    /// son fichier, ADR 0001) : elle est refusée comme inconnue.
     pub fn renommer_mesure(&self, id: IdMesure, nom: &str) -> Resultat<()> {
         let nom = nom_de_mesure(nom)?;
         let modifiees = self.base.execute(
-            "UPDATE mesures SET nom = ?1 WHERE id = ?2",
+            "UPDATE mesures SET nom = ?1 WHERE id = ?2 AND origine = 'pont'",
             params![nom, id.0],
         )?;
         if modifiees == 0 {
@@ -581,13 +625,23 @@ impl Bibliotheque {
         examiner_sauvegarde(fichier).map_err(ErreurBibliotheque::SauvegardeInvalide)?;
         // Copie de secours d'abord : si la suite échoue (mise à niveau
         // impossible, disque plein…), la bibliothèque d'avant est remise.
-        let secours = self.dossier.join(FICHIER_SECOURS);
+        // Une copie par restauration, datée : la suivante n'écrase pas celle-ci.
+        let secours = fichier_libre(&self.dossier.join(format!(
+            "{FICHIER_SECOURS}-{}",
+            date_heure_utc(std::time::SystemTime::now())
+        )));
         self.sauvegarder(&secours)?;
-        let restauree = self.remplacer_par(fichier);
-        if restauree.is_err() {
-            self.remplacer_par(&secours)?;
+        match self.remplacer_par(fichier) {
+            Ok(()) => Ok(()),
+            Err(echec) => match self.remplacer_par(&secours) {
+                Ok(()) => Err(echec),
+                // Les deux erreurs sont gardées : la copie reste sur le disque.
+                Err(remise) => Err(ErreurBibliotheque::Base(format!(
+                    "restauration impossible ({echec}), et remise de la copie de secours {} impossible ({remise})",
+                    secours.display()
+                ))),
+            },
         }
-        restauree
     }
 
     /// Remplace tout le contenu de la base par celui du fichier, puis le met
@@ -846,3 +900,17 @@ DROP TABLE mesures;
 ALTER TABLE mesures_3 RENAME TO mesures;
 CREATE INDEX mesures_par_condition ON mesures (condition);
 ";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, UNIX_EPOCH};
+
+    #[test]
+    fn la_date_d_une_copie_de_secours_est_juste() {
+        let a = |s: u64| date_heure_utc(UNIX_EPOCH + Duration::from_secs(s));
+        assert_eq!(a(0), "1970-01-01-000000Z");
+        assert_eq!(a(1_791_552_845), "2026-10-09-133405Z");
+        assert_eq!(a(1_709_251_199), "2024-02-29-235959Z");
+    }
+}
