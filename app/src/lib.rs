@@ -258,8 +258,11 @@ fn choisir_instrument(
         .ok_or_else(|| "refus.occupe.recherche".to_string())?;
     avec_ouverture(&app, None, |o| selection.changer(&jeton, vers, o))
         .map_err(|refus| refus.cle())?;
-    if let Some(fichier) = fichier_choix(&app) {
-        let _ = choix::retenir_choix(&fichier, vers);
+    // Un échec d'écriture est dit à l'opérateur ; le choix vaut pour la séance.
+    match fichier_choix(&app) {
+        Some(fichier) => selection.retenir(&fichier),
+        // Sans dossier de configuration, l'écriture échoue et l'avis le dit.
+        None => selection.retenir(Path::new("")),
     }
     Ok(vue_retenue(&app, selection))
 }

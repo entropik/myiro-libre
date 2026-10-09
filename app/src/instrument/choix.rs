@@ -10,7 +10,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use pont_protocole::{Palier, RemiseAuRepos, Reponse, Requete};
+use pont_protocole::{ErreurPont, Palier, RemiseAuRepos, Reponse, Requete};
 use serde::Serialize;
 
 use super::fd9::NOM_DLL_FD9;
@@ -120,15 +120,25 @@ impl Modele {
 
 /// Dernier choix retenu dans `fichier`, s'il y en a un lisible.
 pub fn lire_choix(fichier: &Path) -> Option<Modele> {
-    Modele::depuis_code(std::fs::read_to_string(fichier).ok()?.trim())
+    let texte = std::fs::read_to_string(fichier).ok()?;
+    // Une marque d'ordre des octets (BOM), ajoutée par un éditeur, est ignorée.
+    Modele::depuis_code(texte.trim_start_matches('\u{feff}').trim())
 }
 
-/// Retient le choix pour le lancement suivant.
+/// Retient le choix pour le lancement suivant. Écrit d'abord un fichier
+/// temporaire à côté, puis le renomme : une coupure en cours d'écriture ne
+/// laisse jamais un fichier à moitié écrit.
 pub fn retenir_choix(fichier: &Path, modele: Modele) -> std::io::Result<()> {
     if let Some(dossier) = fichier.parent() {
         std::fs::create_dir_all(dossier)?;
     }
-    std::fs::write(fichier, modele.code())
+    let mut temporaire = fichier.as_os_str().to_owned();
+    temporaire.push(".tmp");
+    let temporaire = PathBuf::from(temporaire);
+    std::fs::write(&temporaire, modele.code())?;
+    std::fs::rename(&temporaire, fichier).inspect_err(|_| {
+        let _ = std::fs::remove_file(&temporaire);
+    })
 }
 
 /// Ce dont le module a besoin pour ouvrir un instrument : où chercher les
@@ -260,9 +270,22 @@ pub enum Fermeture {
     Confirmee,
     /// Déconnecté, repos supposé ou non prouvé.
     Incertaine(RemiseAuRepos),
-    /// La déconnexion a échoué, ou le pont n'a pas répondu : il est arrêté
-    /// quand même ; l'instrument est peut-être resté dans un état incertain.
-    Echec { detail: String },
+    /// La fermeture n'a pas abouti : le pont est arrêté quand même ;
+    /// l'instrument est peut-être resté dans un état incertain.
+    Echec(EchecFermeture),
+}
+
+/// Pourquoi la fermeture n'a pas abouti.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EchecFermeture {
+    /// `deconnexion_echouee` : la DLL a refusé la déconnexion (code brut).
+    DeconnexionRefusee { code: i32 },
+    /// Une autre erreur du pont en réponse à `fermer`.
+    FermetureRefusee,
+    /// Le pont n'a pas répondu, ou s'est arrêté sans répondre.
+    PontMuet,
+    /// Une réponse hors de propos.
+    ReponseInattendue,
 }
 
 impl<P: Pont> Instrument<P> {
@@ -278,18 +301,12 @@ impl<P: Pont> Instrument<P> {
             Ok(Reponse::FermetureIncertaine { remise_au_repos }) => {
                 Fermeture::Incertaine(remise_au_repos)
             }
-            Ok(Reponse::Erreur { erreur }) => Fermeture::Echec {
-                detail: format!(
-                    "fermeture : {erreur:?} ; pont arrêté quand même (dernière tentative de \
-                     déconnexion par le pont)"
-                ),
-            },
-            Ok(autre) => Fermeture::Echec {
-                detail: format!("fermeture : réponse inattendue : {autre:?}"),
-            },
-            Err(panne) => Fermeture::Echec {
-                detail: format!("fermeture : {panne:?}"),
-            },
+            Ok(Reponse::Erreur {
+                erreur: ErreurPont::DeconnexionEchouee { code, .. },
+            }) => Fermeture::Echec(EchecFermeture::DeconnexionRefusee { code }),
+            Ok(Reponse::Erreur { .. }) => Fermeture::Echec(EchecFermeture::FermetureRefusee),
+            Ok(_) => Fermeture::Echec(EchecFermeture::ReponseInattendue),
+            Err(_) => Fermeture::Echec(EchecFermeture::PontMuet),
         };
         // Le pont est rendu ici : `PontProcessus` attend sa fin, ou l'arrête.
         drop(pont);
@@ -309,6 +326,9 @@ pub enum Annonce {
         modele: Modele,
         fermeture: Fermeture,
     },
+    /// Le choix n'a pas pu être écrit pour le lancement suivant ; il vaut
+    /// pour la séance.
+    ChoixNonRetenu { modele: Modele },
 }
 
 /// Une ligne de la liste des instruments présents.
@@ -333,7 +353,11 @@ pub struct VueAnnonce {
     pub autre: Option<String>,
     /// Montrer l'avis en orange : le repos n'est pas prouvé.
     pub alerte: bool,
-    pub detail: Option<String>,
+    /// Clé `choix.detail.<…>` du détail replié, en mots simples ; `{code}`
+    /// y est remplacé par `code_instrument`.
+    pub detail: Option<&'static str>,
+    /// Code rendu par l'instrument, s'il y en a un.
+    pub code_instrument: Option<i32>,
 }
 
 /// Ce que la barre et la liste reçoivent.
@@ -341,7 +365,8 @@ pub struct VueAnnonce {
 pub struct VueSelection {
     pub instrument: Vue,
     pub instruments: Vec<Ligne>,
-    pub annonce: Option<VueAnnonce>,
+    /// Ce que l'application a à dire, dans l'ordre.
+    pub annonces: Vec<VueAnnonce>,
     /// Ouvrir la liste d'elle-même : l'annonce doit être vue.
     pub montrer_liste: bool,
 }
@@ -355,7 +380,7 @@ pub struct Selection<P: Pont> {
     choisi: Option<Modele>,
     /// Instruments inactifs qui n'ont pas été trouvés au dernier essai.
     non_trouves: Vec<Modele>,
-    annonce: Option<Annonce>,
+    annonces: Vec<Annonce>,
     montrer_liste: bool,
 }
 
@@ -374,7 +399,10 @@ impl<P: Pont> Selection<P> {
             let trouve = instrument.etat != Etat::NonDetecte;
             return Selection {
                 montrer_liste: trouve && presents.len() > 1,
-                annonce: trouve.then_some(Annonce::SansChoix { pris: actif }),
+                annonces: trouve
+                    .then_some(Annonce::SansChoix { pris: actif })
+                    .into_iter()
+                    .collect(),
                 presents,
                 actif,
                 instrument,
@@ -393,10 +421,10 @@ impl<P: Pont> Selection<P> {
                     instrument: second,
                     choisi: Some(choisi),
                     non_trouves: vec![choisi],
-                    annonce: Some(Annonce::Remplace {
+                    annonces: vec![Annonce::Remplace {
                         choisi,
                         pris: autre,
-                    }),
+                    }],
                     montrer_liste: true,
                 };
             }
@@ -407,7 +435,7 @@ impl<P: Pont> Selection<P> {
             instrument,
             choisi: Some(choisi),
             non_trouves: Vec::new(),
-            annonce: None,
+            annonces: Vec::new(),
             montrer_liste: false,
         }
     }
@@ -433,15 +461,20 @@ impl<P: Pont> Selection<P> {
         self.choisi = Some(vers);
         self.montrer_liste = false;
         if vers == self.actif && self.instrument.etat != Etat::NonDetecte {
-            self.annonce = None;
+            self.annonces.clear();
             return Ok(());
         }
         let ancien = self.actif;
         let ancien_trouve = self.instrument.etat != Etat::NonDetecte;
-        self.annonce = self.instrument.fermer().map(|fermeture| Annonce::Ferme {
-            modele: ancien,
-            fermeture,
-        });
+        self.annonces = self
+            .instrument
+            .fermer()
+            .map(|fermeture| Annonce::Ferme {
+                modele: ancien,
+                fermeture,
+            })
+            .into_iter()
+            .collect();
         self.non_trouves.retain(|m| *m != vers && *m != ancien);
         if ancien != vers && !ancien_trouve {
             self.non_trouves.push(ancien);
@@ -460,10 +493,15 @@ impl<P: Pont> Selection<P> {
         F: PareFeu,
     {
         let ancien = self.actif;
-        self.annonce = self.instrument.fermer().map(|fermeture| Annonce::Ferme {
-            modele: ancien,
-            fermeture,
-        });
+        self.annonces = self
+            .instrument
+            .fermer()
+            .map(|fermeture| Annonce::Ferme {
+                modele: ancien,
+                fermeture,
+            })
+            .into_iter()
+            .collect();
         self.montrer_liste = false;
         self.presents = o.presents();
         if self.choisi.is_some() {
@@ -494,8 +532,19 @@ impl<P: Pont> Selection<P> {
         &mut self.instrument
     }
 
-    pub fn annonce(&self) -> Option<&Annonce> {
-        self.annonce.as_ref()
+    pub fn annonces(&self) -> &[Annonce] {
+        &self.annonces
+    }
+
+    /// Retient le choix de l'opérateur dans `fichier` pour le lancement
+    /// suivant. Un échec est dit à l'opérateur ; le choix vaut pour la séance.
+    pub fn retenir(&mut self, fichier: &Path) {
+        let Some(modele) = self.choisi else {
+            return;
+        };
+        if retenir_choix(fichier, modele).is_err() {
+            self.annonces.push(Annonce::ChoixNonRetenu { modele });
+        }
     }
 
     pub fn vue(&self) -> VueSelection {
@@ -527,7 +576,7 @@ impl<P: Pont> Selection<P> {
         VueSelection {
             instrument,
             instruments,
-            annonce: self.annonce.as_ref().map(vue_annonce),
+            annonces: self.annonces.iter().map(vue_annonce).collect(),
             montrer_liste: self.montrer_liste,
         }
     }
@@ -540,26 +589,49 @@ fn vue_annonce(annonce: &Annonce) -> VueAnnonce {
         autre: autre.map(|m| m.nom().into()),
         alerte: false,
         detail: None,
+        code_instrument: None,
     };
     match annonce {
         Annonce::SansChoix { pris } => simple("sans_choix", *pris, None),
         Annonce::Remplace { choisi, pris } => simple("remplace", *choisi, Some(*pris)),
+        Annonce::ChoixNonRetenu { modele } => simple("choix_non_retenu", *modele, None),
         Annonce::Ferme { modele, fermeture } => match fermeture {
             Fermeture::Confirmee => simple("ferme", *modele, None),
             Fermeture::Incertaine(RemiseAuRepos::ReposSuppose {}) => VueAnnonce {
-                detail: Some("fermeture : repos supposé (aucune mesure lancée)".into()),
+                detail: Some("choix.detail.repos_suppose"),
                 ..simple("ferme_repos_suppose", *modele, None)
             },
-            Fermeture::Incertaine(repos) => VueAnnonce {
-                alerte: true,
-                detail: Some(format!("fermeture incertaine : {repos:?}")),
-                ..simple("ferme_incertain", *modele, None)
-            },
-            Fermeture::Echec { detail } => VueAnnonce {
-                alerte: true,
-                detail: Some(detail.clone()),
-                ..simple("ferme_echec", *modele, None)
-            },
+            Fermeture::Incertaine(repos) => {
+                let (detail, code) = match repos {
+                    RemiseAuRepos::ArretRefuse { code } => {
+                        ("choix.detail.arret_refuse", Some(*code))
+                    }
+                    RemiseAuRepos::LiaisonPerdue {} => ("choix.detail.liaison_perdue", None),
+                    _ => ("choix.detail.repos_non_signale", None),
+                };
+                VueAnnonce {
+                    alerte: true,
+                    detail: Some(detail),
+                    code_instrument: code,
+                    ..simple("ferme_incertain", *modele, None)
+                }
+            }
+            Fermeture::Echec(echec) => {
+                let (detail, code) = match echec {
+                    EchecFermeture::DeconnexionRefusee { code } => {
+                        ("choix.detail.deconnexion_refusee", Some(*code))
+                    }
+                    EchecFermeture::FermetureRefusee => ("choix.detail.fermeture_refusee", None),
+                    EchecFermeture::PontMuet => ("choix.detail.pont_muet", None),
+                    EchecFermeture::ReponseInattendue => ("choix.detail.reponse_inattendue", None),
+                };
+                VueAnnonce {
+                    alerte: true,
+                    detail: Some(detail),
+                    code_instrument: code,
+                    ..simple("ferme_echec", *modele, None)
+                }
+            }
         },
     }
 }

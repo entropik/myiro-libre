@@ -268,7 +268,8 @@
     if (enCours || bouton.disabled) return;
     enCours = true;
     erreur = null;
-    dessiner();
+    operationEnCours = "mesure"; // app.js : la barre ne s'ouvre pas pendant la mesure
+    afficherInstrument();
     try {
       const r = await invoke("mesurer", { condition: Number(choixCondition.value), langue: langue() });
       if (r.instrument) recevoir(r.instrument); // app.js : instrument actif et liste du poste
@@ -281,6 +282,7 @@
       erreur = cle;
     }
     enCours = false;
+    operationEnCours = null;
     afficherInstrument(); // app.js : barre, puis cette feuille (événement « instrument-affiche »)
   }
 

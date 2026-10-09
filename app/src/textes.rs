@@ -337,6 +337,47 @@ const FRANCAIS: Catalogue = &[
         "refus.absent",
         "Le logiciel du fabricant de cet instrument n’est pas trouvé sur ce poste.",
     ),
+    (
+        "choix.annonce.choix_non_retenu",
+        "Le {modele} reste en service, mais ce choix n’a pas pu être gardé pour le prochain lancement.",
+    ),
+    ("choix.compris", "Compris"),
+    (
+        "choix.detail.repos_suppose",
+        "Aucune mesure n’avait été lancée\u{202f}: l’instrument n’avait rien à confirmer.",
+    ),
+    (
+        "choix.detail.repos_non_signale",
+        "L’instrument n’a pas signalé à temps son retour au repos.",
+    ),
+    (
+        "choix.detail.arret_refuse",
+        "L’instrument a refusé de s’arrêter (code {code}).",
+    ),
+    (
+        "choix.detail.liaison_perdue",
+        "La liaison avec l’instrument a été perdue avant qu’il confirme son retour au repos.",
+    ),
+    (
+        "choix.detail.deconnexion_refusee",
+        "L’instrument a refusé la déconnexion (code {code})\u{202f}; la liaison a été coupée quand même.",
+    ),
+    (
+        "choix.detail.fermeture_refusee",
+        "L’instrument a refusé la fermeture\u{202f}; la liaison a été coupée quand même.",
+    ),
+    (
+        "choix.detail.pont_muet",
+        "L’instrument n’a pas répondu à la demande de fermeture\u{202f}; la liaison a été coupée quand même.",
+    ),
+    (
+        "choix.detail.reponse_inattendue",
+        "La réponse à la demande de fermeture n’était pas celle attendue\u{202f}; la liaison a été coupée quand même.",
+    ),
+    (
+        "refus.autre",
+        "Cette demande n’a pas pu aboutir. Réessayez dans un instant.",
+    ),
     // Étalonnage guidé
     ("instrument.etalonner", "Étalonner"),
     (
@@ -765,6 +806,47 @@ const ANGLAIS: Catalogue = &[
     (
         "refus.absent",
         "The manufacturer software for this instrument is not found on this computer.",
+    ),
+    (
+        "choix.annonce.choix_non_retenu",
+        "The {modele} stays in use, but this choice could not be kept for the next launch.",
+    ),
+    ("choix.compris", "Got it"),
+    (
+        "choix.detail.repos_suppose",
+        "No measurement had been started: the instrument had nothing to confirm.",
+    ),
+    (
+        "choix.detail.repos_non_signale",
+        "The instrument did not report in time that it was back at rest.",
+    ),
+    (
+        "choix.detail.arret_refuse",
+        "The instrument refused to stop (code {code}).",
+    ),
+    (
+        "choix.detail.liaison_perdue",
+        "The connection with the instrument was lost before it confirmed it was back at rest.",
+    ),
+    (
+        "choix.detail.deconnexion_refusee",
+        "The instrument refused to disconnect (code {code}); the connection was cut anyway.",
+    ),
+    (
+        "choix.detail.fermeture_refusee",
+        "The instrument refused to close; the connection was cut anyway.",
+    ),
+    (
+        "choix.detail.pont_muet",
+        "The instrument did not answer the request to close; the connection was cut anyway.",
+    ),
+    (
+        "choix.detail.reponse_inattendue",
+        "The answer to the request to close was not the expected one; the connection was cut anyway.",
+    ),
+    (
+        "refus.autre",
+        "This request could not be completed. Try again in a moment.",
     ),
     // Guided calibration
     ("instrument.etalonner", "Calibrate"),

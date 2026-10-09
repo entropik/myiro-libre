@@ -73,6 +73,9 @@ let vuePoste = null; // instruments du poste, actif, annonce (module `instrument
 let listeOuverte = false; // la liste des instruments remplace la feuille
 let refusChoix = null; // clé du catalogue du dernier refus
 let occupe = true; // recherche de l'instrument en cours
+// Étalonnage ou mesure en cours (« etalonnage », « mesure ») : l'instrument attend
+// un geste, la liste des instruments ne doit pas cacher son écran.
+let operationEnCours = null;
 const TACHES_SANS_INSTRUMENT = ["bibliotheque"];
 
 // Reçoit la vue du module : l'instrument actif et la liste du poste.
@@ -115,21 +118,48 @@ function remplirListe(section) {
     }
     lignes.append(li);
   }
-  const a = vuePoste && vuePoste.annonce;
-  const avis = section.querySelector("[data-choix-annonce]");
-  avis.hidden = !a;
-  avis.classList.toggle("notice--warn", Boolean(a && a.alerte));
-  if (a) {
-    avis.querySelector("[data-choix-annonce-texte]").textContent = textes["choix.annonce." + a.code]
-      .replace("{modele}", a.modele)
-      .replace("{autre}", a.autre || "");
-  }
+  remplirAnnonces(section.querySelector("[data-choix-annonce]"));
+  // Vues dans la liste : l'avis de la feuille ne les répète pas.
+  annoncesLues = signatureAnnonces();
   const refus = section.querySelector("[data-choix-refus]");
   refus.hidden = !refusChoix;
-  refus.textContent = refusChoix ? textes[refusChoix] || refusChoix : "";
-  const detail = a ? a.detail : null;
-  section.querySelector("[data-choix-details]").hidden = !detail;
-  section.querySelector("[data-choix-details-texte]").textContent = detail || "";
+  refus.textContent = refusChoix ? textes[refusChoix] || textes["refus.autre"] : "";
+  const details = annonces()
+    .filter((a) => a.detail)
+    .map((a) => textes[a.detail].replace("{code}", a.code_instrument === null ? "" : String(a.code_instrument)))
+    .join("\n");
+  section.querySelector("[data-choix-details]").hidden = !details;
+  section.querySelector("[data-choix-details-texte]").textContent = details;
+}
+
+// Annonces du module (instrument pris, fermé, choix non gardé) : une phrase chacune.
+let annoncesLues = "";
+function annonces() {
+  return vuePoste ? vuePoste.annonces : [];
+}
+function signatureAnnonces() {
+  return JSON.stringify(annonces());
+}
+function remplirAnnonces(avis) {
+  const liste = annonces();
+  avis.hidden = liste.length === 0;
+  avis.classList.toggle("notice--warn", liste.some((a) => a.alerte));
+  const textesAvis = avis.querySelector("[data-annonce-textes]");
+  textesAvis.replaceChildren(
+    ...liste.map((a) => {
+      const p = document.createElement("p");
+      p.textContent = textes["choix.annonce." + a.code].replace("{modele}", a.modele).replace("{autre}", a.autre || "");
+      return p;
+    }),
+  );
+}
+
+// Sur la feuille, une annonce pas encore vue reste affichée jusqu'à « Compris » ou
+// l'ouverture de la liste : l'opérateur la voit même sans ouvrir la liste.
+function afficherAnnonceFeuille() {
+  const avis = document.querySelector("[data-annonce-feuille]");
+  remplirAnnonces(avis);
+  if (listeOuverte || signatureAnnonces() === annoncesLues) avis.hidden = true;
 }
 
 // Choix d'un autre instrument : le module ferme le pont en cours, ouvre l'autre, ou refuse.
@@ -160,6 +190,7 @@ function afficherFeuille() {
   const tache = tacheCourante();
   const liste = document.querySelector("[data-liste-instruments]");
   liste.hidden = !listeOuverte;
+  afficherAnnonceFeuille();
   if (listeOuverte) {
     remplirListe(liste);
     for (const v of document.querySelectorAll("[data-vue], [data-ecran]")) v.hidden = true;
@@ -231,8 +262,12 @@ function afficherInstrument() {
   const pret = Boolean(vue && vue.pret);
   barre.classList.toggle("state--ok", pret);
   barre.classList.toggle("state--warn", !pret);
-  // La liste s'ouvre dès qu'il y a un instrument à montrer ; jamais pendant une recherche.
-  barre.disabled = occupe || !(vuePoste && vuePoste.instruments.length);
+  // La liste s'ouvre dès qu'il y a un instrument à montrer ; jamais pendant une
+  // recherche, un étalonnage ou une mesure : la raison est donnée au survol.
+  const operation = operationEnCours || (occupe ? "recherche" : null);
+  if (operationEnCours) listeOuverte = false;
+  barre.disabled = Boolean(operation) || !(vuePoste && vuePoste.instruments.length);
+  barre.title = operation ? textes["refus.occupe." + operation] : "";
   barre.setAttribute("aria-expanded", String(listeOuverte));
   for (const b of document.querySelectorAll("[data-action]")) b.disabled = occupe;
   // « Étalonner » à côté de l'état, tant que l'étalonnage est requis et pas déjà ouvert.
@@ -285,6 +320,7 @@ async function lancerEtalonnage(dejaFait) {
   appelEnCours = true;
   gesteDejaFait = dejaFait;
   phaseEtalonnage = dejaFait ? "en_cours" : "geste";
+  operationEnCours = "etalonnage";
   afficherInstrument();
   try {
     recevoir(await invoke("etalonner"));
@@ -292,6 +328,7 @@ async function lancerEtalonnage(dejaFait) {
     // Refusé : une autre opération est en cours (clé du catalogue).
     refusChoix = String(cle);
   }
+  operationEnCours = null;
   appelEnCours = false;
   gesteEnAttente = false;
   gesteDejaFait = false;
@@ -363,6 +400,10 @@ document.addEventListener("click", (e) => {
     afficherInstrument();
   }
   if (cible.dataset.choixCode) choisirInstrument(cible.dataset.choixCode);
+  if (cible.hasAttribute("data-annonce-compris")) {
+    annoncesLues = signatureAnnonces();
+    afficherFeuille();
+  }
   if (cible.dataset.themeChoix) {
     appliquerTheme(cible.dataset.themeChoix);
     memoire("theme", cible.dataset.themeChoix);

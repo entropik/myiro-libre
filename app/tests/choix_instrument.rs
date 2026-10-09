@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use app::instrument::choix::{
     lire_choix, retenir_choix, Modele, Occupation, Operation, Ouverture, Recherche, Refus,
-    Selection,
+    Selection, VueAnnonce,
 };
 use app::instrument::parefeu::{AutorisationPareFeu, PareFeuSimule};
 use app::instrument::{Accord, Etat, Geste};
@@ -280,9 +280,34 @@ fn changer(
     selection.changer(&jeton, vers, &mut poste.ouverture())
 }
 
+fn premiere_annonce(selection: &Selection<Journalise>) -> VueAnnonce {
+    selection
+        .vue()
+        .annonces
+        .first()
+        .cloned()
+        .expect("une annonce")
+}
+
+/// Détail replié d'une annonce, tel que la page le compose.
+fn detail(a: &VueAnnonce, langue: Langue) -> String {
+    let cle = a.detail.expect("un détail");
+    texte(langue, cle).replace(
+        "{code}",
+        &a.code_instrument.map_or(String::new(), |c| c.to_string()),
+    )
+}
+
+/// Un détail en mots simples : jamais de sortie brute du programme.
+fn sans_sortie_brute(texte: &str) {
+    for brut in ["{", "}", "::", "Repos", "Erreur", "Panne", "Deconnexion"] {
+        assert!(!texte.contains(brut), "« {brut} » dans « {texte} »");
+    }
+}
+
 /// Texte de l'annonce, tel que la page le compose.
 fn annonce(selection: &Selection<Journalise>, langue: Langue) -> String {
-    let a = selection.vue().annonce.expect("une annonce");
+    let a = premiere_annonce(selection);
     texte(langue, &format!("choix.annonce.{}", a.code))
         .replace("{modele}", &a.modele)
         .replace("{autre}", a.autre.as_deref().unwrap_or(""))
@@ -323,9 +348,11 @@ fn passer_au_fd9_ferme_d_abord_le_myiro1_puis_ouvre_le_fd9_jusqu_a_la_detection(
         "MYIRO-1 (USB), en attente"
     );
     // Fermé juste après la connexion : repos supposé, et on le dit.
-    let vue = selection.vue().annonce.unwrap();
+    let vue = premiere_annonce(&selection);
     assert_eq!(vue.code, "ferme_repos_suppose");
     assert!(!vue.alerte);
+    assert_eq!(vue.detail, Some("choix.detail.repos_suppose"));
+    sans_sortie_brute(&detail(&vue, Langue::Anglais));
     assert_eq!(
         annonce(&selection, Langue::Francais),
         "Le MYIRO-1 a été fermé. Aucune mesure n’était en cours\u{202f}: il devrait être au repos."
@@ -354,7 +381,7 @@ fn revenir_au_myiro1_ferme_le_fd9_et_redemande_l_etalonnage() {
         selection.instrument().etat(),
         Etat::EtalonnageRequis(_)
     ));
-    assert_eq!(selection.vue().annonce.unwrap().code, "ferme");
+    assert_eq!(premiere_annonce(&selection).code, "ferme");
     assert_eq!(
         annonce(&selection, Langue::Anglais),
         "The FD-9 has been closed."
@@ -387,10 +414,13 @@ fn une_fermeture_incertaine_est_rapportee_en_alerte() {
     });
     let mut selection = lancer(&mut poste, None);
     changer(&mut selection, &mut poste, Modele::Fd9).unwrap();
-    let vue = selection.vue().annonce.unwrap();
+    let vue = premiere_annonce(&selection);
     assert_eq!(vue.code, "ferme_incertain");
     assert!(vue.alerte);
-    assert!(vue.detail.unwrap().contains("ReposNonSignale"));
+    assert_eq!(vue.detail, Some("choix.detail.repos_non_signale"));
+    for langue in [Langue::Francais, Langue::Anglais] {
+        sans_sortie_brute(&detail(&vue, langue));
+    }
     assert!(annonce(&selection, Langue::Francais).contains("débranchez-le puis rebranchez-le"));
     // Le FD-9 est ouvert quand même : le pont du MYIRO-1 est arrêté.
     assert_eq!(selection.actif(), Modele::Fd9);
@@ -398,7 +428,7 @@ fn une_fermeture_incertaine_est_rapportee_en_alerte() {
 
 #[test]
 fn une_deconnexion_refusee_ou_un_pont_muet_sont_rapportes_sans_bloquer_le_changement() {
-    for (nom, fermeture) in [
+    for (nom, fermeture, cle) in [
         (
             "deconnexion",
             Ok(Reponse::Erreur {
@@ -407,21 +437,30 @@ fn une_deconnexion_refusee_ou_un_pont_muet_sont_rapportes_sans_bloquer_le_change
                     remise_au_repos: RemiseAuRepos::AuRepos {},
                 },
             }),
+            "choix.detail.deconnexion_refusee",
         ),
         (
             "muet",
             Err(Panne::SansReponse {
                 detail: "aucune réponse ; pont arrêté de force".into(),
             }),
+            "choix.detail.pont_muet",
         ),
     ] {
         let mut poste = Poste::deux_instruments(nom);
         poste.fermeture_myiro1 = fermeture;
         let mut selection = lancer(&mut poste, None);
         changer(&mut selection, &mut poste, Modele::Fd9).unwrap();
-        let vue = selection.vue().annonce.unwrap();
+        let vue = premiere_annonce(&selection);
         assert_eq!(vue.code, "ferme_echec", "{nom}");
-        assert!(vue.alerte && vue.detail.is_some(), "{nom}");
+        assert!(vue.alerte, "{nom}");
+        assert_eq!(vue.detail, Some(cle), "{nom}");
+        for langue in [Langue::Francais, Langue::Anglais] {
+            sans_sortie_brute(&detail(&vue, langue));
+        }
+        if nom == "deconnexion" {
+            assert!(detail(&vue, Langue::Francais).contains("-1"));
+        }
         assert_eq!(selection.actif(), Modele::Fd9, "{nom}");
     }
 }
@@ -443,7 +482,7 @@ fn un_fd9_choisi_mais_eteint_montre_son_probleme_et_reste_choisi() {
         "FD-9 (réseau), non trouvé"
     );
     // Le MYIRO-1 a bien été fermé : aucun pont ne reste ouvert à côté.
-    assert_eq!(selection.vue().annonce.unwrap().code, "ferme_repos_suppose");
+    assert_eq!(premiere_annonce(&selection).code, "ferme_repos_suppose");
 }
 
 #[test]
@@ -485,6 +524,53 @@ fn le_choix_est_retenu_dans_un_fichier_et_relu() {
     assert_eq!(lire_choix(&fichier), Some(Modele::Myiro1));
     std::fs::write(&fichier, "autre chose").unwrap();
     assert_eq!(lire_choix(&fichier), None);
+    // Un fichier réécrit à la main par un éditeur qui ajoute une marque d'ordre
+    // des octets (BOM) reste lisible.
+    std::fs::write(&fichier, "\u{feff}fd9\r\n").unwrap();
+    assert_eq!(lire_choix(&fichier), Some(Modele::Fd9));
+}
+
+#[test]
+fn le_choix_est_ecrit_d_un_coup_sans_laisser_de_fichier_temporaire() {
+    let dossier = dossier_vide("ecriture-sure");
+    let fichier = dossier.join("instrument.txt");
+    std::fs::write(&fichier, "myiro1").unwrap();
+    retenir_choix(&fichier, Modele::Fd9).unwrap();
+    assert_eq!(lire_choix(&fichier), Some(Modele::Fd9));
+    let restes: Vec<_> = std::fs::read_dir(&dossier)
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(restes, vec![std::ffi::OsString::from("instrument.txt")]);
+}
+
+#[test]
+fn un_choix_qui_ne_peut_pas_etre_retenu_est_signale_et_vaut_pour_la_seance() {
+    let mut poste = Poste::deux_instruments("non-retenu");
+    let mut selection = lancer(&mut poste, None);
+    changer(&mut selection, &mut poste, Modele::Fd9).unwrap();
+    // Un dossier à la place du fichier : l'écriture échoue.
+    let impossible = dossier_vide("non-retenu-fichier");
+    selection.retenir(&impossible);
+    assert_eq!(selection.choisi(), Some(Modele::Fd9));
+    assert_eq!(selection.actif(), Modele::Fd9);
+    let vue = selection.vue();
+    let codes: Vec<_> = vue.annonces.iter().map(|a| a.code).collect();
+    assert_eq!(codes, vec!["ferme_repos_suppose", "choix_non_retenu"]);
+    let a = &vue.annonces[1];
+    assert!(!a.alerte, "avis simple");
+    assert_eq!(
+        texte(Langue::Francais, "choix.annonce.choix_non_retenu").replace("{modele}", &a.modele),
+        "Le FD-9 reste en service, mais ce choix n’a pas pu être gardé pour le prochain lancement."
+    );
+
+    // Retenu sans erreur : rien à dire de plus.
+    let fichier = dossier_vide("retenu-fichier").join("instrument.txt");
+    changer(&mut selection, &mut poste, Modele::Myiro1).unwrap();
+    selection.retenir(&fichier);
+    assert_eq!(lire_choix(&fichier), Some(Modele::Myiro1));
+    assert_eq!(premiere_annonce(&selection).code, "ferme");
+    assert_eq!(selection.vue().annonces.len(), 1);
 }
 
 #[test]
@@ -493,7 +579,7 @@ fn au_lancement_le_choix_retenu_est_ouvert_seul() {
     let selection = lancer(&mut poste, Some(Modele::Fd9));
     assert_eq!(selection.actif(), Modele::Fd9);
     assert!(poste.requetes().iter().all(|(nom, _)| *nom == "fd9"));
-    assert_eq!(selection.vue().annonce, None);
+    assert_eq!(selection.vue().annonces, vec![]);
     assert!(!selection.vue().montrer_liste);
 }
 
@@ -511,7 +597,7 @@ fn sans_choix_retenu_l_instrument_present_est_pris_et_on_le_dit() {
 
     let mut seul = Poste::myiro1_seul("sans-choix-seul");
     let selection = lancer(&mut seul, None);
-    assert_eq!(selection.vue().annonce.unwrap().code, "sans_choix");
+    assert_eq!(premiere_annonce(&selection).code, "sans_choix");
     assert!(!selection.vue().montrer_liste, "rien d'autre à choisir");
 }
 
@@ -549,7 +635,7 @@ fn un_choix_retenu_introuvable_sans_autre_instrument_garde_son_probleme() {
         selection.vue().instrument.probleme.unwrap().code,
         "aucun_fd9"
     );
-    assert_eq!(selection.vue().annonce, None);
+    assert_eq!(selection.vue().annonces, vec![]);
 }
 
 // ---- Une seule opération à la fois ----
@@ -607,9 +693,24 @@ fn chaque_refus_et_chaque_annonce_ont_leur_texte_en_francais_et_en_anglais() {
         "ferme_repos_suppose",
         "ferme_incertain",
         "ferme_echec",
+        "choix_non_retenu",
     ] {
         attendues.push(format!("choix.annonce.{code}"));
     }
+    for code in [
+        "repos_suppose",
+        "repos_non_signale",
+        "arret_refuse",
+        "liaison_perdue",
+        "deconnexion_refusee",
+        "fermeture_refusee",
+        "pont_muet",
+        "reponse_inattendue",
+    ] {
+        attendues.push(format!("choix.detail.{code}"));
+    }
+    attendues.push("refus.autre".into());
+    attendues.push("choix.compris".into());
     for etat in [
         "non_detecte",
         "detecte",
