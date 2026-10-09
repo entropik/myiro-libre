@@ -23,3 +23,9 @@ Les mesures, conditions d'impression, références, profils et linéarisations s
 - Une mesure peut porter un nom, donné par l'utilisateur dans la tâche Mesurer (« Couleur 1 » par défaut) et modifiable. Il est enregistré avec la mesure, à côté de son format versionné, qui ne change pas : le nom n'est pas une donnée du pont. Espaces de début et de fin retirés ; un nom vide est refusé ; deux mesures peuvent porter le même nom.
 - Organisation 2 de la base : une colonne `nom` ajoutée à la table des mesures. Rien n'est réécrit ni effacé ; les mesures déjà enregistrées restent sans nom, et une mesure enregistrée sans nom (bande, import) n'en reçoit pas d'office. Un test relit sans perte une base de l'organisation 1.
 - La colonne de gauche montre le nom devant la date ; la recherche porte aussi sur le nom de la mesure.
+
+## Complément du 9 octobre 2026 : export, import et sauvegarde (ticket #9)
+
+- Export CGATS.17 de toute mesure, depuis la section « Export et sauvegarde » de la tâche Bibliothèque : un seul menu, formats nommés par usage (« Pour un logiciel de profilage (CGATS) », « Pour garder ou changer de poste (sauvegarde) »), sélecteur de fichier de Windows. Format et écarts avec l'export du fabricant : [`docs/formats/cgats.md`](../formats/cgats.md).
+- Import CGATS : le fichier est lu en **mesure importée**, distincte d'une mesure attestée par un pont ; ce qu'il ne donne pas, spectre compris, reste inconnu. Pour l'instant l'écran en montre le résumé ; la ranger dans la bibliothèque reste à faire (elle demandera une évolution de la base).
+- Sauvegarde complète : copie de la base en un seul fichier SQLite. La restauration remplace toute la bibliothèque après accord de l'opérateur, et seulement si la sauvegarde a été examinée sans défaut (organisation connue, liens cohérents, chaque mesure relisible).

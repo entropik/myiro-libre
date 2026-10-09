@@ -139,6 +139,10 @@ _Éviter_ : métadonnées, contexte
 Forme écrite d'une mesure, identique dans le protocole et dans la bibliothèque, désignée par un nom versionné (`myiro-libre/mesure/1`). Une version non prise en charge est refusée en clair. Le **format initial** est celui du pont 0.1.0, sans numéro : il se relit sans réécrire les archives, ses faits non démontrables restant inconnus. Description : `docs/formats/mesure.md`.
 _Éviter_ : schéma, export (réservé à CGATS)
 
+**Mesure importée** :
+Mesure lue dans un fichier CGATS.17 (écrit par myiro-libre ou par un autre logiciel), et non produite par un pont : ce qu'elle dit vient du fichier, pas d'une provenance attestée. Ce que le fichier ne donne pas, spectre compris, reste inconnu. Description : `docs/formats/cgats.md`.
+_Éviter_ : mesure externe, mesure chargée
+
 **Conditions demandées / observées** :
 Les conditions de calcul que le pont a demandées à la DLL, et celles relues sur l'instrument par un appel vérifié. Les deux sont conservées séparément ; tant que rien n'est relu, les conditions observées sont inconnues.
 _Éviter_ : conditions réelles, paramètres
@@ -198,6 +202,10 @@ _Éviter_ : onglet, module, mode
 **Bibliothèque** :
 Base unique sur le poste, pour un utilisateur, où sont rangées les conditions d'impression et leurs mesures, chacune rattachée à l'instrument qui l'a produite (ADR 0001). Elle conserve les mesures telles que le pont les a données, sans rien recalculer. La colonne de gauche de l'application en montre l'arborescence.
 _Éviter_ : base de données (au sens technique), dossier de mesures, catalogue
+
+**Sauvegarde** :
+Copie complète de la bibliothèque en un seul fichier, à garder en lieu sûr ou à restaurer sur un autre poste. La restaurer remplace toute la bibliothèque, après accord de l'opérateur.
+_Éviter_ : backup, archive (réservé à `Archivage/`), export (réservé à CGATS)
 
 **État vide** :
 Ce qu'affiche une tâche qui n'a encore rien à montrer : une phrase et une seule action (« Aucune mesure. Mesurer une couleur »).
