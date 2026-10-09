@@ -19,7 +19,10 @@ use std::sync::{mpsc, Mutex};
 use instrument::choix::{self, Modele, Occupation, Operation, Ouverture, Selection, VueSelection};
 use instrument::parefeu::{AutorisationPareFeu, PareFeuWindows};
 use instrument::{emplacements_a_essayer, fd9, Accord, Geste, Gestes};
-use mesurer::{choisir_condition, FicheMesure, FicheReference, RefusMesure, Seance};
+use mesurer::{
+    choisir_condition, ecrire_declenchement, lire_declenchement, retenir_declenchement,
+    FicheMesure, FicheReference, RefusMesure, Seance,
+};
 use pont::Panne;
 use pont::{chercher_ponts, chercher_ponts_nommes, PontProcessus};
 use pont_protocole::Palier;
@@ -377,8 +380,71 @@ fn langue(code: &str) -> Langue {
     Langue::depuis_code(code).unwrap_or(Langue::Francais)
 }
 
+/// Fichier où le choix « Mesure : automatique / manuelle » est retenu.
+const FICHIER_DECLENCHEMENT: &str = "mode-mesure.txt";
+
+fn fichier_declenchement(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join(FICHIER_DECLENCHEMENT))
+}
+
+/// Choix « Mesure » retenu la fois précédente (automatique s'il n'y en a
+/// pas), appliqué à la séance et rendu à la page.
+#[tauri::command]
+fn mode_mesure(app: AppHandle, seance: State<'_, SeanceMesures>) -> &'static str {
+    let texte = fichier_declenchement(&app).and_then(|f| std::fs::read_to_string(f).ok());
+    let declenchement = lire_declenchement(texte.as_deref());
+    let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
+    seance.choisir_declenchement(declenchement);
+    ecrire_declenchement(declenchement)
+}
+
+/// Choix « Mesure » appliqué, et s'il a pu être retenu pour la fois suivante.
+#[derive(serde::Serialize)]
+struct ChoixMesure {
+    mode: &'static str,
+    retenu: bool,
+}
+
+/// Retient le choix « Mesure » de l'opérateur pour cette séance et les
+/// suivantes ; si l'écriture échoue, le choix vaut pour la séance et la page
+/// le dit.
+#[tauri::command]
+fn choisir_mode_mesure(
+    app: AppHandle,
+    seance: State<'_, SeanceMesures>,
+    mode: &str,
+) -> ChoixMesure {
+    let declenchement = lire_declenchement(Some(mode));
+    seance
+        .0
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .choisir_declenchement(declenchement);
+    let retenu = match fichier_declenchement(&app) {
+        Some(fichier) => match retenir_declenchement(&fichier, declenchement) {
+            Ok(()) => true,
+            Err(erreur) => {
+                eprintln!(
+                    "choix « Mesure » non retenu ({}) : {erreur}",
+                    fichier.display()
+                );
+                false
+            }
+        },
+        None => false,
+    };
+    ChoixMesure {
+        mode: ecrire_declenchement(declenchement),
+        retenu,
+    }
+}
+
 /// Mesure ponctuelle : l'écran demande de poser le MYIRO-1 sur la couleur,
-/// le pont attend l'appui sur son bouton, puis la mesure est rangée dans la
+/// le pont déclenche la mesure (automatique) ou attend l'appui sur son
+/// bouton (manuelle), puis la mesure est rangée dans la
 /// condition d'impression `condition`. Les refus sont des clés du catalogue.
 #[tauri::command(async)]
 fn mesurer(
@@ -513,6 +579,8 @@ pub fn lancer() {
         .manage(GesteEnAttente::default())
         .invoke_handler(tauri::generate_handler![
             mesurer,
+            mode_mesure,
+            choisir_mode_mesure,
             mesures_seance,
             renommer_mesure,
             ranger_a_nouveau,
@@ -531,6 +599,13 @@ pub fn lancer() {
             colonne::bibliotheque_detail_mesure,
             colonne::bibliotheque_creer_condition,
             colonne::bibliotheque_renommer_condition,
+            colonne::bibliotheque_exporter_cgats,
+            colonne::bibliotheque_sauvegarder,
+            colonne::bibliotheque_restaurer,
+            colonne::bibliotheque_apercu_cgats,
+            colonne::bibliotheque_ranger_import,
+            colonne::bibliotheque_annuler_import,
+            colonne::bibliotheque_detail_importee,
             etalonner,
             repondre_geste
         ])

@@ -27,3 +27,9 @@ Ajout seulement, rien ne change dans l'interface existante : `Seuil` (écart ΔE
 - Proche de la limite : à partir de 80 % du seuil (`PART_PROCHE_DE_LA_LIMITE`). C'est un choix du projet, repris du trait de limite de la jauge du système graphique, et non une valeur de norme : la question des seuils de « proche de la limite » reste ouverte (journal du 7 octobre 2026).
 - Aucun seuil par défaut. La seule limite publique trouvée pour un ton direct (« de l'ordre de ΔE 2,5 », `docs/references/icc-12647-controle.md`) ne précise pas sa formule ; tant qu'elle n'est pas établie en ΔE00, l'utilisateur fixe lui-même l'écart accepté.
 - Côté application (relecture du ticket #8) : le verdict juge exactement l'écart affiché, arrondi par la même fonction que l'écriture à deux décimales, et le seuil saisi passe par le même arrondi (« 1,115 » devient 1,11, valeur binaire 1,1149…). Deux spectres de conditions de mesure différentes (M0 contre M1) ne se comparent pas : l'écran montre l'avertissement, sans écart ni verdict, plutôt qu'un chiffre qui mélangerait la condition de mesure et l'impression.
+
+## Contrat de la crate `cgats` (9 octobre 2026)
+
+- Interface publique : `ecrire` (mesure `myiro-libre/mesure/1` vers CGATS.17, version `myiro-libre/cgats/1`) et `lire` (CGATS.17 de myiro-libre ou d'un autre logiciel vers `MesureImportee`). Description : [`docs/formats/cgats.md`](../formats/cgats.md).
+- Une donnée absente du fichier reste `Inconnue` ; une condition de mesure déduite de la source lumineuse du fabricant est `Supposee` ; un fichier sans condition de mesure reconnaissable est refusé. Une mesure écrite puis relue rend exactement ses spectres, ses Lab et sa provenance.
+- Dépend seulement de `pont-protocole` ; contrôlée aussi sur le poste Linux de la CI. Changer le nom ou le sens d'un mot-clé `MYIRO_LIBRE_*` demande un nouveau numéro de format.

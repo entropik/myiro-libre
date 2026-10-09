@@ -12,7 +12,7 @@
 
 use bibliotheque::{Bibliotheque, ConditionImpression, IdMesure};
 use colorimetrie::{Seuil, Verdict};
-use pont_protocole::{ConditionMesure, Echantillonnage, Horodatage, Info, Mesure};
+use pont_protocole::{ConditionMesure, Declenchement, Echantillonnage, Horodatage, Info, Mesure};
 use serde::Serialize;
 
 use crate::instrument::{Gestes, Instrument, MesureAcquise};
@@ -74,10 +74,50 @@ struct ReferenceDeSeance {
 }
 
 /// Les mesures faites depuis le lancement de l'application, dans l'ordre.
-#[derive(Default)]
 pub struct Seance {
     mesures: Vec<MesureDeSeance>,
     reference: Option<ReferenceDeSeance>,
+    /// « Mesure : automatique / manuelle » ; automatique par défaut (ticket #51).
+    declenchement: Declenchement,
+}
+
+impl Default for Seance {
+    fn default() -> Self {
+        Seance {
+            mesures: Vec::new(),
+            reference: None,
+            declenchement: Declenchement::Automatique,
+        }
+    }
+}
+
+/// Choix « Mesure » tel qu'il est retenu d'une fois sur l'autre.
+pub fn ecrire_declenchement(declenchement: Declenchement) -> &'static str {
+    match declenchement {
+        Declenchement::Automatique => "automatique",
+        Declenchement::Manuel => "manuel",
+    }
+}
+
+/// Retient le choix dans `fichier` (dossier créé au besoin). Un échec est
+/// rendu : le choix vaut alors pour la séance seulement, et l'écran le dit.
+pub fn retenir_declenchement(
+    fichier: &std::path::Path,
+    declenchement: Declenchement,
+) -> std::io::Result<()> {
+    if let Some(dossier) = fichier.parent() {
+        std::fs::create_dir_all(dossier)?;
+    }
+    std::fs::write(fichier, ecrire_declenchement(declenchement))
+}
+
+/// Relit le choix retenu ; absent ou illisible, c'est l'automatique,
+/// demandé par le mainteneur le 9 octobre 2026.
+pub fn lire_declenchement(texte: Option<&str>) -> Declenchement {
+    match texte.map(str::trim) {
+        Some("manuel") => Declenchement::Manuel,
+        _ => Declenchement::Automatique,
+    }
 }
 
 /// Là où la couleur de référence et son seuil sont conservés : la
@@ -312,6 +352,16 @@ fn valeurs(spectre: &[f32], langue: Langue) -> Option<Valeurs> {
 }
 
 impl Seance {
+    pub fn declenchement(&self) -> Declenchement {
+        self.declenchement
+    }
+
+    /// En automatique, « Mesurer » fait partir la mesure ; en manuel, c'est
+    /// le bouton de l'instrument.
+    pub fn choisir_declenchement(&mut self, declenchement: Declenchement) {
+        self.declenchement = declenchement;
+    }
+
     /// Mesure ponctuelle, puis rangement dans la condition d'impression
     /// choisie par `ranger`, qui reçoit la mesure et son nom. Rend le numéro
     /// de la nouvelle mesure, ou `None` si rien n'a été mesuré (le module
@@ -324,7 +374,8 @@ impl Seance {
         ranger: impl FnOnce(&Mesure, &str) -> Result<IdMesure, String>,
         langue: Langue,
     ) -> Option<usize> {
-        let acquise: MesureAcquise = instrument.mesurer_ponctuelle(gestes)?;
+        let acquise: MesureAcquise =
+            instrument.mesurer_ponctuelle_avec(gestes, self.declenchement)?;
         Some(self.ajouter(acquise.mesure, condition, ranger, langue))
     }
 

@@ -24,6 +24,11 @@ pub struct SdkSimule {
     pub evenements: VecDeque<Evenement>,
     /// Événements émis à chaque armement réussi, une salve par armement.
     pub salves: VecDeque<Vec<Evenement>>,
+    /// Événements émis à chaque déclenchement accepté, une salve par appel.
+    pub salves_declenchement: VecDeque<Vec<Evenement>>,
+    /// Code négatif : `FDX_StartMeasurement` échoue avec ce code, même en
+    /// attente de mesure (refus de l'instrument, -9793 à -9789, supposé).
+    pub code_declenchement: i32,
     /// Comme le vrai MYIRO-1 : désarmement refusé (-9986) tant que l'instrument
     /// est dans l'état « mesure réussie », jusqu'à son réarmement automatique.
     pub arret_refuse_apres_mesure: bool,
@@ -133,6 +138,23 @@ impl SdkMyiro1 for SdkSimule {
         }
         self.arme = true;
         if let Some(salve) = self.salves.pop_front() {
+            self.evenements.extend(salve);
+        }
+        Ok(0)
+    }
+    /// Comme la DLL (fiche `FDX_StartMeasurement`, confirmé par lecture
+    /// statique) : refus -9986 hors de l'attente de mesure, c'est-à-dire si
+    /// rien n'est armé ou si le dernier événement n'est pas 1. Que le vrai
+    /// MYIRO-1 accepte ensuite le déclenchement en réflexion est SUPPOSÉ.
+    fn declencher(&mut self) -> Result<i32, i32> {
+        self.appels.push("declencher".into());
+        if !self.arme || self.dernier_evenement != Some(1) {
+            return Err(-9986);
+        }
+        if self.code_declenchement < 0 {
+            return Err(self.code_declenchement);
+        }
+        if let Some(salve) = self.salves_declenchement.pop_front() {
             self.evenements.extend(salve);
         }
         Ok(0)

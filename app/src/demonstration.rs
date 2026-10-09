@@ -161,7 +161,35 @@ pub fn remplir(biblio: &Bibliotheque) -> Result<(), ErreurBibliotheque> {
         offset.id,
         &ponctuelle(&CYAN, "2026-10-07T14:06:10+02:00", etalonnage),
     )?;
+    // Mesure importée d'un fichier CGATS fictif de 36 plages, comme une mire
+    // de comparaison : Lab seuls, en M1 d'après la source lumineuse, sans
+    // date ; ses spectres restent inconnus.
+    biblio.importer_mesure(jet.id, "releve-lab.txt", &cgats_lab_seul())?;
     Ok(())
+}
+
+/// Fichier CGATS fictif : 36 plages réparties sur un cercle de teintes, à
+/// trois clartés. Aucune valeur ne vient d'une mesure réelle.
+fn cgats_lab_seul() -> String {
+    let mut texte = String::from(
+        "CGATS.17\r\nORIGINATOR\t\"Logiciel fictif\"\r\nCREATED\t\"\"\r\n\
+         INSTRUMENTATION\t\"FD-9\"\r\nSERIAL\t\"12345678\"\r\n\
+         MEASUREMENT_SOURCE\t\"D50\"\r\nNUMBER_OF_FIELDS\t4\r\n\
+         BEGIN_DATA_FORMAT\r\nSAMPLE_ID\tLAB_L\tLAB_A\tLAB_B\r\nEND_DATA_FORMAT\r\n\
+         NUMBER_OF_SETS\t36\r\nBEGIN_DATA\r\n",
+    );
+    for i in 0..36 {
+        let teinte = f64::from(i) * 30.0_f64.to_radians();
+        let clarte = [80.0, 60.0, 40.0][(i / 12) as usize];
+        texte.push_str(&format!(
+            "{}\t{clarte:.2}\t{:.2}\t{:.2}\r\n",
+            i + 1,
+            45.0 * teinte.cos(),
+            45.0 * teinte.sin()
+        ));
+    }
+    texte.push_str("END_DATA\r\n");
+    texte
 }
 
 // ---- Séance de démonstration de la tâche Mesurer (ticket #8) ----
