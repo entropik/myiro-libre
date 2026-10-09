@@ -69,8 +69,113 @@ function afficherTache(tache) {
 
 // ---- Instrument : l'état vient du module Rust `instrument`, la page ne fait qu'afficher ----
 let vueInstrument = null; // dernier état rendu par le module `instrument`
+let vuePoste = null; // instruments du poste, actif, annonce (module `instrument`, ticket #49)
+let listeOuverte = false; // la liste des instruments remplace la feuille
+let refusChoix = null; // clé du catalogue du dernier refus
 let occupe = true; // recherche de l'instrument en cours
+// Étalonnage ou mesure en cours (« etalonnage », « mesure ») : l'instrument attend
+// un geste, la liste des instruments ne doit pas cacher son écran.
+let operationEnCours = null;
 const TACHES_SANS_INSTRUMENT = ["bibliotheque"];
+
+// Reçoit la vue du module : l'instrument actif et la liste du poste.
+function recevoir(poste) {
+  if (!poste) return;
+  vuePoste = poste;
+  vueInstrument = poste.instrument;
+  if (poste.montrer_liste) listeOuverte = true;
+}
+
+// Liste des instruments : une ligne par instrument présent, « Utiliser » sur les autres.
+function remplirListe(section) {
+  const lignes = section.querySelector("[data-choix-lignes]");
+  lignes.replaceChildren();
+  for (const l of vuePoste ? vuePoste.instruments : []) {
+    const li = document.createElement("li");
+    li.classList.toggle("sel", l.actif);
+    const etat = document.createElement("span");
+    etat.className = "state " + (l.actif && vueInstrument && vueInstrument.pret ? "state--ok" : "state--warn");
+    etat.append(document.createElement("i"));
+    const texte = document.createElement("span");
+    texte.textContent = textes["choix.ligne"]
+      .replace("{modele}", l.modele)
+      .replace("{liaison}", textes["choix.liaison." + l.liaison])
+      .replace("{etat}", textes["choix.etat." + l.etat]);
+    etat.append(texte);
+    li.append(etat);
+    if (l.actif) {
+      const actif = document.createElement("span");
+      actif.className = "label label--ink";
+      actif.textContent = textes["choix.en_service"];
+      li.append(actif);
+    } else {
+      const b = document.createElement("button");
+      b.className = "btn";
+      b.dataset.choixCode = l.code;
+      b.textContent = textes["choix.utiliser"];
+      b.disabled = occupe;
+      li.append(b);
+    }
+    lignes.append(li);
+  }
+  remplirAnnonces(section.querySelector("[data-choix-annonce]"));
+  // Vues dans la liste : l'avis de la feuille ne les répète pas.
+  annoncesLues = signatureAnnonces();
+  const refus = section.querySelector("[data-choix-refus]");
+  refus.hidden = !refusChoix;
+  refus.textContent = refusChoix ? textes[refusChoix] || textes["refus.autre"] : "";
+  const details = annonces()
+    .filter((a) => a.detail)
+    .map((a) => textes[a.detail].replace("{code}", a.code_instrument === null ? "" : String(a.code_instrument)))
+    .join("\n");
+  section.querySelector("[data-choix-details]").hidden = !details;
+  section.querySelector("[data-choix-details-texte]").textContent = details;
+}
+
+// Annonces du module (instrument pris, fermé, choix non gardé) : une phrase chacune.
+let annoncesLues = "";
+function annonces() {
+  return vuePoste ? vuePoste.annonces : [];
+}
+function signatureAnnonces() {
+  return JSON.stringify(annonces());
+}
+function remplirAnnonces(avis) {
+  const liste = annonces();
+  avis.hidden = liste.length === 0;
+  avis.classList.toggle("notice--warn", liste.some((a) => a.alerte));
+  const textesAvis = avis.querySelector("[data-annonce-textes]");
+  textesAvis.replaceChildren(
+    ...liste.map((a) => {
+      const p = document.createElement("p");
+      p.textContent = textes["choix.annonce." + a.code].replace("{modele}", a.modele).replace("{autre}", a.autre || "");
+      return p;
+    }),
+  );
+}
+
+// Sur la feuille, une annonce pas encore vue reste affichée jusqu'à « Compris » ou
+// l'ouverture de la liste : l'opérateur la voit même sans ouvrir la liste.
+function afficherAnnonceFeuille() {
+  const avis = document.querySelector("[data-annonce-feuille]");
+  remplirAnnonces(avis);
+  if (listeOuverte || signatureAnnonces() === annoncesLues) avis.hidden = true;
+}
+
+// Choix d'un autre instrument : le module ferme le pont en cours, ouvre l'autre, ou refuse.
+async function choisirInstrument(code) {
+  occupe = true;
+  refusChoix = null;
+  afficherInstrument();
+  try {
+    recevoir(await invoke("choisir_instrument", { code }));
+  } catch (cle) {
+    refusChoix = String(cle);
+  }
+  occupe = false;
+  listeOuverte = true;
+  afficherInstrument();
+}
 
 // L'écran d'étalonnage ne s'ouvre que sur demande de l'opérateur (bouton « Étalonner »).
 // Un problème de mesure s'affiche sur la feuille Mesurer elle-même (mesurer.js).
@@ -83,6 +188,14 @@ function ecranInstrument() {
 // L'étalonnage en cours l'emporte : l'opérateur l'a demandé.
 function afficherFeuille() {
   const tache = tacheCourante();
+  const liste = document.querySelector("[data-liste-instruments]");
+  liste.hidden = !listeOuverte;
+  afficherAnnonceFeuille();
+  if (listeOuverte) {
+    remplirListe(liste);
+    for (const v of document.querySelectorAll("[data-vue], [data-ecran]")) v.hidden = true;
+    return;
+  }
   const ecran = phaseEtalonnage
     ? "etalonnage"
     : TACHES_SANS_INSTRUMENT.includes(tache)
@@ -149,6 +262,13 @@ function afficherInstrument() {
   const pret = Boolean(vue && vue.pret);
   barre.classList.toggle("state--ok", pret);
   barre.classList.toggle("state--warn", !pret);
+  // La liste s'ouvre dès qu'il y a un instrument à montrer ; jamais pendant une
+  // recherche, un étalonnage ou une mesure : la raison est donnée au survol.
+  const operation = operationEnCours || (occupe ? "recherche" : null);
+  if (operationEnCours) listeOuverte = false;
+  barre.disabled = Boolean(operation) || !(vuePoste && vuePoste.instruments.length);
+  barre.title = operation ? textes["refus.occupe." + operation] : "";
+  barre.setAttribute("aria-expanded", String(listeOuverte));
   for (const b of document.querySelectorAll("[data-action]")) b.disabled = occupe;
   // « Étalonner » à côté de l'état, tant que l'étalonnage est requis et pas déjà ouvert.
   const etalonner = document.querySelector("[data-etalonner]");
@@ -200,13 +320,15 @@ async function lancerEtalonnage(dejaFait) {
   appelEnCours = true;
   gesteDejaFait = dejaFait;
   phaseEtalonnage = dejaFait ? "en_cours" : "geste";
+  operationEnCours = "etalonnage";
   afficherInstrument();
   try {
-    const vue = await invoke("etalonner");
-    if (vue) vueInstrument = vue;
-  } catch (erreur) {
-    console.error("etalonner", erreur);
+    recevoir(await invoke("etalonner"));
+  } catch (cle) {
+    // Refusé : une autre opération est en cours (clé du catalogue).
+    refusChoix = String(cle);
   }
+  operationEnCours = null;
   appelEnCours = false;
   gesteEnAttente = false;
   gesteDejaFait = false;
@@ -255,10 +377,10 @@ async function interrogerInstrument(commande) {
   occupe = true;
   afficherInstrument();
   try {
-    const vue = await invoke(commande);
-    if (vue) vueInstrument = vue;
-  } catch (erreur) {
-    console.error(commande, erreur);
+    recevoir(await invoke(commande));
+  } catch (cle) {
+    // Refusé : une autre opération est en cours (clé du catalogue).
+    refusChoix = String(cle);
   }
   occupe = false;
   afficherInstrument();
@@ -268,7 +390,20 @@ async function interrogerInstrument(commande) {
 document.addEventListener("click", (e) => {
   const cible = e.target.closest("button");
   if (!cible) return;
-  if (cible.dataset.tache) afficherTache(cible.dataset.tache);
+  if (cible.dataset.tache) {
+    listeOuverte = false;
+    afficherTache(cible.dataset.tache);
+  }
+  if (cible.hasAttribute("data-instrument") || cible.hasAttribute("data-choix-fermer")) {
+    listeOuverte = cible.hasAttribute("data-instrument") ? !listeOuverte : false;
+    refusChoix = null;
+    afficherInstrument();
+  }
+  if (cible.dataset.choixCode) choisirInstrument(cible.dataset.choixCode);
+  if (cible.hasAttribute("data-annonce-compris")) {
+    annoncesLues = signatureAnnonces();
+    afficherFeuille();
+  }
   if (cible.dataset.themeChoix) {
     appliquerTheme(cible.dataset.themeChoix);
     memoire("theme", cible.dataset.themeChoix);

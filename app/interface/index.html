@@ -23,7 +23,8 @@
     <button data-tache="bibliotheque"><span class="label num">04</span><span data-t="tache.bibliotheque"></span></button>
   </nav>
   <div class="c-8-12 masthead__tools">
-    <span class="state state--warn" data-t-aria="instrument.libelle" data-instrument role="status"><i></i><span data-instrument-texte></span></span>
+    <!-- L’instrument actif et son état ; un clic ouvre la liste des instruments du poste (ticket #49). -->
+    <button class="state state--warn" data-instrument data-t-aria="choix.libelle" aria-expanded="false" aria-controls="liste-instruments" disabled><i></i><span data-instrument-texte role="status"></span></button>
     <button class="btn" data-etalonner data-t="instrument.etalonner" hidden></button>
     <div class="seg" role="group" data-t-aria="theme.libelle">
       <button data-theme-choix="light" data-t="theme.clair"></button><button data-theme-choix="dark" data-t="theme.sombre"></button>
@@ -55,6 +56,18 @@
 
   <div class="c-3-9">
     <div class="sheet-head"><span class="label label--ink" data-tache-courante></span><span class="label num" data-t="feuille.numero"></span></div>
+    <!-- Annonce du module `instrument` pas encore vue (instrument pris, fermé, choix non gardé). -->
+    <div class="notice" data-annonce-feuille role="status" hidden><div data-annonce-textes></div><p><button class="btn" data-annonce-compris data-t="choix.compris"></button></p></div>
+    <!-- Liste des instruments du poste : elle remplace la feuille, sans fenêtre empilée. Lignes, annonce et refus viennent du module `instrument`. -->
+    <section id="liste-instruments" data-liste-instruments hidden>
+      <h2 class="empty__text" data-t="choix.titre"></h2>
+      <p class="prose" data-t="choix.aide"></p>
+      <ol class="instruments" data-choix-lignes></ol>
+      <div class="notice" data-choix-annonce hidden><div data-annonce-textes></div></div>
+      <p class="why" data-choix-refus hidden></p>
+      <div class="actions"><button class="btn" data-choix-fermer data-t="choix.fermer"></button></div>
+      <details class="replie" data-choix-details hidden><summary data-t="ecran.details"></summary><pre data-choix-details-texte></pre></details>
+    </section>
     <!-- Écrans de l’instrument : ils remplacent la feuille des tâches qui en ont besoin. -->
     <section data-ecran="non_detecte" hidden>
       <h2 class="empty__text" data-t="ecran.non_detecte.titre"></h2>

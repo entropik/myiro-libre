@@ -13,21 +13,29 @@ pub mod pont;
 pub mod textes;
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Mutex};
 
+use instrument::choix::{self, Modele, Occupation, Operation, Ouverture, Selection, VueSelection};
 use instrument::parefeu::{AutorisationPareFeu, PareFeuWindows};
-use instrument::{choix, emplacements_a_essayer, fd9, Accord, Geste, Gestes, Instrument, Vue};
+use instrument::{emplacements_a_essayer, fd9, Accord, Geste, Gestes};
 use mesurer::{choisir_condition, FicheMesure, RefusMesure, Seance};
+use pont::Panne;
 use pont::{chercher_ponts, chercher_ponts_nommes, PontProcessus};
+use pont_protocole::Palier;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use textes::Langue;
 
-/// Instrument ouvert par l'application, s'il y en a un. Le remplacer ferme
-/// l'ancien pont.
+/// Instrument actif parmi ceux du poste, une fois cherché. Un seul pont est
+/// ouvert à la fois : la sélection ferme l'ancien avant d'ouvrir l'autre.
 #[derive(Default)]
-struct Instruments(Mutex<Option<Instrument<PontProcessus>>>);
+struct Instruments {
+    selection: Mutex<Option<Selection<PontProcessus>>>,
+    /// Opération en cours sur l'instrument : une demande pendant une autre
+    /// est refusée avec sa raison (module `instrument`), sans attendre sa fin.
+    occupation: Occupation,
+}
 
 /// Règle du pare-feu pour le FD-9 : demandée d'elle-même une seule fois
 /// pendant l'utilisation de l'application (ticket #47).
@@ -43,6 +51,9 @@ impl Default for PareFeuFd9 {
 
 /// Fichier où la DLL du fabricant trouvée est retenue pour la fois suivante.
 const FICHIER_SDK: &str = "emplacement-sdk.txt";
+
+/// Fichier où le dernier instrument choisi est retenu (ticket #49).
+const FICHIER_CHOIX: &str = "instrument-choisi.txt";
 
 /// Textes de l'interface dans une langue, pour la page web.
 #[tauri::command]
@@ -68,6 +79,13 @@ fn fichier_sdk(app: &AppHandle) -> Option<PathBuf> {
         .app_config_dir()
         .ok()
         .map(|d| d.join(FICHIER_SDK))
+}
+
+fn fichier_choix(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join(FICHIER_CHOIX))
 }
 
 /// DLL du fabricant retenue lors d'une utilisation précédente.
@@ -99,11 +117,17 @@ fn fenetre_principale(app: &AppHandle) -> isize {
     0
 }
 
-/// Ferme l'instrument en cours, puis en ouvre un nouveau, en essayant les
-/// emplacements dans l'ordre de `emplacements_a_essayer`.
-fn ouvrir(app: &AppHandle, instruments: &Instruments, choisi: Option<PathBuf>) -> Vue {
-    let mut courant = instruments.0.lock().unwrap_or_else(|e| e.into_inner());
-    *courant = None;
+/// Lancement d'un pont, tel que le module `instrument` le demande.
+type Lanceur = fn(&Path, &Path, Palier) -> Result<PontProcessus, Panne>;
+
+/// Prépare ce dont le module `instrument` a besoin pour ouvrir un instrument
+/// (emplacements des logiciels, ponts, pare-feu), puis lui confie `faire`.
+/// `dossier` : le dossier choisi par l'opérateur, essayé en premier.
+fn avec_ouverture<R>(
+    app: &AppHandle,
+    dossier: Option<PathBuf>,
+    faire: impl FnOnce(&mut Ouverture<'_, Lanceur, PareFeuWindows>) -> R,
+) -> R {
     let pare_feu = app.state::<PareFeuFd9>();
     let mut autorisation = pare_feu.0.lock().unwrap_or_else(|e| e.into_inner());
     // La fenêtre de contrôle de compte s'ouvre au premier plan, sur celle de
@@ -116,35 +140,66 @@ fn ouvrir(app: &AppHandle, instruments: &Instruments, choisi: Option<PathBuf>) -
     // Les ressources du paquet (DLL embarquées) sont installées à côté de
     // l'exécutable sous Windows.
     let dossier_app = app.path().resource_dir().unwrap_or(dossier_exe.clone());
-    let emplacements = emplacements_a_essayer(&dossier_app, sdk_retenu(app), choisi.clone());
+    let emplacements = emplacements_a_essayer(&dossier_app, sdk_retenu(app), dossier.clone());
     let ponts = chercher_ponts(&dossier_exe);
-    // MYIRO-1 d'abord ; sans lui, un FD-9 détecté (ticket #13).
-    let emplacements_fd9 = fd9::emplacements_fd9(choisi);
+    let emplacements_fd9 = fd9::emplacements_fd9(dossier);
     let ponts_fd9 = chercher_ponts_nommes(&dossier_exe, fd9::NOM_PONT_FD9);
-    let instrument = choix::ouvrir_l_un_ou_l_autre(
-        choix::Recherche {
+    faire(&mut Ouverture {
+        myiro1: choix::Recherche {
             emplacements: &emplacements,
             ponts: &ponts,
         },
-        choix::Recherche {
+        fd9: choix::Recherche {
             emplacements: &emplacements_fd9,
             ponts: &ponts_fd9,
         },
-        PontProcessus::lancer,
-        &mut autorisation,
-    );
-    if let Some(dll) = instrument.sdk() {
+        lancer: PontProcessus::lancer as Lanceur,
+        pare_feu: &mut autorisation,
+    })
+}
+
+/// Vue de la sélection, après avoir retenu la DLL du MYIRO-1 trouvée.
+fn vue_retenue(app: &AppHandle, selection: &Selection<PontProcessus>) -> VueSelection {
+    if let Some(dll) = selection.instrument().sdk() {
         retenir_sdk(app, dll);
     }
-    let vue = instrument.vue();
-    *courant = Some(instrument);
-    vue
+    selection.vue()
+}
+
+/// Au lancement, ouvre l'instrument choisi la fois précédente (ou celui qui
+/// est trouvé) ; ensuite (« Réessayer », dossier choisi, pare-feu), rouvre
+/// l'instrument actif. Refusé pendant une autre opération.
+fn ouvrir(
+    app: &AppHandle,
+    instruments: &Instruments,
+    dossier: Option<PathBuf>,
+) -> Result<VueSelection, String> {
+    let jeton = instruments
+        .occupation
+        .commencer(Operation::Recherche)
+        .map_err(|refus| refus.cle())?;
+    let mut courant = instruments
+        .selection
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    avec_ouverture(app, dossier, |o| match courant.as_mut() {
+        Some(selection) => selection.rouvrir(&jeton, o),
+        None => {
+            let retenu = fichier_choix(app).and_then(|f| choix::lire_choix(&f));
+            *courant = Some(Selection::lancer(retenu, o));
+        }
+    });
+    let selection = courant.as_ref().expect("sélection ouverte");
+    Ok(vue_retenue(app, selection))
 }
 
 /// Ouvre l'instrument (au lancement, ou « Réessayer »). Hors du fil de la
 /// fenêtre : la connexion peut être longue.
 #[tauri::command(async)]
-fn ouvrir_instrument(app: AppHandle, instruments: State<'_, Instruments>) -> Vue {
+fn ouvrir_instrument(
+    app: AppHandle,
+    instruments: State<'_, Instruments>,
+) -> Result<VueSelection, String> {
     ouvrir(&app, &instruments, None)
 }
 
@@ -155,7 +210,7 @@ fn autoriser_pare_feu_fd9(
     app: AppHandle,
     instruments: State<'_, Instruments>,
     pare_feu: State<'_, PareFeuFd9>,
-) -> Vue {
+) -> Result<VueSelection, String> {
     pare_feu
         .0
         .lock()
@@ -167,10 +222,49 @@ fn autoriser_pare_feu_fd9(
 /// Ouvre le sélecteur de dossier de Windows, puis ouvre l'instrument avec le
 /// dossier choisi. `None` si l'opérateur a annulé.
 #[tauri::command(async)]
-fn choisir_dossier(app: AppHandle, instruments: State<'_, Instruments>) -> Option<Vue> {
-    let dossier = app.dialog().file().blocking_pick_folder()?;
-    let dossier = dossier.into_path().ok()?;
-    Some(ouvrir(&app, &instruments, Some(dossier)))
+fn choisir_dossier(
+    app: AppHandle,
+    instruments: State<'_, Instruments>,
+) -> Result<Option<VueSelection>, String> {
+    let Some(dossier) = app.dialog().file().blocking_pick_folder() else {
+        return Ok(None);
+    };
+    let Ok(dossier) = dossier.into_path() else {
+        return Ok(None);
+    };
+    ouvrir(&app, &instruments, Some(dossier)).map(Some)
+}
+
+/// Liste des instruments : l'opérateur choisit `code` (`myiro1`, `fd9`). Le
+/// pont en cours est fermé, l'autre ouvert, et le choix retenu pour le
+/// lancement suivant. Un refus rend la clé du catalogue qui l'explique.
+#[tauri::command(async)]
+fn choisir_instrument(
+    app: AppHandle,
+    instruments: State<'_, Instruments>,
+    code: &str,
+) -> Result<VueSelection, String> {
+    let vers = Modele::depuis_code(code).ok_or_else(|| "refus.absent".to_string())?;
+    let jeton = instruments
+        .occupation
+        .commencer(Operation::Changement)
+        .map_err(|refus| refus.cle())?;
+    let mut courant = instruments
+        .selection
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let selection = courant
+        .as_mut()
+        .ok_or_else(|| "refus.occupe.recherche".to_string())?;
+    avec_ouverture(&app, None, |o| selection.changer(&jeton, vers, o))
+        .map_err(|refus| refus.cle())?;
+    // Un échec d'écriture est dit à l'opérateur ; le choix vaut pour la séance.
+    match fichier_choix(&app) {
+        Some(fichier) => selection.retenir(&fichier),
+        // Sans dossier de configuration, l'écriture échoue et l'avis le dit.
+        None => selection.retenir(Path::new("")),
+    }
+    Ok(vue_retenue(&app, selection))
 }
 
 /// Ouvre la bibliothèque du poste, ou celle de démonstration avec `--demo`.
@@ -219,21 +313,31 @@ impl Gestes for GestesEcran<'_> {
     }
 }
 
-/// Étalonne l'instrument ouvert : l'écran demande d'abord de le poser sur
-/// son blanc. Rend la nouvelle vue, ou `None` sans instrument ouvert.
+/// Étalonne l'instrument actif : l'écran demande d'abord de le poser sur
+/// son blanc. Rend la nouvelle vue ; refusé (clé du catalogue) pendant une
+/// autre opération ou avant la recherche de l'instrument.
 #[tauri::command(async)]
 fn etalonner(
     app: AppHandle,
     instruments: State<'_, Instruments>,
     attente: State<'_, GesteEnAttente>,
-) -> Option<Vue> {
-    let mut courant = instruments.0.lock().unwrap_or_else(|e| e.into_inner());
-    let instrument = courant.as_mut()?;
-    instrument.etalonner(&mut GestesEcran {
+) -> Result<VueSelection, String> {
+    let _jeton = instruments
+        .occupation
+        .commencer(Operation::Etalonnage)
+        .map_err(|refus| refus.cle())?;
+    let mut courant = instruments
+        .selection
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let selection = courant
+        .as_mut()
+        .ok_or_else(|| "refus.occupe.recherche".to_string())?;
+    selection.instrument_mut().etalonner(&mut GestesEcran {
         app: &app,
         attente: &attente,
     });
-    Some(instrument.vue())
+    Ok(selection.vue())
 }
 
 /// Mesures ponctuelles faites depuis le lancement (tâche Mesurer).
@@ -241,10 +345,11 @@ fn etalonner(
 struct SeanceMesures(Mutex<Seance>);
 
 /// Ce que la feuille Mesurer reçoit : l'état de l'instrument, s'il a pu
-/// changer, et les mesures de la séance, la plus récente d'abord.
+/// changer (avec la liste des instruments du poste), et les mesures de la
+/// séance, la plus récente d'abord.
 #[derive(serde::Serialize)]
 struct EcranMesurer {
-    instrument: Option<Vue>,
+    instrument: Option<VueSelection>,
     mesures: Vec<FicheMesure>,
 }
 
@@ -269,13 +374,21 @@ fn mesurer(
     // Refus avant toute mesure : un code `mesurer.erreur.*` (cause et action).
     let condition = choisir_condition(bibliotheque.conditions(), condition)
         .map_err(|refus| refus.code().to_string())?;
-    let mut courant = instruments.0.lock().unwrap_or_else(|e| e.into_inner());
-    let instrument = courant
+    // Pas de mesure pendant un étalonnage ou un changement d'instrument (#49).
+    let _jeton = instruments
+        .occupation
+        .commencer(Operation::Mesure)
+        .map_err(|refus| refus.cle())?;
+    let mut courant = instruments
+        .selection
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let selection = courant
         .as_mut()
         .ok_or(RefusMesure::SansInstrument.code().to_string())?;
     let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
     seance.mesurer(
-        instrument,
+        selection.instrument_mut(),
         &mut GestesEcran {
             app: &app,
             attente: &attente,
@@ -285,7 +398,7 @@ fn mesurer(
         langue,
     );
     Ok(EcranMesurer {
-        instrument: Some(instrument.vue()),
+        instrument: Some(selection.vue()),
         mesures: seance.fiches(langue),
     })
 }
@@ -363,6 +476,7 @@ pub fn lancer() {
             ouvrir_instrument,
             autoriser_pare_feu_fd9,
             choisir_dossier,
+            choisir_instrument,
             colonne::version_application,
             colonne::bibliotheque_demonstration,
             colonne::bibliotheque_arborescence,

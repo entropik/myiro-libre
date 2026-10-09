@@ -79,6 +79,10 @@ _Éviter_ : DLL fournies, DLL livrées
 Ce que la barre du haut dit de l'instrument, en un mot : non détecté, détecté (vu par la détection mais pas connecté, comme le FD-9 tant que son pont s'arrête à ce palier), connecté, étalonnage requis ou étalonné. Il est établi par le module `instrument`, jamais par un écran.
 _Éviter_ : statut, mode
 
+**Instrument actif** :
+L'instrument du poste dont le pont est ouvert, montré dans la barre ; un seul à la fois. Le choisir dans la liste des instruments du poste ferme d'abord le pont de l'autre. Le dernier choix est retenu d'un lancement à l'autre.
+_Éviter_ : instrument sélectionné, instrument par défaut, appareil courant
+
 **Plafond** :
 Dernier palier qu'un pont a le droit d'atteindre, fixé à son lancement ; toute demande au-delà est refusée sans toucher à l'instrument.
 _Éviter_ : limite, niveau maximal
