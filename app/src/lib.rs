@@ -15,8 +15,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{mpsc, Mutex};
 
-use instrument::{emplacements_a_essayer, Accord, Geste, Gestes, Instrument, Vue};
-use pont::{chercher_ponts, PontProcessus};
+use instrument::{choix, emplacements_a_essayer, fd9, Accord, Geste, Gestes, Instrument, Vue};
+use pont::{chercher_ponts, chercher_ponts_nommes, PontProcessus};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use textes::Langue;
@@ -83,9 +83,22 @@ fn ouvrir(app: &AppHandle, instruments: &Instruments, choisi: Option<PathBuf>) -
     // Les ressources du paquet (DLL embarquées) sont installées à côté de
     // l'exécutable sous Windows.
     let dossier_app = app.path().resource_dir().unwrap_or(dossier_exe.clone());
-    let emplacements = emplacements_a_essayer(&dossier_app, sdk_retenu(app), choisi);
+    let emplacements = emplacements_a_essayer(&dossier_app, sdk_retenu(app), choisi.clone());
     let ponts = chercher_ponts(&dossier_exe);
-    let instrument = Instrument::ouvrir(&emplacements, &ponts, PontProcessus::lancer);
+    // MYIRO-1 d'abord ; sans lui, un FD-9 détecté (ticket #13).
+    let emplacements_fd9 = fd9::emplacements_fd9(choisi);
+    let ponts_fd9 = chercher_ponts_nommes(&dossier_exe, fd9::NOM_PONT_FD9);
+    let instrument = choix::ouvrir_l_un_ou_l_autre(
+        choix::Recherche {
+            emplacements: &emplacements,
+            ponts: &ponts,
+        },
+        choix::Recherche {
+            emplacements: &emplacements_fd9,
+            ponts: &ponts_fd9,
+        },
+        PontProcessus::lancer,
+    );
     if let Some(dll) = instrument.sdk() {
         retenir_sdk(app, dll);
     }

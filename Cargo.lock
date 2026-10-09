@@ -2370,6 +2370,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pont-fd9"
+version = "0.1.0"
+dependencies = [
+ "fd9-sys",
+ "libloading 0.8.9",
+ "pont-protocole",
+ "sha2",
+]
+
+[[package]]
 name = "pont-myiro1"
 version = "0.1.0"
 dependencies = [

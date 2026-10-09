@@ -113,6 +113,7 @@ const FRANCAIS: Catalogue = &[
     // Instrument : état dans la barre ({modele} et {etat} sont remplacés)
     ("instrument.recherche", "Recherche de l’instrument…"),
     ("instrument.barre", "{modele}, {etat}"),
+    ("instrument.etat.detecte", "détecté"),
     ("instrument.etat.connecte", "connecté"),
     ("instrument.etat.etalonnage_requis", "étalonnage requis"),
     ("instrument.etat.etalonne", "étalonné"),
@@ -206,6 +207,14 @@ const FRANCAIS: Catalogue = &[
     (
         "probleme.aucun_instrument.action",
         "Vérifiez le câble et branchez l’instrument directement sur l’ordinateur, puis réessayez.",
+    ),
+    (
+        "probleme.aucun_fd9.cause",
+        "Aucun FD-9 n’a répondu sur le réseau. Le pare-feu de Windows bloque peut-être sa réponse.",
+    ),
+    (
+        "probleme.aucun_fd9.action",
+        "Vérifiez que le FD-9 est allumé et sur le même réseau, et que FD-S2w est fermé, puis réessayez. Si rien ne change, faites autoriser myiro-libre dans le pare-feu (voir le détail).",
     ),
     (
         "probleme.connexion_impossible.cause",
@@ -371,6 +380,7 @@ const ANGLAIS: Catalogue = &[
     // Instrument: state in the top bar ({modele} and {etat} are replaced)
     ("instrument.recherche", "Looking for the instrument…"),
     ("instrument.barre", "{modele}, {etat}"),
+    ("instrument.etat.detecte", "detected"),
     ("instrument.etat.connecte", "connected"),
     ("instrument.etat.etalonnage_requis", "calibration required"),
     ("instrument.etat.etalonne", "calibrated"),
@@ -461,6 +471,14 @@ const ANGLAIS: Catalogue = &[
     (
         "probleme.aucun_instrument.action",
         "Check the cable and plug the instrument directly into the computer, then try again.",
+    ),
+    (
+        "probleme.aucun_fd9.cause",
+        "No FD-9 answered on the network. The Windows firewall may be blocking its reply.",
+    ),
+    (
+        "probleme.aucun_fd9.action",
+        "Check that the FD-9 is on and on the same network, and that FD-S2w is closed, then try again. If nothing changes, have myiro-libre allowed in the firewall (see the details).",
     ),
     (
         "probleme.connexion_impossible.cause",
@@ -614,7 +632,7 @@ mod tests {
                 reste.split('"').next().map(String::from)
             })
             .collect();
-        for etat in ["connecte", "etalonnage_requis", "etalonne"] {
+        for etat in ["detecte", "connecte", "etalonnage_requis", "etalonne"] {
             demandees.push(format!("instrument.etat.{etat}"));
         }
         demandees.extend(

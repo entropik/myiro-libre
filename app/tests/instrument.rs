@@ -564,6 +564,7 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
         Probleme::EtalonnageEchoue { detail: d() },
         Probleme::EtalonnageDelai { detail: d() },
         Probleme::InstrumentPerdu { detail: d() },
+        Probleme::AucunFd9 { detail: d() },
     ];
     // Garde : ajouter une variante à `Probleme` casse la compilation ici ;
     // on lui donne alors un numéro, et l'assertion exige qu'elle soit listée.
@@ -580,13 +581,14 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
             Probleme::EtalonnageEchoue { .. } => 8,
             Probleme::EtalonnageDelai { .. } => 9,
             Probleme::InstrumentPerdu { .. } => 10,
+            Probleme::AucunFd9 { .. } => 11,
         }
     }
     let mut numeros: Vec<usize> = tous.iter().map(numero).collect();
     numeros.sort();
     assert_eq!(
         numeros,
-        (0..11).collect::<Vec<_>>(),
+        (0..12).collect::<Vec<_>>(),
         "chaque problème est listé une fois"
     );
     for probleme in tous {

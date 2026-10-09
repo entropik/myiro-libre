@@ -19,6 +19,22 @@ int32_t __stdcall FD9_GetDeviceList(tFD9_DeviceData *liste,      /* obligatoire 
 - **Réseau ensuite** : un message de 16 octets commençant par `FD9SDK` est diffusé vers `255.255.255.255`, port UDP **49152**, depuis le port local 49152. Seules les réponses de 24 octets sont gardées : leurs octets 4 à 7, en hexadécimal, forment l'identifiant, et leurs octets 8 à 11 l'adresse IP, écrite `a.b.c.d`. Une adresse déjà présente n'est pas ajoutée deux fois.
 - **Succès partiel** : si une étape échoue mais que le compteur n'est pas nul, la fonction renvoie 0 (`0x100b0ea7..0x100b0eb0`). Un échec réseau (codes internes 12051 à 12057, public 1002) n'empêche donc pas de voir un FD-9 en USB.
 
+## Détection réseau en détail (`fd9-x86`)
+
+Établi le 9 octobre 2026 par lecture de la recherche (`0x100ae5db..0x100ae973`), après une détection réelle qui ne trouvait aucun FD-9.
+
+- **Deux sockets UDP** (confirmé) : une de réception, avec `SO_REUSEADDR`, liée à `0.0.0.0:49152` (`0x100ae699..0x100ae7ac`) ; une d'envoi, avec `SO_BROADCAST`, **non liée** (port local choisi par Windows, `0x100ae7e2..0x100ae7f8`). L'envoi part de la seconde, la réponse n'est lue que sur la première.
+- **Un envoi par adresse IPv4 de l'ordinateur** (confirmé) : `gethostbyname("")` donne les adresses locales ; pour chacune, un message de 16 octets (`FD9SDK`, l'adresse locale, une somme de contrôle) est diffusé vers `255.255.255.255:49152`, puis les réponses sont lues jusqu'au premier délai dépassé (`0x100ae853..0x100ae96a`). Les adresses d'un VPN ou de cartes virtuelles reçoivent aussi leur envoi.
+- **Délai de lecture : 5 millisecondes** (confirmé pour la valeur passée) : `SO_RCVTIMEO` reçoit une structure de 8 octets `{5, 0}` (`0x100ae6f6..0x100ae71f`) ; Winsock n'en lit que le premier mot, en millisecondes. L'intention était sans doute 5 secondes (supposé). Une réponse plus lente que la suite des envois est perdue à la fermeture des sockets.
+- **Pare-feu Windows** (confirmé sur le poste le 9 octobre 2026) : la réponse arrive sur le port 49152 d'une socket qui n'a rien envoyé. L'exception de Windows pour les réponses à une diffusion ne vaut que pour la socket d'envoi : sans règle entrante « UDP, port local 49152 » pour le programme qui charge la DLL, la réponse est bloquée et la liste reste vide, **sans erreur**. Sans règle : liste vide cinq fois de suite. Avec la règle ci-dessous : un FD-9 en réseau trouvé en 0,3 s, liaison 0. Le délai de 5 ms a suffi dans cet essai. Règle, avec des valeurs fictives (droits d'administrateur) :
+
+  ```
+  netsh advfirewall firewall add rule name="FD-9 - pont-fd9 - UDP local" dir=in action=allow protocol=UDP localport=49152 remoteip=192.0.2.40 profile=any program="C:\Program Files\myiro-libre\pont-fd9-x86.exe"
+  ```
+
+  Le chemin est celui du pont installé ; en développement, celui de `target\i686-pc-windows-msvc\debug\pont-fd9.exe`.
+- **Ce que FD-S2w fait de plus** : rien (confirmé, `FD-S2w.exe` `0x41ed50..0x41eda8`) : le même appel, tableau de 10 entrées, capacité 10, sans appel préalable à la DLL. Qu'il trouve le FD-9 sans règle de pare-feu visible n'est pas expliqué (question ouverte).
+
 ## Contenu d'une entrée `tFD9_DeviceData` (44 octets en 32 et 64 bits)
 
 | Position | Taille | Contenu | Niveau |
@@ -50,8 +66,9 @@ Taille confirmée par le pas de 44 octets (`imul …, 0x2c`, `0x100ae273`) ; auc
 
 ## À vérifier sur l'instrument
 
-- La liste avec le FD-9 du réseau : une entrée, liaison 0, son adresse IP.
-- Le délai d'attente des réponses réseau (fixé par le SDK, non relevé).
+- La liste avec le FD-9 du réseau : **observée le 9 octobre 2026** avec la règle de pare-feu : une entrée, liaison 0 (réseau), son adresse IP et un identifiant de 8 caractères (que ce soit le n° de série reste supposé).
+- La marge du délai de 5 ms sur un réseau plus chargé (il a suffi dans l'essai).
+- Pourquoi FD-S2w trouve le FD-9 sans règle de pare-feu visible.
 
 ## Preuves (locales)
 

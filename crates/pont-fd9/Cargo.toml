@@ -1,0 +1,13 @@
+[package]
+name = "pont-fd9"
+version = "0.1.0"
+description = "Pont FD-9 : seul processus qui charge FD9SDK.dll (ADR 0005)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+fd9-sys = { path = "../fd9-sys" }
+pont-protocole = { path = "../pont-protocole" }
+libloading = "0.8"
+sha2 = "0.10"

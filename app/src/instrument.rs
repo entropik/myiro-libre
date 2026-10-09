@@ -47,6 +47,11 @@ impl<F: FnMut(Geste) -> Accord> Gestes for F {
     }
 }
 
+/// Choix entre le pont MYIRO-1 et le pont FD-9 (ticket #13).
+pub mod choix;
+/// Le FD-9 : son pont et ses paliers (ticket #13).
+pub mod fd9;
+
 /// Nom de la DLL du MYIRO-1 cherchée dans le logiciel du fabricant.
 pub const NOM_DLL: &str = "FDXSDK.dll";
 
@@ -104,6 +109,12 @@ pub struct Fiche {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Etat {
     NonDetecte,
+    /// Vu par la détection, pas connecté : le pont de cet instrument ne va pas
+    /// plus loin pour l'instant (FD-9). `identifiant` : texte rendu par la DLL.
+    Detecte {
+        modele: String,
+        identifiant: pont_protocole::Info<String>,
+    },
     /// Connecté, sans étalonnage à faire (instrument qui n'en a pas besoin).
     Connecte(Fiche),
     /// Connecté ; un étalonnage sur le blanc est nécessaire avant de mesurer.
@@ -140,6 +151,9 @@ pub enum Probleme {
     PontBloque { detail: String },
     /// Le pont répond, mais ne voit aucun instrument.
     AucunInstrument,
+    /// Le pont FD-9 ne voit aucun FD-9 : sur le réseau, le pare-feu de
+    /// Windows bloque peut-être la réponse (fiche `FD9_GetDeviceList`).
+    AucunFd9 { detail: String },
     /// La recherche des instruments branchés a échoué.
     DetectionImpossible { detail: String },
     /// L'instrument détecté a refusé la connexion ou ne répond pas.
@@ -170,6 +184,7 @@ impl Probleme {
             | Probleme::PontEnPanne { .. }
             | Probleme::PontBloque { .. }
             | Probleme::AucunInstrument
+            | Probleme::AucunFd9 { .. }
             | Probleme::DetectionImpossible { .. }
             | Probleme::ConnexionImpossible { .. }
             | Probleme::InstrumentPerdu { .. } => Ecran::NonDetecte,
@@ -198,6 +213,7 @@ impl Probleme {
             Probleme::PontEnPanne { .. } => "pont_en_panne",
             Probleme::PontBloque { .. } => "pont_bloque",
             Probleme::AucunInstrument => "aucun_instrument",
+            Probleme::AucunFd9 { .. } => "aucun_fd9",
             Probleme::DetectionImpossible { .. } => "detection_impossible",
             Probleme::ConnexionImpossible { .. } => "connexion_impossible",
             Probleme::EtalonnageEchoue { .. } => "etalonnage_echoue",
@@ -215,6 +231,7 @@ impl Probleme {
             | Probleme::PontIntrouvable { detail: d }
             | Probleme::PontEnPanne { detail: d }
             | Probleme::PontBloque { detail: d }
+            | Probleme::AucunFd9 { detail: d }
             | Probleme::DetectionImpossible { detail: d }
             | Probleme::ConnexionImpossible { detail: d }
             | Probleme::EtalonnageEchoue { detail: d }
@@ -291,7 +308,7 @@ impl<P: Pont> Instrument<P> {
         ponts: &[(Architecture, PathBuf)],
         lancer: impl FnOnce(&Path, &Path, Palier) -> Result<P, Panne>,
     ) -> Self {
-        let (programme, dll) = match choisir(emplacements, ponts) {
+        let (programme, dll) = match choisir(NOM_DLL, "pont-myiro1", emplacements, ponts) {
             Ok(choix) => choix,
             Err(probleme) => return Self::en_echec(None, probleme),
         };
@@ -333,7 +350,8 @@ impl<P: Pont> Instrument<P> {
     pub fn etalonner(&mut self, gestes: &mut impl Gestes) {
         let fiche = match &self.etat {
             Etat::EtalonnageRequis(f) | Etat::Etalonne(f) => f.clone(),
-            Etat::NonDetecte | Etat::Connecte(_) => return,
+            // Un FD-9 détecté n'est pas connecté : son pont n'étalonne pas.
+            Etat::NonDetecte | Etat::Detecte { .. } | Etat::Connecte(_) => return,
         };
         let Some(pont) = self.pont.as_mut() else {
             return;
@@ -399,15 +417,16 @@ impl<P: Pont> Instrument<P> {
     }
 
     pub fn vue(&self) -> Vue {
-        let (etat, fiche) = match &self.etat {
+        let (etat, modele) = match &self.etat {
             Etat::NonDetecte => ("non_detecte", None),
-            Etat::Connecte(f) => ("connecte", Some(f)),
-            Etat::EtalonnageRequis(f) => ("etalonnage_requis", Some(f)),
-            Etat::Etalonne(f) => ("etalonne", Some(f)),
+            Etat::Detecte { modele, .. } => ("detecte", Some(modele)),
+            Etat::Connecte(f) => ("connecte", Some(&f.modele)),
+            Etat::EtalonnageRequis(f) => ("etalonnage_requis", Some(&f.modele)),
+            Etat::Etalonne(f) => ("etalonne", Some(&f.modele)),
         };
         Vue {
             etat,
-            modele: fiche.map(|f| f.modele.clone()),
+            modele: modele.cloned(),
             pret: matches!(self.etat, Etat::Connecte(_) | Etat::Etalonne(_)),
             probleme: self.probleme.as_ref().map(|p| VueProbleme {
                 code: p.code(),
@@ -426,17 +445,20 @@ impl<P: Pont> Instrument<P> {
 /// Choisit la DLL et le pont. Les emplacements sont essayés dans l'ordre ;
 /// dans chacun, une DLL 64 bits qui a son pont est préférée, sinon une
 /// 32 bits qui a le sien. Le premier emplacement qui contient une DLL
-/// décide : sans pont pour elle, la recherche s'arrête là.
+/// décide : sans pont pour elle, la recherche s'arrête là. `nom_dll` : la DLL
+/// cherchée (`FDXSDK.dll`, `FD9SDK.dll`) ; `nom_pont` : son pont, pour le détail.
 fn choisir(
+    nom_dll: &str,
+    nom_pont: &str,
     emplacements: &[PathBuf],
     ponts: &[(Architecture, PathBuf)],
 ) -> Result<(PathBuf, PathBuf), Probleme> {
     let mut examines = String::new();
     let mut trouvees = 0;
     for emplacement in emplacements {
-        let dlls = chercher_dlls(emplacement);
+        let dlls = chercher_dlls(emplacement, nom_dll);
         if dlls.is_empty() {
-            let _ = writeln!(examines, "{} : aucun {NOM_DLL}", emplacement.display());
+            let _ = writeln!(examines, "{} : aucun {nom_dll}", emplacement.display());
         }
         let mut ici = Vec::new();
         for dll in dlls {
@@ -475,7 +497,7 @@ fn choisir(
     let disponibles: Vec<_> = ponts.iter().map(|(a, _)| nom_architecture(*a)).collect();
     Err(Probleme::PontIntrouvable {
         detail: format!(
-            "{examines}\naucun pont-myiro1 de cette architecture ; ponts disponibles : {}",
+            "{examines}\naucun {nom_pont} de cette architecture ; ponts disponibles : {}",
             if disponibles.is_empty() {
                 "aucun".to_string()
             } else {
@@ -537,15 +559,15 @@ fn inattendue(reponse: Reponse) -> Probleme {
     }
 }
 
-/// Tous les `FDXSDK.dll` d'un emplacement : la DLL elle-même, ou celles d'un
-/// dossier et de ses sous-dossiers (trois niveaux au plus), dans l'ordre des
-/// noms. Le pont exécute le code de la DLL qu'on lui donne : un fichier d'un
-/// autre nom n'est jamais retenu.
-fn chercher_dlls(emplacement: &Path) -> Vec<PathBuf> {
+/// Tous les fichiers `nom_dll` d'un emplacement : la DLL elle-même, ou celles
+/// d'un dossier et de ses sous-dossiers (trois niveaux au plus), dans l'ordre
+/// des noms. Le pont exécute le code de la DLL qu'on lui donne : un fichier
+/// d'un autre nom n'est jamais retenu.
+fn chercher_dlls(emplacement: &Path, nom_dll: &str) -> Vec<PathBuf> {
     if emplacement.is_file() {
         let bon_nom = emplacement
             .file_name()
-            .is_some_and(|n| n.eq_ignore_ascii_case(NOM_DLL));
+            .is_some_and(|n| n.eq_ignore_ascii_case(nom_dll));
         return if bon_nom {
             vec![emplacement.to_path_buf()]
         } else {
@@ -553,11 +575,11 @@ fn chercher_dlls(emplacement: &Path) -> Vec<PathBuf> {
         };
     }
     let mut trouvees = Vec::new();
-    chercher_dans(emplacement, PROFONDEUR, &mut trouvees);
+    chercher_dans(emplacement, nom_dll, PROFONDEUR, &mut trouvees);
     trouvees
 }
 
-fn chercher_dans(dossier: &Path, profondeur: usize, trouvees: &mut Vec<PathBuf>) {
+fn chercher_dans(dossier: &Path, nom_dll: &str, profondeur: usize, trouvees: &mut Vec<PathBuf>) {
     let Ok(entrees) = std::fs::read_dir(dossier) else {
         return;
     };
@@ -569,14 +591,14 @@ fn chercher_dans(dossier: &Path, profondeur: usize, trouvees: &mut Vec<PathBuf>)
             sous_dossiers.push(chemin);
         } else if chemin
             .file_name()
-            .is_some_and(|n| n.eq_ignore_ascii_case(NOM_DLL))
+            .is_some_and(|n| n.eq_ignore_ascii_case(nom_dll))
         {
             trouvees.push(chemin);
         }
     }
     if profondeur > 0 {
         for sous_dossier in sous_dossiers {
-            chercher_dans(&sous_dossier, profondeur - 1, trouvees);
+            chercher_dans(&sous_dossier, nom_dll, profondeur - 1, trouvees);
         }
     }
 }
