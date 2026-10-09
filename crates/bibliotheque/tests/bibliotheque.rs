@@ -1,7 +1,9 @@
 //! Bibliothèque locale (ADR 0001), vue par son API publique, sur une
 //! bibliothèque temporaire. Toutes les mesures sont fictives (n° 12345678).
 
-use bibliotheque::{Bibliotheque, Branche, ErreurBibliotheque, IdCondition, IdMesure, Instrument};
+use bibliotheque::{
+    Bibliotheque, Branche, ErreurBibliotheque, IdCondition, IdMesure, Instrument, ReferenceCouleur,
+};
 use pont_protocole::{
     Calcul, ConditionMesure, ConditionsCalcul, DonneesBrutes, Echantillonnage, Empreinte,
     Geometrie, Horodatage, Illuminant, Info, InstrumentMesurant, Lab, Mesure, Observateur, Plage,
@@ -650,5 +652,122 @@ fn une_bibliotheque_d_avant_les_noms_se_relit_sans_perte() {
         .unwrap()
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
+}
+
+// ---- Couleur de référence (ticket #8) ----
+
+/// Une bibliothèque avec une condition et deux mesures ponctuelles.
+fn deux_mesures() -> (TempDir, Bibliotheque, IdMesure, IdMesure) {
+    let (dossier, biblio) = bibliotheque_vide();
+    let offset = biblio.creer_condition("Offset").unwrap();
+    let a = biblio
+        .enregistrer_mesure_nommee(
+            offset.id,
+            &ponctuelle(12345678, "2026-10-09T10:00:00+02:00"),
+            "Magenta",
+        )
+        .unwrap();
+    let b = biblio
+        .enregistrer_mesure(
+            offset.id,
+            &ponctuelle(12345678, "2026-10-09T10:01:00+02:00"),
+        )
+        .unwrap();
+    (dossier, biblio, a, b)
+}
+
+#[test]
+fn une_mesure_devient_couleur_de_reference_avec_ou_sans_seuil() {
+    let (dossier, biblio, a, b) = deux_mesures();
+    assert_eq!(biblio.reference(a).unwrap(), None);
+
+    // Sans seuil : aucune valeur à la place, le seuil est absent.
+    biblio.designer_reference(a, None).unwrap();
+    assert_eq!(
+        biblio.reference(a).unwrap(),
+        Some(ReferenceCouleur {
+            mesure: a,
+            seuil: None
+        })
+    );
+    biblio.designer_reference(a, Some(2.5)).unwrap();
+    biblio.designer_reference(b, Some(1.0)).unwrap();
+    drop(biblio);
+
+    // Le seuil est conservé avec la référence, à la réouverture.
+    let biblio = Bibliotheque::ouvrir(dossier.path()).unwrap();
+    assert_eq!(
+        biblio.references().unwrap(),
+        vec![
+            ReferenceCouleur {
+                mesure: a,
+                seuil: Some(2.5)
+            },
+            ReferenceCouleur {
+                mesure: b,
+                seuil: Some(1.0)
+            },
+        ]
+    );
+    biblio.retirer_reference(a).unwrap();
+    assert_eq!(biblio.reference(a).unwrap(), None);
+    // La mesure elle-même reste, avec son nom.
+    assert_eq!(biblio.mesure(a).unwrap().nom.as_deref(), Some("Magenta"));
+    // Retirer une référence absente ne change rien.
+    biblio.retirer_reference(a).unwrap();
+}
+
+#[test]
+fn un_seuil_impossible_ou_une_mesure_inconnue_sont_refuses() {
+    let (_dossier, biblio, a, _) = deux_mesures();
+    for seuil in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        assert_eq!(
+            biblio.designer_reference(a, Some(seuil)),
+            Err(ErreurBibliotheque::SeuilInvalide),
+            "{seuil}"
+        );
+    }
+    assert_eq!(biblio.reference(a).unwrap(), None, "rien n'a été écrit");
+    assert_eq!(
+        biblio.designer_reference(IdMesure(99), None),
+        Err(ErreurBibliotheque::MesureInconnue(IdMesure(99)))
+    );
+}
+
+/// Une bibliothèque de l'organisation 2 (avec les noms) se relit sans
+/// perte : aucune mesure n'y est couleur de référence.
+#[test]
+fn une_bibliotheque_d_avant_les_references_se_relit_sans_perte() {
+    let dossier = tempfile::tempdir().unwrap();
+    let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
+    let mesure = ponctuelle(12345678, "2026-10-07T15:04:05+02:00");
+    let base = rusqlite::Connection::open(&chemin).unwrap();
+    base.execute_batch(ORGANISATION_1).unwrap();
+    base.execute_batch(&format!(
+        "ALTER TABLE mesures ADD COLUMN nom TEXT;
+         PRAGMA user_version = 2;
+         INSERT INTO conditions (id, nom) VALUES (1, 'Offset');
+         INSERT INTO instruments (id, modele, numero_serie) VALUES (1, 'MYIRO-1', 12345678);
+         INSERT INTO mesures (id, condition, instrument, horodatage, geometrie, plages, contenu, nom)
+         VALUES (1, 1, 1, '2026-10-07T15:04:05+02:00', '{{\"lecture\":\"ponctuelle\"}}', 1, '{}', 'Cyan');",
+        pont_protocole::ecrire_mesure(&mesure).replace('\'', "''")
+    ))
+    .unwrap();
+    drop(base);
+
+    let biblio = Bibliotheque::ouvrir(dossier.path()).unwrap();
+
+    let relue = biblio.mesure(IdMesure(1)).unwrap();
+    assert_eq!(relue.mesure, mesure);
+    assert_eq!(relue.nom.as_deref(), Some("Cyan"));
+    assert_eq!(biblio.references().unwrap(), vec![]);
+    biblio.designer_reference(IdMesure(1), Some(2.0)).unwrap();
+    assert_eq!(
+        biblio.reference(IdMesure(1)).unwrap(),
+        Some(ReferenceCouleur {
+            mesure: IdMesure(1),
+            seuil: Some(2.0)
+        })
+    );
 }

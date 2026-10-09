@@ -16,7 +16,7 @@ use serde::Serialize;
 pub const FICHIER_BASE: &str = "bibliotheque.sqlite";
 
 /// Version de l'organisation de la base ; une base plus récente est refusée.
-const VERSION_BASE: i32 = 2;
+const VERSION_BASE: i32 = 3;
 
 /// Ce qui peut empêcher une opération sur la bibliothèque.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,6 +27,9 @@ pub enum ErreurBibliotheque {
     NomDejaPris(String),
     ConditionInconnue(IdCondition),
     MesureInconnue(IdMesure),
+    /// Le seuil d'une couleur de référence n'est pas un nombre fini
+    /// strictement positif.
+    SeuilInvalide,
     /// La base a été écrite par une version plus récente de myiro-libre.
     VersionBase(i32),
     /// Une mesure conservée ne se relit plus (format, contenu).
@@ -47,6 +50,7 @@ impl fmt::Display for ErreurBibliotheque {
             }
             Self::ConditionInconnue(id) => write!(f, "condition d'impression n° {} inconnue", id.0),
             Self::MesureInconnue(id) => write!(f, "mesure n° {} inconnue", id.0),
+            Self::SeuilInvalide => f.write_str("seuil d'écart impossible"),
             Self::VersionBase(v) => write!(
                 f,
                 "bibliothèque écrite par une version plus récente (organisation {v}, attendu {VERSION_BASE} au plus)"
@@ -118,6 +122,15 @@ pub struct ResumeMesure {
     pub geometrie: Geometrie,
     /// Nombre de plages lues.
     pub plages: usize,
+}
+
+/// Une mesure désignée couleur de référence (GLOSSARY), avec l'écart ΔE00
+/// accepté. `seuil` vaut `None` tant que l'utilisateur n'en a pas fixé :
+/// aucune valeur ne le remplace.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct ReferenceCouleur {
+    pub mesure: IdMesure,
+    pub seuil: Option<f64>,
 }
 
 /// Une condition d'impression et ses mesures, les plus récentes d'abord.
@@ -396,6 +409,71 @@ impl Bibliotheque {
         Ok(branches)
     }
 
+    /// Désigne une mesure couleur de référence, ou change son seuil si elle
+    /// l'est déjà. Un seuil doit être un nombre fini strictement positif ;
+    /// `None` : pas de seuil.
+    pub fn designer_reference(&self, id: IdMesure, seuil: Option<f64>) -> Resultat<()> {
+        if seuil.is_some_and(|s| !(s.is_finite() && s > 0.0)) {
+            return Err(ErreurBibliotheque::SeuilInvalide);
+        }
+        let existe: Option<i64> = self
+            .base
+            .query_row("SELECT id FROM mesures WHERE id = ?1", params![id.0], |l| {
+                l.get(0)
+            })
+            .optional()?;
+        if existe.is_none() {
+            return Err(ErreurBibliotheque::MesureInconnue(id));
+        }
+        self.base.execute(
+            "INSERT INTO references_couleur (mesure, seuil) VALUES (?1, ?2)
+             ON CONFLICT (mesure) DO UPDATE SET seuil = excluded.seuil",
+            params![id.0, seuil],
+        )?;
+        Ok(())
+    }
+
+    /// La mesure n'est plus couleur de référence ; elle-même reste. Sans
+    /// effet si elle ne l'était pas.
+    pub fn retirer_reference(&self, id: IdMesure) -> Resultat<()> {
+        self.base.execute(
+            "DELETE FROM references_couleur WHERE mesure = ?1",
+            params![id.0],
+        )?;
+        Ok(())
+    }
+
+    /// La mesure comme couleur de référence, si elle l'est.
+    pub fn reference(&self, id: IdMesure) -> Resultat<Option<ReferenceCouleur>> {
+        Ok(self
+            .base
+            .query_row(
+                "SELECT seuil FROM references_couleur WHERE mesure = ?1",
+                params![id.0],
+                |l| {
+                    Ok(ReferenceCouleur {
+                        mesure: id,
+                        seuil: l.get(0)?,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    /// Couleurs de référence, dans l'ordre des mesures.
+    pub fn references(&self) -> Resultat<Vec<ReferenceCouleur>> {
+        let mut requete = self
+            .base
+            .prepare("SELECT mesure, seuil FROM references_couleur ORDER BY mesure")?;
+        let lignes = requete.query_map([], |l| {
+            Ok(ReferenceCouleur {
+                mesure: IdMesure(l.get(0)?),
+                seuil: l.get(1)?,
+            })
+        })?;
+        Ok(lignes.collect::<Result<_, _>>()?)
+    }
+
     /// Instruments qui ont produit au moins une mesure de la bibliothèque.
     pub fn instruments(&self) -> Resultat<Vec<Instrument>> {
         let mut requete = self.base.prepare(
@@ -511,6 +589,7 @@ fn migrer(base: &mut Connection) -> Resultat<()> {
         match version {
             0 => transaction.execute_batch(ORGANISATION_1)?,
             1 => transaction.execute_batch(ORGANISATION_2)?,
+            2 => transaction.execute_batch(ORGANISATION_3)?,
             autre => unreachable!("aucune migration depuis l'organisation {autre}"),
         }
         version += 1;
@@ -523,6 +602,16 @@ fn migrer(base: &mut Connection) -> Resultat<()> {
 /// Organisation 2 (ticket #7) : le nom d'une mesure. Les mesures déjà
 /// enregistrées restent sans nom ; rien n'est réécrit ni effacé.
 const ORGANISATION_2: &str = "ALTER TABLE mesures ADD COLUMN nom TEXT;";
+
+/// Organisation 3 (ticket #8) : les couleurs de référence et leur seuil
+/// ΔE00. Un seuil absent est `NULL`, jamais une valeur sentinelle. Rien
+/// n'est réécrit ni effacé.
+const ORGANISATION_3: &str = "
+CREATE TABLE references_couleur (
+    mesure INTEGER PRIMARY KEY REFERENCES mesures (id),
+    seuil REAL CHECK (seuil IS NULL OR seuil > 0)
+);
+";
 
 /// Nom de mesure débarrassé de ses espaces de début et de fin, jamais vide.
 fn nom_de_mesure(nom: &str) -> Resultat<&str> {

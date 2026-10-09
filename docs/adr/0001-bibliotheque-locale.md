@@ -23,3 +23,9 @@ Les mesures, conditions d'impression, références, profils et linéarisations s
 - Une mesure peut porter un nom, donné par l'utilisateur dans la tâche Mesurer (« Couleur 1 » par défaut) et modifiable. Il est enregistré avec la mesure, à côté de son format versionné, qui ne change pas : le nom n'est pas une donnée du pont. Espaces de début et de fin retirés ; un nom vide est refusé ; deux mesures peuvent porter le même nom.
 - Organisation 2 de la base : une colonne `nom` ajoutée à la table des mesures. Rien n'est réécrit ni effacé ; les mesures déjà enregistrées restent sans nom, et une mesure enregistrée sans nom (bande, import) n'en reçoit pas d'office. Un test relit sans perte une base de l'organisation 1.
 - La colonne de gauche montre le nom devant la date ; la recherche porte aussi sur le nom de la mesure.
+
+## Complément du 9 octobre 2026 : couleur de référence (ticket #8)
+
+- Une mesure peut être désignée couleur de référence, avec un écart ΔE00 accepté (son seuil) ou sans seuil. Le seuil absent est enregistré comme absent (`NULL`), jamais comme une valeur sentinelle ; un seuil nul, négatif ou non fini est refusé et rien n'est écrit.
+- Organisation 3 de la base : une table `references_couleur` (mesure, seuil). Rien n'est réécrit ni effacé ; un test relit sans perte une base de l'organisation 2. La mesure elle-même ne change pas : retirer la référence laisse la mesure et son nom.
+- Dans Mesurer, la séance a une seule couleur de référence à la fois : en désigner une autre retire la première. Seule une mesure rangée peut devenir référence, puisque c'est la bibliothèque qui la conserve.
