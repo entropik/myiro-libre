@@ -12,7 +12,7 @@ fn un_export_hors_liste_blanche_est_refuse_avant_toute_resolution() {
         "FDX_JIG_SetFactoryCalib_WriteSector",
         "FDX_SetNetworkInfo",
         "FDX_SetCalibration",
-        "FDX_StartMeasurement",
+        "FDX_CancelScanMeasurement",
     ] {
         assert_eq!(
             autoriser_export(nom),
@@ -24,6 +24,8 @@ fn un_export_hors_liste_blanche_est_refuse_avant_toute_resolution() {
 #[test]
 fn un_export_de_la_liste_blanche_est_accepte() {
     assert_eq!(autoriser_export("FDX_GetSDKVersion"), Ok(()));
+    // Seconde exception nommée, accord du mainteneur du 9 octobre 2026.
+    assert_eq!(autoriser_export("FDX_StartMeasurement"), Ok(()));
 }
 
 #[test]
@@ -220,6 +222,90 @@ fn palier_mesure_ponctuelle_avec_le_vrai_instrument() {
     }
     println!("résultats écrits dans {}", sortie.display());
     fermer(&mut session);
+}
+
+/// Palier 4, mode automatique (ticket #51, fiche `docs/abi/FDX_StartMeasurement.md`) :
+/// étalonnage, puis mesures ponctuelles déclenchées par le pont, sans appui sur
+/// le bouton, une par plage de `MYIRO_PLAGES` (par défaut « papier,1A1 »).
+/// Pour chacune, l'opérateur pose l'instrument sur la plage puis appuie sur
+/// Entrée dans le terminal, **sans toucher au bouton de l'instrument**. On
+/// cherche à voir : déclenchement accepté (code 0), événements 1, 2 puis 3,
+/// voyant, retour au repos. Un refus (-9986, ou -9793 à -9789) est affiché et
+/// arrête l'essai : il dit que l'instrument n'accepte pas ce déclenchement.
+/// Résultats dans `MYIRO_SORTIE` (CSV ; par défaut dans `target/`).
+#[test]
+#[ignore = "étalonne puis mesure sans le bouton avec le MYIRO-1 réel ; demande l'opérateur"]
+fn palier_mesure_automatique_avec_le_vrai_instrument() {
+    use pont_protocole::Declenchement;
+    use std::io::{BufRead, Write};
+    let plages = std::env::var("MYIRO_PLAGES").unwrap_or("papier,1A1".into());
+    let sortie = std::env::var("MYIRO_SORTIE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../target/mesures-automatiques-myiro1.csv")
+        });
+    let dll = FdxDll::charger(dll_du_poste()).expect("chargement de FDXSDK.dll");
+    let mut session = Session::new(dll, Palier::MesurePonctuelle);
+    session.version().expect("FDX_GetSDKVersion");
+    session.detecter().expect("FDX_GetDevicePortList");
+    session
+        .connecter(0)
+        .expect("FDX_Connect + FDX_GetDeviceInfo");
+    println!("posez le MYIRO-1 sur son capuchon blanc, puis appuyez sur Entrée");
+    attendre_entree();
+    session.etalonner().expect("étalonnage sur le blanc");
+    println!("étalonnage réussi");
+
+    let mut fichier = std::fs::File::create(&sortie).expect("fichier de sortie");
+    let longueurs: Vec<String> = (0..36).map(|i| format!("nm{}", 380 + 10 * i)).collect();
+    writeln!(fichier, "plage;donnees;L;a;b;{}", longueurs.join(";")).unwrap();
+    let texte = |v: &[f32]| {
+        v.iter()
+            .map(|x| format!("{x}"))
+            .collect::<Vec<_>>()
+            .join(";")
+    };
+    for plage in plages.split(',') {
+        println!("mesure de {plage} : posez l'instrument, NE TOUCHEZ PAS son bouton, puis Entrée");
+        attendre_entree();
+        let deja = session.journal().len();
+        let debut = std::time::Instant::now();
+        let resultat = session.mesurer_ponctuelle_avec(Declenchement::Automatique);
+        println!("  durée {:?}", debut.elapsed());
+        for ligne in &session.journal()[deja..] {
+            println!("    journal : {ligne}");
+        }
+        let mesure = match resultat {
+            Ok(mesure) => mesure,
+            Err(erreur) => {
+                println!("  mesure automatique refusée : {erreur:?}");
+                fermer(&mut session);
+                panic!("déclenchement logiciel non accepté : {erreur:?}");
+            }
+        };
+        for (nom, spectre, lab) in [
+            ("M0", &mesure.m0, &mesure.lab_dll[0]),
+            ("M1", &mesure.m1, &mesure.lab_dll[1]),
+            ("M2", &mesure.m2, &mesure.lab_dll[2]),
+        ] {
+            writeln!(fichier, "{plage};{nom};{};{}", texte(lab), texte(spectre)).unwrap();
+            println!("  {nom} Lab {lab:?}");
+        }
+        writeln!(fichier, "{plage};brutes;;;;{}", texte(&mesure.brutes)).unwrap();
+        println!(
+            "  événements {:?}",
+            mesure.evenements.iter().map(|e| e.code).collect::<Vec<_>>()
+        );
+        println!("  retour au repos {:?}", mesure.remise_au_repos);
+    }
+    println!("résultats écrits dans {}", sortie.display());
+    fermer(&mut session);
+
+    fn attendre_entree() {
+        let mut ligne = String::new();
+        std::io::stdin().lock().read_line(&mut ligne).unwrap();
+    }
 }
 
 /// Palier 5 : étalonnage puis lecture en bande des rangées de la mire de

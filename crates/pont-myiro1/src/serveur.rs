@@ -89,16 +89,18 @@ fn traiter<S: SdkMyiro1>(session: &mut Session<S>, requete: Requete) -> (Reponse
         Requete::Etalonner {} => session.etalonner().map(|etalonnage| Reponse::Etalonne {
             date: etalonnage.date,
         }),
-        Requete::MesurerPonctuelle {} => session.mesurer_ponctuelle().and_then(|mesure| {
-            let plage = MesurePlage {
-                m0: mesure.m0,
-                m1: mesure.m1,
-                m2: mesure.m2,
-                brutes: mesure.brutes,
-                lab_dll: mesure.lab_dll,
-            };
-            reponse_mesure(vec![plage], mesure.provenance, mesure.remise_au_repos)
-        }),
+        Requete::MesurerPonctuelle { declenchement } => session
+            .mesurer_ponctuelle_avec(declenchement)
+            .and_then(|mesure| {
+                let plage = MesurePlage {
+                    m0: mesure.m0,
+                    m1: mesure.m1,
+                    m2: mesure.m2,
+                    brutes: mesure.brutes,
+                    lab_dll: mesure.lab_dll,
+                };
+                reponse_mesure(vec![plage], mesure.provenance, mesure.remise_au_repos)
+            }),
         Requete::MesurerBande { plages_attendues } => {
             session.mesurer_bande(plages_attendues).and_then(|bande| {
                 reponse_mesure(bande.plages, bande.provenance, bande.remise_au_repos)

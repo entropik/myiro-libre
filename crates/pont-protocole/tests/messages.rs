@@ -1,6 +1,6 @@
 //! Le dialogue application ↔ pont : une ligne JSON par message, rien de deviné.
 
-use pont_protocole::{lire_requete, Requete};
+use pont_protocole::{lire_requete, Declenchement, Requete};
 
 #[test]
 fn une_requete_connue_est_lue() {
@@ -56,7 +56,9 @@ fn les_requetes_de_mesure_sont_lues() {
     );
     assert_eq!(
         lire_requete(r#"{"cmd":"mesurer_ponctuelle"}"#),
-        Ok(Requete::MesurerPonctuelle {})
+        Ok(Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Manuel
+        })
     );
     assert_eq!(
         lire_requete(r#"{"cmd":"mesurer_bande","plages_attendues":12}"#),
@@ -264,4 +266,48 @@ fn les_lignes_du_myiro1_restent_lues_et_ecrites_comme_avant() {
         serde_json::to_string(&Requete::Connecter { instrument: 0 }).unwrap(),
         r#"{"cmd":"connecter","instrument":0}"#
     );
+}
+
+/// Ticket #51 : la mesure ponctuelle dit qui la déclenche. Sans le champ, c'est
+/// le bouton de l'instrument, comme avant : la ligne manuelle ne change pas.
+#[test]
+fn la_mesure_ponctuelle_porte_son_declenchement() {
+    assert_eq!(
+        lire_requete(r#"{"cmd":"mesurer_ponctuelle","declenchement":"automatique"}"#),
+        Ok(Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Automatique
+        })
+    );
+    assert_eq!(
+        lire_requete(r#"{"cmd":"mesurer_ponctuelle","declenchement":"manuel"}"#),
+        Ok(Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Manuel
+        })
+    );
+    assert!(lire_requete(r#"{"cmd":"mesurer_ponctuelle","declenchement":"bouton"}"#).is_err());
+    assert_eq!(
+        serde_json::to_string(&Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Manuel
+        })
+        .unwrap(),
+        r#"{"cmd":"mesurer_ponctuelle"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Automatique
+        })
+        .unwrap(),
+        r#"{"cmd":"mesurer_ponctuelle","declenchement":"automatique"}"#
+    );
+}
+
+#[test]
+fn un_declenchement_refuse_porte_le_code_de_la_dll() {
+    use pont_protocole::{ecrire_reponse, lire_reponse, ErreurPont, Reponse};
+    let reponse = Reponse::Erreur {
+        erreur: ErreurPont::DeclenchementRefuse { code: -9986 },
+    };
+    let ligne = r#"{"rep":"erreur","erreur":{"type":"declenchement_refuse","code":-9986}}"#;
+    assert_eq!(ecrire_reponse(&reponse), ligne);
+    assert_eq!(lire_reponse(ligne), Ok(reponse));
 }

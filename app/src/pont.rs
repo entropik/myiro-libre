@@ -229,10 +229,11 @@ impl Pont for PontProcessus {
         // (`pont_myiro1::DELAI_ETALONNAGE`), en plus de l'appel à la DLL.
         // La mesure ponctuelle attend jusqu'à 2 min l'appui sur le bouton
         // (`pont_myiro1::DELAI_APPUI`), plus un désarmement avant et un après
-        // (15 s au plus chacun) et les lectures.
+        // (15 s au plus chacun) et les lectures. En automatique, l'attente de
+        // l'armement (5 s) et de la fin de mesure (30 s) y tiennent aussi.
         let delai = match requete {
             Requete::Etalonner {} => self.delai * 2,
-            Requete::MesurerPonctuelle {} => self.delai * 6,
+            Requete::MesurerPonctuelle { .. } => self.delai * 6,
             _ => self.delai,
         };
         match self.lignes.recv_timeout(delai) {
@@ -422,7 +423,7 @@ impl Pont for PontSimule {
             Requete::Detecter {} => Palier::Detection,
             Requete::Connecter { .. } => Palier::Connexion,
             Requete::Etalonner {} => Palier::Etalonnage,
-            Requete::MesurerPonctuelle {} => Palier::MesurePonctuelle,
+            Requete::MesurerPonctuelle { .. } => Palier::MesurePonctuelle,
             Requete::MesurerBande { .. } => Palier::Bande,
             Requete::Fermer {} => return (*self.fermeture).clone(),
             // Comme `pont-myiro1` : la connexion par adresse est celle du FD-9.
@@ -479,7 +480,10 @@ impl Pont for PontSimule {
                 Reponse::Etalonne { date }
             }
             // Comme `pont-myiro1` : pas de mesure sans étalonnage de la connexion.
-            Requete::MesurerPonctuelle {} => match (self.connecte, &self.etalonnage) {
+            // Le déclenchement ne change rien au simulé : qu'un vrai MYIRO-1
+            // accepte la mesure sans son bouton est supposé (fiche
+            // FDX_StartMeasurement) ; un refus s'injecte par `echouer_a`.
+            Requete::MesurerPonctuelle { .. } => match (self.connecte, &self.etalonnage) {
                 (Some(serie), Some(date)) => Reponse::Mesure {
                     mesure: mesure_simulee(serie, Some(date.clone())),
                     remise_au_repos: self.remise_au_repos.clone(),

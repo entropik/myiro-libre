@@ -83,6 +83,10 @@ _Éviter_ : statut, mode
 L'instrument du poste dont le pont est ouvert, montré dans la barre ; un seul à la fois. Le choisir dans la liste des instruments du poste ferme d'abord le pont de l'autre. Le dernier choix est retenu d'un lancement à l'autre.
 _Éviter_ : instrument sélectionné, instrument par défaut, appareil courant
 
+**Mesure automatique** :
+Mesure ponctuelle du MYIRO-1 que l'application fait partir elle-même : l'opérateur pose l'instrument sur la couleur puis clique sur « Mesurer », sans appuyer sur son bouton. Le pont arme l'instrument puis le déclenche par `FDX_StartMeasurement`. Que le MYIRO-1 accepte ce déclenchement est supposé jusqu'à l'essai réel. Son contraire est la **mesure manuelle**, qui part à l'appui sur le bouton. Choix « Mesure : automatique / manuelle » de la feuille Mesurer, automatique par défaut. Le FD-9 ne mesure pas encore.
+_Éviter_ : mode déclenché, trigger, mesure logicielle (à l'écran)
+
 **Plafond** :
 Dernier palier qu'un pont a le droit d'atteindre, fixé à son lancement ; toute demande au-delà est refusée sans toucher à l'instrument.
 _Éviter_ : limite, niveau maximal

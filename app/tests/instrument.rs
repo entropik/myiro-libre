@@ -11,7 +11,7 @@ use app::instrument::{
 use app::pont::{Architecture, Panne, PontSimule, DATE_ETALONNAGE_SIMULEE};
 use app::textes::{texte, Langue};
 use pont_protocole::{
-    ErreurPont, Geometrie, Horodatage, Info, Palier, RemiseAuRepos, Reponse, Requete,
+    Declenchement, ErreurPont, Geometrie, Horodatage, Info, Palier, RemiseAuRepos, Reponse, Requete,
 };
 
 /// Numéro de série fictif : jamais celui d'un instrument réel.
@@ -335,7 +335,7 @@ fn le_pont_est_lance_avec_le_plafond_mesure_ponctuelle_sans_rien_faire_a_l_ouver
     assert_eq!(recu, Some(Palier::MesurePonctuelle));
     assert!(!journal.requetes().iter().any(|r| matches!(
         r,
-        Requete::Etalonner {} | Requete::MesurerPonctuelle {} | Requete::MesurerBande { .. }
+        Requete::Etalonner {} | Requete::MesurerPonctuelle { .. } | Requete::MesurerBande { .. }
     )));
 }
 
@@ -574,6 +574,7 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
         Probleme::MesureDelai { detail: d() },
         Probleme::EtalonnageARefaire { detail: d() },
         Probleme::ReposIncertain { detail: d() },
+        Probleme::DeclenchementRefuse { detail: d() },
     ];
     // Garde : ajouter une variante à `Probleme` casse la compilation ici ;
     // on lui donne alors un numéro, et l'assertion exige qu'elle soit listée.
@@ -596,13 +597,14 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
             Probleme::MesureDelai { .. } => 14,
             Probleme::EtalonnageARefaire { .. } => 15,
             Probleme::ReposIncertain { .. } => 16,
+            Probleme::DeclenchementRefuse { .. } => 17,
         }
     }
     let mut numeros: Vec<usize> = tous.iter().map(numero).collect();
     numeros.sort();
     assert_eq!(
         numeros,
-        (0..17).collect::<Vec<_>>(),
+        (0..18).collect::<Vec<_>>(),
         "chaque problème est listé une fois"
     );
     for probleme in tous {
@@ -880,7 +882,10 @@ fn une_mesure_ponctuelle_demande_de_poser_sur_la_couleur_puis_rend_la_mesure_du_
     let acquise = instrument
         .mesurer_ponctuelle(&mut |geste: Geste| {
             // Le geste est demandé avant que la mesure parte vers le pont.
-            assert!(!journal.requetes().contains(&Requete::MesurerPonctuelle {}));
+            assert!(!journal
+                .requetes()
+                .iter()
+                .any(|r| matches!(r, Requete::MesurerPonctuelle { .. })));
             demandes.push(geste);
             Accord::Fait
         })
@@ -889,7 +894,9 @@ fn une_mesure_ponctuelle_demande_de_poser_sur_la_couleur_puis_rend_la_mesure_du_
     assert_eq!(demandes, vec![Geste::PoserSurCouleur]);
     assert_eq!(
         journal.requetes().last(),
-        Some(&Requete::MesurerPonctuelle {})
+        Some(&Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Manuel
+        })
     );
     // La provenance est celle du pont, telle quelle.
     let provenance = acquise.mesure.provenance();
@@ -1029,6 +1036,91 @@ fn une_mesure_echouee_reste_sur_la_feuille_mesurer_avec_une_action() {
         assert!(matches!(instrument.etat(), Etat::Etalonne(_)), "{refus:?}");
         assert!(instrument.vue().mesurable, "{refus:?}");
     }
+}
+
+// ---- Mesure automatique (ticket #51) ----
+
+/// En automatique, la demande au pont porte le déclenchement : le pont fait
+/// partir la mesure lui-même, l'opérateur a seulement posé l'instrument.
+#[test]
+fn en_automatique_la_mesure_est_demandee_declenchee_par_le_pont() {
+    let simule = PontSimule::avec_instruments(&[SERIE]);
+    let journal = simule.journal();
+    let mut instrument = etalonne(simule, "mesure-automatique");
+    let mut demandes = Vec::new();
+
+    let acquise = instrument.mesurer_ponctuelle_avec(
+        &mut |geste: Geste| {
+            demandes.push(geste);
+            Accord::Fait
+        },
+        Declenchement::Automatique,
+    );
+
+    assert!(acquise.is_some());
+    assert_eq!(demandes, vec![Geste::PoserSurCouleur]);
+    assert_eq!(
+        journal.requetes().last(),
+        Some(&Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Automatique
+        })
+    );
+}
+
+#[test]
+fn en_manuel_la_demande_reste_celle_d_avant() {
+    let simule = PontSimule::avec_instruments(&[SERIE]);
+    let journal = simule.journal();
+    let mut instrument = etalonne(simule, "mesure-manuelle");
+
+    instrument.mesurer_ponctuelle_avec(&mut fait, Declenchement::Manuel);
+
+    assert_eq!(
+        journal.requetes().last(),
+        Some(&Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Manuel
+        })
+    );
+}
+
+/// L'instrument refuse de mesurer sans son bouton : il reste étalonné, l'avis
+/// s'affiche sur la feuille Mesurer et propose de passer en manuel.
+#[test]
+fn un_declenchement_refuse_propose_de_passer_en_manuel() {
+    for (n, code) in [-9986, -9791].into_iter().enumerate() {
+        let simule = PontSimule::avec_instruments(&[SERIE]).echouer_apres(
+            Palier::MesurePonctuelle,
+            0,
+            erreur(ErreurPont::DeclenchementRefuse { code }),
+        );
+        let mut instrument = etalonne(simule, &format!("declenchement-refuse-{n}"));
+
+        let rendue = instrument.mesurer_ponctuelle_avec(&mut fait, Declenchement::Automatique);
+
+        assert_eq!(rendue, None);
+        let probleme = instrument.probleme().expect("problème");
+        assert_eq!(probleme.code(), "declenchement_refuse");
+        assert_eq!(probleme.ecran(), Ecran::Mesure);
+        assert!(!probleme.guide_cablage());
+        assert!(probleme.detail().unwrap().contains(&code.to_string()));
+        assert!(matches!(instrument.etat(), Etat::Etalonne(_)));
+        assert!(instrument.etalonnage().is_some());
+        assert!(
+            instrument.vue().mesurable,
+            "la mesure manuelle reste possible"
+        );
+    }
+}
+
+#[test]
+fn le_refus_du_declenchement_a_ses_textes_dans_les_deux_langues() {
+    for langue in [Langue::Francais, Langue::Anglais] {
+        for partie in ["cause", "action"] {
+            let cle = format!("probleme.declenchement_refuse.{partie}");
+            assert!(!texte(langue, &cle).is_empty(), "{cle}");
+        }
+    }
+    assert!(texte(Langue::Francais, "probleme.declenchement_refuse.action").contains("manuel"));
 }
 
 /// Personne n'a appuyé sur le bouton de l'instrument dans le délai du pont.

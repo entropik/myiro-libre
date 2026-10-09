@@ -145,14 +145,22 @@
         <label class="label" for="condition-mesure" data-t="details.condition"></label>
         <select class="input" id="condition-mesure" data-mesurer-condition></select>
       </div>
-      <p class="prose" data-mesurer-consigne data-t="mesurer.consigne"></p>
+      <div class="field">
+        <span class="label" id="declenchement-mesure" data-t="mesurer.declenchement"></span>
+        <div class="seg" role="group" aria-labelledby="declenchement-mesure" data-mesurer-declenchement>
+          <button aria-pressed="true" data-declenchement="automatique" data-t="mesurer.declenchement.automatique"></button>
+          <button aria-pressed="false" data-declenchement="manuel" data-t="mesurer.declenchement.manuel"></button>
+        </div>
+      </div>
+      <!-- Consigne et texte « en cours » suivent le choix « Mesure » (mesurer.js). -->
+      <p class="prose" data-mesurer-consigne data-t="mesurer.consigne.automatique"></p>
       <div class="notice notice--warn" data-mesurer-avis hidden><p><b data-avis-cause></b> <span data-avis-action></span></p></div>
       <div class="actions">
         <button class="btn btn--primary" data-mesurer data-t="mesurer.action" disabled></button>
         <button class="btn" data-action="reessayer" data-mesurer-reessayer data-t="ecran.reessayer" hidden></button>
       </div>
       <p class="why" data-mesurer-raison></p>
-      <p class="prose" role="status" data-mesurer-en-cours data-t="mesurer.en_cours" hidden></p>
+      <p class="prose" role="status" data-mesurer-en-cours data-t="mesurer.en_cours.automatique" hidden></p>
       <details class="replie" data-mesurer-details-techniques hidden><summary data-t="ecran.details"></summary><pre data-details-texte></pre></details>
       <h2 class="empty__text" data-mesurer-vide data-t="vide.mesurer.phrase"></h2>
       <div class="section" data-mesurer-liste hidden>

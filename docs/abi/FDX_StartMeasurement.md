@@ -1,6 +1,6 @@
 # FDX_StartMeasurement
 
-**En clair** : c'est l'équivalent logiciel de l'appui sur le bouton du MYIRO-1. Une fois la mesure armée par `FDX_SetMeasureCondition`, cette fonction demande à l'instrument de mesurer tout de suite, sans qu'on touche à son bouton. La DLL ne l'interdit pas pour une mesure ponctuelle en réflexion, mais aucun logiciel du fabricant ne s'en sert ainsi, et elle **n'est pas dans la liste blanche** du pont : son entrée attend l'accord du mainteneur (ticket #51).
+**En clair** : c'est l'équivalent logiciel de l'appui sur le bouton du MYIRO-1. Une fois la mesure armée par `FDX_SetMeasureCondition`, cette fonction demande à l'instrument de mesurer tout de suite, sans qu'on touche à son bouton. La DLL ne l'interdit pas pour une mesure ponctuelle en réflexion, mais aucun logiciel du fabricant ne s'en sert ainsi. Elle est dans la liste blanche du pont depuis l'accord du mainteneur du 9 octobre 2026 (ticket #51, complément plus bas), pour la mesure ponctuelle automatique.
 
 ## Signature
 
@@ -47,7 +47,11 @@ Pour la mesure en réflexion, ponctuelle ou en bande, MYIRO tools arme puis **la
 
 Export sans argument, ni `FDX_Set*` ni `FDX_JIG_*`, qui ne fait que démarrer une acquisition déjà armée, par la même commande que `FDX_StopMeasurement` (déjà autorisé) avec un autre paramètre. Risque matériel jugé faible (supposé). **Hors liste blanche** : son entrée dans `crates/fdx-sys` demande l'accord du mainteneur, puis un essai sur l'instrument réel au palier Mesure ponctuelle.
 
-## Pour le pont (si l'accord est donné)
+### Complément du 9 octobre 2026 : accord du mainteneur
+
+Le mainteneur a donné son accord : l'export entre dans la liste blanche de `crates/fdx-sys` comme **seconde exception nommée**, avec `FDX_SetMeasureCondition` (ADR 0005, complément du même jour). Le pont l'appelle par la méthode `declencher` du trait `SdkMyiro1`, selon les règles ci-dessous. Le classement ci-dessus, « hors liste blanche », reste pour l'historique.
+
+## Pour le pont
 
 - Seulement avec le type 0 armé, après l'événement 1 ; jamais au repos, jamais en bande.
 - Après l'appel : attendre les événements 2 et 3 comme aujourd'hui, avec un délai court (la mesure part tout de suite, pas d'attente d'un appui) ; un code de -9793 à -9789 veut dire que l'instrument refuse le déclenchement logiciel : revenir au mode manuel, sans le présenter comme une panne.
@@ -58,6 +62,8 @@ Export sans argument, ni `FDX_Set*` ni `FDX_JIG_*`, qui ne fait que démarrer un
 1. Armer une mesure ponctuelle, attendre l'événement 1, appeler `FDX_StartMeasurement` sans toucher au bouton : code rendu, événements reçus (2 puis 3 attendus), voyant.
 2. Comparer la mesure à une mesure du même blanc faite au bouton.
 3. Vérifier que le réarmement automatique et le désarmement suivent comme après un appui.
+
+Essai prévu : `cargo test -p pont-myiro1 --test dll -- --ignored --nocapture palier_mesure_automatique`, avec l'accord du mainteneur.
 
 ## Preuves (locales)
 

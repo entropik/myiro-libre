@@ -30,8 +30,13 @@ pub enum Requete {
     },
     /// Étalonnage sur le blanc : l'instrument est posé sur son capuchon.
     Etalonner {},
-    /// L'instrument attend l'appui sur son bouton, posé sur une plage.
-    MesurerPonctuelle {},
+    /// Mesure d'une plage, l'instrument posé dessus. En `manuel` (défaut, et
+    /// seule forme écrite avant le ticket #51), l'instrument attend l'appui
+    /// sur son bouton ; en `automatique`, le pont déclenche lui-même la mesure.
+    MesurerPonctuelle {
+        #[serde(default, skip_serializing_if = "Declenchement::est_manuel")]
+        declenchement: Declenchement,
+    },
     /// L'instrument attend un passage le long d'une rangée ; avec
     /// `plages_attendues`, une lecture qui n'en compte pas autant est refusée.
     MesurerBande {
@@ -42,6 +47,24 @@ pub enum Requete {
     /// et termine le pont. Si la déconnexion échoue, le pont répond par une
     /// erreur et reste à l'écoute : seul un nouveau `fermer` touche la DLL.
     Fermer {},
+}
+
+/// Qui déclenche une mesure ponctuelle armée (fiche
+/// `docs/abi/FDX_StartMeasurement.md`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Declenchement {
+    /// L'opérateur appuie sur le bouton de l'instrument.
+    #[default]
+    Manuel,
+    /// Le pont déclenche la mesure par `FDX_StartMeasurement`, sans le bouton.
+    Automatique,
+}
+
+impl Declenchement {
+    pub fn est_manuel(&self) -> bool {
+        *self == Declenchement::Manuel
+    }
 }
 
 /// Lit une requête ; rejette les commandes inconnues, les champs en trop et
@@ -295,6 +318,11 @@ pub enum ErreurPont {
     SessionInexploitable {},
     /// L'instrument a signalé l'échec de la mesure (événement 4).
     MesureEchouee { erreur: i32 },
+    /// Mesure automatique : la DLL ou l'instrument a refusé de déclencher la
+    /// mesure armée (code brut de `FDX_StartMeasurement` : -9986 hors attente
+    /// de mesure, -9793 à -9789 refus de l'instrument, supposé). La mesure
+    /// reste possible en manuel, au bouton.
+    DeclenchementRefuse { code: i32 },
     /// La DLL a rendu une réponse de forme imprévue (nombre ou taille de résultats).
     ReponseInattendue { detail: String },
     /// L'instrument n'a pas répondu dans le délai prévu.
