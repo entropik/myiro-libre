@@ -63,7 +63,7 @@ fn fichier_libre(chemin: &Path) -> std::path::PathBuf {
 }
 
 /// Version de l'organisation de la base ; une base plus récente est refusée.
-const VERSION_BASE: i32 = 3;
+const VERSION_BASE: i32 = 4;
 
 /// Ce qui peut empêcher une opération sur la bibliothèque.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -74,6 +74,9 @@ pub enum ErreurBibliotheque {
     NomDejaPris(String),
     ConditionInconnue(IdCondition),
     MesureInconnue(IdMesure),
+    /// Le seuil d'une couleur de référence n'est pas un nombre fini
+    /// strictement positif.
+    SeuilInvalide,
     /// La base a été écrite par une version plus récente de myiro-libre.
     VersionBase(i32),
     /// Le fichier à importer n'est pas un CGATS lisible ; rien n'est importé.
@@ -99,6 +102,7 @@ impl fmt::Display for ErreurBibliotheque {
             }
             Self::ConditionInconnue(id) => write!(f, "condition d'impression n° {} inconnue", id.0),
             Self::MesureInconnue(id) => write!(f, "mesure n° {} inconnue", id.0),
+            Self::SeuilInvalide => f.write_str("seuil d'écart impossible"),
             Self::VersionBase(v) => write!(
                 f,
                 "bibliothèque écrite par une version plus récente (organisation {v}, attendu {VERSION_BASE} au plus)"
@@ -176,6 +180,15 @@ pub struct ResumeMesure {
     pub geometrie: Geometrie,
     /// Nombre de plages lues.
     pub plages: usize,
+}
+
+/// Une mesure désignée couleur de référence (GLOSSARY), avec l'écart ΔE00
+/// accepté. `seuil` vaut `None` tant que l'utilisateur n'en a pas fixé :
+/// aucune valeur ne le remplace.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct ReferenceCouleur {
+    pub mesure: IdMesure,
+    pub seuil: Option<f64>,
 }
 
 /// Une mesure importée d'un fichier CGATS, telle que la bibliothèque la
@@ -502,6 +515,86 @@ impl Bibliotheque {
         Ok(branches)
     }
 
+    /// Désigne une mesure d'un pont couleur de référence, ou change son seuil
+    /// si elle l'est déjà (une mesure importée ne peut pas l'être). Un seuil
+    /// doit être un nombre fini strictement positif ; `None` : pas de seuil.
+    pub fn designer_reference(&self, id: IdMesure, seuil: Option<f64>) -> Resultat<()> {
+        if seuil.is_some_and(|s| !(s.is_finite() && s > 0.0)) {
+            return Err(ErreurBibliotheque::SeuilInvalide);
+        }
+        let existe: Option<i64> = self
+            .base
+            .query_row(
+                "SELECT id FROM mesures WHERE id = ?1 AND origine = 'pont'",
+                params![id.0],
+                |l| l.get(0),
+            )
+            .optional()?;
+        if existe.is_none() {
+            return Err(ErreurBibliotheque::MesureInconnue(id));
+        }
+        self.base.execute(
+            "INSERT INTO references_couleur (mesure, seuil) VALUES (?1, ?2)
+             ON CONFLICT (mesure) DO UPDATE SET seuil = excluded.seuil",
+            params![id.0, seuil],
+        )?;
+        Ok(())
+    }
+
+    /// Remplace la référence `ancienne` par `nouvelle`, sans seuil, d'un
+    /// bloc : si la nouvelle mesure est inconnue, rien ne change.
+    pub fn remplacer_reference(&self, ancienne: IdMesure, nouvelle: IdMesure) -> Resultat<()> {
+        let transaction = self.base.unchecked_transaction()?;
+        transaction.execute(
+            "DELETE FROM references_couleur WHERE mesure = ?1",
+            params![ancienne.0],
+        )?;
+        self.designer_reference(nouvelle, None)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    /// La mesure n'est plus couleur de référence ; elle-même reste. Sans
+    /// effet si elle ne l'était pas.
+    pub fn retirer_reference(&self, id: IdMesure) -> Resultat<()> {
+        self.base.execute(
+            "DELETE FROM references_couleur WHERE mesure = ?1",
+            params![id.0],
+        )?;
+        Ok(())
+    }
+
+    /// La mesure comme couleur de référence, si elle l'est.
+    pub fn reference(&self, id: IdMesure) -> Resultat<Option<ReferenceCouleur>> {
+        Ok(self
+            .base
+            .query_row(
+                "SELECT seuil FROM references_couleur WHERE mesure = ?1",
+                params![id.0],
+                |l| {
+                    Ok(ReferenceCouleur {
+                        mesure: id,
+                        seuil: l.get(0)?,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    /// Couleurs de référence, dans l'ordre des mesures.
+    pub fn references(&self) -> Resultat<Vec<ReferenceCouleur>> {
+        let mut requete = self
+            .base
+            .prepare("SELECT mesure, seuil FROM references_couleur ORDER BY mesure")?;
+        let lignes = requete.query_map([], |l| {
+            Ok(ReferenceCouleur {
+                mesure: IdMesure(l.get(0)?),
+                seuil: l.get(1)?,
+            })
+        })?;
+        Ok(lignes.collect::<Result<_, _>>()?)
+    }
+
     /// Mesures importées, les dernières importées d'abord, avec leur condition.
     fn resumes_importees(&self) -> Resultat<Vec<(IdCondition, ResumeImportee)>> {
         let mut requete = self.base.prepare(
@@ -822,6 +915,7 @@ fn migrer(base: &mut Connection) -> Resultat<()> {
             0 => transaction.execute_batch(ORGANISATION_1)?,
             1 => transaction.execute_batch(ORGANISATION_2)?,
             2 => transaction.execute_batch(ORGANISATION_3)?,
+            3 => transaction.execute_batch(ORGANISATION_4)?,
             autre => unreachable!("aucune migration depuis l'organisation {autre}"),
         }
         version += 1;
@@ -899,6 +993,16 @@ INSERT INTO mesures_3 (id, condition, origine, instrument, horodatage, geometrie
 DROP TABLE mesures;
 ALTER TABLE mesures_3 RENAME TO mesures;
 CREATE INDEX mesures_par_condition ON mesures (condition);
+";
+
+/// Organisation 4 (ticket #8), par-dessus l'organisation 3 : les couleurs
+/// de référence et leur seuil ΔE00. Un seuil absent est `NULL`, jamais une
+/// valeur sentinelle. Rien n'est réécrit ni effacé.
+const ORGANISATION_4: &str = "
+CREATE TABLE references_couleur (
+    mesure INTEGER PRIMARY KEY REFERENCES mesures (id),
+    seuil REAL CHECK (seuil IS NULL OR seuil > 0)
+);
 ";
 
 #[cfg(test)]
