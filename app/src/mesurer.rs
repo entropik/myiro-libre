@@ -109,6 +109,11 @@ pub struct Valeurs {
     pub x: String,
     pub y: String,
     pub z: String,
+    /// Couleur à l'écran, `#rrggbb` (sRGB, crate `colorimetrie`).
+    pub ecran: String,
+    /// Couleur hors du gamut sRGB, ramenée dedans : l'écran n'en montre
+    /// qu'une approximation.
+    pub approchee: bool,
 }
 
 /// Longueurs d'onde sur lesquelles la crate `colorimetrie` calcule : 380 à
@@ -141,6 +146,7 @@ fn valeurs(spectre: &[f32], langue: Langue) -> Option<Valeurs> {
     let xyz = colorimetrie::spectre_vers_xyz(&spectre).ok()?;
     let lab = colorimetrie::xyz_vers_lab(xyz, colorimetrie::blanc_d50()).ok()?;
     let lch = colorimetrie::lab_vers_lch(lab).ok()?;
+    let ecran = colorimetrie::lab_vers_srgb(lab).ok()?;
     let d = |v| decimal(v, langue);
     Some(Valeurs {
         l: d(lab.l),
@@ -151,6 +157,8 @@ fn valeurs(spectre: &[f32], langue: Langue) -> Option<Valeurs> {
         x: d(xyz.x),
         y: d(xyz.y),
         z: d(xyz.z),
+        ecran: ecran.hexadecimal(),
+        approchee: ecran.ramenee,
     })
 }
 

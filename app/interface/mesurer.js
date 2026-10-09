@@ -115,7 +115,15 @@
       const nomCellule = el("td");
       nomCellule.append(nom);
       const range = f.erreur_rangement ? `${f.condition_impression} · ${t("mesurer.non_rangee")}` : f.condition_impression;
-      tr.append(el("td", "id num", String(f.numero)), nomCellule, el("td", "num", date(f.horodatage)), el("td", "", range));
+      // Petit carré de la couleur, devant le nom (même spectre que le détail).
+      const v = f.spectres[spectreChoisi].valeurs;
+      const couleur = el("td", "id num");
+      if (v) {
+        const carre = el("span", "swatch");
+        carre.style.setProperty("--c", v.ecran);
+        couleur.append(carre);
+      }
+      tr.append(el("td", "id num", String(f.numero)), couleur, nomCellule, el("td", "num", date(f.horodatage)), el("td", "", range));
       tr.addEventListener("click", (e) => {
         if (e.target === nom) return;
         choisie = f.numero;
@@ -137,6 +145,23 @@
     return c;
   }
 
+  // Grand carré de la couleur mesurée, calculée en Rust (crate colorimetrie) ; inconnue : pas de carré.
+  function apercu(v) {
+    const bloc = el("div");
+    bloc.append(el("span", "label", t("mesurer.couleur")));
+    if (!v) {
+      bloc.append(el("p", "", t("cartouche.inconnue")));
+      return bloc;
+    }
+    const carre = el("span", "apercu");
+    carre.style.setProperty("--c", v.ecran);
+    carre.setAttribute("role", "img");
+    carre.setAttribute("aria-label", t("mesurer.couleur"));
+    bloc.append(carre);
+    if (v.approchee) bloc.append(el("p", "why", t("mesurer.approchee")));
+    return bloc;
+  }
+
   function dessinerDetail() {
     const f = fiches.find((m) => m.numero === choisie);
     if (!f) {
@@ -152,7 +177,7 @@
     [0, 1, 2].forEach((i) => {
       const b = el("button", "", conditionSpectre(f, i));
       b.setAttribute("aria-pressed", String(i === spectreChoisi));
-      b.addEventListener("click", () => { spectreChoisi = i; dessinerDetail(); });
+      b.addEventListener("click", () => { spectreChoisi = i; dessiner(); }); // la liste suit le spectre choisi
       seg.append(b);
     });
     tete.append(seg);
@@ -172,7 +197,7 @@
     }
     const table = el("table");
     table.append(corps);
-    valeurs.append(tete, table, el("p", "why", t("mesurer.calcul")));
+    valeurs.append(apercu(v), tete, table, el("p", "why", t("mesurer.calcul")));
 
     const cartouche = el("div", "cartouche");
     const titre = el("div", "cartouche__title");

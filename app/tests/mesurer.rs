@@ -379,6 +379,22 @@ fn sans_conditions_de_calcul_tout_reste_inconnu() {
 
 // ---- Corrections de relecture ----
 
+/// Le carré de couleur vient de notre colorimétrie (Lab D50 → sRGB), pour
+/// chaque spectre ; le gris 18 % (L* 49,50) donne un gris sRGB de 118.
+#[test]
+fn chaque_spectre_a_sa_couleur_a_l_ecran() {
+    let fiche = fiche_du_gris("gris-ecran", demande_myiro1(), Langue::Francais);
+
+    for spectre in &fiche.spectres {
+        let v = spectre.valeurs.as_ref().unwrap();
+        assert_eq!(v.ecran, "#767676");
+        assert!(!v.approchee);
+    }
+    // Sans valeurs, pas de couleur : « inconnu » à l'écran.
+    let inconnu = fiche_du_gris("gris-ecran-inconnu", Info::Inconnue, Langue::Francais);
+    assert!(inconnu.spectres.iter().all(|s| s.valeurs.is_none()));
+}
+
 /// Un micrologiciel que le pont n'a pas su lire (texte vide) est inconnu,
 /// jamais une case vide du cartouche.
 #[test]

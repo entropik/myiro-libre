@@ -341,6 +341,8 @@ const FRANCAIS: Catalogue = &[
         "Calculées par myiro-libre à partir du spectre, avec ses propres tables\u{202f}: illuminant D50, observateur 2°.",
     ),
     ("mesurer.ranger", "Ranger à nouveau"),
+    ("mesurer.couleur", "Couleur à l’écran"),
+    ("mesurer.approchee", "Couleur approchée à l’écran"),
     (
         "mesurer.erreur.sans_instrument.cause",
         "Aucun instrument n’est prêt à mesurer.",
@@ -707,6 +709,8 @@ const ANGLAIS: Catalogue = &[
         "Computed by myiro-libre from the spectrum, with its own tables: illuminant D50, 2° observer.",
     ),
     ("mesurer.ranger", "Store again"),
+    ("mesurer.couleur", "Colour on screen"),
+    ("mesurer.approchee", "Approximate colour on screen"),
     (
         "mesurer.erreur.sans_instrument.cause",
         "No instrument is ready to measure.",
