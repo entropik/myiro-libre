@@ -496,6 +496,18 @@ fn mesures_seance(seance: State<'_, SeanceMesures>, langue: &str) -> EcranMesure
     }
 }
 
+/// Spectres d'une mesure de la séance, pour sa courbe (ticket #10).
+#[tauri::command]
+fn spectres_seance(
+    seance: State<'_, SeanceMesures>,
+    numero: usize,
+) -> Result<bibliotheque::SpectresMesure, &'static str> {
+    let seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
+    seance
+        .spectres(numero)
+        .ok_or("bibliotheque.erreur.autre")
+}
+
 /// Renomme une mesure de la séance, et dans la bibliothèque si elle y est rangée.
 #[tauri::command]
 fn renommer_mesure(
@@ -537,6 +549,7 @@ pub fn lancer() {
             mode_mesure,
             choisir_mode_mesure,
             mesures_seance,
+            spectres_seance,
             renommer_mesure,
             ranger_a_nouveau,
             catalogue,
@@ -549,6 +562,7 @@ pub fn lancer() {
             colonne::bibliotheque_demonstration,
             colonne::bibliotheque_arborescence,
             colonne::bibliotheque_detail_mesure,
+            colonne::bibliotheque_spectres,
             colonne::bibliotheque_creer_condition,
             colonne::bibliotheque_renommer_condition,
             colonne::bibliotheque_exporter_cgats,

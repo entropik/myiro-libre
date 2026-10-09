@@ -247,6 +247,12 @@ impl Seance {
         self.trouver(numero).map(|m| &m.acquise.mesure)
     }
 
+    /// Spectres de la mesure n° `numero`, par condition de mesure, pour sa
+    /// courbe : rangée ou non dans la bibliothèque.
+    pub fn spectres(&self, numero: usize) -> Option<bibliotheque::SpectresMesure> {
+        self.mesure(numero).map(bibliotheque::spectres_mesure)
+    }
+
     /// Renomme une mesure de la séance ; le nom est débarrassé de ses espaces
     /// de début et de fin. Une mesure rangée est d'abord renommée dans la
     /// bibliothèque par `renommer_rangee` : si celle-ci refuse, rien ne

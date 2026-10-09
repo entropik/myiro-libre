@@ -589,3 +589,37 @@ fn une_mesure_refusee_se_range_a_nouveau() {
         0
     );
 }
+
+// ---- Courbe de spectre depuis la liste de la séance (ticket #10) ----
+
+/// Une mesure de la séance ouvre sa courbe même si la bibliothèque l'a
+/// refusée : ses spectres viennent de la séance, rangés par condition.
+#[test]
+fn une_mesure_de_la_seance_donne_ses_spectres_par_condition_meme_non_rangee() {
+    let mut instrument = etalonne(PontSimule::avec_instruments(&[SERIE]), "spectres");
+    let (_biblio, condition) = bibliotheque("spectres-biblio");
+    let mut seance = Seance::default();
+    let numero = seance
+        .mesurer(
+            &mut instrument,
+            &mut fait,
+            &condition,
+            |_, _| Err("bibliothèque indisponible".into()),
+            Langue::Francais,
+        )
+        .expect("mesure faite");
+
+    let spectres = seance.spectres(numero).expect("mesure de la séance");
+    let Info::Confirmee(nm) = &spectres.longueurs_onde else {
+        panic!("longueurs d'onde confirmées par le pont simulé");
+    };
+    assert_eq!((nm.len(), nm[0], nm[35]), (36, 380, 730));
+    assert_eq!(spectres.plages.len(), 1);
+    let plage = seance.mesure(numero).unwrap().plages()[0].clone();
+    let [m0, m1, m2] = &spectres.plages[0].conditions;
+    assert_eq!(m0.as_ref().unwrap().valeurs, plage.m0().to_vec());
+    assert_eq!(m1.as_ref().unwrap().valeurs, plage.m1().to_vec());
+    assert_eq!(m2.as_ref().unwrap().valeurs, plage.m2().to_vec());
+
+    assert!(seance.spectres(numero + 1).is_none());
+}

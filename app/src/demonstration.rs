@@ -164,8 +164,29 @@ pub fn remplir(biblio: &Bibliotheque) -> Result<(), ErreurBibliotheque> {
     // Mesure importée d'un fichier CGATS fictif de 36 plages, comme une mire
     // de comparaison : Lab seuls, en M1 d'après la source lumineuse, sans
     // date ; ses spectres restent inconnus.
+    // Relevé spectral fictif d'un papier, en M1 seulement : sur la courbe,
+    // M0 et M2 sont « non disponibles ».
+    biblio.importer_mesure(jet.id, "papier-m1.txt", &cgats_papier_m1())?;
     biblio.importer_mesure(jet.id, "releve-lab.txt", &cgats_lab_seul())?;
     Ok(())
+}
+
+/// Fichier CGATS fictif : le spectre M1 d'un papier, de 380 à 730 nm, en
+/// réflectance de 0 à 1 (colonnes `nm380`…).
+fn cgats_papier_m1() -> String {
+    let colonnes: Vec<String> = (0..36).map(|i| format!("nm{}", 380 + 10 * i)).collect();
+    let valeurs: Vec<String> = spectre(&PAPIER, 1.0)
+        .iter()
+        .map(|v| format!("{v:.4}"))
+        .collect();
+    format!(
+        "CGATS.17\r\nORIGINATOR\t\"Logiciel fictif\"\r\nCREATED\t\"2026-10-05\"\r\n\
+         MEASUREMENT_SOURCE\t\"D50\"\r\nNUMBER_OF_FIELDS\t37\r\n\
+         BEGIN_DATA_FORMAT\r\nSAMPLE_ID\t{}\r\nEND_DATA_FORMAT\r\n\
+         NUMBER_OF_SETS\t1\r\nBEGIN_DATA\r\nPapier\t{}\r\nEND_DATA\r\n",
+        colonnes.join("\t"),
+        valeurs.join("\t")
+    )
 }
 
 /// Fichier CGATS fictif : 36 plages réparties sur un cercle de teintes, à

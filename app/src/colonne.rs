@@ -9,7 +9,7 @@ use std::sync::Mutex;
 
 use bibliotheque::{
     Bibliotheque, Branche, ConditionImpression, ErreurBibliotheque, IdCondition, IdMesure,
-    Instrument, MesureEnregistree,
+    Instrument, MesureEnregistree, SpectresMesure,
 };
 use cgats::MesureImportee;
 use pont_protocole::{ConditionMesure, Geometrie, Horodatage, Info};
@@ -88,6 +88,11 @@ impl BibliothequeOuverte {
                 .unwrap_or_default();
             Ok(DetailMesure::de(&mesure, nom))
         })
+    }
+
+    /// Spectres d'une mesure, du pont ou importée, pour sa courbe.
+    pub fn spectres(&self, id: IdMesure) -> Result<SpectresMesure, String> {
+        self.avec(|b| b.spectres(id))
     }
 
     pub fn creer_condition(&self, nom: &str) -> Result<ConditionImpression, String> {
@@ -429,6 +434,15 @@ pub fn bibliotheque_detail_mesure(
     ouverte.detail_mesure(IdMesure(id))
 }
 
+/// Spectres d'une mesure de la bibliothèque, pour sa courbe (ticket #10).
+#[tauri::command]
+pub fn bibliotheque_spectres(
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+    id: i64,
+) -> Result<SpectresMesure, String> {
+    ouverte.spectres(IdMesure(id))
+}
+
 #[tauri::command]
 pub fn bibliotheque_creer_condition(
     ouverte: tauri::State<'_, BibliothequeOuverte>,
@@ -676,9 +690,47 @@ mod tests {
                     .collect::<Vec<_>>()
             })
             .collect();
-        assert_eq!(fichiers, [vec!["releve-lab.txt"], vec![], vec![]]);
+        assert_eq!(
+            fichiers,
+            [vec!["releve-lab.txt", "papier-m1.txt"], vec![], vec![]]
+        );
         // Assez de plages pour voir le tableau défiler seul (ticket #9).
         assert_eq!(branches[0].importees[0].plages, 36);
+    }
+
+    /// Courbe de spectre (ticket #10) : une mesure du pont donne ses trois
+    /// conditions, une importée seulement celles que son fichier contient.
+    #[test]
+    fn les_spectres_d_une_mesure_arrivent_a_la_page_par_condition() {
+        let (_dossier, ouverte) = demonstration();
+        let branches = ouverte.arborescence("").unwrap();
+        let bande = ouverte.spectres(branches[0].mesures[0].id).unwrap();
+        assert_eq!(bande.plages.len(), 4);
+        assert!(bande.plages[0].conditions.iter().all(Option::is_some));
+        // L'azurant du papier se voit : M1 au-dessus de M2 vers 440 nm.
+        let [_, m1, m2] = &ouverte
+            .spectres(branches[0].mesures[1].id)
+            .unwrap()
+            .plages[0]
+            .conditions;
+        assert!(m1.as_ref().unwrap().valeurs[6] > m2.as_ref().unwrap().valeurs[6] + 0.03);
+
+        // Le relevé de la démonstration n'a que son spectre M1 : M0 et M2 ne
+        // sont pas disponibles.
+        let releve = branches[0]
+            .importees
+            .iter()
+            .find(|m| m.fichier == "papier-m1.txt")
+            .expect("relevé spectral de démonstration");
+        let spectres = ouverte.spectres(releve.id).unwrap();
+        let [m0, m1, m2] = &spectres.plages[0].conditions;
+        assert!(m0.is_none() && m2.is_none());
+        assert_eq!(m1.as_ref().unwrap().valeurs.len(), 36);
+
+        assert_eq!(
+            ouverte.spectres(IdMesure(999)).map(|_| ()),
+            Err("bibliotheque.erreur.autre".to_string())
+        );
     }
 
     #[test]
