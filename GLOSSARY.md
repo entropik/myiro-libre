@@ -194,8 +194,12 @@ _Éviter_ : validation de profil, test de profil
 ### Densitométrie et contrôle
 
 **Densité** :
-Valeur densitométrique (statut T, E, I…) calculée à partir du spectre d'une plage mesurée.
+Valeur densitométrique (statut T, E, I…) calculée à partir du spectre d'une plage mesurée. myiro-libre calcule les statuts E et T (cyan, magenta, jaune) et la densité visuelle ISO depuis le spectre M0, avec les tables d'ArgyllCMS (`docs/references/icc-densite.md`). Elle est **absolue** (rapportée au blanc parfait) ou **relative** (rapportée au blanc papier) ; impossible à calculer, elle est inconnue, jamais zéro.
 _Éviter_ : D, valeur densito
+
+**Blanc papier** :
+Mesure du papier non imprimé qui sert de zéro à une densité relative. Elle doit avoir été faite dans la même condition de mesure (M0) que la plage.
+_Éviter_ : papier nu, support, zéro papier
 
 **Contrôle d'impression** :
 Comparaison d'un tirage mesuré à une référence, avec verdict selon des tolérances, et suivi dans le temps pour une condition d'impression.

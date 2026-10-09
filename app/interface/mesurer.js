@@ -35,6 +35,11 @@
   let version = "";
   // « Mesure : automatique / manuelle », retenu par le module Rust `mesurer` d'une fois sur l'autre.
   let declenchement = "automatique";
+  // Panneau Densités : statut E ou T (retenu), absolue ou relative au blanc papier choisi
+  // parmi les mesures de la séance. Les densités viennent du module Rust `mesurer`.
+  let statutDensite = memoire("statut-densite") === "T" ? "T" : "E";
+  let densiteRelative = false;
+  let papier = null; // numéro de la mesure prise comme blanc papier
 
   const langue = () => document.documentElement.lang || "fr";
 
@@ -220,7 +225,112 @@
     cartouche.append(titre, cells, pied);
     const espace = el("div", "section");
     espace.append(cartouche);
-    detail.replaceChildren(valeurs, espace);
+    detail.replaceChildren(valeurs, panneauDensites(f), espace);
+  }
+
+  // ---- Panneau Densités : réglages, puis valeurs demandées au module Rust ----
+  function segment(libelle, choix, actif, choisir) {
+    const champ = el("div", "field");
+    const id = `densite-${libelle}`;
+    const titre = el("span", "label", t(`densite.${libelle}`));
+    titre.id = id;
+    const seg = el("div", "seg");
+    seg.setAttribute("role", "group");
+    seg.setAttribute("aria-labelledby", id);
+    for (const [valeur, texte, aide] of choix) {
+      const b = el("button", "", texte);
+      if (aide) b.title = aide;
+      b.setAttribute("aria-pressed", String(valeur === actif));
+      b.addEventListener("click", () => { choisir(valeur); dessinerDetail(); });
+      seg.append(b);
+    }
+    champ.append(titre, seg);
+    return champ;
+  }
+
+  function panneauDensites(f) {
+    const bloc = el("div", "section section--serree");
+    const tete = el("div", "section__head");
+    tete.append(el("span", "label label--ink", t("densite.titre")));
+    bloc.append(tete);
+    bloc.append(segment("statut", [["E", "E", t("densite.statut.E")], ["T", "T", t("densite.statut.T")]], statutDensite, (v) => {
+      statutDensite = v;
+      memoire("statut-densite", v);
+    }));
+    bloc.append(segment("mode", [[false, t("densite.absolue")], [true, t("densite.relative")]], densiteRelative, (v) => {
+      densiteRelative = v;
+    }));
+    if (densiteRelative) {
+      const champ = el("div", "field");
+      const etiquette = el("label", "label", t("densite.papier"));
+      etiquette.htmlFor = "densite-papier";
+      const choix = el("select", "input");
+      choix.id = "densite-papier";
+      const vide = el("option", "", t("densite.papier.choisir"));
+      vide.value = "";
+      choix.append(vide, ...fiches.map((m) => {
+        const o = el("option", "", `${m.numero} · ${m.nom}`);
+        o.value = String(m.numero);
+        return o;
+      }));
+      choix.value = papier === null ? "" : String(papier);
+      choix.addEventListener("change", () => {
+        papier = choix.value === "" ? null : Number(choix.value);
+        dessinerDetail();
+      });
+      champ.append(etiquette, choix);
+      bloc.append(champ);
+    }
+    const resultat = el("div");
+    bloc.append(resultat);
+    remplirDensites(resultat, f.numero);
+    return bloc;
+  }
+
+  // Densités inconnues : la raison, jamais un zéro.
+  function afficherDensites(resultat, d) {
+    const inconnu = t("cartouche.inconnu");
+    const v = d && d.valeurs;
+    const corps = el("tbody");
+    const tr = el("tr");
+    const tete = el("tr");
+    for (const canal of ["cyan", "magenta", "jaune", "visuel"]) {
+      tete.append(el("th", "r", t(`densite.${canal}`)));
+      tr.append(el("td", "r num", v ? v[canal] : inconnu));
+    }
+    corps.append(tr);
+    const table = el("table");
+    const thead = el("thead");
+    thead.append(tete);
+    table.append(thead, corps);
+    resultat.replaceChildren(table);
+    if (d) {
+      const condition = d.condition.statut === "inconnue" ? t("cartouche.inconnue")
+        : d.condition.statut === "supposee" ? `${d.condition.valeur} (${t("details.a_confirmer")})` : d.condition.valeur;
+      const cells = el("div", "cells");
+      cells.append(cellule(t("densite.condition"), condition, true));
+      if (d.papier_nom) cells.append(cellule(t("densite.papier"), d.papier_nom, true));
+      resultat.append(cells);
+    }
+    const raison = d ? d.raison : "densite.inconnue.papier";
+    resultat.append(el("p", "why", raison ? t(raison) : t("densite.calcul")));
+    resultat.append(el("p", "why", t("densite.limite")));
+  }
+
+  async function remplirDensites(resultat, numero) {
+    // Relative sans papier choisi : rien à demander, la raison suffit.
+    if (densiteRelative && papier === null) {
+      afficherDensites(resultat, null);
+      return;
+    }
+    const demande = { numero, statut: statutDensite, papier: densiteRelative ? papier : null, langue: langue() };
+    try {
+      const d = await invoke("densites_mesure", demande);
+      if (resultat.isConnected) afficherDensites(resultat, d);
+    } catch (cle) {
+      console.error("densites_mesure", cle);
+      if (resultat.isConnected) afficherDensites(resultat, { condition: { statut: "inconnue" }, valeurs: null, raison: null });
+    }
   }
 
   function dessiner() {

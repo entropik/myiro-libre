@@ -262,6 +262,13 @@ fn la_limite_connue_et_les_raisons_ont_un_texte_dans_les_deux_langues() {
         "densite.inconnue.calcul",
         "densite.inconnue.papier",
         "densite.inconnue.papier_condition",
+        // Libellés que le panneau compose (`densite.${…}` dans mesurer.js).
+        "densite.statut",
+        "densite.mode",
+        "densite.cyan",
+        "densite.magenta",
+        "densite.jaune",
+        "densite.visuel",
     ] {
         for langue in [Langue::Francais, Langue::Anglais] {
             assert_ne!(texte(langue, cle), cle, "{cle} sans texte");
