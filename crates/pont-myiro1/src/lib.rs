@@ -16,9 +16,9 @@ use fdx_sys::{
     TAILLE_TAMPON_INFOS,
 };
 use pont_protocole::{
-    Calcul, ConditionMesure, ConditionsCalcul, Echantillonnage, Empreinte, ErreurMesure,
-    ErreurPont, Geometrie, Horodatage, Illuminant, Info, InstrumentMesurant, Observateur, Palier,
-    Provenance, RemiseAuRepos, MODELE_MYIRO1,
+    Calcul, ConditionMesure, ConditionsCalcul, Declenchement, Echantillonnage, Empreinte,
+    ErreurMesure, ErreurPont, Geometrie, Horodatage, Illuminant, Info, InstrumentMesurant,
+    Observateur, Palier, Provenance, RemiseAuRepos, MODELE_MYIRO1,
 };
 use std::time::{Duration, Instant};
 
@@ -36,6 +36,20 @@ pub const DELAI_ETALONNAGE: Duration = Duration::from_secs(30);
 
 /// Temps laissé à l'opérateur pour poser l'instrument et appuyer sur le bouton.
 pub const DELAI_APPUI: Duration = Duration::from_secs(120);
+
+/// Mesure automatique : délai de l'événement 1 après l'armement. Observé
+/// aussitôt sur l'instrument le 7 octobre 2026 ; la marge est supposée.
+pub const DELAI_ARMEMENT: Duration = Duration::from_secs(5);
+
+/// Mesure automatique : délai de la fin de mesure (événement 3) après un
+/// déclenchement accepté. Sans attente d'opérateur, une mesure dure moins
+/// d'une seconde (supposé) ; la marge couvre un instrument lent.
+pub const DELAI_MESURE_DECLENCHEE: Duration = Duration::from_secs(30);
+
+/// Mesure automatique refusée (-9986) : temps laissé à une mesure partie au
+/// bouton juste avant pour se signaler (événement 2 ou 3) avant le
+/// désarmement. Durée supposée : à confirmer par l'essai réel.
+pub const DELAI_APRES_REFUS: Duration = Duration::from_secs(2);
 
 /// Délai maximal du retour au repos après un désarmement, et attente d'un
 /// événement entre deux essais refusés.
@@ -55,6 +69,8 @@ const CODE_NON_ETALONNE: i32 = -9983;
 
 /// Codes d'événement (fiche `docs/abi/FDX_RegisterDeviceEventHandler.md`).
 const EVENEMENT_REPOS: i32 = 0;
+const EVENEMENT_MESURE_ARMEE: i32 = 1;
+const EVENEMENT_MESURE_EN_COURS: i32 = 2;
 const EVENEMENT_MESURE_TERMINEE: i32 = 3;
 const EVENEMENT_MESURE_ECHOUEE: i32 = 4;
 const EVENEMENT_DECONNEXION: i32 = 6;
@@ -87,6 +103,11 @@ pub trait SdkMyiro1 {
     /// compare le nombre de plages reconnues à `plages_attendues` (0 : aucun
     /// contrôle).
     fn armer_bande(&mut self, plages_attendues: u32) -> Result<i32, i32>;
+    /// `FDX_StartMeasurement` : déclenche la mesure armée, comme un appui sur
+    /// le bouton. La DLL la refuse (-9986) hors de l'attente de mesure
+    /// (événement 1) ; le pont ne l'appelle qu'après cet événement, en
+    /// mesure ponctuelle seulement.
+    fn declencher(&mut self) -> Result<i32, i32>;
     /// `FDX_StopMeasurement` : désarme et ramène l'instrument au repos.
     fn arreter_mesure(&mut self) -> Result<i32, i32>;
     /// `FDX_Disconnect` : ferme la session ouverte par `FDX_Connect`.
@@ -143,7 +164,7 @@ struct Acquisition {
 
 #[derive(Clone, Copy)]
 enum Mode {
-    Ponctuelle,
+    Ponctuelle(Declenchement),
     /// Nombre de plages attendu, 0 si inconnu.
     Bande(u32),
 }
@@ -409,6 +430,17 @@ impl<S: SdkMyiro1> Session<S> {
     /// Mesure ponctuelle : arme l'instrument, attend l'appui sur son bouton,
     /// lit M0, M1, M2 et les données brutes, puis désarme dans tous les cas.
     pub fn mesurer_ponctuelle(&mut self) -> Result<MesurePonctuelle, ErreurPont> {
+        self.mesurer_ponctuelle_avec(Declenchement::Manuel)
+    }
+
+    /// Mesure ponctuelle, déclenchée au bouton (`Manuel`) ou par le pont
+    /// (`Automatique` : `FDX_StartMeasurement` après l'événement 1, jamais
+    /// avant). Un refus du déclenchement devient `DeclenchementRefuse` ;
+    /// l'instrument est désarmé dans tous les cas.
+    pub fn mesurer_ponctuelle_avec(
+        &mut self,
+        declenchement: Declenchement,
+    ) -> Result<MesurePonctuelle, ErreurPont> {
         self.autoriser(Palier::MesurePonctuelle, None)?;
         let garantie = self.garantie()?;
         let Acquisition {
@@ -416,7 +448,7 @@ impl<S: SdkMyiro1> Session<S> {
             evenements,
             remise_au_repos,
             ..
-        } = self.mesurer(Mode::Ponctuelle)?;
+        } = self.mesurer(Mode::Ponctuelle(declenchement))?;
         if plages.len() != 1 {
             return Err(inattendue(format!(
                 "{} résultats pour une mesure ponctuelle",
@@ -616,7 +648,7 @@ impl<S: SdkMyiro1> Session<S> {
         // armé, le repos prouvé ne vaut plus.
         self.repos = Repos::Incertain;
         let armement = match mode {
-            Mode::Ponctuelle => self.sdk.armer_ponctuelle(),
+            Mode::Ponctuelle(_) => self.sdk.armer_ponctuelle(),
             Mode::Bande(attendues) => self.sdk.armer_bande(attendues),
         };
         self.journal
@@ -627,7 +659,11 @@ impl<S: SdkMyiro1> Session<S> {
             }
             return Err(traduire(code));
         }
-        let resultat = self.attendre_mesure().and_then(|evenements| {
+        let attente = match mode {
+            Mode::Ponctuelle(Declenchement::Automatique) => self.declencher(),
+            _ => self.attendre_mesure(Vec::new(), DELAI_APPUI),
+        };
+        let resultat = attente.and_then(|evenements| {
             let (plages, sens) = self.lire_plages()?;
             Ok((plages, sens, evenements))
         });
@@ -781,8 +817,12 @@ impl<S: SdkMyiro1> Session<S> {
         RemiseAuRepos::ReposNonSignale {}
     }
 
-    fn attendre_mesure(&mut self) -> Result<Vec<Evenement>, ErreurPont> {
-        let echeance = Instant::now() + DELAI_APPUI;
+    /// Mesure automatique : attend l'attente de mesure (événement 1), puis
+    /// `FDX_StartMeasurement`, puis la fin de la mesure. Sans événement 1, le
+    /// déclenchement n'est jamais appelé. Si la mesure se termine avant (appui
+    /// sur le bouton pendant l'attente), elle est gardée.
+    fn declencher(&mut self) -> Result<Vec<Evenement>, ErreurPont> {
+        let echeance = Instant::now() + DELAI_ARMEMENT;
         let mut evenements = Vec::new();
         loop {
             let reste = echeance.saturating_duration_since(Instant::now());
@@ -790,24 +830,94 @@ impl<S: SdkMyiro1> Session<S> {
                 .sdk
                 .attendre_evenement(reste)
                 .ok_or(ErreurPont::Delai {})?;
-            // Les événements 2 se répètent à chaque donnée brute : un seul suffit.
-            if evenements.last().map(|e: &Evenement| e.code) != Some(evenement.code) {
-                self.journal.push(format!(
-                    "événement {} (erreur {})",
-                    evenement.code, evenement.erreur
-                ));
+            if self.noter(&mut evenements, evenement)? {
+                return Ok(evenements);
             }
-            evenements.push(evenement);
-            match evenement.code {
-                EVENEMENT_MESURE_TERMINEE => return Ok(evenements),
-                EVENEMENT_MESURE_ECHOUEE => {
-                    return Err(ErreurPont::MesureEchouee {
-                        erreur: evenement.erreur,
-                    })
-                }
-                EVENEMENT_DECONNEXION => return Err(ErreurPont::InstrumentPerdu {}),
-                _ => {}
+            if evenement.code == EVENEMENT_MESURE_ARMEE {
+                break;
             }
+        }
+        let declenchement = self.sdk.declencher();
+        self.journal
+            .push(format!("déclenchement : code {}", code_de(declenchement)));
+        match declenchement {
+            Ok(_) => self.attendre_mesure(evenements, DELAI_MESURE_DECLENCHEE),
+            Err(CODE_ETAT_INCOMPATIBLE) => self.attendre_mesure_au_bouton(evenements),
+            Err(code) => Err(ErreurPont::DeclenchementRefuse { code }),
+        }
+    }
+
+    /// Déclenchement refusé (-9986) : l'instrument n'attend plus de mesure,
+    /// peut-être parce que l'opérateur vient d'appuyer sur son bouton (supposé).
+    /// Avant de désarmer, le pont attend `DELAI_APRES_REFUS` un événement 2 ou
+    /// 3 ; si la mesure est partie, elle est gardée, sinon le refus est rapporté.
+    fn attendre_mesure_au_bouton(
+        &mut self,
+        mut evenements: Vec<Evenement>,
+    ) -> Result<Vec<Evenement>, ErreurPont> {
+        let refus = ErreurPont::DeclenchementRefuse {
+            code: CODE_ETAT_INCOMPATIBLE,
+        };
+        let echeance = Instant::now() + DELAI_APRES_REFUS;
+        loop {
+            let reste = echeance.saturating_duration_since(Instant::now());
+            let Some(evenement) = self.sdk.attendre_evenement(reste) else {
+                return Err(refus);
+            };
+            if self.noter(&mut evenements, evenement)? {
+                return Ok(evenements);
+            }
+            if evenement.code == EVENEMENT_MESURE_EN_COURS {
+                self.journal
+                    .push("mesure partie au bouton malgré le refus du déclenchement".into());
+                return self.attendre_mesure(evenements, DELAI_MESURE_DECLENCHEE);
+            }
+            if reste.is_zero() {
+                return Err(refus);
+            }
+        }
+    }
+
+    fn attendre_mesure(
+        &mut self,
+        mut evenements: Vec<Evenement>,
+        delai: Duration,
+    ) -> Result<Vec<Evenement>, ErreurPont> {
+        let echeance = Instant::now() + delai;
+        loop {
+            let reste = echeance.saturating_duration_since(Instant::now());
+            let evenement = self
+                .sdk
+                .attendre_evenement(reste)
+                .ok_or(ErreurPont::Delai {})?;
+            if self.noter(&mut evenements, evenement)? {
+                return Ok(evenements);
+            }
+        }
+    }
+
+    /// Note un événement de mesure ; `true` si la mesure est terminée, erreur
+    /// si elle a échoué ou si la liaison est perdue.
+    fn noter(
+        &mut self,
+        evenements: &mut Vec<Evenement>,
+        evenement: Evenement,
+    ) -> Result<bool, ErreurPont> {
+        // Les événements 2 se répètent à chaque donnée brute : un seul suffit.
+        if evenements.last().map(|e: &Evenement| e.code) != Some(evenement.code) {
+            self.journal.push(format!(
+                "événement {} (erreur {})",
+                evenement.code, evenement.erreur
+            ));
+        }
+        evenements.push(evenement);
+        match evenement.code {
+            EVENEMENT_MESURE_TERMINEE => Ok(true),
+            EVENEMENT_MESURE_ECHOUEE => Err(ErreurPont::MesureEchouee {
+                erreur: evenement.erreur,
+            }),
+            EVENEMENT_DECONNEXION => Err(ErreurPont::InstrumentPerdu {}),
+            _ => Ok(false),
         }
     }
 

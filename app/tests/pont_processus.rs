@@ -163,7 +163,9 @@ fn la_mesure_ponctuelle_a_six_fois_le_delai_d_une_autre_demande() {
     let mut pont = lancer("mesure_lente").avec_delai(Duration::from_millis(200));
 
     assert!(matches!(
-        pont.demander(&Requete::MesurerPonctuelle {}),
+        pont.demander(&Requete::MesurerPonctuelle {
+            declenchement: Default::default()
+        }),
         Ok(Reponse::Erreur { .. })
     ));
 }

@@ -88,6 +88,7 @@ pub struct FdxDll {
     enregistrer: FnEnregistrer,
     etalonner: FnEtalonner,
     armer: FnArmer,
+    declencher: FnSansArgument,
     arreter: FnSansArgument,
     lire: FnLire,
     connecte: bool,
@@ -113,6 +114,7 @@ impl FdxDll {
             enregistrer: resoudre(&bibliotheque, "FDX_RegisterDeviceEventHandler")?,
             etalonner: resoudre(&bibliotheque, "FDX_Calibration")?,
             armer: resoudre(&bibliotheque, "FDX_SetMeasureCondition")?,
+            declencher: resoudre(&bibliotheque, "FDX_StartMeasurement")?,
             arreter: resoudre(&bibliotheque, "FDX_StopMeasurement")?,
             lire: resoudre(&bibliotheque, "FDX_GetMeasureData")?,
             connecte: false,
@@ -226,6 +228,12 @@ impl SdkMyiro1 for FdxDll {
         };
         // SAFETY : pointeur vers 8 octets (fiche FDX_SetMeasureCondition).
         verifier(unsafe { (self.armer)(&condition) })
+    }
+
+    fn declencher(&mut self) -> Result<i32, i32> {
+        // SAFETY : aucun argument (fiche FDX_StartMeasurement) ; la DLL refuse
+        // elle-même (-9986) hors de l'attente de mesure.
+        verifier(unsafe { (self.declencher)() })
     }
 
     fn arreter_mesure(&mut self) -> Result<i32, i32> {

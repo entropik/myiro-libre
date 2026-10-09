@@ -97,7 +97,7 @@ fn main() -> ExitCode {
             // Mesure plus longue que trois fois le délai d'une autre demande
             // (200 ms dans le test), mais moins que six fois ; l'instrument
             // fictif n'a pas vu d'appui sur son bouton.
-            "mesure_lente" if matches!(requete, Ok(Requete::MesurerPonctuelle {})) => {
+            "mesure_lente" if matches!(requete, Ok(Requete::MesurerPonctuelle { .. })) => {
                 std::thread::sleep(std::time::Duration::from_millis(800));
                 Reponse::Erreur {
                     erreur: ErreurPont::Delai {},
@@ -107,7 +107,7 @@ fn main() -> ExitCode {
             "mesure_muette" if matches!(requete, Ok(Requete::Etalonner {})) => Reponse::Etalonne {
                 date: Horodatage::new("2026-10-07T09:30:00+02:00").unwrap(),
             },
-            "mesure_muette" if matches!(requete, Ok(Requete::MesurerPonctuelle {})) => loop {
+            "mesure_muette" if matches!(requete, Ok(Requete::MesurerPonctuelle { .. })) => loop {
                 std::thread::sleep(std::time::Duration::from_secs(60));
             },
             "echo" => Reponse::RequeteInvalide {

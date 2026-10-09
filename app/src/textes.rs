@@ -418,13 +418,28 @@ const FRANCAIS: Catalogue = &[
     ("ecran.etalonnage.schema.blanc", "Blanc de référence"),
     // Mesure ponctuelle : feuille Mesurer ({n} est remplacé)
     ("mesurer.nom_defaut", "Couleur {n}"),
+    ("mesurer.declenchement", "Mesure"),
+    ("mesurer.declenchement.automatique", "Automatique"),
+    ("mesurer.declenchement.manuel", "Manuelle"),
     (
-        "mesurer.consigne",
+        "mesurer.declenchement.non_retenu",
+        "Ce choix vaut pour cette séance\u{202f}: il n’a pas pu être enregistré pour la prochaine fois.",
+    ),
+    (
+        "mesurer.consigne.automatique",
+        "Posez le MYIRO-1 sur la couleur, puis cliquez sur «\u{202f}Mesurer\u{202f}».",
+    ),
+    (
+        "mesurer.consigne.manuel",
         "Posez le MYIRO-1 bien à plat sur la couleur, cliquez sur «\u{202f}Mesurer\u{202f}», puis appuyez sur le bouton de l’instrument.",
     ),
     ("mesurer.action", "Mesurer"),
     (
-        "mesurer.en_cours",
+        "mesurer.en_cours.automatique",
+        "Mesure en cours. Gardez le MYIRO-1 immobile sur la couleur.",
+    ),
+    (
+        "mesurer.en_cours.manuel",
         "Appuyez sur le bouton du MYIRO-1 et gardez-le immobile jusqu’à la fin de la mesure.",
     ),
     ("mesurer.liste", "Dernières mesures"),
@@ -494,6 +509,22 @@ const FRANCAIS: Catalogue = &[
     (
         "probleme.mesure_delai.action",
         "Cliquez de nouveau sur «\u{202f}Mesurer\u{202f}», puis appuyez sur le bouton de l’instrument dans les deux minutes.",
+    ),
+    (
+        "probleme.mesure_delai_automatique.cause",
+        "Le MYIRO-1 n’a pas terminé la mesure à temps.",
+    ),
+    (
+        "probleme.mesure_delai_automatique.action",
+        "Vérifiez qu’il est bien posé à plat sur la couleur, puis cliquez de nouveau sur «\u{202f}Mesurer\u{202f}».",
+    ),
+    (
+        "probleme.declenchement_refuse.cause",
+        "Le MYIRO-1 n’a pas accepté de mesurer sans qu’on appuie sur son bouton.",
+    ),
+    (
+        "probleme.declenchement_refuse.action",
+        "Choisissez «\u{202f}Mesure\u{202f}: manuelle\u{202f}», cliquez sur «\u{202f}Mesurer\u{202f}», puis appuyez sur le bouton de l’instrument.",
     ),
     (
         "probleme.etalonnage_a_refaire.cause",
@@ -888,13 +919,28 @@ const ANGLAIS: Catalogue = &[
     ("ecran.etalonnage.schema.blanc", "Reference white"),
     // Spot measurement: Measure sheet ({n} is replaced)
     ("mesurer.nom_defaut", "Colour {n}"),
+    ("mesurer.declenchement", "Measurement"),
+    ("mesurer.declenchement.automatique", "Automatic"),
+    ("mesurer.declenchement.manuel", "Manual"),
     (
-        "mesurer.consigne",
+        "mesurer.declenchement.non_retenu",
+        "This choice applies to this session: it could not be saved for next time.",
+    ),
+    (
+        "mesurer.consigne.automatique",
+        "Set the MYIRO-1 on the colour, then click “Measure”.",
+    ),
+    (
+        "mesurer.consigne.manuel",
         "Set the MYIRO-1 flat on the colour, click “Measure”, then press the instrument’s button.",
     ),
     ("mesurer.action", "Measure"),
     (
-        "mesurer.en_cours",
+        "mesurer.en_cours.automatique",
+        "Measuring. Keep the MYIRO-1 still on the colour.",
+    ),
+    (
+        "mesurer.en_cours.manuel",
         "Press the MYIRO-1 button and keep it still until the measurement is over.",
     ),
     ("mesurer.liste", "Latest measurements"),
@@ -964,6 +1010,22 @@ const ANGLAIS: Catalogue = &[
     (
         "probleme.mesure_delai.action",
         "Click “Measure” again, then press the instrument’s button within two minutes.",
+    ),
+    (
+        "probleme.mesure_delai_automatique.cause",
+        "The MYIRO-1 did not finish the measurement in time.",
+    ),
+    (
+        "probleme.mesure_delai_automatique.action",
+        "Check that it sits flat on the colour, then click “Measure” again.",
+    ),
+    (
+        "probleme.declenchement_refuse.cause",
+        "The MYIRO-1 refused to start the measurement without its button being pressed.",
+    ),
+    (
+        "probleme.declenchement_refuse.action",
+        "Choose “Measurement: manual”, click “Measure”, then press the instrument’s button.",
     ),
     (
         "probleme.etalonnage_a_refaire.cause",

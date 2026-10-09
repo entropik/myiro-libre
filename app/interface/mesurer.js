@@ -11,6 +11,7 @@
   const feuille = document.querySelector("[data-vue='mesurer']");
   const choixCondition = feuille.querySelector("[data-mesurer-condition]");
   const consigne = feuille.querySelector("[data-mesurer-consigne]");
+  const choixDeclenchement = feuille.querySelector("[data-mesurer-declenchement]");
   const avis = feuille.querySelector("[data-mesurer-avis]");
   const bouton = feuille.querySelector("[data-mesurer]");
   const reessayer = feuille.querySelector("[data-mesurer-reessayer]");
@@ -32,6 +33,8 @@
   let enCours = false; // la commande `mesurer` n'a pas encore répondu
   let erreur = null; // clé du catalogue d'un refus de la commande
   let version = "";
+  // « Mesure : automatique / manuelle », retenu par le module Rust `mesurer` d'une fois sur l'autre.
+  let declenchement = "automatique";
 
   const langue = () => document.documentElement.lang || "fr";
 
@@ -227,6 +230,17 @@
     const ligne = pourquoi || (erreur && !enCours ? refus(erreur) : null);
     raisonTexte.hidden = ligne === null;
     raisonTexte.textContent = ligne || "";
+    // La consigne suit le choix « Mesure » : en automatique, pas de bouton à presser sur l'instrument.
+    consigne.dataset.t = `mesurer.consigne.${declenchement}`;
+    consigne.textContent = t(consigne.dataset.t);
+    enCoursTexte.dataset.t = `mesurer.en_cours.${declenchement}`;
+    enCoursTexte.textContent = t(enCoursTexte.dataset.t);
+    // Choix propre au MYIRO-1 : un FD-9 actif ne mesure pas encore.
+    choixDeclenchement.closest(".field").hidden = Boolean(vueInstrument && vueInstrument.etat === "detecte");
+    for (const b of choixDeclenchement.querySelectorAll("[data-declenchement]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.declenchement === declenchement));
+      b.disabled = enCours;
+    }
     consigne.hidden = enCours;
     enCoursTexte.hidden = !enCours;
     choixCondition.disabled = enCours;
@@ -316,6 +330,21 @@
     dessiner();
   });
   choixCondition.addEventListener("change", () => memoire("condition-mesure", choixCondition.value));
+  choixDeclenchement.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-declenchement]");
+    if (!b || enCours) return;
+    const nonRetenu = feuille.querySelector("[data-mesurer-declenchement-non-retenu]");
+    try {
+      const choix = await invoke("choisir_mode_mesure", { mode: b.dataset.declenchement });
+      declenchement = choix.mode;
+      // Écriture impossible : le choix vaut pour la séance, et on le dit.
+      nonRetenu.hidden = choix.retenu;
+    } catch (err) {
+      console.error("choisir_mode_mesure", err);
+      nonRetenu.hidden = false;
+    }
+    dessiner();
+  });
   document.addEventListener("instrument-affiche", dessiner);
   document.addEventListener("tache-affichee", (e) => { if (e.detail === "mesurer") chargerConditions(); });
 
@@ -324,6 +353,11 @@
     if (premiereFois) {
       premiereFois = false;
       version = await invoke("version_application");
+      try {
+        declenchement = await invoke("mode_mesure");
+      } catch (e) {
+        console.error("mode_mesure", e);
+      }
       await chargerConditions();
     }
     await chargerMesures(); // valeurs réécrites dans la langue de l'écran

@@ -74,6 +74,61 @@ fn la_connexion_par_adresse_du_fd9_est_refusee_sans_appel_a_la_dll() {
 }
 
 #[test]
+fn la_mesure_automatique_est_declenchee_par_le_pont() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements.extend([7, 8].map(evenement));
+    sdk.salves.push_back([1].map(evenement).to_vec());
+    sdk.salves_declenchement
+        .push_back([2, 3, 0].map(evenement).to_vec());
+    let (lignes, session) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[
+            r#"{"cmd":"etalonner"}"#,
+            r#"{"cmd":"mesurer_ponctuelle","declenchement":"automatique"}"#,
+        ]),
+    );
+    assert!(matches!(
+        lire_reponse(&lignes[4]).unwrap(),
+        Reponse::Mesure { .. }
+    ));
+    assert!(session.sdk().appels.contains(&"declencher".to_string()));
+}
+
+#[test]
+fn un_declenchement_refuse_est_rapporte_avec_son_code() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements.extend([7, 8].map(evenement));
+    sdk.salves.push_back([1].map(evenement).to_vec());
+    sdk.code_declenchement = -9791;
+    let (lignes, _) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[
+            r#"{"cmd":"etalonner"}"#,
+            r#"{"cmd":"mesurer_ponctuelle","declenchement":"automatique"}"#,
+        ]),
+    );
+    assert_eq!(
+        lignes[4],
+        r#"{"rep":"erreur","erreur":{"type":"declenchement_refuse","code":-9791}}"#
+    );
+}
+
+#[test]
+fn la_mesure_manuelle_ne_declenche_jamais() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements.extend([7, 8].map(evenement));
+    sdk.salves.push_back([1, 2, 3].map(evenement).to_vec());
+    let (_, session) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[r#"{"cmd":"etalonner"}"#, r#"{"cmd":"mesurer_ponctuelle"}"#]),
+    );
+    assert!(!session.sdk().appels.contains(&"declencher".to_string()));
+}
+
+#[test]
 fn apres_un_etalonnage_echoue_le_pont_repond_etalonnage_requis_sans_armer() {
     let mut sdk = SdkSimule::avec_un_myiro1();
     sdk.evenements.extend([7, 8, 7, 9].map(evenement));

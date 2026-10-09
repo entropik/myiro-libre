@@ -7,7 +7,8 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use pont_protocole::{
-    ErreurPont, Geometrie, Horodatage, Info, Mesure, Palier, RemiseAuRepos, Reponse, Requete,
+    Declenchement, ErreurPont, Geometrie, Horodatage, Info, Mesure, Palier, RemiseAuRepos, Reponse,
+    Requete,
 };
 use serde::Serialize;
 
@@ -26,8 +27,9 @@ pub const PLAFOND: Palier = Palier::MesurePonctuelle;
 pub enum Geste {
     /// Poser le MYIRO-1 sur son capuchon, où se trouve son blanc de référence.
     PoserSurBlanc,
-    /// Poser le MYIRO-1 à plat sur la couleur à mesurer ; l'opérateur appuiera
-    /// ensuite sur le bouton de l'instrument, une fois celui-ci armé.
+    /// Poser le MYIRO-1 à plat sur la couleur à mesurer ; en manuel,
+    /// l'opérateur appuiera ensuite sur le bouton de l'instrument, une fois
+    /// celui-ci armé ; en automatique, le pont déclenche la mesure.
     PoserSurCouleur,
 }
 
@@ -217,6 +219,13 @@ pub enum Probleme {
     /// L'instrument ne se dit plus étalonné au moment de mesurer : son
     /// étalonnage est à refaire avant toute mesure.
     EtalonnageARefaire { detail: String },
+    /// Mesure automatique : l'instrument a refusé de mesurer sans son bouton
+    /// (fiche `docs/abi/FDX_StartMeasurement.md`). Il reste étalonné ; la
+    /// mesure manuelle, au bouton, reste possible.
+    DeclenchementRefuse { detail: String },
+    /// Mesure automatique : l'instrument n'a pas signalé la fin de la mesure
+    /// dans le délai du pont. Personne n'avait de bouton à presser.
+    MesureDelaiAutomatique { detail: String },
 }
 
 impl Probleme {
@@ -241,6 +250,8 @@ impl Probleme {
             Probleme::ReposIncertain { .. }
             | Probleme::MesureEchouee { .. }
             | Probleme::MesureDelai { .. }
+            | Probleme::MesureDelaiAutomatique { .. }
+            | Probleme::DeclenchementRefuse { .. }
             | Probleme::EtalonnageARefaire { .. } => Ecran::Mesure,
         }
     }
@@ -282,7 +293,9 @@ impl Probleme {
             Probleme::ReposIncertain { .. } => "repos_incertain",
             Probleme::MesureEchouee { .. } => "mesure_echouee",
             Probleme::MesureDelai { .. } => "mesure_delai",
+            Probleme::MesureDelaiAutomatique { .. } => "mesure_delai_automatique",
             Probleme::EtalonnageARefaire { .. } => "etalonnage_a_refaire",
+            Probleme::DeclenchementRefuse { .. } => "declenchement_refuse",
         }
     }
 
@@ -304,7 +317,9 @@ impl Probleme {
             | Probleme::ReposIncertain { detail: d }
             | Probleme::MesureEchouee { detail: d }
             | Probleme::MesureDelai { detail: d }
+            | Probleme::MesureDelaiAutomatique { detail: d }
             | Probleme::EtalonnageARefaire { detail: d }
+            | Probleme::DeclenchementRefuse { detail: d }
             | Probleme::InstrumentPerdu { detail: d } => Some(d),
         }
     }
@@ -492,6 +507,18 @@ impl<P: Pont> Instrument<P> {
     /// le repos de la mesure précédente est incertain, ou si l'opérateur
     /// renonce, rien n'est envoyé.
     pub fn mesurer_ponctuelle(&mut self, gestes: &mut impl Gestes) -> Option<MesureAcquise> {
+        self.mesurer_ponctuelle_avec(gestes, Declenchement::Manuel)
+    }
+
+    /// Mesure ponctuelle, au bouton de l'instrument (`Manuel`) ou déclenchée
+    /// par le pont (`Automatique`, ticket #51) : l'opérateur pose seulement
+    /// l'instrument. Si l'instrument refuse de mesurer sans son bouton, il
+    /// reste étalonné et le problème propose de passer en manuel.
+    pub fn mesurer_ponctuelle_avec(
+        &mut self,
+        gestes: &mut impl Gestes,
+        declenchement: Declenchement,
+    ) -> Option<MesureAcquise> {
         if !self.mesurable() {
             return None;
         }
@@ -500,7 +527,7 @@ impl<P: Pont> Instrument<P> {
             return None;
         }
         self.probleme = None;
-        let probleme = match pont.demander(&Requete::MesurerPonctuelle {}) {
+        let probleme = match pont.demander(&Requete::MesurerPonctuelle { declenchement }) {
             Ok(Reponse::Mesure {
                 mesure,
                 remise_au_repos,
@@ -526,7 +553,13 @@ impl<P: Pont> Instrument<P> {
                     | ErreurPont::ParametreRefuse {}
                     | ErreurPont::ReponseInattendue { .. }
                     | ErreurPont::Sdk { .. } => Probleme::MesureEchouee { detail },
-                    ErreurPont::Delai {} => Probleme::MesureDelai { detail },
+                    ErreurPont::Delai {} => match declenchement {
+                        Declenchement::Manuel => Probleme::MesureDelai { detail },
+                        Declenchement::Automatique => Probleme::MesureDelaiAutomatique { detail },
+                    },
+                    ErreurPont::DeclenchementRefuse { .. } => {
+                        Probleme::DeclenchementRefuse { detail }
+                    }
                     ErreurPont::NonEtalonne {} | ErreurPont::EtalonnageRequis {} => {
                         Probleme::EtalonnageARefaire { detail }
                     }
@@ -541,7 +574,10 @@ impl<P: Pont> Instrument<P> {
         };
         match &probleme {
             // L'instrument reste connecté et étalonné : une nouvelle mesure suffit.
-            Probleme::MesureEchouee { .. } | Probleme::MesureDelai { .. } => {}
+            Probleme::MesureEchouee { .. }
+            | Probleme::MesureDelai { .. }
+            | Probleme::MesureDelaiAutomatique { .. }
+            | Probleme::DeclenchementRefuse { .. } => {}
             Probleme::ReposIncertain { .. } => self.repos_incertain = true,
             Probleme::EtalonnageARefaire { .. } => {
                 if let Etat::Etalonne(fiche) | Etat::Connecte(fiche) = &self.etat {

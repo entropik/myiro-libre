@@ -134,6 +134,19 @@ Vérifié contre le pont simulé et le pont factice seulement ; la mesure sur le
 
 Vérifié contre le pont simulé du MYIRO-1, un pont FD-9 simulé et le pare-feu simulé seulement. L'essai sur le poste avec les deux instruments, et la validation de l'écran, restent à faire avec le mainteneur.
 
+### Complément du 9 octobre 2026 : mesure sans le bouton (ticket #51)
+
+**Décision du mainteneur du 9 octobre 2026** : `FDX_StartMeasurement` entre dans la liste blanche de `fdx-sys` comme **seconde exception nommée**, au même titre que `FDX_SetMeasureCondition`. La fiche [`FDX_StartMeasurement`](../abi/FDX_StartMeasurement.md) établit, par lecture statique, qu'elle déclenche la mesure armée comme un appui sur le bouton, sans regarder le type de mesure ni rien écrire de permanent ; que le MYIRO-1 l'accepte en réflexion reste **supposé**, à vérifier sur l'instrument. Le test de la liste blanche nomme exactement ces deux exceptions parmi les exports `FDX_Set*` et `FDX_Start*`.
+
+- **Pont.** Le trait `SdkMyiro1` gagne `declencher` (sans argument). En mesure ponctuelle automatique, le pont arme, attend l'événement 1 (5 s au plus), appelle `FDX_StartMeasurement`, puis attend la fin de la mesure (30 s au plus) et lit comme avant. Jamais d'appel sans l'événement 1, jamais en bande. Un refus (-9986, ou -9793 à -9789) devient l'erreur `declenchement_refuse` avec son code ; l'instrument est désarmé et l'étalonnage reste valable. Une mesure partie au bouton pendant l'attente est gardée.
+- **Protocole**, aux conventions du ticket #25 : champ facultatif `declenchement` (`manuel` par défaut, `automatique`) de `mesurer_ponctuelle`, omis en manuel pour que la ligne d'avant ne change pas ; erreur `declenchement_refuse {code}` ([`docs/formats/protocole.md`](../formats/protocole.md)). Application et ponts se mettent à jour ensemble.
+- **Application.** Choix « Mesure : automatique / manuelle » sur la feuille Mesurer, **automatique par défaut** (demande du mainteneur), retenu d'une fois sur l'autre (`mode-mesure.txt` du dossier de configuration). En automatique, la consigne dit de poser le MYIRO-1 puis de cliquer sur « Mesurer » ; en manuel, rien ne change. Un refus de l'instrument donne le problème `declenchement_refuse` (feuille Mesurer, instrument toujours étalonné), dont l'action propose de passer en manuel.
+- **Simulés.** Le SDK simulé refuse le déclenchement hors de l'attente de mesure, comme la DLL ; son acceptation en réflexion y est marquée supposée. Le pont simulé de l'application rend la même mesure dans les deux modes, et un refus s'y injecte.
+
+- **Après relecture.** Sur un refus -9986, le pont attend encore 2 s (`DELAI_APRES_REFUS`) un événement 2 ou 3 avant de désarmer : l'opérateur a peut-être appuyé sur le bouton entre l'événement 1 et le déclenchement, ce qui ferait refuser celui-ci (supposé) ; la mesure partie au bouton est alors gardée. En automatique, un délai dépassé a son propre problème (`mesure_delai_automatique`), qui ne parle pas du bouton. Si le choix « Mesure » ne peut pas être enregistré, il vaut pour la séance et la feuille le dit. Le choix n'est montré qu'avec le MYIRO-1 : un FD-9 actif ne mesure toujours pas. Les mesures des essais réels (tests `--ignored`) vont par défaut dans `Archivage/donnees/`, datées.
+
+Vérifié contre les simulés seulement ; l'essai réel (test `palier_mesure_automatique_avec_le_vrai_instrument`) et l'écran restent à faire avec le mainteneur.
+
 ## Options écartées
 
 - **Commande brute et catalogue dynamique** (appeler un export par son nom). Ils ouvrent un chemin vers des exports arbitraires, contraire à la règle de sécurité matérielle. Un banc d'exploration éventuel serait un binaire séparé, hors build de production.
