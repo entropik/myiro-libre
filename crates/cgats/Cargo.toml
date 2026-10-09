@@ -1,0 +1,10 @@
+[package]
+name = "cgats"
+version = "0.1.0"
+description = "Échange des mesures au format CGATS.17 : export et import (ADR 0001, ADR 0004)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+pont-protocole = { path = "../pont-protocole" }

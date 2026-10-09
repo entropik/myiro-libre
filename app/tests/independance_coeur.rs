@@ -91,6 +91,7 @@ fn seule_l_application_depend_de_tauri() {
         "pont-myiro1",
         "jeu-validation",
         "bibliotheque",
+        "cgats",
     ] {
         assert_eq!(crates.get(coeur), Some(&false), "{coeur} est examinée");
     }
