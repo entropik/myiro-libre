@@ -257,7 +257,10 @@ fn un_nom_de_mesure_trop_long_se_lit_au_survol() {
         .iter()
         .any(|c| c.contains("text-overflow:ellipsis")));
     let script = lire("interface/mesurer.js");
-    assert!(script.contains("nom.title = f.nom;"), "pas de nom au survol");
+    assert!(
+        script.contains("nom.title = f.nom;"),
+        "pas de nom au survol"
+    );
 }
 
 /// Une mesure sans nom, à gauche : la lecture en ligne 1, la date courte

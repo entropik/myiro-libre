@@ -83,6 +83,7 @@ impl<P: Pont> Instrument<P> {
                 probleme: None,
                 etalonnage: None,
                 repos_incertain: false,
+                annulation: crate::pont::Annulation::default(),
             },
             Err(probleme) => Self::en_echec(None, probleme),
         }

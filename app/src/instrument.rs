@@ -5,6 +5,7 @@
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use pont_protocole::{
     Declenchement, ErreurPont, Geometrie, Horodatage, Info, Mesure, Palier, RemiseAuRepos, Reponse,
@@ -12,7 +13,7 @@ use pont_protocole::{
 };
 use serde::Serialize;
 
-use crate::pont::{architecture, Architecture, Panne, Pont};
+use crate::pont::{architecture, Annulation, Architecture, Panne, Pont};
 
 /// Dernier palier que l'application autorise au pont : la mesure ponctuelle,
 /// jamais la bande (ticket #7). L'ouverture s'arrête à la connexion ;
@@ -51,6 +52,86 @@ impl MesureAcquise {
             self.remise_au_repos,
             Info::Confirmee(RemiseAuRepos::AuRepos {} | RemiseAuRepos::ReposSuppose {})
         )
+    }
+}
+
+/// Mesures qu'un instrument ouvert prend en charge dans l'application.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TypeMesure {
+    /// Une plage, l'instrument posé dessus.
+    Ponctuelle,
+}
+
+/// Résultat unique d'une demande de mesure (ticket #26). L'acquisition et
+/// l'état de l'instrument se lisent à part : une mesure acquise peut
+/// s'accompagner d'un problème (repos incertain, pont perdu au nettoyage).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Issue {
+    /// La mesure est lue, avec sa provenance ; elle est toujours gardée.
+    Acquise(MesureAcquise),
+    /// La mesure a été annulée pendant qu'elle attendait : rien n'a été lu.
+    /// `remise_au_repos` est le retour au repos vérifié par le pont ; s'il
+    /// n'est pas prouvé, la mesure suivante attend la récupération.
+    Annulee { remise_au_repos: RemiseAuRepos },
+    /// Rien n'a été envoyé : l'opérateur a renoncé au geste, ou a annulé
+    /// avant l'envoi.
+    Abandonnee,
+    /// Refusée sans geste ni envoi : instrument absent, pas prêt, repos
+    /// incertain, ou mesure non prise en charge.
+    Refusee,
+    /// La mesure a échoué : le problème dit pourquoi et quoi faire.
+    Echouee,
+}
+
+/// Délai de réponse du pont. La connexion la plus lente attend 10 s dans la
+/// DLL (`pont_myiro1::DELAI_CONNEXION`), plus la lecture de l'identité.
+pub const DELAI_REPONSE: Duration = Duration::from_secs(30);
+
+/// Délais du dialogue avec le pont, fixés par le module instrument et
+/// appliqués par `PontProcessus`. Bornés : passé un délai, le pont est arrêté
+/// de force et l'instrument dit dans un état incertain ; aucune demande n'est
+/// répétée d'elle-même.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Delais {
+    /// Délai d'une demande ordinaire.
+    pub base: Duration,
+}
+
+impl Default for Delais {
+    fn default() -> Self {
+        Delais::new(DELAI_REPONSE)
+    }
+}
+
+impl Delais {
+    pub const fn new(base: Duration) -> Self {
+        Delais { base }
+    }
+
+    /// Délai de la réponse à `requete`. L'étalonnage attend jusqu'à 30 s dans
+    /// le pont (`pont_myiro1::DELAI_ETALONNAGE`), en plus de l'appel à la DLL.
+    /// La mesure ponctuelle attend jusqu'à 2 min l'appui sur le bouton
+    /// (`pont_myiro1::DELAI_APPUI`), plus un désarmement avant et un après
+    /// (15 s au plus chacun) et les lectures ; en automatique, l'attente de
+    /// l'armement (5 s) et de la fin de mesure (30 s) y tiennent aussi.
+    pub fn reponse(&self, requete: &Requete) -> Duration {
+        match requete {
+            Requete::Etalonner {} => self.base * 2,
+            Requete::MesurerPonctuelle { .. } => self.base * 6,
+            _ => self.base,
+        }
+    }
+
+    /// Après l'envoi de `annuler` : le pont désarme (15 s au plus) puis
+    /// répond à la mesure, puis à l'annulation, chacune dans ce délai.
+    pub fn apres_annulation(&self) -> Duration {
+        self.base
+    }
+
+    /// Fin du pont après la fermeture de son entrée.
+    pub fn arret(&self) -> Duration {
+        self.base
     }
 }
 
@@ -369,9 +450,12 @@ impl From<Panne> for Probleme {
 }
 
 /// Un instrument ouvert par un pont, ou la raison pour laquelle il ne l'est pas.
-/// Petit à dessein : la fermeture, l'annulation et les mesures s'y ajouteront
-/// (spécification #21).
+/// Petit à dessein : ouvrir, dire les mesures prises en charge, mesurer,
+/// annuler, fermer (spécification #21). Les paliers et la séquence du SDK
+/// restent derrière.
 pub struct Instrument<P: Pont> {
+    /// Annulation de la mesure en cours, utilisable d'un autre fil.
+    annulation: Annulation,
     /// Pont gardé ouvert tant que l'instrument est connecté ; il se ferme quand
     /// l'instrument est abandonné. Les paliers suivants passent par lui.
     pont: Option<P>,
@@ -422,6 +506,7 @@ impl<P: Pont> Instrument<P> {
                 probleme: None,
                 etalonnage: None,
                 repos_incertain: false,
+                annulation: Annulation::default(),
             },
             Err(probleme) => Self::en_echec(Some(dll), probleme),
         }
@@ -436,6 +521,7 @@ impl<P: Pont> Instrument<P> {
             probleme: Some(probleme),
             etalonnage: None,
             repos_incertain: false,
+            annulation: Annulation::default(),
         }
     }
 
@@ -519,15 +605,85 @@ impl<P: Pont> Instrument<P> {
         gestes: &mut impl Gestes,
         declenchement: Declenchement,
     ) -> Option<MesureAcquise> {
-        if !self.mesurable() {
-            return None;
+        match self.mesurer(gestes, TypeMesure::Ponctuelle, declenchement) {
+            Issue::Acquise(acquise) => Some(acquise),
+            _ => None,
         }
-        let pont = self.pont.as_mut()?;
-        if gestes.demander(Geste::PoserSurCouleur) == Accord::Annule {
-            return None;
+    }
+
+    /// Mesures que l'instrument ouvert prend en charge : la mesure ponctuelle
+    /// pour un MYIRO-1 connecté (le plafond de l'application s'arrête là),
+    /// rien pour un FD-9 détecté ni sans instrument.
+    pub fn mesures_prises_en_charge(&self) -> Vec<TypeMesure> {
+        match (&self.pont, &self.etat) {
+            (Some(_), Etat::EtalonnageRequis(_) | Etat::Etalonne(_) | Etat::Connecte(_)) => {
+                vec![TypeMesure::Ponctuelle]
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Poignée pour annuler la mesure en cours d'un autre fil (bouton
+    /// « Annuler » de l'opérateur). Hors d'une mesure, elle ne fait rien.
+    pub fn annulation(&self) -> Annulation {
+        self.annulation.clone()
+    }
+
+    /// Mesure du type demandé, avec un seul résultat terminal ([`Issue`]).
+    /// Le geste est demandé d'abord ; une annulation pendant le geste ou
+    /// avant l'envoi n'envoie rien ; pendant l'attente de l'instrument, elle
+    /// est transmise au pont sans attendre sa réponse. Une mesure déjà acquise
+    /// est toujours rendue. Jamais répétée d'elle-même.
+    pub fn mesurer(
+        &mut self,
+        gestes: &mut impl Gestes,
+        type_mesure: TypeMesure,
+        declenchement: Declenchement,
+    ) -> Issue {
+        if !self.mesurable() || !self.mesures_prises_en_charge().contains(&type_mesure) {
+            return Issue::Refusee;
+        }
+        self.annulation.commencer();
+        let issue = self.mesurer_ponctuelle_annulable(gestes, declenchement);
+        self.annulation.terminer();
+        issue
+    }
+
+    fn mesurer_ponctuelle_annulable(
+        &mut self,
+        gestes: &mut impl Gestes,
+        declenchement: Declenchement,
+    ) -> Issue {
+        let Some(pont) = self.pont.as_mut() else {
+            return Issue::Refusee;
+        };
+        if gestes.demander(Geste::PoserSurCouleur) == Accord::Annule || self.annulation.demandee() {
+            return Issue::Abandonnee;
         }
         self.probleme = None;
-        let probleme = match pont.demander(&Requete::MesurerPonctuelle { declenchement }) {
+        let echange = pont.demander_annulable(
+            &Requete::MesurerPonctuelle { declenchement },
+            &self.annulation,
+        );
+        // Le pont n'a pas confirmé l'annulation : il est arrêté. Ce qui a été
+        // acquis reste rendu ; l'état de l'instrument est dit à part.
+        let nettoyage = match echange.annulation {
+            Some(Err(panne)) => Some(Probleme::from(panne)),
+            _ => None,
+        };
+        let issue = self.issue_de(echange.reponse, declenchement);
+        if let Some(probleme) = nettoyage {
+            self.pont = None;
+            self.etat = Etat::NonDetecte;
+            self.etalonnage = None;
+            self.probleme = Some(probleme);
+        }
+        issue
+    }
+
+    /// Traduit la réponse du pont à une mesure ponctuelle.
+    fn issue_de(&mut self, reponse: Result<Reponse, Panne>, declenchement: Declenchement) -> Issue {
+        let probleme = match reponse {
             Ok(Reponse::Mesure {
                 mesure,
                 remise_au_repos,
@@ -543,7 +699,23 @@ impl<P: Pont> Instrument<P> {
                         detail: format!("remise au repos : {:?}", acquise.remise_au_repos),
                     });
                 }
-                return Some(acquise);
+                return Issue::Acquise(acquise);
+            }
+            Ok(Reponse::Erreur {
+                erreur: ErreurPont::MesureAnnulee { remise_au_repos },
+            }) => {
+                // L'instrument reste étalonné ; la mesure suivante attend
+                // seulement que le repos soit prouvé ou supposé.
+                if !matches!(
+                    remise_au_repos,
+                    RemiseAuRepos::AuRepos {} | RemiseAuRepos::ReposSuppose {}
+                ) {
+                    self.repos_incertain = true;
+                    self.probleme = Some(Probleme::ReposIncertain {
+                        detail: format!("annulation, remise au repos : {remise_au_repos:?}"),
+                    });
+                }
+                return Issue::Annulee { remise_au_repos };
             }
             Ok(Reponse::Erreur { erreur }) => {
                 let detail = format!("mesure ponctuelle : {erreur:?}");
@@ -593,7 +765,7 @@ impl<P: Pont> Instrument<P> {
             }
         }
         self.probleme = Some(probleme);
-        None
+        Issue::Echouee
     }
 
     /// Heure du dernier étalonnage réussi, avec fuseau, tant qu'il est valable.

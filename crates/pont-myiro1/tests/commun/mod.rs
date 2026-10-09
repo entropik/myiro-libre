@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use fdx_sys::{ConditionCalcul, Port, Version, TAILLE_TAMPON_INFOS};
-use pont_myiro1::{Evenement, Lecture, SdkMyiro1};
+use pont_myiro1::{Annulations, Evenement, Lecture, SdkMyiro1};
 use std::collections::VecDeque;
 use std::time::Duration;
 
@@ -47,6 +47,19 @@ pub struct SdkSimule {
     /// La première valeur de chaque lecture est NaN, comme une DLL défaillante.
     pub valeur_non_finie: bool,
     pub appels: Vec<String>,
+    /// L'opérateur annule (ticket #26) la première fois que le pont attend un
+    /// événement, instrument armé, alors qu'aucun n'est en file.
+    pub annuler_pendant_attente: Option<Annulations>,
+    /// Événements émis juste après cette annulation (mesure qui se termine
+    /// quand même, par exemple).
+    pub evenements_apres_annulation: Vec<Evenement>,
+    /// Un désarmement accepté est suivi de l'événement 0 (retour au repos).
+    pub repos_a_l_arret: bool,
+    /// Instrument armé et sans événement en file : l'attente dure vraiment
+    /// son délai, comme la DLL (pour les essais de la boucle du pont).
+    pub attente_reelle: bool,
+    /// Prévenu à chaque armement réussi (essais de la boucle du pont).
+    pub signal_armement: Option<std::sync::mpsc::Sender<()>>,
 }
 
 /// Motif répété 32 fois : l'empreinte SHA-256 fictive de la DLL simulée.
@@ -129,6 +142,9 @@ impl SdkMyiro1 for SdkSimule {
         if let Some(salve) = self.salves.pop_front() {
             self.evenements.extend(salve);
         }
+        if let Some(signal) = &self.signal_armement {
+            let _ = signal.send(());
+        }
         Ok(0)
     }
     fn armer_bande(&mut self, plages_attendues: u32) -> Result<i32, i32> {
@@ -173,6 +189,9 @@ impl SdkMyiro1 for SdkSimule {
             return Err(self.code_arret);
         }
         self.arme = false;
+        if self.repos_a_l_arret {
+            self.evenements.push_back(evenement(0));
+        }
         Ok(0)
     }
     fn deconnecter(&mut self) -> Result<i32, i32> {
@@ -200,7 +219,17 @@ impl SdkMyiro1 for SdkSimule {
         })
     }
     /// Sans événement en attente, simule l'expiration du délai.
-    fn attendre_evenement(&mut self, _delai: Duration) -> Option<Evenement> {
+    fn attendre_evenement(&mut self, delai: Duration) -> Option<Evenement> {
+        if self.evenements.is_empty() && self.arme && self.attente_reelle {
+            std::thread::sleep(delai);
+        }
+        if self.evenements.is_empty() && self.arme {
+            if let Some(annulation) = self.annuler_pendant_attente.take() {
+                annulation.annuler();
+                self.evenements
+                    .extend(std::mem::take(&mut self.evenements_apres_annulation));
+            }
+        }
         let evenement = self.evenements.pop_front()?;
         self.dernier_evenement = Some(evenement.code);
         Some(evenement)

@@ -25,7 +25,7 @@ fn derniere_reponse(mut sdk: SdkSimule, mesure: &str) -> Reponse {
     ]
     .join("\n");
     let mut sortie = Vec::new();
-    servir(&mut session, entree.as_bytes(), &mut sortie).unwrap();
+    servir(&mut session, std::io::Cursor::new(entree), &mut sortie).unwrap();
     let texte = String::from_utf8(sortie).unwrap();
     lire_reponse(texte.lines().last().unwrap()).unwrap()
 }
