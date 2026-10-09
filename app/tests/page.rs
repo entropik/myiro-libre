@@ -23,7 +23,10 @@ fn classes_qui_fixent_display(css: &str) -> BTreeSet<String> {
         for selecteur in selecteurs.split(',') {
             let s = selecteur.trim();
             if let Some(nom) = s.strip_prefix('.') {
-                if nom.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+                if nom
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+                {
                     classes.insert(nom.to_string());
                 }
             }
