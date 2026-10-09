@@ -29,7 +29,9 @@ En-tête de chaque tableau :
 
 Un mot-clé standard est lu sans réserve par les autres logiciels : on n'y met que ce qui est confirmé. Tout mot-clé hors de la liste de CGATS.17 est déclaré par `KEYWORD` avant usage.
 
-Colonnes : `SAMPLE_ID` (rang de la plage, à partir de 1), `LAB_L`, `LAB_A`, `LAB_B` (le Lab calculé pour ce spectre), puis le spectre en réflectance (1 = blanc parfait, pas en pourcentage) : `nm380`, `nm390`… quand les longueurs d'onde sont connues, sinon `MYIRO_LIBRE_SPECTRE_1`, `MYIRO_LIBRE_SPECTRE_2`… Les nombres sont écrits avec tous les chiffres utiles : la relecture rend exactement les mêmes valeurs. Fins de ligne Windows (`\r\n`), texte en UTF-8.
+Colonnes : `SAMPLE_ID` (rang de la plage, à partir de 1), `LAB_L`, `LAB_A`, `LAB_B` (le Lab calculé pour ce spectre), puis le spectre **en pourcentage** (100 = blanc parfait), présenté comme ArgyllCMS l'attend (moteur de profilage inclus, ADR 0002 ; voir la [description du format `.ti3`](https://www.argyllcms.com/doc/ti3_format.html)) : colonnes `SPEC_380`, `SPEC_390`… et mots-clés `SPECTRAL_BANDS` (`36`), `SPECTRAL_START_NM` (`380`), `SPECTRAL_END_NM` (`730`), déclarés par `KEYWORD`. Quand les longueurs d'onde ne sont pas connues, ni ces mots-clés ni ces noms ne sont écrits : les colonnes s'appellent `MYIRO_LIBRE_SPECTRE_1`, `MYIRO_LIBRE_SPECTRE_2`… (pourcentage aussi). Les nombres sont écrits avec tous les chiffres utiles : la relecture rend exactement les mêmes valeurs (le spectre, multiplié par 100 en double précision, se relit à l'identique en divisant par 100). Fins de ligne Windows (`\r\n`), texte en UTF-8.
+
+Pourquoi `SPEC_380` et pas `SPECTRAL_380` : la description du format d'ArgyllCMS, vérifiée le 9 octobre 2026, nomme les colonnes `SPEC_380` et décrit les bandes par `SPECTRAL_BANDS`, `SPECTRAL_START_NM` et `SPECTRAL_END_NM` (pas de `SPECTRAL_NM`), avec des valeurs en pourcentage. C'est cette convention, établie, qui est suivie.
 
 ### La provenance dans l'en-tête
 
@@ -49,7 +51,7 @@ Les **données brutes** (152 par plage pour le MYIRO-1) ne sont pas exportées e
 
 ## Ce que myiro-libre lit
 
-`lire` accepte un fichier CGATS.17 d'un ou plusieurs tableaux, quel que soit l'identifiant de la première ligne, avec commentaires `#`, blancs ou tabulations, fins de ligne Windows ou Unix. Le résultat est une **mesure importée** (`MesureImportee`) : ce n'est pas une mesure attestée par un pont, et elle ne se confond jamais avec elle.
+`lire` accepte un fichier CGATS.17 d'un ou plusieurs tableaux, quel que soit l'identifiant de la première ligne, avec commentaires `#`, blancs ou tabulations, fins de ligne Windows ou Unix. Le texte est lu en UTF-8, ou, s'il n'en est pas, en Latin-1 de Windows (Windows-1252), courant dans les exports d'autres logiciels : les accents sont gardés (fonction `decoder`). À l'écran, un fichier de plus de 16 Mio est refusé avant d'être lu. Le résultat est une **mesure importée** (`MesureImportee`) : ce n'est pas une mesure attestée par un pont, et elle ne se confond jamais avec elle.
 
 Chaque donnée y est qualifiée :
 
@@ -65,7 +67,15 @@ Chaque tableau va dans un emplacement `m0`, `m1` ou `m2`, dans cet ordre de pré
 
 Sans aucun des trois, le fichier est **refusé** avec une phrase claire : on ne range pas des valeurs sous une condition devinée.
 
-Dans les colonnes : `SAMPLE_ID` donne l'identifiant de la plage (sinon son rang), `LAB_L`, `LAB_A`, `LAB_B` le Lab, et les colonnes `nmNNN` (ou `MYIRO_LIBRE_SPECTRE_N`) le spectre ; les longueurs d'onde doivent être régulières. Les autres colonnes (densités, RVB, emplacement sur la feuille…) sont ignorées. **Un fichier sans spectre donne des spectres inconnus** : tout ce qui exige un spectre (autre condition de mesure, densité calculée, nouvel illuminant) reste inconnu pour cette mesure. Un emplacement absent du fichier (par exemple M0 et M2 d'un export qui ne contient que M1) reste inconnu lui aussi.
+Dans les colonnes : `SAMPLE_ID` donne l'identifiant de la plage (sinon son rang), `LAB_L`, `LAB_A`, `LAB_B` le Lab, et le spectre vient de l'une de ces familles de colonnes, chacune avec son échelle, jamais devinée :
+
+| Colonnes | Écrites par | Échelle |
+|---|---|---|
+| `SPEC_380`… | ArgyllCMS, myiro-libre | pourcentage (0 à 100) |
+| `nm380`… | logiciels du fabricant | réflectance (0 à 1) |
+| `MYIRO_LIBRE_SPECTRE_1`… | myiro-libre, longueurs d'onde inconnues | pourcentage |
+
+Deux familles dans un même tableau : refusé. Les longueurs d'onde doivent être régulières (calcul en 64 bits : des valeurs démesurées sont refusées, sans planter). Une autre famille de colonnes (par exemple `SPECTRAL_NM380` ou `SPECTRAL_380`, dont l'échelle n'est pas établie) est ignorée : le spectre reste inconnu. Les autres colonnes (densités, RVB, emplacement sur la feuille…) sont ignorées. **Un fichier sans spectre donne des spectres inconnus** : tout ce qui exige un spectre (autre condition de mesure, densité calculée, nouvel illuminant) reste inconnu pour cette mesure. Un emplacement absent du fichier (par exemple M0 et M2 d'un export qui ne contient que M1) reste inconnu lui aussi.
 
 Plusieurs tableaux doivent porter les mêmes plages, dans le même ordre. Un fichier de myiro-libre d'une autre version (`MYIRO_LIBRE_FORMAT` différent) ou dont la provenance est incomplète est refusé : il ne se relit pas à moitié.
 
@@ -75,7 +85,7 @@ Plusieurs tableaux doivent porter les mêmes plages, dans le même ordre. Un fic
 
 ## Comparaison avec l'export CGATS de référence du fabricant
 
-Comparé à l'export MYIROtools d'une couleur, archivé sur le poste (non versionné), et à des exports CGATS du FD-9 par le logiciel du fabricant. Mêmes conventions : identifiant `CGATS.17`, tabulations, chaînes entre guillemets, `ORIGINATOR`, `FILE_DESCRIPTOR`, `CREATED`, `INSTRUMENTATION`, `SERIAL`, `MEASUREMENT_SOURCE`, `WEIGHTING_FUNCTION`, `KEYWORD`, `NUMBER_OF_FIELDS`, `NUMBER_OF_SETS`, colonnes `SAMPLE_ID`, `LAB_L`, `LAB_A`, `LAB_B` et spectre en `nmNNN` (réflectance de 0 à 1).
+Comparé à l'export MYIROtools d'une couleur, archivé sur le poste (non versionné), et à des exports CGATS du FD-9 par le logiciel du fabricant. Mêmes conventions : identifiant `CGATS.17`, tabulations, chaînes entre guillemets, `ORIGINATOR`, `FILE_DESCRIPTOR`, `CREATED`, `INSTRUMENTATION`, `SERIAL`, `MEASUREMENT_SOURCE`, `WEIGHTING_FUNCTION`, `KEYWORD`, `NUMBER_OF_FIELDS`, `NUMBER_OF_SETS`, colonnes `SAMPLE_ID`, `LAB_L`, `LAB_A`, `LAB_B` et spectre (chez le fabricant `nmNNN`, de 0 à 1).
 
 Écarts voulus :
 
@@ -87,6 +97,7 @@ Comparé à l'export MYIROtools d'une couleur, archivé sur le poste (non versio
 | `MEASUREMENT_GEOMETRY "45/0"` | Absent | La géométrie optique n'est pas dans la provenance ; elle n'est pas devinée |
 | `MEASUREMENT_SOURCE`, `WEIGHTING_FUNCTION` toujours écrits | Écrits seulement si confirmés ; ajout de `MEASUREMENT_CONDITION` | Un mot-clé standard ne porte rien de supposé |
 | Lab arrondis à deux décimales | Tous les chiffres utiles | La relecture rend exactement la mesure |
+| Spectre `nmNNN` de 0 à 1 | `SPEC_NNN` en pourcentage, bandes dans l'en-tête | Lisible tel quel par ArgyllCMS |
 | Colonnes de valeurs d'origine (CMJN, RVB), densités, `SAMPLE_LOC` | Absentes | Une mesure ponctuelle ou une bande n'a pas encore de mire ; la densité sera calculée à partir du spectre |
 | Pas de provenance | Provenance complète en mots-clés `MYIRO_LIBRE_*` déclarés | Aucune mesure sans provenance (ADR 0005) |
 
@@ -94,4 +105,4 @@ Comparé à l'export MYIROtools d'une couleur, archivé sur le poste (non versio
 
 La sauvegarde n'est pas un CGATS : c'est une copie de la base de la bibliothèque, en **un seul fichier SQLite** (`bibliotheque-myiro-libre.sqlite` par défaut), lisible par tout outil SQLite. Elle contient tout : conditions d'impression, instruments, mesures complètes (données brutes comprises). Un fichier déjà présent n'est remplacé qu'une fois la copie terminée.
 
-La restauration remplace **toute** la bibliothèque par la sauvegarde ; l'écran demande d'abord l'accord de l'opérateur. Avant de toucher quoi que ce soit, la sauvegarde est examinée en lecture seule : organisation de la base connue (pas plus récente que le logiciel), tables présentes, liens cohérents, chaque mesure relisible. Au moindre défaut, elle est refusée et la bibliothèque reste telle quelle.
+La restauration remplace **toute** la bibliothèque par la sauvegarde ; l'écran demande d'abord l'accord de l'opérateur. Avant de toucher quoi que ce soit, la sauvegarde est examinée en lecture seule : organisation de la base connue (pas plus récente que le logiciel), tables présentes, liens cohérents, chaque mesure relisible. Au moindre défaut, elle est refusée et la bibliothèque reste telle quelle. Une fois l'examen passé, une copie de secours de la bibliothèque est faite dans son dossier (`bibliotheque.sqlite.avant-restauration`) ; si la restauration échoue en route (mise à niveau impossible, disque plein…), cette copie est remise en place. Elle reste ensuite dans le dossier.

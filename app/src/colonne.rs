@@ -158,18 +158,25 @@ impl BibliothequeOuverte {
     }
 
     /// Lit un fichier CGATS et range la mesure importée dans la condition
-    /// d'impression.
+    /// d'impression. Un fichier de plus de [`TAILLE_MAX_CGATS`] est refusé
+    /// avant d'être lu.
     pub fn importer_cgats(
         &self,
         condition: IdCondition,
         fichier: &Path,
     ) -> Result<IdMesure, String> {
-        let octets = std::fs::read(fichier).map_err(|e| {
+        let illisible = |e: std::io::Error| {
             eprintln!("{} : {e}", fichier.display());
             "bibliotheque.erreur.cgats_illisible".to_string()
-        })?;
-        // Les exports d'autres logiciels ne sont pas toujours en UTF-8.
-        let texte = String::from_utf8_lossy(&octets);
+        };
+        let taille = std::fs::metadata(fichier).map_err(illisible)?.len();
+        if taille > TAILLE_MAX_CGATS {
+            eprintln!("{} : {taille} octets", fichier.display());
+            return Err("bibliotheque.erreur.cgats_trop_gros".to_string());
+        }
+        let octets = std::fs::read(fichier).map_err(illisible)?;
+        // UTF-8, ou Latin-1 de Windows sans abîmer les accents.
+        let texte = cgats::decoder(&octets);
         self.avec(|b| b.importer_mesure(condition, &nom_de(fichier), &texte))
     }
 
@@ -186,6 +193,10 @@ impl BibliothequeOuverte {
         })
     }
 }
+
+/// Taille au-delà de laquelle un fichier CGATS n'est pas lu : 16 Mio, bien
+/// plus qu'une mire de plusieurs milliers de plages avec leurs spectres.
+pub const TAILLE_MAX_CGATS: u64 = 16 * 1024 * 1024;
 
 /// Ce que la feuille et le cartouche montrent d'une mesure importée : ce que
 /// le fichier contient, et ce qui y reste inconnu.
@@ -355,6 +366,8 @@ pub fn bibliotheque_renommer_condition(
 }
 
 /// Fichier choisi dans le sélecteur de Windows ; `None` si l'opérateur a annulé.
+/// Chaque commande reçoit de la page le nom du type de fichier (`filtre`),
+/// en mots simples et dans la langue de l'écran.
 fn choisi(fichier: Option<tauri_plugin_dialog::FilePath>) -> Option<PathBuf> {
     fichier?.into_path().ok()
 }
@@ -366,6 +379,7 @@ pub fn bibliotheque_exporter_cgats(
     app: tauri::AppHandle,
     ouverte: tauri::State<'_, BibliothequeOuverte>,
     id: i64,
+    filtre: String,
 ) -> Result<Option<String>, String> {
     let id = IdMesure(id);
     let nom = ouverte.nom_export(id)?;
@@ -373,7 +387,7 @@ pub fn bibliotheque_exporter_cgats(
         app.dialog()
             .file()
             .set_file_name(nom)
-            .add_filter("CGATS", &["txt"])
+            .add_filter(filtre, &["txt"])
             .blocking_save_file(),
     ) else {
         return Ok(None);
@@ -387,12 +401,13 @@ pub fn bibliotheque_exporter_cgats(
 pub fn bibliotheque_sauvegarder(
     app: tauri::AppHandle,
     ouverte: tauri::State<'_, BibliothequeOuverte>,
+    filtre: String,
 ) -> Result<Option<String>, String> {
     let Some(fichier) = choisi(
         app.dialog()
             .file()
             .set_file_name("bibliotheque-myiro-libre.sqlite")
-            .add_filter("SQLite", &["sqlite"])
+            .add_filter(&filtre, &["sqlite"])
             .blocking_save_file(),
     ) else {
         return Ok(None);
@@ -407,11 +422,12 @@ pub fn bibliotheque_sauvegarder(
 pub fn bibliotheque_restaurer(
     app: tauri::AppHandle,
     ouverte: tauri::State<'_, BibliothequeOuverte>,
+    filtre: String,
 ) -> Result<Option<String>, String> {
     let Some(fichier) = choisi(
         app.dialog()
             .file()
-            .add_filter("SQLite", &["sqlite"])
+            .add_filter(&filtre, &["sqlite"])
             .blocking_pick_file(),
     ) else {
         return Ok(None);
@@ -427,11 +443,12 @@ pub fn bibliotheque_importer_cgats(
     app: tauri::AppHandle,
     ouverte: tauri::State<'_, BibliothequeOuverte>,
     condition: i64,
+    filtre: String,
 ) -> Result<Option<IdMesure>, String> {
     let Some(fichier) = choisi(
         app.dialog()
             .file()
-            .add_filter("CGATS", &["txt", "cgats", "it8", "ti3"])
+            .add_filter(filtre, &["txt", "cgats", "it8", "ti3"])
             .blocking_pick_file(),
     ) else {
         return Ok(None);
@@ -737,8 +754,38 @@ mod tests {
     }
 
     #[test]
+    fn un_fichier_trop_gros_est_refuse_avant_lecture_et_le_latin_1_garde_ses_accents() {
+        let (dossier, ouverte) = demonstration();
+        let offset = ouverte.arborescence("").unwrap()[1].condition.id;
+        let gros = dossier.path().join("gros.txt");
+        std::fs::File::create(&gros)
+            .unwrap()
+            .set_len(16 * 1024 * 1024 + 1)
+            .unwrap();
+        assert_eq!(
+            ouverte.importer_cgats(offset, &gros),
+            Err("bibliotheque.erreur.cgats_trop_gros".to_string())
+        );
+
+        let latin = dossier.path().join("latin.txt");
+        std::fs::write(
+            &latin,
+            b"CGATS.17\nINSTRUMENTATION\t\"Relev\xe9 fictif\"\nMEASUREMENT_SOURCE\t\"D50\"\n\
+              BEGIN_DATA_FORMAT\nSAMPLE_ID\tLAB_L\tLAB_A\tLAB_B\nEND_DATA_FORMAT\n\
+              BEGIN_DATA\n1\t50.0\t1.0\t-2.0\nEND_DATA\n",
+        )
+        .unwrap();
+        let id = ouverte.importer_cgats(offset, &latin).unwrap();
+        assert_eq!(
+            ouverte.detail_importee(id).unwrap().instrument,
+            Info::Confirmee("Relevé fictif".into())
+        );
+    }
+
+    #[test]
     fn les_textes_de_l_export_existent_au_catalogue() {
         for cle in [
+            "bibliotheque.erreur.cgats_trop_gros",
             "bibliotheque.erreur.sauvegarde_invalide",
             "bibliotheque.erreur.cgats_illisible",
             "bibliotheque.erreur.export",

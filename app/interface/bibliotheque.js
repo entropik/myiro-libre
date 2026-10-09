@@ -367,6 +367,7 @@
   // ---- Export et sauvegarde, sous la feuille ----
   const exportZone = document.querySelector("[data-export]");
   const exportPourquoi = exportZone.querySelector("[data-export-pourquoi]");
+  const exportDetails = exportZone.querySelector("[data-export-details]");
   const exporterBouton = exportZone.querySelector("[data-exporter]");
   const exportRaison = exportZone.querySelector("[data-export-raison]");
   const exportMessage = exportZone.querySelector("[data-export-message]");
@@ -380,6 +381,9 @@
       b.setAttribute("aria-pressed", String(b.dataset.format === format));
     }
     exportPourquoi.textContent = t("export.pourquoi." + format);
+    exportDetails.textContent = t("export.details." + format);
+    // Le glossaire réserve « exporter » au CGATS : la sauvegarde se dit « Sauvegarder… ».
+    exporterBouton.textContent = t(format === "cgats" ? "export.exporter" : "export.sauvegarder");
     const sansMesure = format === "cgats" && !(choix && choix.type === "mesure");
     exporterBouton.disabled = sansMesure;
     exportRaison.hidden = !sansMesure;
@@ -398,8 +402,8 @@
     exportMessage.hidden = true;
     try {
       const nom = format === "cgats"
-        ? await invoke("bibliotheque_exporter_cgats", { id: choix.id })
-        : await invoke("bibliotheque_sauvegarder");
+        ? await invoke("bibliotheque_exporter_cgats", { id: choix.id, filtre: t("export.filtre.cgats") })
+        : await invoke("bibliotheque_sauvegarder", { filtre: t("export.filtre.sauvegarde") });
       if (nom) annoncer(`${t("export.fait")} ${nom}`);
     } catch (cle) {
       annoncer(t(cle));
@@ -412,7 +416,7 @@
     const condition = conditionChoisie();
     if (condition === null) return;
     try {
-      const id = await invoke("bibliotheque_importer_cgats", { condition });
+      const id = await invoke("bibliotheque_importer_cgats", { condition, filtre: t("export.filtre.cgats") });
       if (id === null) return;
       recherche.value = "";
       choix = { type: "importee", id };
@@ -428,7 +432,7 @@
     restaurerAvis.hidden = true;
     exportMessage.hidden = true;
     try {
-      const nom = await invoke("bibliotheque_restaurer");
+      const nom = await invoke("bibliotheque_restaurer", { filtre: t("export.filtre.sauvegarde") });
       if (!nom) return;
       choix = null;
       recherche.value = "";

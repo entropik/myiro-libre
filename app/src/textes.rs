@@ -83,11 +83,15 @@ const FRANCAIS: Catalogue = &[
         "bibliotheque.erreur.cgats_illisible",
         "Ce fichier n’a pas pu être lu comme un CGATS, ou il ne dit pas sa condition de mesure. Rien n’a été deviné.",
     ),
+    (
+        "bibliotheque.erreur.cgats_trop_gros",
+        "Ce fichier est trop gros pour un fichier de mesures (plus de 16\u{202f}Mo). Rien n’a été importé.",
+    ),
     ("bibliotheque.erreur.export", "Le fichier n’a pas pu être écrit."),
     // Bibliothèque, section Export et sauvegarde
     ("export.titre", "Export et sauvegarde"),
-    ("export.usage", "Exporter"),
-    ("export.usage.libelle", "Usage du fichier exporté"),
+    ("export.usage", "Exporter ou sauvegarder"),
+    ("export.usage.libelle", "Usage du fichier"),
     (
         "export.format.cgats",
         "Pour un logiciel de profilage (CGATS)",
@@ -98,13 +102,25 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "export.pourquoi.cgats",
-        "La mesure choisie, avec ses spectres M0, M1, M2, ses Lab et sa provenance, dans un fichier CGATS.17 que lisent les logiciels de profilage.",
+        "La mesure choisie, dans un fichier que lisent les logiciels de profilage.",
     ),
     (
         "export.pourquoi.sauvegarde",
         "Toute la bibliothèque dans un seul fichier, à garder en lieu sûr ou à restaurer sur un autre poste.",
     ),
+    ("export.details.titre", "Détail technique"),
+    (
+        "export.details.cgats",
+        "Format CGATS.17, un tableau par condition de mesure (M0, M1, M2) avec le spectre et les Lab de chaque plage, spectre présenté comme l’attend ArgyllCMS (SPEC_380…, en pourcentage). L’en-tête dit d’où vient la mesure (instrument, date, étalonnage), et ce qui n’est pas connu y est écrit «\u{202f}inconnue\u{202f}».",
+    ),
+    (
+        "export.details.sauvegarde",
+        "Une copie de la base de la bibliothèque (fichier SQLite), avec toutes les mesures complètes.",
+    ),
     ("export.exporter", "Exporter…"),
+    ("export.sauvegarder", "Sauvegarder…"),
+    ("export.filtre.cgats", "Fichier de mesures"),
+    ("export.filtre.sauvegarde", "Sauvegarde de la bibliothèque"),
     (
         "export.raison.mesure",
         "Choisissez d’abord une mesure dans la colonne de gauche.",
@@ -636,10 +652,14 @@ const ANGLAIS: Catalogue = &[
         "bibliotheque.erreur.cgats_illisible",
         "This file could not be read as CGATS, or it does not state its measurement condition. Nothing was guessed.",
     ),
+    (
+        "bibliotheque.erreur.cgats_trop_gros",
+        "This file is too large for a measurement file (over 16 MB). Nothing was imported.",
+    ),
     ("bibliotheque.erreur.export", "The file could not be written."),
     ("export.titre", "Export and backup"),
-    ("export.usage", "Export"),
-    ("export.usage.libelle", "What the exported file is for"),
+    ("export.usage", "Export or back up"),
+    ("export.usage.libelle", "What the file is for"),
     ("export.format.cgats", "For profiling software (CGATS)"),
     (
         "export.format.sauvegarde",
@@ -647,13 +667,25 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "export.pourquoi.cgats",
-        "The chosen measurement, with its M0, M1, M2 spectra, its Lab values and its provenance, in a CGATS.17 file that profiling software reads.",
+        "The chosen measurement, in a file that profiling software reads.",
     ),
     (
         "export.pourquoi.sauvegarde",
         "The whole library in a single file, to keep somewhere safe or to restore on another computer.",
     ),
+    ("export.details.titre", "Technical detail"),
+    (
+        "export.details.cgats",
+        "CGATS.17 format, one table per measurement condition (M0, M1, M2) with the spectrum and Lab values of each patch, spectrum laid out as ArgyllCMS expects (SPEC_380…, in percent). The header says where the measurement comes from (instrument, date, calibration), and anything unknown is written “inconnue”.",
+    ),
+    (
+        "export.details.sauvegarde",
+        "A copy of the library database (SQLite file), with every measurement in full.",
+    ),
     ("export.exporter", "Export…"),
+    ("export.sauvegarder", "Back up…"),
+    ("export.filtre.cgats", "Measurement file"),
+    ("export.filtre.sauvegarde", "Library backup"),
     (
         "export.raison.mesure",
         "First choose a measurement in the left column.",
