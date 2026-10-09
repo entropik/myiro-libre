@@ -56,9 +56,10 @@ fn main() -> ExitCode {
         }
     };
     let mut session = Session::new(dll, plafond);
+    // L'entrée est lue par un fil à part (annulation pendant une mesure).
     let resultat = servir(
         &mut session,
-        std::io::stdin().lock(),
+        std::io::BufReader::new(std::io::stdin()),
         &mut std::io::stdout(),
     );
     // `servir` a déjà fermé la session (désarmement puis déconnexion) ; la

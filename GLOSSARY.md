@@ -27,7 +27,7 @@ Mesure d'une seule plage ou couleur, hors mire.
 _Éviter_ : spot, mesure spot
 
 **Couleur de référence** :
-Couleur nommée, saisie ou mesurée par l'utilisateur, à laquelle on compare une mesure ponctuelle.
+Couleur nommée, saisie ou mesurée par l'utilisateur, à laquelle on compare une mesure ponctuelle. Dans Mesurer, une mesure rangée de la séance est désignée couleur de référence ; elle est conservée dans la bibliothèque avec son écart accepté.
 _Éviter_ : ton direct, spot color, nuancier
 
 **Feuille** :
@@ -123,6 +123,14 @@ _Éviter_ : nettoyage réussi, arrêt (au sens du résultat)
 Fin volontaire de la session avec l'instrument : désarmement, puis déconnexion. Elle est confirmée seulement si les deux sont faits et le repos prouvé ; sinon elle est incertaine (déconnecté, repos supposé ou non prouvé) ou en échec (déconnexion refusée, à redemander).
 _Éviter_ : arrêt, sortie, déconnexion (qui n'en est qu'une étape)
 
+**Annulation** :
+Demande de l'opérateur d'interrompre la mesure en cours tant qu'elle attend (le bouton, ou en automatique le déclenchement). Elle ne vise que cette mesure, jamais la suivante. Le pont désarme l'instrument et rapporte la remise au repos ; une mesure déjà partie ou terminée est gardée. L'issue d'une mesure est unique : acquise, annulée, abandonnée (rien envoyé), refusée ou échouée.
+_Éviter_ : arrêt, abandon (pour une mesure déjà envoyée), interruption forcée
+
+**Interruption forcée** :
+Arrêt du programme pont par l'application, quand il ne répond plus dans le délai. L'état de l'instrument devient incertain et une récupération est demandée (débrancher, rebrancher, réessayer) : un pont arrêté ne prouve jamais que l'instrument est au repos.
+_Éviter_ : annulation, fermeture
+
 **Données brutes** :
 Valeurs rendues par l'instrument avant tout calcul de spectre (152 par plage pour le MYIRO-1), conservées avec chaque mesure pour valider le pilote libre (ADR 0006).
 _Éviter_ : raw, données capteur
@@ -160,6 +168,14 @@ _Éviter_ : null, vide, zéro, par défaut
 **Écart de couleur** :
 Différence chiffrée entre deux couleurs Lab. ΔE00 (CIEDE2000) par défaut ; ΔC (écart de chroma) et ΔH (écart de teinte) sont des critères distincts, signés, qu'on ne confond pas avec ΔE00. On dit toujours quelle formule est employée.
 _Éviter_ : delta E sans précision, différence de couleur
+
+**Écart accepté** :
+Écart ΔE00 au-delà duquel une mesure est hors tolérance par rapport à une couleur de référence ; choisi par l'utilisateur et conservé avec la référence. Tant qu'il n'est pas fixé, il n'y a pas de verdict (« seuil non fixé ») et aucune valeur par défaut ne le remplace.
+_Éviter_ : tolérance par défaut, seuil 0
+
+**Verdict d'écart** :
+Jugement d'un écart au regard de l'écart accepté, à trois niveaux : conforme (sous 80 % de l'écart accepté), proche de la limite (de 80 % à l'écart accepté inclus), hors tolérance (au-delà). Les 80 % sont un choix du projet, pas une valeur de norme. Entre deux mesures de conditions de mesure différentes, il n'y a ni écart ni verdict. Il porte sur l'écart tel qu'il est écrit, à deux décimales. Toujours un mot et un carré, jamais la couleur seule ; le rouge est réservé au hors tolérance.
+_Éviter_ : OK/KO, bon/mauvais, pass/fail
 
 **Teinte** :
 Angle de la couleur dans le plan a*b*, en degrés (0 à 360). Un gris parfait (chroma nulle) n'a pas de teinte : elle est inconnue, pas nulle.

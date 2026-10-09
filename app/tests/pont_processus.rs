@@ -159,7 +159,7 @@ fn un_etalonnage_qui_depasse_le_delai_double_arrete_le_pont() {
 /// ponctuelle six fois le délai d'une autre demande (3 min).
 #[test]
 fn la_mesure_ponctuelle_a_six_fois_le_delai_d_une_autre_demande() {
-    assert_eq!(app::pont::DELAI_REPONSE * 6, Duration::from_secs(180));
+    assert_eq!(app::instrument::DELAI_REPONSE * 6, Duration::from_secs(180));
     let mut pont = lancer("mesure_lente").avec_delai(Duration::from_millis(200));
 
     assert!(matches!(
@@ -200,6 +200,145 @@ fn une_mesure_sans_reponse_laisse_l_instrument_dans_un_etat_incertain() {
     assert_eq!(instrument.probleme().unwrap().code(), "pont_bloque");
     assert_eq!(instrument.etat(), &Etat::NonDetecte);
     assert!(!instrument.vue().mesurable);
+}
+
+// ---- Annulation pendant une mesure (ticket #26) ----
+
+const MESURER: Requete = Requete::MesurerPonctuelle {
+    declenchement: pont_protocole::Declenchement::Manuel,
+};
+
+/// L'opérateur annule `apres` le début de la demande.
+fn annuler_apres(apres: Duration) -> app::pont::Annulation {
+    let annulation = app::pont::Annulation::default();
+    annulation.commencer();
+    let copie = annulation.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(apres);
+        copie.annuler();
+    });
+    annulation
+}
+
+/// `annuler` part pendant que le pont attend, sans attendre sa réponse ; les
+/// deux réponses arrivent dans l'ordre, et la demande suivante reçoit la
+/// sienne.
+#[test]
+fn l_annulation_part_pendant_l_attente_et_les_reponses_restent_dans_l_ordre() {
+    let mut pont = lancer("annulable").avec_delai(Duration::from_millis(300));
+    let debut = Instant::now();
+
+    let echange = pont.demander_annulable(&MESURER, &annuler_apres(Duration::from_millis(50)));
+
+    assert_eq!(
+        echange.reponse,
+        Ok(Reponse::Erreur {
+            erreur: pont_protocole::ErreurPont::MesureAnnulee {
+                remise_au_repos: pont_protocole::RemiseAuRepos::AuRepos {}
+            }
+        })
+    );
+    assert_eq!(
+        echange.annulation,
+        Some(Ok(pont_protocole::EffetAnnulation::Appliquee))
+    );
+    assert!(
+        debut.elapsed() < Duration::from_secs(1),
+        "{:?}",
+        debut.elapsed()
+    );
+    assert_eq!(
+        pont.demander(&Requete::Version {}),
+        Ok(Reponse::Version { parties: [1, 0, 1] })
+    );
+}
+
+/// Résultat tardif : la réponse arrivée après l'envoi de `annuler` reste
+/// celle de sa mesure, et ne devient jamais celle de la demande suivante.
+#[test]
+fn un_resultat_tardif_reste_celui_de_sa_mesure() {
+    let mut pont = lancer("resultat_tardif").avec_delai(Duration::from_millis(300));
+
+    let echange = pont.demander_annulable(&MESURER, &annuler_apres(Duration::from_millis(50)));
+
+    assert_eq!(
+        echange.reponse,
+        Ok(Reponse::Erreur {
+            erreur: pont_protocole::ErreurPont::Delai {}
+        })
+    );
+    assert_eq!(
+        echange.annulation,
+        Some(Ok(pont_protocole::EffetAnnulation::SansEffet))
+    );
+    assert_eq!(
+        pont.demander(&Requete::Version {}),
+        Ok(Reponse::Version { parties: [1, 0, 1] })
+    );
+}
+
+/// Réponse illisible à la mesure après l'envoi de `annuler` : le pont est
+/// arrêté, sa réponse à `annuler` ne peut pas devenir celle d'une autre
+/// demande.
+#[test]
+fn une_reponse_illisible_apres_l_annulation_arrete_le_pont() {
+    let mut pont = lancer("annulation_illisible").avec_delai(Duration::from_millis(300));
+
+    let echange = pont.demander_annulable(&MESURER, &annuler_apres(Duration::from_millis(50)));
+
+    assert!(matches!(
+        echange.reponse,
+        Err(Panne::ReponseIllisible { .. })
+    ));
+    assert!(matches!(echange.annulation, Some(Err(_))));
+    assert!(pont.demander(&Requete::Version {}).is_err());
+}
+
+/// Sans annulation, la demande annulable se comporte comme une autre.
+#[test]
+fn une_demande_annulable_sans_annulation_reste_une_demande() {
+    let mut pont = lancer("normal");
+    let annulation = app::pont::Annulation::default();
+    let echange = pont.demander_annulable(&Requete::Version {}, &annulation);
+    assert_eq!(echange.reponse, Ok(Reponse::Version { parties: [1, 0, 1] }));
+    assert_eq!(echange.annulation, None);
+}
+
+/// Fin de la sortie du pont (processus perdu) pendant la mesure.
+#[test]
+fn la_perte_du_pont_pendant_la_mesure_est_vue() {
+    let mut pont = lancer("muet");
+    let echange = pont.demander_annulable(&MESURER, &annuler_apres(Duration::from_secs(60)));
+    assert!(
+        matches!(echange.reponse, Err(Panne::Arret { code: Some(1), .. })),
+        "{echange:?}"
+    );
+    assert_eq!(echange.annulation, None);
+}
+
+/// Un pont qui ne répond ni à la mesure ni à l'annulation : après l'envoi de
+/// `annuler`, il n'a plus que le délai de l'annulation, puis il est arrêté de
+/// force (état incertain), bien avant le délai de la mesure.
+#[test]
+fn un_pont_qui_ignore_l_annulation_est_arrete_dans_le_delai_de_l_annulation() {
+    let delais = app::instrument::Delais::new(Duration::from_millis(300));
+    assert!(delais.reponse(&MESURER) >= Duration::from_millis(1800));
+    let mut pont = lancer("bloque").avec_delai(delais.base);
+    let debut = Instant::now();
+
+    let echange = pont.demander_annulable(&MESURER, &annuler_apres(Duration::from_millis(50)));
+
+    assert!(matches!(echange.reponse, Err(Panne::SansReponse { .. })));
+    assert!(matches!(
+        echange.annulation,
+        Some(Err(Panne::SansReponse { .. }))
+    ));
+    assert!(
+        debut.elapsed() < Duration::from_millis(1200),
+        "{:?}",
+        debut.elapsed()
+    );
+    assert!(pont.demander(&Requete::Version {}).is_err());
 }
 
 /// Fermer un pont bloqué ne bloque pas non plus.

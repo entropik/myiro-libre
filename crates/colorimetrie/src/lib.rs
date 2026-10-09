@@ -3,7 +3,9 @@
 //! - spectre de réflexion (380 à 730 nm par 10 nm) vers XYZ puis Lab, pour
 //!   l'illuminant D50 et l'observateur 2° ;
 //! - Lab vers LCH ;
-//! - écarts ΔE00 (CIEDE2000), ΔC et ΔH (CIELAB).
+//! - écarts ΔE00 (CIEDE2000), ΔC et ΔH (CIELAB) ;
+//! - verdict d'un écart au regard d'un seuil (conforme, proche de la limite,
+//!   hors tolérance).
 //!
 //! Une valeur impossible à calculer est **inconnue** (voir `GLOSSARY.md`) :
 //! les fonctions rendent alors `Err(Inconnu)`, jamais zéro.
@@ -194,6 +196,55 @@ pub fn delta_h(lab1: Lab, lab2: Lab) -> Result<f64, Inconnu> {
     let dh = (lab2.b.atan2(lab2.a) - lab1.b.atan2(lab1.a)).to_degrees();
     let dh = (dh + 180.0).rem_euclid(360.0) - 180.0;
     fini(2.0 * (c1 * c2).sqrt() * (dh / 2.0).to_radians().sin())
+}
+
+// ---- Verdict d'un écart ----
+
+/// Part du seuil à partir de laquelle un écart est dit proche de la limite.
+/// Choix du projet (ADR 0004, complément du 9 octobre 2026), pas d'une norme.
+pub const PART_PROCHE_DE_LA_LIMITE: f64 = 0.8;
+
+/// Écart ΔE00 accepté, choisi par l'utilisateur : un nombre fini strictement
+/// positif. Il n'existe pas de seuil « vide » : l'absence de seuil se dit
+/// `Option::None` chez l'appelant, jamais par une valeur sentinelle.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Seuil(f64);
+
+/// Verdict d'un écart au regard d'un seuil.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verdict {
+    /// Écart sous [`PART_PROCHE_DE_LA_LIMITE`] du seuil.
+    Conforme,
+    /// Écart entre cette part du seuil et le seuil, inclus.
+    ProcheDeLaLimite,
+    /// Écart au-delà du seuil.
+    HorsTolerance,
+}
+
+impl Seuil {
+    /// Seuil, si `valeur` est un nombre fini strictement positif.
+    pub fn new(valeur: f64) -> Option<Seuil> {
+        (valeur.is_finite() && valeur > 0.0).then_some(Seuil(valeur))
+    }
+
+    pub fn valeur(self) -> f64 {
+        self.0
+    }
+
+    /// Verdict de l'écart `ecart` : un écart égal au seuil reste dans la
+    /// tolérance. Un écart non fini est inconnu.
+    pub fn verdict(self, ecart: f64) -> Result<Verdict, Inconnu> {
+        if !ecart.is_finite() {
+            return Err(Inconnu::ValeurNonFinie);
+        }
+        Ok(if ecart > self.0 {
+            Verdict::HorsTolerance
+        } else if ecart >= PART_PROCHE_DE_LA_LIMITE * self.0 {
+            Verdict::ProcheDeLaLimite
+        } else {
+            Verdict::Conforme
+        })
+    }
 }
 
 /// Facteur de réflexion de la longueur d'onde de rang `i` des tables

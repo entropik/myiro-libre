@@ -10,11 +10,12 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::instrument::Delais;
 use pont_protocole::{
     lire_reponse, Calcul, ConditionMesure, ConditionsCalcul, DonneesBrutes, Echantillonnage,
-    ErreurPont, Geometrie, Horodatage, Identite, Illuminant, Info, InstrumentDetecte,
-    InstrumentMesurant, Lab, Mesure, Observateur, Palier, Plage, Provenance, RemiseAuRepos,
-    Reponse, Requete, Spectre, MODELE_MYIRO1,
+    EffetAnnulation, ErreurPont, Geometrie, Horodatage, Identite, Illuminant, Info,
+    InstrumentDetecte, InstrumentMesurant, Lab, Mesure, Observateur, Palier, Plage, Provenance,
+    RemiseAuRepos, Reponse, Requete, Spectre, MODELE_MYIRO1,
 };
 
 /// Le pont n'a pas pu répondre : ce n'est pas une erreur de l'instrument, mais
@@ -35,9 +36,77 @@ pub enum Panne {
     SansReponse { detail: String },
 }
 
+/// Demande d'annulation de la mesure en cours (ticket #26), partagée entre
+/// le fil qui mesure et celui de l'opérateur. Une seule mesure à la fois.
+#[derive(Clone, Debug, Default)]
+pub struct Annulation(Arc<Mutex<EtatAnnulation>>);
+
+#[derive(Debug, Default)]
+struct EtatAnnulation {
+    en_cours: bool,
+    demandee: bool,
+}
+
+impl Annulation {
+    fn etat(&self) -> std::sync::MutexGuard<'_, EtatAnnulation> {
+        self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Demande d'annuler la mesure en cours. Refusée (`false`) s'il n'y en a
+    /// pas : une annulation ne vise jamais la mesure suivante.
+    pub fn annuler(&self) -> bool {
+        let mut etat = self.etat();
+        if etat.en_cours {
+            etat.demandee = true;
+        }
+        etat.en_cours
+    }
+
+    /// L'annulation de la mesure en cours est-elle demandée ?
+    pub fn demandee(&self) -> bool {
+        self.etat().demandee
+    }
+
+    /// Une mesure commence : elle peut être annulée jusqu'à sa fin.
+    pub fn commencer(&self) {
+        *self.etat() = EtatAnnulation {
+            en_cours: true,
+            demandee: false,
+        };
+    }
+
+    /// La mesure est terminée : plus rien à annuler.
+    pub fn terminer(&self) {
+        *self.etat() = EtatAnnulation::default();
+    }
+}
+
+/// Résultat d'une demande annulable : la réponse unique de la requête, et,
+/// si `annuler` a été envoyé, ce que le pont en dit.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Echange {
+    pub reponse: Result<Reponse, Panne>,
+    /// `None` : aucune annulation envoyée. `Some(Err)` : envoyée, mais le pont
+    /// ne l'a pas confirmée ; il est alors arrêté.
+    pub annulation: Option<Result<EffetAnnulation, Panne>>,
+}
+
 /// Une requête, une réponse : tout le dialogue avec un pont.
 pub trait Pont {
     fn demander(&mut self, requete: &Requete) -> Result<Reponse, Panne>;
+
+    /// Comme `demander`, mais l'attente peut être interrompue : quand
+    /// `annulation` est demandée, le pont reçoit `annuler` sans attendre la
+    /// réponse, puis la réponse de la requête et celle de `annuler` sont lues,
+    /// dans cet ordre. Un pont qui ne sait pas annuler répond comme
+    /// `demander`.
+    fn demander_annulable(&mut self, requete: &Requete, annulation: &Annulation) -> Echange {
+        let _ = annulation;
+        Echange {
+            reponse: self.demander(requete),
+            annulation: None,
+        }
+    }
 }
 
 /// Architecture d'un exécutable ou d'une DLL Windows. Un pont ne charge
@@ -107,19 +176,20 @@ pub fn chercher_ponts_nommes(dossier_exe: &Path, base: &str) -> Vec<(Architectur
 /// Code de sortie de `pont-myiro1` quand la DLL n'a pas pu être chargée.
 const CODE_DLL_REFUSEE: i32 = 3;
 
-/// Délai de réponse du pont. La connexion la plus lente attend 10 s dans la
-/// DLL (`pont_myiro1::DELAI_CONNEXION`), plus la lecture de l'identité.
-pub const DELAI_REPONSE: Duration = Duration::from_secs(30);
+/// Pendant une demande annulable, la réponse est attendue par tranches de
+/// cette durée, pour voir l'annulation demandée.
+const PAS_ATTENTE_REPONSE: Duration = Duration::from_millis(20);
 
 /// Le vrai programme `pont-myiro1`, lancé avec la DLL et le plafond, auquel on
 /// parle par une ligne JSON par message (crate `pont-protocole`). Chaque
-/// réponse est attendue au plus `delai` ; au-delà, le pont est arrêté de force.
+/// réponse est attendue au plus le délai fixé par le module instrument
+/// ([`Delais`]) ; au-delà, le pont est arrêté de force.
 pub struct PontProcessus {
     enfant: Child,
     entree: Option<ChildStdin>,
     /// Lignes lues par un fil à part, pour pouvoir attendre avec un délai.
     lignes: Receiver<String>,
-    delai: Duration,
+    delais: Delais,
 }
 
 impl PontProcessus {
@@ -158,21 +228,22 @@ impl PontProcessus {
             enfant,
             entree,
             lignes,
-            delai: DELAI_REPONSE,
+            delais: Delais::default(),
         })
     }
 
-    /// Change le délai de réponse (et d'arrêt) du pont.
+    /// Change le délai de base des réponses (et de l'arrêt) du pont ; les
+    /// autres délais en découlent.
     pub fn avec_delai(mut self, delai: Duration) -> Self {
-        self.delai = delai;
+        self.delais = Delais::new(delai);
         self
     }
 
-    /// Attend la fin du pont au plus `delai`, puis l'arrête de force. Rend
-    /// `None` si le pont a dû être arrêté de force.
+    /// Attend la fin du pont au plus le délai d'arrêt, puis l'arrête de force.
+    /// Rend `None` si le pont a dû être arrêté de force.
     fn attendre_fin(&mut self) -> Option<ExitStatus> {
         self.entree = None;
-        let echeance = Instant::now() + self.delai;
+        let echeance = Instant::now() + self.delais.arret();
         loop {
             match self.enfant.try_wait() {
                 Ok(Some(statut)) => return Some(statut),
@@ -180,8 +251,7 @@ impl PontProcessus {
                     std::thread::sleep(Duration::from_millis(10))
                 }
                 _ => {
-                    let _ = self.enfant.kill();
-                    let _ = self.enfant.wait();
+                    self.arreter_de_force();
                     return None;
                 }
             }
@@ -215,43 +285,133 @@ fn nom_palier(palier: Palier) -> String {
         .expect("un palier se nomme toujours")
 }
 
-impl Pont for PontProcessus {
-    fn demander(&mut self, requete: &Requete) -> Result<Reponse, Panne> {
+impl PontProcessus {
+    /// Écrit une requête sur l'entrée du pont.
+    fn envoyer(&mut self, requete: &Requete) -> Result<String, Panne> {
         let ligne = serde_json::to_string(requete).expect("une requête se sérialise toujours");
         let envoi = match self.entree.as_mut() {
             Some(entree) => writeln!(entree, "{ligne}").and_then(|_| entree.flush()),
             None => Err(std::io::ErrorKind::BrokenPipe.into()),
         };
-        if envoi.is_err() {
-            return Err(self.arret());
+        match envoi {
+            Ok(()) => Ok(ligne),
+            Err(_) => Err(self.arret()),
         }
-        // L'étalonnage attend jusqu'à 30 s dans le pont
-        // (`pont_myiro1::DELAI_ETALONNAGE`), en plus de l'appel à la DLL.
-        // La mesure ponctuelle attend jusqu'à 2 min l'appui sur le bouton
-        // (`pont_myiro1::DELAI_APPUI`), plus un désarmement avant et un après
-        // (15 s au plus chacun) et les lectures. En automatique, l'attente de
-        // l'armement (5 s) et de la fin de mesure (30 s) y tiennent aussi.
-        let delai = match requete {
-            Requete::Etalonner {} => self.delai * 2,
-            Requete::MesurerPonctuelle { .. } => self.delai * 6,
-            _ => self.delai,
-        };
+    }
+
+    /// Arrête le pont de force : il n'a pas répondu à `ligne` à temps. Cela ne
+    /// prouve pas que l'instrument est revenu au repos.
+    fn couper(&mut self, ligne: &str, delai: Duration) -> Panne {
+        self.arreter_de_force();
+        Panne::SansReponse {
+            detail: format!(
+                "aucune réponse en {} ms à {ligne} ; pont arrêté de force",
+                delai.as_millis()
+            ),
+        }
+    }
+
+    /// Ferme l'entrée du pont et termine son processus, sans attendre.
+    fn arreter_de_force(&mut self) {
+        self.entree = None;
+        let _ = self.enfant.kill();
+        let _ = self.enfant.wait();
+    }
+
+    /// Lit la réponse à `ligne`, au plus `delai`.
+    fn recevoir(&mut self, ligne: &str, delai: Duration) -> Result<Reponse, Panne> {
         match self.lignes.recv_timeout(delai) {
-            Ok(reponse) => lire_reponse(reponse.trim()).map_err(|e| Panne::ReponseIllisible {
-                detail: format!("{e} : {}", reponse.trim()),
-            }),
+            Ok(reponse) => lire(&reponse),
             Err(RecvTimeoutError::Disconnected) => Err(self.arret()),
-            Err(RecvTimeoutError::Timeout) => {
-                self.entree = None;
-                let _ = self.enfant.kill();
-                let _ = self.enfant.wait();
-                Err(Panne::SansReponse {
-                    detail: format!(
-                        "aucune réponse en {} ms à {ligne} ; pont arrêté de force",
-                        delai.as_millis()
-                    ),
-                })
+            Err(RecvTimeoutError::Timeout) => Err(self.couper(ligne, delai)),
+        }
+    }
+}
+
+fn lire(reponse: &str) -> Result<Reponse, Panne> {
+    lire_reponse(reponse.trim()).map_err(|e| Panne::ReponseIllisible {
+        detail: format!("{e} : {}", reponse.trim()),
+    })
+}
+
+impl Pont for PontProcessus {
+    fn demander(&mut self, requete: &Requete) -> Result<Reponse, Panne> {
+        let ligne = self.envoyer(requete)?;
+        self.recevoir(&ligne, self.delais.reponse(requete))
+    }
+
+    /// La requête est envoyée, puis sa réponse attendue par tranches courtes :
+    /// dès que l'annulation est demandée, `annuler` part sans attendre, et le
+    /// délai restant devient celui de l'annulation (le pont désarme avant de
+    /// répondre). Les deux réponses sont lues dans l'ordre ; un pont qui ne
+    /// confirme pas l'annulation est arrêté.
+    fn demander_annulable(&mut self, requete: &Requete, annulation: &Annulation) -> Echange {
+        let sans_annulation = |reponse| Echange {
+            reponse,
+            annulation: None,
+        };
+        let ligne = match self.envoyer(requete) {
+            Ok(ligne) => ligne,
+            Err(panne) => return sans_annulation(Err(panne)),
+        };
+        let mut delai = self.delais.reponse(requete);
+        let mut debut = Instant::now();
+        let mut annulee = false;
+        let reponse = loop {
+            if !annulee && annulation.demandee() {
+                if let Err(panne) = self.envoyer(&Requete::Annuler {}) {
+                    return Echange {
+                        reponse: Err(panne.clone()),
+                        annulation: Some(Err(panne)),
+                    };
+                }
+                annulee = true;
+                delai = self.delais.apres_annulation();
+                debut = Instant::now();
             }
+            let reste = delai.saturating_sub(debut.elapsed());
+            match self.lignes.recv_timeout(reste.min(PAS_ATTENTE_REPONSE)) {
+                Ok(texte) => break lire(&texte),
+                Err(RecvTimeoutError::Disconnected) => break Err(self.arret()),
+                Err(RecvTimeoutError::Timeout) if reste.is_zero() => {
+                    break Err(self.couper(&ligne, delai))
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+            }
+        };
+        if !annulee {
+            return sans_annulation(reponse);
+        }
+        let effet = match &reponse {
+            // Réponse illisible : le pont vit encore et sa réponse à
+            // `annuler` resterait à lire, prise ensuite pour celle d'une autre
+            // demande. Il est arrêté. Les autres pannes l'ont déjà arrêté.
+            Err(panne) => {
+                if matches!(panne, Panne::ReponseIllisible { .. }) {
+                    self.arreter_de_force();
+                }
+                Err(panne.clone())
+            }
+            Ok(_) => match self.recevoir("{\"cmd\":\"annuler\"}", self.delais.apres_annulation()) {
+                Ok(Reponse::Annulation { effet }) => Ok(effet),
+                Ok(autre) => {
+                    self.arreter_de_force();
+                    Err(Panne::ReponseIllisible {
+                        detail: format!("réponse à annuler inattendue : {autre:?}"),
+                    })
+                }
+                // Une ligne illisible laisse aussi le pont vivant.
+                Err(panne) => {
+                    if matches!(panne, Panne::ReponseIllisible { .. }) {
+                        self.arreter_de_force();
+                    }
+                    Err(panne)
+                }
+            },
+        };
+        Echange {
+            reponse,
+            annulation: Some(effet),
         }
     }
 }
@@ -364,7 +524,27 @@ pub struct PontSimule {
     remise_au_repos: Info<RemiseAuRepos>,
     /// Réponse à `fermer` (par défaut : fermeture confirmée).
     fermeture: Box<Result<Reponse, Panne>>,
+    /// La prochaine mesure attend l'annulation, puis se termine ainsi.
+    attente: Option<AttenteSimulee>,
 }
+
+/// Comment se termine une mesure du pont simulé qui attend l'annulation
+/// (ticket #26). Sans annulation, elle finit par le délai du pont.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AttenteSimulee {
+    /// La mesure est interrompue : `mesure_annulee` avec cette remise au
+    /// repos, puis `annulation appliquee`.
+    Annulee(RemiseAuRepos),
+    /// La mesure était déjà partie : elle est rendue (résultat tardif), puis
+    /// `annulation sans_effet`.
+    TermineeAvant,
+    /// La mesure est rendue, mais le pont ne confirme jamais l'annulation.
+    SansAccuse,
+}
+
+/// Temps que le pont simulé laisse à l'annulation avant de répondre
+/// `delai`.
+const ATTENTE_SIMULEE: Duration = Duration::from_secs(2);
 
 impl PontSimule {
     /// Instruments branchés, par leur numéro de série (toujours fictif).
@@ -377,7 +557,15 @@ impl PontSimule {
             etalonnage: None,
             remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
             fermeture: Box::new(Ok(Reponse::Ferme {})),
+            attente: None,
         }
+    }
+
+    /// La prochaine mesure (une seule) attend que l'opérateur l'annule, puis
+    /// se termine comme `attente` le dit.
+    pub fn attendre_annulation(mut self, attente: AttenteSimulee) -> Self {
+        self.attente = Some(attente);
+        self
     }
 
     /// Remise au repos rendue avec chaque mesure (par défaut : au repos, prouvé).
@@ -426,6 +614,12 @@ impl Pont for PontSimule {
             Requete::MesurerPonctuelle { .. } => Palier::MesurePonctuelle,
             Requete::MesurerBande { .. } => Palier::Bande,
             Requete::Fermer {} => return (*self.fermeture).clone(),
+            // Hors d'une demande annulable, rien n'est en cours.
+            Requete::Annuler {} => {
+                return Ok(Reponse::Annulation {
+                    effet: EffetAnnulation::SansEffet,
+                })
+            }
             // Comme `pont-myiro1` : la connexion par adresse est celle du FD-9.
             Requete::ConnecterAdresse { .. } => {
                 return Ok(Reponse::RequeteInvalide {
@@ -501,5 +695,63 @@ impl Pont for PontSimule {
                 },
             },
         })
+    }
+
+    /// Sans attente préparée, comme `demander`. Avec [`AttenteSimulee`], la
+    /// mesure attend l'annulation (au plus [`ATTENTE_SIMULEE`]), note
+    /// `annuler` au journal et se termine comme prévu.
+    fn demander_annulable(&mut self, requete: &Requete, annulation: &Annulation) -> Echange {
+        let attente = match requete {
+            Requete::MesurerPonctuelle { .. } => self.attente.take(),
+            _ => None,
+        };
+        let Some(attente) = attente else {
+            return Echange {
+                reponse: self.demander(requete),
+                annulation: None,
+            };
+        };
+        self.journal.0.lock().unwrap().push(requete.clone());
+        let fin = Instant::now() + ATTENTE_SIMULEE;
+        while !annulation.demandee() {
+            if Instant::now() >= fin {
+                return Echange {
+                    reponse: Ok(Reponse::Erreur {
+                        erreur: ErreurPont::Delai {},
+                    }),
+                    annulation: None,
+                };
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        self.journal.0.lock().unwrap().push(Requete::Annuler {});
+        let mesure = || match (self.connecte, &self.etalonnage) {
+            (Some(serie), Some(date)) => Reponse::Mesure {
+                mesure: mesure_simulee(serie, Some(date.clone())),
+                remise_au_repos: self.remise_au_repos.clone(),
+            },
+            _ => Reponse::Erreur {
+                erreur: ErreurPont::EtalonnageRequis {},
+            },
+        };
+        let (reponse, effet) = match attente {
+            AttenteSimulee::Annulee(remise_au_repos) => (
+                Reponse::Erreur {
+                    erreur: ErreurPont::MesureAnnulee { remise_au_repos },
+                },
+                Ok(EffetAnnulation::Appliquee),
+            ),
+            AttenteSimulee::TermineeAvant => (mesure(), Ok(EffetAnnulation::SansEffet)),
+            AttenteSimulee::SansAccuse => (
+                mesure(),
+                Err(Panne::SansReponse {
+                    detail: "aucune réponse à annuler ; pont arrêté de force".into(),
+                }),
+            ),
+        };
+        Echange {
+            reponse: Ok(reponse),
+            annulation: Some(effet),
+        }
     }
 }

@@ -311,3 +311,44 @@ fn un_declenchement_refuse_porte_le_code_de_la_dll() {
     assert_eq!(ecrire_reponse(&reponse), ligne);
     assert_eq!(lire_reponse(ligne), Ok(reponse));
 }
+
+/// Ticket #26 : `annuler` interrompt la mesure en attente qui la précède.
+/// Chaque requête reçoit une seule réponse, dans l'ordre : celle de la mesure
+/// (`mesure` si elle était déjà acquise, sinon `mesure_annulee` avec la remise
+/// au repos vérifiée), puis celle de `annuler`, qui dit si elle a servi.
+#[test]
+fn l_annulation_s_ecrit_et_se_relit_en_clair() {
+    use pont_protocole::{
+        ecrire_reponse, lire_reponse, EffetAnnulation, ErreurPont, RemiseAuRepos, Reponse,
+    };
+    assert_eq!(
+        lire_requete(r#"{"cmd":"annuler"}"#),
+        Ok(Requete::Annuler {})
+    );
+    assert!(lire_requete(r#"{"cmd":"annuler","mesure":1}"#).is_err());
+
+    let annulee = Reponse::Erreur {
+        erreur: ErreurPont::MesureAnnulee {
+            remise_au_repos: RemiseAuRepos::AuRepos {},
+        },
+    };
+    let texte = r#"{"rep":"erreur","erreur":{"type":"mesure_annulee","remise_au_repos":{"etat":"au_repos"}}}"#;
+    assert_eq!(ecrire_reponse(&annulee), texte);
+    assert_eq!(lire_reponse(texte), Ok(annulee));
+
+    for (effet, texte) in [
+        (
+            EffetAnnulation::Appliquee,
+            r#"{"rep":"annulation","effet":"appliquee"}"#,
+        ),
+        (
+            EffetAnnulation::SansEffet,
+            r#"{"rep":"annulation","effet":"sans_effet"}"#,
+        ),
+    ] {
+        let reponse = Reponse::Annulation { effet };
+        assert_eq!(ecrire_reponse(&reponse), texte);
+        assert_eq!(lire_reponse(texte), Ok(reponse));
+    }
+    assert!(lire_reponse(r#"{"rep":"annulation","effet":"peut_etre"}"#).is_err());
+}
