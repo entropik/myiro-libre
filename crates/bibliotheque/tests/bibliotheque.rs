@@ -652,3 +652,89 @@ fn une_bibliotheque_d_avant_les_noms_se_relit_sans_perte() {
         .unwrap();
     assert_eq!(version, 2);
 }
+
+/// Tout ce que la bibliothèque montre : arborescence, instruments, mesures.
+fn contenu(biblio: &Bibliotheque) -> (Vec<Branche>, Vec<Instrument>, Vec<Mesure>) {
+    let branches = biblio.arborescence("").unwrap();
+    let mesures = branches
+        .iter()
+        .flat_map(|b| &b.mesures)
+        .map(|m| biblio.mesure(m.id).unwrap().mesure)
+        .collect();
+    (branches, biblio.instruments().unwrap(), mesures)
+}
+
+#[test]
+fn une_sauvegarde_restauree_rend_toute_la_bibliotheque_a_l_identique() {
+    let (dossier, biblio) = bibliotheque_garnie();
+    let attendu = contenu(&biblio);
+    let fichier = dossier.path().join("sauvegarde.sqlite");
+    biblio.sauvegarder(&fichier).unwrap();
+    // Une deuxième sauvegarde au même endroit remplace la première.
+    biblio.sauvegarder(&fichier).unwrap();
+
+    // Autre poste : une bibliothèque qui a déjà son propre contenu.
+    let (_ailleurs, mut autre) = bibliotheque_vide();
+    let locale = autre.creer_condition("Condition locale").unwrap();
+    autre
+        .enregistrer_mesure(
+            locale.id,
+            &ponctuelle(12345678, "2026-10-08T08:00:00+02:00"),
+        )
+        .unwrap();
+
+    autre.restaurer(&fichier).unwrap();
+    assert_eq!(contenu(&autre), attendu);
+    // La bibliothèque restaurée continue de servir.
+    autre.creer_condition("Après restauration").unwrap();
+}
+
+#[test]
+fn un_fichier_qui_n_est_pas_une_sauvegarde_est_refuse_sans_rien_toucher() {
+    let (dossier, mut biblio) = bibliotheque_garnie();
+    let attendu = contenu(&biblio);
+
+    let texte = dossier.path().join("texte.sqlite");
+    std::fs::write(&texte, "pas une base").unwrap();
+    let autre_base = dossier.path().join("autre.sqlite");
+    rusqlite::Connection::open(&autre_base)
+        .unwrap()
+        .execute_batch("CREATE TABLE autre (x)")
+        .unwrap();
+    let recente = dossier.path().join("recente.sqlite");
+    biblio.sauvegarder(&recente).unwrap();
+    rusqlite::Connection::open(&recente)
+        .unwrap()
+        .pragma_update(None, "user_version", 99)
+        .unwrap();
+    let absent = dossier.path().join("absent.sqlite");
+
+    for fichier in [&texte, &autre_base, &recente, &absent] {
+        let refus = biblio.restaurer(fichier).unwrap_err();
+        assert!(
+            matches!(refus, ErreurBibliotheque::SauvegardeInvalide(_)),
+            "{} : {refus:?}",
+            fichier.display()
+        );
+        assert_eq!(contenu(&biblio), attendu);
+    }
+    assert!(!absent.exists(), "la restauration ne crée pas de fichier");
+}
+
+#[test]
+fn une_sauvegarde_dont_une_mesure_ne_se_relit_plus_est_refusee() {
+    let (dossier, mut biblio) = bibliotheque_garnie();
+    let attendu = contenu(&biblio);
+    let abimee = dossier.path().join("abimee.sqlite");
+    biblio.sauvegarder(&abimee).unwrap();
+    rusqlite::Connection::open(&abimee)
+        .unwrap()
+        .execute("UPDATE mesures SET contenu = '{}' WHERE id = 1", [])
+        .unwrap();
+
+    assert!(matches!(
+        biblio.restaurer(&abimee),
+        Err(ErreurBibliotheque::SauvegardeInvalide(_))
+    ));
+    assert_eq!(contenu(&biblio), attendu);
+}

@@ -9,7 +9,7 @@ use std::fmt;
 use std::path::Path;
 
 use pont_protocole::{ecrire_mesure, lire_mesure, Geometrie, Mesure};
-use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension, TransactionBehavior, MAIN_DB};
 use serde::Serialize;
 
 /// Nom du fichier de la base, dans le dossier de la bibliothèque.
@@ -34,6 +34,9 @@ pub enum ErreurBibliotheque {
         id: IdMesure,
         detail: String,
     },
+    /// Le fichier à restaurer n'est pas une sauvegarde utilisable ; la
+    /// bibliothèque n'a pas été touchée.
+    SauvegardeInvalide(String),
     /// Erreur du fichier ou de la base elle-même.
     Base(String),
 }
@@ -53,6 +56,9 @@ impl fmt::Display for ErreurBibliotheque {
             ),
             Self::MesureIllisible { id, detail } => {
                 write!(f, "mesure n° {} illisible : {detail}", id.0)
+            }
+            Self::SauvegardeInvalide(detail) => {
+                write!(f, "sauvegarde inutilisable, rien n'a été restauré : {detail}")
             }
             Self::Base(detail) => write!(f, "bibliothèque : {detail}"),
         }
@@ -410,6 +416,39 @@ impl Bibliotheque {
         Ok(lignes.collect::<Result<_, _>>()?)
     }
 
+    /// Sauvegarde complète de la bibliothèque dans un seul fichier : une base
+    /// SQLite, lisible par tout outil SQLite (ADR 0001). Un fichier déjà
+    /// présent est remplacé ; il ne l'est qu'une fois la copie terminée.
+    pub fn sauvegarder(&self, fichier: &Path) -> Resultat<()> {
+        let mut nom = fichier.as_os_str().to_owned();
+        nom.push(".partiel");
+        let partiel = std::path::PathBuf::from(nom);
+        let erreur_fichier =
+            |e: std::io::Error| ErreurBibliotheque::Base(format!("{} : {e}", fichier.display()));
+        match std::fs::remove_file(&partiel) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(erreur_fichier(e)),
+            _ => {}
+        }
+        if let Err(e) = self.base.backup(MAIN_DB, &partiel, None) {
+            let _ = std::fs::remove_file(&partiel);
+            return Err(e.into());
+        }
+        std::fs::rename(&partiel, fichier).map_err(erreur_fichier)
+    }
+
+    /// Remplace tout le contenu de la bibliothèque par une sauvegarde faite
+    /// par [`Bibliotheque::sauvegarder`]. La sauvegarde est d'abord examinée
+    /// en lecture seule : organisation connue, tables présentes, liens
+    /// cohérents, chaque mesure relisible. Au moindre défaut, rien n'est
+    /// touché ([`ErreurBibliotheque::SauvegardeInvalide`]).
+    pub fn restaurer(&mut self, fichier: &Path) -> Resultat<()> {
+        examiner_sauvegarde(fichier).map_err(ErreurBibliotheque::SauvegardeInvalide)?;
+        self.base
+            .restore(MAIN_DB, fichier, None::<fn(rusqlite::backup::Progress)>)?;
+        self.base.pragma_update(None, "foreign_keys", true)?;
+        migrer(&mut self.base)
+    }
+
     /// Nom nettoyé, s'il n'est ni vide ni porté par une autre condition.
     fn nom_libre(&self, nom: &str, sauf: Option<IdCondition>) -> Resultat<String> {
         let nom = nom.trim();
@@ -428,6 +467,52 @@ impl Bibliotheque {
             None => Ok(nom.to_string()),
         }
     }
+}
+
+/// Vérifie, en lecture seule, qu'un fichier est une sauvegarde restaurable.
+fn examiner_sauvegarde(fichier: &Path) -> Result<(), String> {
+    if !fichier.is_file() {
+        return Err(format!("{} introuvable", fichier.display()));
+    }
+    let base = Connection::open_with_flags(fichier, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| e.to_string())?;
+    let version: i32 = base
+        .pragma_query_value(None, "user_version", |l| l.get(0))
+        .map_err(|e| format!("pas une base SQLite ({e})"))?;
+    if version > VERSION_BASE {
+        return Err(format!(
+            "écrite par une version plus récente (organisation {version}, attendu {VERSION_BASE} au plus)"
+        ));
+    }
+    let tables: i64 = base
+        .query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type = 'table'
+             AND name IN ('conditions', 'instruments', 'mesures')",
+            [],
+            |l| l.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if version < 1 || tables != 3 {
+        return Err("pas une sauvegarde de bibliothèque myiro-libre".into());
+    }
+    let liens_rompus = base
+        .prepare("PRAGMA foreign_key_check")
+        .and_then(|mut r| r.exists([]))
+        .map_err(|e| e.to_string())?;
+    if liens_rompus {
+        return Err("mesures rattachées à une condition ou un instrument absent".into());
+    }
+    let mut requete = base
+        .prepare("SELECT id, contenu FROM mesures")
+        .map_err(|e| e.to_string())?;
+    let mesures = requete
+        .query_map([], |l| Ok((l.get::<_, i64>(0)?, l.get::<_, String>(1)?)))
+        .map_err(|e| e.to_string())?;
+    for mesure in mesures {
+        let (id, contenu) = mesure.map_err(|e| e.to_string())?;
+        lire_mesure(&contenu).map_err(|e| format!("mesure n° {id} illisible : {e}"))?;
+    }
+    Ok(())
 }
 
 /// Instant UTC d'un horodatage RFC 3339 déjà vérifié par `pont-protocole` :
