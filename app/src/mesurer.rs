@@ -84,6 +84,18 @@ pub fn ecrire_declenchement(declenchement: Declenchement) -> &'static str {
     }
 }
 
+/// Retient le choix dans `fichier` (dossier créé au besoin). Un échec est
+/// rendu : le choix vaut alors pour la séance seulement, et l'écran le dit.
+pub fn retenir_declenchement(
+    fichier: &std::path::Path,
+    declenchement: Declenchement,
+) -> std::io::Result<()> {
+    if let Some(dossier) = fichier.parent() {
+        std::fs::create_dir_all(dossier)?;
+    }
+    std::fs::write(fichier, ecrire_declenchement(declenchement))
+}
+
 /// Relit le choix retenu ; absent ou illisible, c'est l'automatique,
 /// demandé par le mainteneur le 9 octobre 2026.
 pub fn lire_declenchement(texte: Option<&str>) -> Declenchement {

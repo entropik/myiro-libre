@@ -119,6 +119,49 @@ fn sans_fin_de_mesure_apres_le_declenchement_le_delai_expire_et_desarme() {
     assert_eq!(*appels(&s).last().unwrap(), "arreter");
 }
 
+/// SUPPOSÉ : l'opérateur appuie sur le bouton entre l'événement 1 et le
+/// déclenchement ; la DLL, déjà sortie de l'attente de mesure, refuse (-9986).
+/// Le pont attend brièvement : la mesure partie au bouton est gardée.
+#[test]
+fn une_mesure_partie_au_bouton_juste_avant_le_declenchement_est_gardee() {
+    let mut s = session(&[1, 2, 3], &[]);
+    s.sdk_mut().code_declenchement = -9986;
+    assert_eq!(mesurer_auto(&mut s), Ok(vec![1, 2, 3]));
+    let appels = appels(&s);
+    let declencher = appels.iter().position(|a| *a == "declencher").unwrap();
+    assert_eq!(
+        appels[declencher + 1],
+        "lire 0 10",
+        "lecture avant tout désarmement"
+    );
+}
+
+#[test]
+fn un_refus_sans_mesure_qui_part_reste_un_refus() {
+    // Rien ne suit le refus : le pont rapporte le refus, puis désarme.
+    let mut s = session(&[1], &[]);
+    s.sdk_mut().code_declenchement = -9986;
+    assert_eq!(
+        mesurer_auto(&mut s),
+        Err(ErreurPont::DeclenchementRefuse { code: -9986 })
+    );
+}
+
+#[test]
+fn une_mesure_au_bouton_qui_echoue_apres_le_refus_est_signalee() {
+    let mut s = session(&[1, 2], &[]);
+    s.sdk_mut().code_declenchement = -9986;
+    s.sdk_mut().salves[0].push(pont_myiro1::Evenement {
+        code: 4,
+        nb_donnees_brutes: 0,
+        erreur: -9898,
+    });
+    assert_eq!(
+        mesurer_auto(&mut s),
+        Err(ErreurPont::MesureEchouee { erreur: -9898 })
+    );
+}
+
 #[test]
 fn le_journal_note_le_declenchement() {
     let mut s = session(&[1], &[2, 3]);

@@ -20,7 +20,8 @@ use instrument::choix::{self, Modele, Occupation, Operation, Ouverture, Selectio
 use instrument::parefeu::{AutorisationPareFeu, PareFeuWindows};
 use instrument::{emplacements_a_essayer, fd9, Accord, Geste, Gestes};
 use mesurer::{
-    choisir_condition, ecrire_declenchement, lire_declenchement, FicheMesure, RefusMesure, Seance,
+    choisir_condition, ecrire_declenchement, lire_declenchement, retenir_declenchement,
+    FicheMesure, RefusMesure, Seance,
 };
 use pont::Panne;
 use pont::{chercher_ponts, chercher_ponts_nommes, PontProcessus};
@@ -380,27 +381,45 @@ fn mode_mesure(app: AppHandle, seance: State<'_, SeanceMesures>) -> &'static str
     ecrire_declenchement(declenchement)
 }
 
-/// Retient le choix « Mesure » de l'opérateur pour cette séance et les suivantes.
+/// Choix « Mesure » appliqué, et s'il a pu être retenu pour la fois suivante.
+#[derive(serde::Serialize)]
+struct ChoixMesure {
+    mode: &'static str,
+    retenu: bool,
+}
+
+/// Retient le choix « Mesure » de l'opérateur pour cette séance et les
+/// suivantes ; si l'écriture échoue, le choix vaut pour la séance et la page
+/// le dit.
 #[tauri::command]
 fn choisir_mode_mesure(
     app: AppHandle,
     seance: State<'_, SeanceMesures>,
     mode: &str,
-) -> &'static str {
+) -> ChoixMesure {
     let declenchement = lire_declenchement(Some(mode));
     seance
         .0
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .choisir_declenchement(declenchement);
-    let texte = ecrire_declenchement(declenchement);
-    if let Some(fichier) = fichier_declenchement(&app) {
-        if let Some(dossier) = fichier.parent() {
-            let _ = std::fs::create_dir_all(dossier);
-        }
-        let _ = std::fs::write(&fichier, texte);
+    let retenu = match fichier_declenchement(&app) {
+        Some(fichier) => match retenir_declenchement(&fichier, declenchement) {
+            Ok(()) => true,
+            Err(erreur) => {
+                eprintln!(
+                    "choix « Mesure » non retenu ({}) : {erreur}",
+                    fichier.display()
+                );
+                false
+            }
+        },
+        None => false,
+    };
+    ChoixMesure {
+        mode: ecrire_declenchement(declenchement),
+        retenu,
     }
-    texte
 }
 
 /// Mesure ponctuelle : l'écran demande de poser le MYIRO-1 sur la couleur,

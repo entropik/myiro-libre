@@ -55,6 +55,7 @@ Le mainteneur a donné son accord : l'export entre dans la liste blanche de `cra
 
 - Seulement avec le type 0 armé, après l'événement 1 ; jamais au repos, jamais en bande.
 - Après l'appel : attendre les événements 2 et 3 comme aujourd'hui, avec un délai court (la mesure part tout de suite, pas d'attente d'un appui) ; un code de -9793 à -9789 veut dire que l'instrument refuse le déclenchement logiciel : revenir au mode manuel, sans le présenter comme une panne.
+- Un refus -9986 peut venir d'un appui sur le bouton entre l'événement 1 et l'appel (l'instrument a quitté l'attente de mesure) : supposé. Le pont attend alors brièvement (2 s) un événement 2 ou 3 avant de désarmer, et garde la mesure si elle est partie.
 - Désarmement inchangé.
 
 ## Reste à vérifier sur l'instrument

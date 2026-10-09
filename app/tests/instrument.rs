@@ -575,6 +575,7 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
         Probleme::EtalonnageARefaire { detail: d() },
         Probleme::ReposIncertain { detail: d() },
         Probleme::DeclenchementRefuse { detail: d() },
+        Probleme::MesureDelaiAutomatique { detail: d() },
     ];
     // Garde : ajouter une variante à `Probleme` casse la compilation ici ;
     // on lui donne alors un numéro, et l'assertion exige qu'elle soit listée.
@@ -598,13 +599,14 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
             Probleme::EtalonnageARefaire { .. } => 15,
             Probleme::ReposIncertain { .. } => 16,
             Probleme::DeclenchementRefuse { .. } => 17,
+            Probleme::MesureDelaiAutomatique { .. } => 18,
         }
     }
     let mut numeros: Vec<usize> = tous.iter().map(numero).collect();
     numeros.sort();
     assert_eq!(
         numeros,
-        (0..18).collect::<Vec<_>>(),
+        (0..19).collect::<Vec<_>>(),
         "chaque problème est listé une fois"
     );
     for probleme in tous {
@@ -1132,6 +1134,33 @@ fn une_mesure_sans_appui_a_temps_a_son_propre_probleme() {
     assert_eq!(probleme.code(), "mesure_delai");
     assert_eq!(probleme.ecran(), Ecran::Mesure);
     assert!(instrument.vue().mesurable);
+}
+
+/// En automatique, personne n'avait de bouton à presser : le délai dépassé a
+/// son propre texte, qui ne parle pas du bouton.
+#[test]
+fn en_automatique_le_delai_depasse_ne_parle_pas_du_bouton() {
+    let simule = PontSimule::avec_instruments(&[SERIE])
+        .echouer_a(Palier::MesurePonctuelle, erreur(ErreurPont::Delai {}));
+    let mut instrument = etalonne(simule, "mesure-delai-automatique");
+
+    instrument.mesurer_ponctuelle_avec(&mut fait, Declenchement::Automatique);
+
+    let probleme = instrument.probleme().unwrap();
+    assert_eq!(probleme.code(), "mesure_delai_automatique");
+    assert_eq!(probleme.ecran(), Ecran::Mesure);
+    assert!(instrument.vue().mesurable);
+    for langue in [Langue::Francais, Langue::Anglais] {
+        for partie in ["cause", "action"] {
+            let cle = format!("probleme.mesure_delai_automatique.{partie}");
+            let phrase = texte(langue, &cle);
+            assert_ne!(phrase, cle, "texte manquant");
+            assert!(
+                !phrase.contains("bouton") && !phrase.contains("button"),
+                "{phrase}"
+            );
+        }
+    }
 }
 
 /// L'instrument ne se dit plus étalonné : l'étalonnage est à refaire, son

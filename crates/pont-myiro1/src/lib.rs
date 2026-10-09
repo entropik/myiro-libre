@@ -46,6 +46,11 @@ pub const DELAI_ARMEMENT: Duration = Duration::from_secs(5);
 /// d'une seconde (supposé) ; la marge couvre un instrument lent.
 pub const DELAI_MESURE_DECLENCHEE: Duration = Duration::from_secs(30);
 
+/// Mesure automatique refusée (-9986) : temps laissé à une mesure partie au
+/// bouton juste avant pour se signaler (événement 2 ou 3) avant le
+/// désarmement. Durée supposée : à confirmer par l'essai réel.
+pub const DELAI_APRES_REFUS: Duration = Duration::from_secs(2);
+
 /// Délai maximal du retour au repos après un désarmement, et attente d'un
 /// événement entre deux essais refusés.
 pub const DELAI_REPOS: Duration = Duration::from_secs(5);
@@ -65,6 +70,7 @@ const CODE_NON_ETALONNE: i32 = -9983;
 /// Codes d'événement (fiche `docs/abi/FDX_RegisterDeviceEventHandler.md`).
 const EVENEMENT_REPOS: i32 = 0;
 const EVENEMENT_MESURE_ARMEE: i32 = 1;
+const EVENEMENT_MESURE_EN_COURS: i32 = 2;
 const EVENEMENT_MESURE_TERMINEE: i32 = 3;
 const EVENEMENT_MESURE_ECHOUEE: i32 = 4;
 const EVENEMENT_DECONNEXION: i32 = 6;
@@ -834,10 +840,42 @@ impl<S: SdkMyiro1> Session<S> {
         let declenchement = self.sdk.declencher();
         self.journal
             .push(format!("déclenchement : code {}", code_de(declenchement)));
-        if let Err(code) = declenchement {
-            return Err(ErreurPont::DeclenchementRefuse { code });
+        match declenchement {
+            Ok(_) => self.attendre_mesure(evenements, DELAI_MESURE_DECLENCHEE),
+            Err(CODE_ETAT_INCOMPATIBLE) => self.attendre_mesure_au_bouton(evenements),
+            Err(code) => Err(ErreurPont::DeclenchementRefuse { code }),
         }
-        self.attendre_mesure(evenements, DELAI_MESURE_DECLENCHEE)
+    }
+
+    /// Déclenchement refusé (-9986) : l'instrument n'attend plus de mesure,
+    /// peut-être parce que l'opérateur vient d'appuyer sur son bouton (supposé).
+    /// Avant de désarmer, le pont attend `DELAI_APRES_REFUS` un événement 2 ou
+    /// 3 ; si la mesure est partie, elle est gardée, sinon le refus est rapporté.
+    fn attendre_mesure_au_bouton(
+        &mut self,
+        mut evenements: Vec<Evenement>,
+    ) -> Result<Vec<Evenement>, ErreurPont> {
+        let refus = ErreurPont::DeclenchementRefuse {
+            code: CODE_ETAT_INCOMPATIBLE,
+        };
+        let echeance = Instant::now() + DELAI_APRES_REFUS;
+        loop {
+            let reste = echeance.saturating_duration_since(Instant::now());
+            let Some(evenement) = self.sdk.attendre_evenement(reste) else {
+                return Err(refus);
+            };
+            if self.noter(&mut evenements, evenement)? {
+                return Ok(evenements);
+            }
+            if evenement.code == EVENEMENT_MESURE_EN_COURS {
+                self.journal
+                    .push("mesure partie au bouton malgré le refus du déclenchement".into());
+                return self.attendre_mesure(evenements, DELAI_MESURE_DECLENCHEE);
+            }
+            if reste.is_zero() {
+                return Err(refus);
+            }
+        }
     }
 
     fn attendre_mesure(

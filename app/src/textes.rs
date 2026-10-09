@@ -422,6 +422,10 @@ const FRANCAIS: Catalogue = &[
     ("mesurer.declenchement.automatique", "Automatique"),
     ("mesurer.declenchement.manuel", "Manuelle"),
     (
+        "mesurer.declenchement.non_retenu",
+        "Ce choix vaut pour cette séance\u{202f}: il n’a pas pu être enregistré pour la prochaine fois.",
+    ),
+    (
         "mesurer.consigne.automatique",
         "Posez le MYIRO-1 sur la couleur, puis cliquez sur «\u{202f}Mesurer\u{202f}».",
     ),
@@ -505,6 +509,14 @@ const FRANCAIS: Catalogue = &[
     (
         "probleme.mesure_delai.action",
         "Cliquez de nouveau sur «\u{202f}Mesurer\u{202f}», puis appuyez sur le bouton de l’instrument dans les deux minutes.",
+    ),
+    (
+        "probleme.mesure_delai_automatique.cause",
+        "Le MYIRO-1 n’a pas terminé la mesure à temps.",
+    ),
+    (
+        "probleme.mesure_delai_automatique.action",
+        "Vérifiez qu’il est bien posé à plat sur la couleur, puis cliquez de nouveau sur «\u{202f}Mesurer\u{202f}».",
     ),
     (
         "probleme.declenchement_refuse.cause",
@@ -911,6 +923,10 @@ const ANGLAIS: Catalogue = &[
     ("mesurer.declenchement.automatique", "Automatic"),
     ("mesurer.declenchement.manuel", "Manual"),
     (
+        "mesurer.declenchement.non_retenu",
+        "This choice applies to this session: it could not be saved for next time.",
+    ),
+    (
         "mesurer.consigne.automatique",
         "Set the MYIRO-1 on the colour, then click “Measure”.",
     ),
@@ -996,8 +1012,16 @@ const ANGLAIS: Catalogue = &[
         "Click “Measure” again, then press the instrument’s button within two minutes.",
     ),
     (
+        "probleme.mesure_delai_automatique.cause",
+        "The MYIRO-1 did not finish the measurement in time.",
+    ),
+    (
+        "probleme.mesure_delai_automatique.action",
+        "Check that it sits flat on the colour, then click “Measure” again.",
+    ),
+    (
         "probleme.declenchement_refuse.cause",
-        "The MYIRO-1 did not accept to measure without its button being pressed.",
+        "The MYIRO-1 refused to start the measurement without its button being pressed.",
     ),
     (
         "probleme.declenchement_refuse.action",

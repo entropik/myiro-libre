@@ -54,7 +54,7 @@ Champ facultatif de la requête `mesurer_ponctuelle`. Il dit qui fait partir la 
 ```
 
 - `manuel` (valeur par défaut) : l'instrument attend l'appui sur son bouton, comme avant. L'application écrit alors la ligne d'avant, sans le champ : `{"cmd": "mesurer_ponctuelle"}`.
-- `automatique` : le pont attend que l'instrument soit armé (événement 1, 5 s au plus), puis appelle `FDX_StartMeasurement` (fiche [FDX_StartMeasurement](../abi/FDX_StartMeasurement.md)) et attend la fin de la mesure (30 s au plus). Il ne l'appelle jamais sans cet événement. Si l'opérateur appuie quand même sur le bouton avant, la mesure faite est gardée.
+- `automatique` : le pont attend que l'instrument soit armé (événement 1, 5 s au plus), puis appelle `FDX_StartMeasurement` (fiche [FDX_StartMeasurement](../abi/FDX_StartMeasurement.md)) et attend la fin de la mesure (30 s au plus). Il ne l'appelle jamais sans cet événement. Si l'opérateur appuie quand même sur le bouton avant, la mesure faite est gardée ; après un refus -9986, le pont attend encore 2 s qu'une mesure partie au bouton se signale avant de désarmer (supposé : un appui juste avant le déclenchement le ferait refuser).
 - Toute autre valeur est refusée à la lecture (`requete_invalide`).
 
 Si la DLL ou l'instrument refuse le déclenchement, le pont désarme et répond une erreur avec le code brut :

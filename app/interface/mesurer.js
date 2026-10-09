@@ -235,6 +235,8 @@
     consigne.textContent = t(consigne.dataset.t);
     enCoursTexte.dataset.t = `mesurer.en_cours.${declenchement}`;
     enCoursTexte.textContent = t(enCoursTexte.dataset.t);
+    // Choix propre au MYIRO-1 : un FD-9 actif ne mesure pas encore.
+    choixDeclenchement.closest(".field").hidden = Boolean(vueInstrument && vueInstrument.etat === "detecte");
     for (const b of choixDeclenchement.querySelectorAll("[data-declenchement]")) {
       b.setAttribute("aria-pressed", String(b.dataset.declenchement === declenchement));
       b.disabled = enCours;
@@ -331,10 +333,15 @@
   choixDeclenchement.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-declenchement]");
     if (!b || enCours) return;
+    const nonRetenu = feuille.querySelector("[data-mesurer-declenchement-non-retenu]");
     try {
-      declenchement = await invoke("choisir_mode_mesure", { mode: b.dataset.declenchement });
+      const choix = await invoke("choisir_mode_mesure", { mode: b.dataset.declenchement });
+      declenchement = choix.mode;
+      // Écriture impossible : le choix vaut pour la séance, et on le dit.
+      nonRetenu.hidden = choix.retenu;
     } catch (err) {
       console.error("choisir_mode_mesure", err);
+      nonRetenu.hidden = false;
     }
     dessiner();
   });

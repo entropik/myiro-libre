@@ -167,17 +167,14 @@ fn palier_etalonnage_avec_le_vrai_instrument() {
 /// Palier 4 : étalonnage puis mesures ponctuelles du MYIRO-1 réel, une par plage
 /// de la liste `MYIRO_PLAGES` (par défaut « papier,1A1,1D1,2B1 »). Pour chacune,
 /// l'opérateur pose l'instrument et appuie sur le bouton (120 s au plus). Les
-/// résultats vont dans le fichier `MYIRO_SORTIE` (CSV ; par défaut dans `target/`).
+/// résultats vont dans le fichier `MYIRO_SORTIE` (CSV ; par défaut dans
+/// `Archivage/donnees/`, voir [`sortie_mesures`]).
 #[test]
 #[ignore = "étalonne puis mesure avec le MYIRO-1 réel ; demande l'opérateur"]
 fn palier_mesure_ponctuelle_avec_le_vrai_instrument() {
     use std::io::Write;
     let plages = std::env::var("MYIRO_PLAGES").unwrap_or("papier,1A1,1D1,2B1".into());
-    let sortie = std::env::var("MYIRO_SORTIE")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/mesures-myiro1.csv")
-        });
+    let sortie = sortie_mesures("mesures-myiro1");
     let dll = FdxDll::charger(dll_du_poste()).expect("chargement de FDXSDK.dll");
     let mut session = Session::new(dll, Palier::MesurePonctuelle);
     session.version().expect("FDX_GetSDKVersion");
@@ -232,19 +229,14 @@ fn palier_mesure_ponctuelle_avec_le_vrai_instrument() {
 /// cherche à voir : déclenchement accepté (code 0), événements 1, 2 puis 3,
 /// voyant, retour au repos. Un refus (-9986, ou -9793 à -9789) est affiché et
 /// arrête l'essai : il dit que l'instrument n'accepte pas ce déclenchement.
-/// Résultats dans `MYIRO_SORTIE` (CSV ; par défaut dans `target/`).
+/// Résultats dans `MYIRO_SORTIE` (CSV ; par défaut dans `Archivage/donnees/`).
 #[test]
 #[ignore = "étalonne puis mesure sans le bouton avec le MYIRO-1 réel ; demande l'opérateur"]
 fn palier_mesure_automatique_avec_le_vrai_instrument() {
     use pont_protocole::Declenchement;
     use std::io::{BufRead, Write};
     let plages = std::env::var("MYIRO_PLAGES").unwrap_or("papier,1A1".into());
-    let sortie = std::env::var("MYIRO_SORTIE")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../target/mesures-automatiques-myiro1.csv")
-        });
+    let sortie = sortie_mesures("mesures-automatiques-myiro1");
     let dll = FdxDll::charger(dll_du_poste()).expect("chargement de FDXSDK.dll");
     let mut session = Session::new(dll, Palier::MesurePonctuelle);
     session.version().expect("FDX_GetSDKVersion");
@@ -311,7 +303,8 @@ fn palier_mesure_automatique_avec_le_vrai_instrument() {
 /// Palier 5 : étalonnage puis lecture en bande des rangées de la mire de
 /// comparaison, une par passage (`MYIRO_RANGEES`, par défaut « 1,2,3 »). Pour
 /// chacune, l'opérateur fait glisser l'instrument le long de la rangée, du blanc
-/// au blanc (120 s au plus). Résultats dans `MYIRO_SORTIE` (CSV), plages nommées
+/// au blanc (120 s au plus). Résultats dans `MYIRO_SORTIE` (CSV ; par défaut
+/// dans `Archivage/donnees/`), plages nommées
 /// comme dans les exports FD-S2w (1A1, 1B1…).
 #[test]
 #[ignore = "étalonne puis lit des bandes avec le MYIRO-1 réel ; demande l'opérateur"]
@@ -324,11 +317,7 @@ fn palier_bande_avec_le_vrai_instrument() {
         .ok()
         .and_then(|v| v.parse::<u32>().ok())
         .filter(|&n| n > 0);
-    let sortie = std::env::var("MYIRO_SORTIE")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/bandes-myiro1.csv")
-        });
+    let sortie = sortie_mesures("bandes-myiro1");
     let dll = FdxDll::charger(dll_du_poste()).expect("chargement de FDXSDK.dll");
     let mut session = Session::new(dll, Palier::Bande);
     session.version().expect("FDX_GetSDKVersion");
@@ -384,6 +373,36 @@ fn palier_bande_avec_le_vrai_instrument() {
     }
     println!("résultats écrits dans {}", sortie.display());
     fermer(&mut session);
+}
+
+/// Dossier des mesures réelles : `Archivage/donnees/` à la racine du dépôt,
+/// local et non versionné (CLAUDE.md).
+fn dossier_archivage() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../Archivage/donnees")
+}
+
+/// Fichier CSV des mesures d'un essai réel : `MYIRO_SORTIE` s'il est donné,
+/// sinon `Archivage/donnees/<nom>-<date>.csv` (le dossier est créé), daté
+/// pour ne jamais écraser un essai précédent.
+fn sortie_mesures(nom: &str) -> PathBuf {
+    if let Ok(chemin) = std::env::var("MYIRO_SORTIE") {
+        return PathBuf::from(chemin);
+    }
+    let dossier = dossier_archivage();
+    std::fs::create_dir_all(&dossier).expect("dossier Archivage/donnees");
+    let date = chrono::Local::now().format("%Y-%m-%d-%H%M%S");
+    dossier.join(format!("{nom}-{date}.csv"))
+}
+
+#[test]
+fn les_mesures_reelles_vont_par_defaut_dans_archivage_donnees() {
+    let dossier = dossier_archivage();
+    assert!(
+        dossier.ends_with("Archivage/donnees"),
+        "{}",
+        dossier.display()
+    );
+    assert!(!dossier.to_string_lossy().contains("target"));
 }
 
 /// Fermeture explicite en fin de palier : désarmement, attente du repos et

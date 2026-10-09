@@ -6,7 +6,9 @@
 use std::path::PathBuf;
 
 use app::instrument::{Accord, Geste, Instrument};
-use app::mesurer::{ecrire_declenchement, lire_declenchement, FicheMesure, Seance};
+use app::mesurer::{
+    ecrire_declenchement, lire_declenchement, retenir_declenchement, FicheMesure, Seance,
+};
 use app::pont::{Architecture, PontSimule};
 use app::textes::Langue;
 use bibliotheque::{Bibliotheque, ConditionImpression, IdMesure};
@@ -124,6 +126,20 @@ fn le_choix_du_declenchement_se_relit_tel_qu_il_a_ete_ecrit() {
 }
 
 #[test]
+fn le_choix_retenu_s_ecrit_dans_son_fichier_et_un_echec_est_rapporte() {
+    let dossier = dossier_vide("declenchement-fichier");
+    let fichier = dossier.join("config").join("mode-mesure.txt");
+    retenir_declenchement(&fichier, Declenchement::Manuel).expect("écrit");
+    let relu = std::fs::read_to_string(&fichier).unwrap();
+    assert_eq!(lire_declenchement(Some(&relu)), Declenchement::Manuel);
+
+    // Le « dossier » est un fichier : l'écriture échoue, et on le dit.
+    let bloque = dossier.join("bloque");
+    std::fs::write(&bloque, "").unwrap();
+    assert!(retenir_declenchement(&bloque.join("mode-mesure.txt"), Declenchement::Manuel).is_err());
+}
+
+#[test]
 fn le_choix_de_la_mesure_a_ses_textes_dans_les_deux_langues() {
     use app::textes::texte;
     for langue in [Langue::Francais, Langue::Anglais] {
@@ -133,6 +149,7 @@ fn le_choix_de_la_mesure_a_ses_textes_dans_les_deux_langues() {
             "mesurer.declenchement.manuel",
             "mesurer.consigne.automatique",
             "mesurer.consigne.manuel",
+            "mesurer.declenchement.non_retenu",
         ] {
             assert_ne!(texte(langue, cle), cle, "texte manquant : {cle}");
         }
