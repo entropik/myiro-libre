@@ -28,4 +28,5 @@ Les mesures, conditions d'impression, références, profils et linéarisations s
 
 - Une mesure peut être désignée couleur de référence, avec un écart ΔE00 accepté (son seuil) ou sans seuil. Le seuil absent est enregistré comme absent (`NULL`), jamais comme une valeur sentinelle ; un seuil nul, négatif ou non fini est refusé et rien n'est écrit.
 - Organisation 3 de la base : une table `references_couleur` (mesure, seuil). Rien n'est réécrit ni effacé ; un test relit sans perte une base de l'organisation 2. La mesure elle-même ne change pas : retirer la référence laisse la mesure et son nom.
-- Dans Mesurer, la séance a une seule couleur de référence à la fois : en désigner une autre retire la première. Seule une mesure rangée peut devenir référence, puisque c'est la bibliothèque qui la conserve.
+- Dans Mesurer, la séance a une seule couleur de référence à la fois : en désigner une autre remplace la première d'un bloc (`remplacer_reference`, une transaction) ; si la bibliothèque refuse, l'ancienne reste et l'écran le dit, jamais deux références. Seule une mesure rangée peut devenir référence, puisque c'est la bibliothèque qui la conserve.
+- Au lancement, la couleur de référence conservée la plus récente revient dans Mesurer, avec son nom et son seuil, sans être rangée une seconde fois.

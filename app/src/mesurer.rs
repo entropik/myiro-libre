@@ -83,8 +83,25 @@ pub struct Seance {
 /// Là où la couleur de référence et son seuil sont conservés : la
 /// bibliothèque. Les refus sont des phrases techniques, pour la console.
 pub trait ReferencesConservees {
+    /// Désigne la mesure, ou change son seuil.
     fn designer(&self, id: IdMesure, seuil: Option<f64>) -> Result<(), String>;
+    /// Remplace une référence par une autre, sans seuil, d'un bloc.
+    fn remplacer(&self, ancienne: IdMesure, nouvelle: IdMesure) -> Result<(), String>;
     fn retirer(&self, id: IdMesure) -> Result<(), String>;
+    /// La couleur de référence conservée la plus récente, pour la reprendre
+    /// au lancement.
+    fn reference_conservee(&self) -> Result<Option<ReferenceReprise>, String>;
+}
+
+/// Une couleur de référence conservée par la bibliothèque, telle qu'elle
+/// revient dans une nouvelle séance.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReferenceReprise {
+    pub id: IdMesure,
+    pub mesure: Mesure,
+    pub nom: Option<String>,
+    pub condition: ConditionImpression,
+    pub seuil: Option<f64>,
 }
 
 impl ReferencesConservees for Bibliotheque {
@@ -93,9 +110,42 @@ impl ReferencesConservees for Bibliotheque {
             .map_err(|e| e.to_string())
     }
 
+    fn remplacer(&self, ancienne: IdMesure, nouvelle: IdMesure) -> Result<(), String> {
+        self.remplacer_reference(ancienne, nouvelle)
+            .map_err(|e| e.to_string())
+    }
+
     fn retirer(&self, id: IdMesure) -> Result<(), String> {
         self.retirer_reference(id).map_err(|e| e.to_string())
     }
+
+    fn reference_conservee(&self) -> Result<Option<ReferenceReprise>, String> {
+        reference_conservee(self).map_err(|e| e.to_string())
+    }
+}
+
+/// La couleur de référence la plus récemment rangée de la bibliothèque.
+pub fn reference_conservee(
+    biblio: &Bibliotheque,
+) -> Result<Option<ReferenceReprise>, bibliotheque::ErreurBibliotheque> {
+    let Some(reference) = biblio.references()?.into_iter().max_by_key(|r| r.mesure) else {
+        return Ok(None);
+    };
+    let enregistree = biblio.mesure(reference.mesure)?;
+    let condition = biblio
+        .conditions()?
+        .into_iter()
+        .find(|c| c.id == enregistree.condition)
+        .ok_or(bibliotheque::ErreurBibliotheque::ConditionInconnue(
+            enregistree.condition,
+        ))?;
+    Ok(Some(ReferenceReprise {
+        id: reference.mesure,
+        mesure: enregistree.mesure,
+        nom: enregistree.nom,
+        condition,
+        seuil: reference.seuil,
+    }))
 }
 
 /// La couleur de référence, telle que la feuille Mesurer la montre.
@@ -116,6 +166,8 @@ pub enum VerdictEcart {
     HorsTolerance,
     /// Aucun seuil fixé : pas de verdict.
     SeuilNonFixe,
+    /// Conditions de mesure différentes : ni écart ni verdict.
+    NonComparable,
     /// Écart inconnu (valeurs d'une des deux mesures inconnues).
     Inconnu,
 }
@@ -210,7 +262,7 @@ const ECHANTILLONNAGE: Echantillonnage = Echantillonnage {
 /// Nombre à deux décimales, avec la virgule en français. Un zéro négatif
 /// s'écrit comme un zéro.
 pub fn decimal(valeur: f64, langue: Langue) -> String {
-    let mut texte = format!("{valeur:.2}");
+    let mut texte = format!("{:.2}", deux_decimales(valeur));
     if texte
         .trim_start_matches('-')
         .bytes()
@@ -222,6 +274,13 @@ pub fn decimal(valeur: f64, langue: Langue) -> String {
         Langue::Francais => texte.replace('.', ","),
         Langue::Anglais => texte,
     }
+}
+
+/// Valeur arrondie à deux décimales, telle que [`decimal`] l'écrit : le
+/// verdict et le seuil passent par là, pour juger exactement ce qui est
+/// affiché.
+pub fn deux_decimales(valeur: f64) -> f64 {
+    format!("{valeur:.2}").parse().unwrap_or(valeur)
 }
 
 /// Lab d'un spectre (D50, 2°), ou `None` s'il est inconnu.
@@ -318,21 +377,24 @@ impl Seance {
             .ok_or("bibliotheque.erreur.autre")?
             .rangee
             .ok_or("mesurer.reference.non_rangee")?;
-        conserver.designer(id, None).map_err(|detail| {
+        // L'ancienne est remplacée d'un bloc : jamais deux références, et
+        // rien ne change si la bibliothèque refuse.
+        let ancienne = self
+            .reference
+            .and_then(|a| self.trouver(a.numero))
+            .and_then(|m| m.rangee);
+        match ancienne {
+            Some(ancienne) => conserver.remplacer(ancienne, id),
+            None => conserver.designer(id, None),
+        }
+        .map_err(|detail| {
             eprintln!("référence {numero} : {detail}");
             "bibliotheque.erreur.autre"
         })?;
-        let ancienne = self.reference.replace(ReferenceDeSeance {
+        self.reference = Some(ReferenceDeSeance {
             numero,
             seuil: None,
         });
-        if let Some(ancienne) = ancienne.filter(|a| a.numero != numero) {
-            if let Some(id) = self.trouver(ancienne.numero).and_then(|m| m.rangee) {
-                if let Err(detail) = conserver.retirer(id) {
-                    eprintln!("retrait de la référence {} : {detail}", ancienne.numero);
-                }
-            }
-        }
         Ok(())
     }
 
@@ -372,7 +434,8 @@ impl Seance {
                 .replace(',', ".")
                 .parse()
                 .map_err(|_| "mesurer.reference.seuil_invalide")?;
-            Some(Seuil::new(valeur).ok_or("mesurer.reference.seuil_invalide")?)
+            // Arrondi comme les écarts affichés : écrit, conservé et jugé à l'identique.
+            Some(Seuil::new(deux_decimales(valeur)).ok_or("mesurer.reference.seuil_invalide")?)
         };
         let id = self
             .trouver(reference.numero)
@@ -385,6 +448,41 @@ impl Seance {
                 "bibliotheque.erreur.autre"
             })?;
         self.reference = Some(ReferenceDeSeance { seuil, ..reference });
+        Ok(())
+    }
+
+    /// Au lancement : reprend dans la séance, encore vide, la couleur de
+    /// référence conservée par la bibliothèque, avec son nom et son seuil.
+    /// Elle n'est pas rangée une seconde fois. Sans référence conservée,
+    /// rien ne change.
+    pub fn reprendre_reference(
+        &mut self,
+        conserver: &impl ReferencesConservees,
+        langue: Langue,
+    ) -> Result<(), &'static str> {
+        if !self.mesures.is_empty() {
+            return Ok(());
+        }
+        let reprise = conserver.reference_conservee().map_err(|detail| {
+            eprintln!("reprise de la référence : {detail}");
+            "bibliotheque.erreur.autre"
+        })?;
+        let Some(reprise) = reprise else {
+            return Ok(());
+        };
+        let numero = self.ajouter(
+            reprise.mesure,
+            &reprise.condition,
+            |_, _| Ok(reprise.id),
+            langue,
+        );
+        if let Some(nom) = reprise.nom {
+            let _ = self.renommer(numero, &nom, |_, _| Ok(()));
+        }
+        self.reference = Some(ReferenceDeSeance {
+            numero,
+            seuil: reprise.seuil.and_then(Seuil::new),
+        });
         Ok(())
     }
 
@@ -514,6 +612,16 @@ fn ecart(
         },
         autre => (i, comparer(autre, &conditions_ref[i])),
     };
+    if comparaison == Comparaison::ConditionDifferente {
+        // M0 contre M1 n'est pas un écart d'impression : ni chiffre ni verdict.
+        return FicheEcart {
+            delta_e00: None,
+            delta_c: None,
+            delta_h: None,
+            verdict: VerdictEcart::NonComparable,
+            comparaison,
+        };
+    }
     let labs = (calculable && calculable_ref)
         .then(|| Some((lab(spectres(reference)[j])?, lab(spectres(mesure)[i])?)))
         .flatten();
@@ -532,7 +640,7 @@ fn ecart(
     let verdict = match (de00, seuil) {
         (None, _) => VerdictEcart::Inconnu,
         (Some(_), None) => VerdictEcart::SeuilNonFixe,
-        (Some(e), Some(s)) => match s.verdict((e * 100.0).round() / 100.0) {
+        (Some(e), Some(s)) => match s.verdict(deux_decimales(e)) {
             Ok(Verdict::Conforme) => VerdictEcart::Conforme,
             Ok(Verdict::ProcheDeLaLimite) => VerdictEcart::ProcheDeLaLimite,
             Ok(Verdict::HorsTolerance) => VerdictEcart::HorsTolerance,

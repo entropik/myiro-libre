@@ -7,7 +7,9 @@
 //! calcule à la main, L* = 116 r^(1/3) − 16, et leur ΔE00 aussi (a* = b* = 0,
 //! seul le terme de clarté reste, S_L ≈ 1 autour de L* = 50).
 
-use app::mesurer::{Comparaison, FicheMesure, ReferencesConservees, Seance, VerdictEcart};
+use app::mesurer::{
+    Comparaison, FicheMesure, ReferenceReprise, ReferencesConservees, Seance, VerdictEcart,
+};
 use app::textes::Langue;
 use bibliotheque::{Bibliotheque, ConditionImpression, IdMesure, ReferenceCouleur};
 use pont_protocole::{
@@ -283,7 +285,13 @@ impl ReferencesConservees for Refus {
     fn designer(&self, _: IdMesure, _: Option<f64>) -> Result<(), String> {
         Err("base verrouillée".into())
     }
+    fn remplacer(&self, _: IdMesure, _: IdMesure) -> Result<(), String> {
+        Err("base verrouillée".into())
+    }
     fn retirer(&self, _: IdMesure) -> Result<(), String> {
+        Err("base verrouillée".into())
+    }
+    fn reference_conservee(&self) -> Result<Option<ReferenceReprise>, String> {
         Err("base verrouillée".into())
     }
 }
@@ -308,6 +316,26 @@ fn un_refus_de_la_bibliotheque_ne_change_rien() {
         Err("bibliotheque.erreur.autre")
     );
     assert!(seance.reference(Langue::Francais).is_some());
+}
+
+/// Changer de référence se fait d'un bloc : si la bibliothèque refuse,
+/// l'ancienne reste la référence, l'écran le dit, et il n'y en a jamais deux.
+#[test]
+fn un_changement_de_reference_refuse_garde_l_ancienne() {
+    let (_d, biblio, mut seance, [a, b, _]) = trois_gris();
+    seance.designer_reference(a, &biblio).unwrap();
+    seance.regler_seuil("2", &biblio).unwrap();
+
+    assert_eq!(
+        seance.designer_reference(b, &Refus),
+        Err("bibliotheque.erreur.autre")
+    );
+    let reference = seance.reference(Langue::Francais).unwrap();
+    assert_eq!(
+        (reference.numero, reference.seuil.as_deref()),
+        (a, Some("2,00"))
+    );
+    assert_eq!(biblio.references().unwrap().len(), 1);
 }
 
 /// La référence est conservée dans la bibliothèque : une mesure qu'elle n'a
@@ -420,10 +448,84 @@ fn des_conditions_de_mesure_differentes_sont_signalees() {
         gris(0.18, confirmees([M0, M0, M0])),
     );
     seance.designer_reference(r, &biblio).unwrap();
+    seance.regler_seuil("2", &biblio).unwrap();
     for s in fiche(&seance, m, Langue::Francais).spectres {
         let e = s.ecart.unwrap();
         assert_eq!(e.comparaison, Comparaison::ConditionDifferente);
-        // L'écart reste affiché, avec l'avertissement.
-        assert_eq!(e.delta_e00.as_deref(), Some("0,00"));
+        // M0 contre M1 ne se compare pas : l'avertissement, ni écart ni verdict.
+        assert_eq!((e.delta_e00, e.delta_c, e.delta_h), (None, None, None));
+        assert_eq!(e.verdict, VerdictEcart::NonComparable);
     }
+}
+
+/// Le seuil est arrondi à deux décimales à la saisie, comme les écarts
+/// affichés : le seuil écrit, conservé et jugé est le même nombre. 1,115
+/// n'existe pas exactement en binaire (1,11499…) : il s'écrit 1,11.
+#[test]
+fn le_seuil_est_arrondi_comme_les_ecarts_affiches() {
+    let (_d, biblio, mut seance, [a, _, _]) = trois_gris();
+    seance.designer_reference(a, &biblio).unwrap();
+    seance.regler_seuil("1,115", &biblio).unwrap();
+    assert_eq!(
+        seance.reference(Langue::Francais).unwrap().seuil.as_deref(),
+        Some("1,11")
+    );
+    assert_eq!(biblio.references().unwrap()[0].seuil, Some(1.11));
+    // Arrondi à zéro : refusé.
+    assert_eq!(
+        seance.regler_seuil("0,001", &biblio),
+        Err("mesurer.reference.seuil_invalide")
+    );
+}
+
+/// Au lancement suivant, la couleur de référence conservée et son seuil
+/// reviennent dans Mesurer ; les nouvelles mesures s'y comparent.
+#[test]
+fn la_reference_conservee_revient_au_lancement_suivant() {
+    let (_d, biblio, mut seance, [_, b, _]) = trois_gris();
+    seance
+        .renommer(b, "Gris du BAT", |id, nom| {
+            biblio.renommer_mesure(id, nom).map_err(|e| e.to_string())
+        })
+        .unwrap();
+    seance.designer_reference(b, &biblio).unwrap();
+    seance.regler_seuil("2", &biblio).unwrap();
+    drop(seance);
+
+    let mut reprise = Seance::default();
+    reprise
+        .reprendre_reference(&biblio, Langue::Francais)
+        .unwrap();
+    let reference = reprise.reference(Langue::Francais).unwrap();
+    assert_eq!(
+        (reference.nom.as_str(), reference.seuil.as_deref()),
+        ("Gris du BAT", Some("2,00"))
+    );
+    let c = biblio.conditions().unwrap().remove(0);
+    let n = ajouter(
+        &mut reprise,
+        &biblio,
+        &c,
+        gris(0.20, confirmees([M0, M1, M2])),
+    );
+    assert_ne!(n, reference.numero);
+    let e = fiche(&reprise, n, Langue::Francais).spectres[0]
+        .ecart
+        .clone()
+        .unwrap();
+    // (51,84 − 50,10) / S_L, S_L = 1,003 à L* = 50,97 : 1,735, à la main.
+    assert_eq!(e.delta_e00.as_deref(), Some("1,73"));
+    assert_eq!(e.verdict, VerdictEcart::ProcheDeLaLimite);
+    // Rien de neuf dans la bibliothèque : la référence n'est pas rangée deux fois.
+    assert_eq!(biblio.arborescence("").unwrap()[0].mesures.len(), 4);
+
+    // Sans référence conservée, la séance reste vide ; un refus est dit.
+    let (_d2, vide, _) = bibliotheque();
+    let mut neuve = Seance::default();
+    neuve.reprendre_reference(&vide, Langue::Francais).unwrap();
+    assert!(neuve.fiches(Langue::Francais).is_empty());
+    assert_eq!(
+        neuve.reprendre_reference(&Refus, Langue::Francais),
+        Err("bibliotheque.erreur.autre")
+    );
 }

@@ -513,12 +513,13 @@ const FRANCAIS: Catalogue = &[
     ("mesurer.ecart.dh", "ΔH (teinte)"),
     ("mesurer.ecart.accepte", "Écart accepté"),
     ("mesurer.ecart.comparaison", "En haut la couleur de référence, en bas cette mesure"),
-    ("mesurer.liste.ecart", "ΔE00"),
+    ("mesurer.liste.ecart", "ΔE00 (CIEDE2000)"),
     ("mesurer.liste.verdict", "Verdict"),
     ("verdict.conforme", "Conforme"),
     ("verdict.proche_de_la_limite", "Proche de la limite"),
     ("verdict.hors_tolerance", "Hors tolérance"),
     ("verdict.inconnu", "Écart inconnu"),
+    ("verdict.non_comparable", "Conditions différentes"),
     ("mesurer.verdict.conforme", "L’écart reste dans la limite fixée."),
     (
         "mesurer.verdict.proche_de_la_limite",
@@ -531,7 +532,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "mesurer.ecart.condition_differente",
-        "Cette mesure et la couleur de référence n’ont pas la même condition de mesure\u{202f}: cet écart n’est pas fiable.",
+        "Cette mesure et la couleur de référence n’ont pas la même condition de mesure\u{202f}: elles ne se comparent pas, ni écart ni verdict.",
     ),
     (
         "mesurer.ecart.non_confirmee",
@@ -540,7 +541,7 @@ const FRANCAIS: Catalogue = &[
     ("mesurer.ecart.calcul_titre", "Comment l’écart est calculé"),
     (
         "mesurer.ecart.calcul",
-        "ΔE00\u{202f}: formule CIEDE2000, facteurs k_L = k_C = k_H = 1.\nΔC et ΔH\u{202f}: écarts de chroma et de teinte CIELAB, signés (positifs\u{202f}: mesure plus saturée, teinte tournée dans le sens direct).\nLab D50, observateur 2°, calculés par myiro-libre à partir des spectres de même condition de mesure.\nProche de la limite\u{202f}: à partir de 80\u{202f}% de l’écart accepté. Le verdict porte sur l’écart arrondi à deux décimales.",
+        "ΔE00\u{202f}: formule CIEDE2000, facteurs k_L = k_C = k_H = 1.\nΔC et ΔH\u{202f}: écarts de chroma et de teinte CIELAB, signés (positifs\u{202f}: mesure plus saturée, teinte tournée dans le sens direct).\nLab D50, observateur 2°, calculés par myiro-libre à partir des spectres de même condition de mesure.\nProche de la limite\u{202f}: à partir de 80\u{202f}% de l’écart accepté, un choix de myiro-libre et non d’une norme. Le verdict porte sur l’écart tel qu’il est écrit, à deux décimales.\nConditions de mesure différentes\u{202f}: ni écart ni verdict.",
     ),
     ("cartouche.micrologiciel", "Micrologiciel"),
     ("cartouche.date", "Date"),
@@ -1053,12 +1054,13 @@ const ANGLAIS: Catalogue = &[
     ("mesurer.ecart.dh", "ΔH (hue)"),
     ("mesurer.ecart.accepte", "Accepted difference"),
     ("mesurer.ecart.comparaison", "Top: reference colour, bottom: this measurement"),
-    ("mesurer.liste.ecart", "ΔE00"),
+    ("mesurer.liste.ecart", "ΔE00 (CIEDE2000)"),
     ("mesurer.liste.verdict", "Verdict"),
-    ("verdict.conforme", "Pass"),
+    ("verdict.conforme", "Within tolerance"),
     ("verdict.proche_de_la_limite", "Close to the limit"),
     ("verdict.hors_tolerance", "Out of tolerance"),
     ("verdict.inconnu", "Unknown difference"),
+    ("verdict.non_comparable", "Different conditions"),
     ("mesurer.verdict.conforme", "The difference stays within the limit set."),
     (
         "mesurer.verdict.proche_de_la_limite",
@@ -1071,7 +1073,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "mesurer.ecart.condition_differente",
-        "This measurement and the reference colour do not share the same measurement condition: this difference is not reliable.",
+        "This measurement and the reference colour do not share the same measurement condition: they cannot be compared, no difference and no verdict.",
     ),
     (
         "mesurer.ecart.non_confirmee",
@@ -1080,7 +1082,7 @@ const ANGLAIS: Catalogue = &[
     ("mesurer.ecart.calcul_titre", "How the difference is computed"),
     (
         "mesurer.ecart.calcul",
-        "ΔE00: CIEDE2000 formula, factors k_L = k_C = k_H = 1.\nΔC and ΔH: CIELAB chroma and hue differences, signed (positive: measurement more saturated, hue turned counter-clockwise).\nLab D50, 2° observer, computed by myiro-libre from spectra of the same measurement condition.\nClose to the limit: from 80% of the accepted difference. The verdict applies to the difference rounded to two decimals.",
+        "ΔE00: CIEDE2000 formula, factors k_L = k_C = k_H = 1.\nΔC and ΔH: CIELAB chroma and hue differences, signed (positive: measurement more saturated, hue turned counter-clockwise).\nLab D50, 2° observer, computed by myiro-libre from spectra of the same measurement condition.\nClose to the limit: from 80% of the accepted difference, a choice made by myiro-libre, not by a standard. The verdict applies to the difference as written, to two decimals.\nDifferent measurement conditions: no difference and no verdict.",
     ),
     ("cartouche.micrologiciel", "Firmware"),
     ("cartouche.date", "Date"),

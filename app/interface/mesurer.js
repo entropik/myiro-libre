@@ -173,7 +173,7 @@
     } else {
       const e = f.spectres[spectreChoisi].ecart;
       if (e) {
-        ecartCellule.textContent = e.delta_e00 || t("cartouche.inconnu");
+        if (e.verdict !== "non_comparable") ecartCellule.textContent = e.delta_e00 || t("cartouche.inconnu");
         verdictCellule.append(avecCarre(etat(e)));
       }
     }
@@ -197,10 +197,12 @@
     bloc.append(el("span", "label", t("mesurer.ecart.titre")));
     const classe = CLASSES_VERDICT[e.verdict];
     if (!classe) {
-      const texte = e.verdict === "seuil_non_fixe" ? t("mesurer.reference.seuil_non_fixe_texte") : t("mesurer.verdict.inconnu");
       const p = el("p", "prose");
       p.append(avecCarre(etat(e)));
-      bloc.append(p, el("p", "why", texte));
+      bloc.append(p);
+      // Conditions différentes : l'avis qui suit dit pourquoi, sans chiffre ni verdict.
+      if (e.verdict === "seuil_non_fixe") bloc.append(el("p", "why", t("mesurer.reference.seuil_non_fixe_texte")));
+      else if (e.verdict === "inconnu") bloc.append(el("p", "why", t("mesurer.verdict.inconnu")));
       return bloc;
     }
     bloc.classList.add("verdict--" + classe);
@@ -261,7 +263,9 @@
     const designer = el("button", "btn", t("mesurer.reference.designer"));
     designer.addEventListener("click", () => commandeReference("designer_reference", { numero: f.numero }));
     actions.append(designer);
-    bloc.append(table, replie, actions);
+    // Sans écart (conditions différentes), pas de tableau de chiffres vides.
+    if (e.verdict !== "non_comparable") bloc.append(table);
+    bloc.append(replie, actions);
     return bloc;
   }
 

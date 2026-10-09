@@ -61,5 +61,5 @@ Demandé par le mainteneur à la première revue de la bibliothèque à l'écran
 
 - La zone de détails montre, pour la mesure choisie : sur la couleur de référence, l'écart accepté (saisi à la main, virgule ou point, vide pour ne pas juger) et « Retirer la référence » ; sur une autre mesure, le verdict en grand (corps `verdict__word--m`, pour tenir dans trois colonnes) doublé d'un carré à symbole, un carré partagé (référence en haut, mesure en bas), puis ΔE00 (CIEDE2000), ΔC (saturation) et ΔH (teinte) avec la formule écrite à côté ; le détail du calcul est replié.
 - La liste ajoute ΔE00 et un petit verdict (carré et mot) à chaque mesure ; la référence porte le libellé « Référence ». Sans écart accepté : « Seuil non fixé », carré vide, aucun verdict.
-- L'écart compare les spectres de même condition de mesure (M0 avec M0…), quelle que soit leur place ; si les conditions diffèrent ou ne sont pas confirmées, un avis le dit au-dessus des chiffres.
+- L'écart compare les spectres de même condition de mesure (M0 avec M0…), quelle que soit leur place ; si elles ne sont pas confirmées, un avis le dit au-dessus des chiffres ; si elles diffèrent, l'avis remplace l'écart et le verdict.
 - `cargo run -p app -- --demo` garnit aussi la séance de Mesurer de mesures fictives, avec une couleur de référence et ses quatre cas (trois verdicts, un avis).

@@ -276,10 +276,12 @@ fn ouvrir_bibliotheque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
         (ouverte, seance)
     } else {
         let dossier = colonne::emplacement(&app.path().app_data_dir()?);
-        (
-            colonne::BibliothequeOuverte::ouvrir(&dossier),
-            Seance::default(),
-        )
+        let ouverte = colonne::BibliothequeOuverte::ouvrir(&dossier);
+        // La couleur de référence conservée revient dans Mesurer (ticket #8).
+        let mut seance = Seance::default();
+        let langue = self::langue(langue_demandee().unwrap_or("fr"));
+        let _ = seance.reprendre_reference(&ouverte, langue);
+        (ouverte, seance)
     };
     app.manage(ouverte);
     app.manage(SeanceMesures(Mutex::new(seance)));

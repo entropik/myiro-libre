@@ -433,6 +433,19 @@ impl Bibliotheque {
         Ok(())
     }
 
+    /// Remplace la référence `ancienne` par `nouvelle`, sans seuil, d'un
+    /// bloc : si la nouvelle mesure est inconnue, rien ne change.
+    pub fn remplacer_reference(&self, ancienne: IdMesure, nouvelle: IdMesure) -> Resultat<()> {
+        let transaction = self.base.unchecked_transaction()?;
+        transaction.execute(
+            "DELETE FROM references_couleur WHERE mesure = ?1",
+            params![ancienne.0],
+        )?;
+        self.designer_reference(nouvelle, None)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     /// La mesure n'est plus couleur de référence ; elle-même reste. Sans
     /// effet si elle ne l'était pas.
     pub fn retirer_reference(&self, id: IdMesure) -> Resultat<()> {

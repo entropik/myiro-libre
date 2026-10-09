@@ -158,7 +158,7 @@ _Éviter_ : delta E sans précision, différence de couleur
 _Éviter_ : tolérance par défaut, seuil 0
 
 **Verdict d'écart** :
-Jugement d'un écart au regard de l'écart accepté, à trois niveaux : conforme (sous 80 % de l'écart accepté), proche de la limite (de 80 % à l'écart accepté inclus), hors tolérance (au-delà). Il porte sur l'écart tel qu'il est écrit, à deux décimales. Toujours un mot et un carré, jamais la couleur seule ; le rouge est réservé au hors tolérance.
+Jugement d'un écart au regard de l'écart accepté, à trois niveaux : conforme (sous 80 % de l'écart accepté), proche de la limite (de 80 % à l'écart accepté inclus), hors tolérance (au-delà). Les 80 % sont un choix du projet, pas une valeur de norme. Entre deux mesures de conditions de mesure différentes, il n'y a ni écart ni verdict. Il porte sur l'écart tel qu'il est écrit, à deux décimales. Toujours un mot et un carré, jamais la couleur seule ; le rouge est réservé au hors tolérance.
 _Éviter_ : OK/KO, bon/mauvais, pass/fail
 
 **Teinte** :

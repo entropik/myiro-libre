@@ -117,8 +117,16 @@ impl crate::mesurer::ReferencesConservees for BibliothequeOuverte {
         self.avec(|b| b.designer_reference(id, seuil))
     }
 
+    fn remplacer(&self, ancienne: IdMesure, nouvelle: IdMesure) -> Result<(), String> {
+        self.avec(|b| b.remplacer_reference(ancienne, nouvelle))
+    }
+
     fn retirer(&self, id: IdMesure) -> Result<(), String> {
         self.avec(|b| b.retirer_reference(id))
+    }
+
+    fn reference_conservee(&self) -> Result<Option<crate::mesurer::ReferenceReprise>, String> {
+        self.avec(crate::mesurer::reference_conservee)
     }
 }
 

@@ -771,3 +771,32 @@ fn une_bibliotheque_d_avant_les_references_se_relit_sans_perte() {
         })
     );
 }
+
+/// Remplacer une référence par une autre se fait d'un bloc : jamais deux
+/// références, et rien ne change si la nouvelle mesure est inconnue.
+#[test]
+fn une_reference_se_remplace_d_un_bloc() {
+    let (_dossier, biblio, a, b) = deux_mesures();
+    biblio.designer_reference(a, Some(2.0)).unwrap();
+
+    assert_eq!(
+        biblio.remplacer_reference(a, IdMesure(99)),
+        Err(ErreurBibliotheque::MesureInconnue(IdMesure(99)))
+    );
+    assert_eq!(
+        biblio.references().unwrap(),
+        vec![ReferenceCouleur {
+            mesure: a,
+            seuil: Some(2.0)
+        }]
+    );
+
+    biblio.remplacer_reference(a, b).unwrap();
+    assert_eq!(
+        biblio.references().unwrap(),
+        vec![ReferenceCouleur {
+            mesure: b,
+            seuil: None
+        }]
+    );
+}
