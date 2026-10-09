@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 
 use pont_protocole::{Info, Palier, Reponse, Requete};
 
-use super::parefeu::{AutorisationPareFeu, EchecPareFeu, PareFeu, RegleFd9, PORT_DETECTION};
+use super::parefeu::{
+    AutorisationPareFeu, EchecPareFeu, EtatRegle, PareFeu, RegleFd9, PORT_DETECTION,
+};
 use super::{choisir, inattendue, Etat, Instrument, Probleme};
 use crate::pont::{Architecture, Panne, Pont};
 
@@ -106,12 +108,15 @@ fn ouvrir_pare_feu<F: PareFeu>(
     let aucun = || Probleme::AucunFd9 {
         detail: DETAIL_AUCUN_FD9.into(),
     };
-    if autorisation.pare_feu_mut().regle_presente() {
-        return Err(aucun());
-    }
     let regle = RegleFd9 {
         programme: programme.to_path_buf(),
     };
+    // Une règle de ce nom pour un autre programme ne sert à rien : elle est
+    // remplacée comme si elle manquait.
+    let etat = autorisation.pare_feu_mut().lire(&regle);
+    if etat == EtatRegle::Presente {
+        return Err(aucun());
+    }
     match autorisation.demander(&regle) {
         Some(Ok(())) => detecter(pont)?.ok_or_else(aucun),
         Some(Err(EchecPareFeu::Refuse)) => Err(pare_feu_ferme(
@@ -119,6 +124,10 @@ fn ouvrir_pare_feu<F: PareFeu>(
             "la fenêtre de contrôle de compte de Windows a été refusée",
         )),
         Some(Err(EchecPareFeu::Echec { detail })) => Err(pare_feu_ferme(&regle, &detail)),
+        None if etat == EtatRegle::AutreProgramme => Err(pare_feu_ferme(
+            &regle,
+            "la règle de ce nom vise un autre programme ; elle a déjà été demandée",
+        )),
         None => Err(pare_feu_ferme(
             &regle,
             "la règle manque toujours ; elle a déjà été demandée",

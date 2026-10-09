@@ -11,7 +11,7 @@
 //! de contrôle de compte de Windows) et [`PareFeuSimule`] pour les tests, qui
 //! ne touche jamais au vrai pare-feu.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Nom fixe de la seule règle que myiro-libre crée. Sans accent : il passe
 /// tel quel dans `netsh` et dans le désinstallateur.
@@ -24,8 +24,8 @@ pub const PORT_DETECTION: u16 = 49152;
 /// 49152, réseau local seulement, tous profils, limitée au programme pont.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RegleFd9 {
-    /// Le programme `pont-fd9` installé à côté de l'application, celui que
-    /// l'application lance (chemin réel, jamais un chemin de développement).
+    /// Le programme `pont-fd9` que l'application lance : le pont installé à
+    /// côté d'elle, ou celui de développement (chemin réel calculé).
     pub programme: PathBuf,
 }
 
@@ -46,10 +46,24 @@ impl RegleFd9 {
         format!("netsh {}", self.arguments_ajout())
     }
 
-    /// Arguments de `netsh` qui lisent la règle, sans rien modifier et sans
-    /// droits particuliers. `netsh` sort avec le code 0 si elle existe.
+    /// Arguments de `cmd.exe` qui posent la règle en une seule élévation :
+    /// retrait de toute règle de ce nom (une ancienne qui visait un autre
+    /// programme), puis ajout d'une seule. Le code de sortie est celui de
+    /// l'ajout. `netsh` : chemin du programme `netsh.exe`.
+    pub fn arguments_pose(&self, netsh: &Path) -> String {
+        let netsh = netsh.display();
+        format!(
+            "/d /s /c \"\"{netsh}\" advfirewall firewall delete rule name=\"{NOM_REGLE}\" & \
+             \"{netsh}\" {}\"",
+            self.arguments_ajout()
+        )
+    }
+
+    /// Arguments de `netsh` qui lisent la règle et son programme, sans rien
+    /// modifier et sans droits particuliers. `netsh` sort avec le code 0 si
+    /// elle existe.
     pub fn arguments_lecture() -> String {
-        format!("advfirewall firewall show rule name=\"{NOM_REGLE}\"")
+        format!("advfirewall firewall show rule name=\"{NOM_REGLE}\" verbose")
     }
 
     /// Commande qui retire la règle (droits d'administrateur).
@@ -58,7 +72,19 @@ impl RegleFd9 {
     }
 }
 
-/// Pourquoi la règle n'a pas été ajoutée.
+/// Ce que la lecture du pare-feu dit de la règle [`NOM_REGLE`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EtatRegle {
+    Absente,
+    /// Une règle de ce nom existe, mais pour un autre programme (par exemple
+    /// créée en développement, puis l'application installée) : elle ne laisse
+    /// pas passer la réponse au pont lancé.
+    AutreProgramme,
+    /// La règle existe pour le pont lancé.
+    Presente,
+}
+
+/// Pourquoi la règle n'a pas été posée.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EchecPareFeu {
     /// L'opérateur a répondu « Non » à la fenêtre de contrôle de compte.
@@ -69,10 +95,12 @@ pub enum EchecPareFeu {
 
 /// L'action sur le pare-feu, injectée dans le module `instrument`.
 pub trait PareFeu {
-    /// La règle [`NOM_REGLE`] existe-t-elle ? Lecture seule, sans élévation.
-    fn regle_presente(&mut self) -> bool;
-    /// Ajoute la règle ; c'est le seul endroit qui demande l'élévation.
-    fn ajouter(&mut self, regle: &RegleFd9) -> Result<(), EchecPareFeu>;
+    /// État de la règle [`NOM_REGLE`] pour ce programme. Lecture seule, sans
+    /// élévation.
+    fn lire(&mut self, regle: &RegleFd9) -> EtatRegle;
+    /// Pose la règle : toute règle de ce nom est remplacée par une seule,
+    /// pour ce programme. C'est le seul endroit qui demande l'élévation.
+    fn poser(&mut self, regle: &RegleFd9) -> Result<(), EchecPareFeu>;
 }
 
 /// Mémoire de la demande pendant une utilisation de l'application : la règle
@@ -112,32 +140,38 @@ impl<F: PareFeu> AutorisationPareFeu<F> {
             return None;
         }
         self.demandee = true;
-        Some(self.pare_feu.ajouter(regle))
+        Some(self.pare_feu.poser(regle))
     }
 }
 
-/// Pare-feu simulé : ne touche à rien, enregistre les demandes. La règle
-/// devient présente quand un ajout réussit.
+/// Pare-feu simulé : ne touche à rien, enregistre les demandes. Il garde au
+/// plus une règle de ce nom, comme la pose réelle ; elle vise le programme
+/// de la dernière pose réussie.
 #[derive(Clone, Debug, Default)]
 pub struct PareFeuSimule {
-    pub presente: bool,
-    /// Réponse imposée à l'ajout (refus, échec) ; `None` : l'ajout réussit.
+    /// Programme visé par la règle de myiro-libre, si elle existe.
+    pub regle: Option<PathBuf>,
+    /// Réponse imposée à la pose (refus, échec) ; `None` : la pose réussit.
     pub echec: Option<EchecPareFeu>,
-    /// Règles dont l'ajout a été demandé, dans l'ordre.
+    /// Règles dont la pose a été demandée, dans l'ordre.
     pub demandes: Vec<RegleFd9>,
 }
 
 impl PareFeu for PareFeuSimule {
-    fn regle_presente(&mut self) -> bool {
-        self.presente
+    fn lire(&mut self, regle: &RegleFd9) -> EtatRegle {
+        match &self.regle {
+            None => EtatRegle::Absente,
+            Some(programme) if *programme == regle.programme => EtatRegle::Presente,
+            Some(_) => EtatRegle::AutreProgramme,
+        }
     }
 
-    fn ajouter(&mut self, regle: &RegleFd9) -> Result<(), EchecPareFeu> {
+    fn poser(&mut self, regle: &RegleFd9) -> Result<(), EchecPareFeu> {
         self.demandes.push(regle.clone());
         match &self.echec {
             Some(echec) => Err(echec.clone()),
             None => {
-                self.presente = true;
+                self.regle = Some(regle.programme.clone());
                 Ok(())
             }
         }
@@ -145,49 +179,88 @@ impl PareFeu for PareFeuSimule {
 }
 
 /// Le vrai pare-feu de Windows, par `netsh` (`System32`). La lecture se fait
-/// sans droits ; l'ajout passe par la fenêtre de contrôle de compte
+/// sans droits ; la pose passe par la fenêtre de contrôle de compte
 /// (`ShellExecuteExW`, verbe `runas`), seul dialogue montré à l'opérateur.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct PareFeuWindows;
+pub struct PareFeuWindows {
+    /// Fenêtre de l'application (`HWND`), parente de la fenêtre de contrôle
+    /// de compte pour qu'elle s'ouvre au premier plan ; 0 si inconnue.
+    pub fenetre: isize,
+}
+
+/// La sortie de `netsh … show rule … verbose` cite-t-elle ce programme ?
+/// Comparaison sans casse ; le pare-feu peut écrire le dossier de
+/// l'utilisateur `%USERPROFILE%` (`profil`).
+pub fn sortie_cite_le_programme(sortie: &str, programme: &Path, profil: Option<&Path>) -> bool {
+    let sortie = sortie.to_lowercase();
+    let chemin = programme.display().to_string();
+    let mut formes = vec![chemin.to_lowercase()];
+    if let Some(profil) = profil {
+        let profil = profil.display().to_string();
+        let suite = chemin.get(profil.len()..).filter(|_| {
+            !profil.is_empty() && chemin.to_lowercase().starts_with(&profil.to_lowercase())
+        });
+        if let Some(suite) = suite {
+            formes.push(format!("%userprofile%{suite}").to_lowercase());
+        }
+    }
+    formes.iter().any(|forme| sortie.contains(forme.as_str()))
+}
 
 /// Attente maximale de `netsh` une fois l'élévation acceptée.
 #[cfg(windows)]
 const DELAI_NETSH_MS: u32 = 60_000;
 
 #[cfg(windows)]
-fn netsh() -> PathBuf {
+fn system32(programme: &str) -> PathBuf {
     let racine = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
-    PathBuf::from(racine).join("System32").join("netsh.exe")
+    PathBuf::from(racine).join("System32").join(programme)
 }
 
 #[cfg(windows)]
 impl PareFeu for PareFeuWindows {
-    fn regle_presente(&mut self) -> bool {
+    fn lire(&mut self, regle: &RegleFd9) -> EtatRegle {
         use std::os::windows::process::CommandExt;
         use std::process::{Command, Stdio};
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        Command::new(netsh())
+        let Ok(sortie) = Command::new(system32("netsh.exe"))
             .raw_arg(RegleFd9::arguments_lecture())
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
             .stderr(Stdio::null())
             .creation_flags(CREATE_NO_WINDOW)
-            .status()
-            .is_ok_and(|statut| statut.success())
+            .output()
+        else {
+            return EtatRegle::Absente;
+        };
+        if !sortie.status.success() {
+            return EtatRegle::Absente;
+        }
+        let profil = std::env::var_os("USERPROFILE").map(PathBuf::from);
+        let texte = String::from_utf8_lossy(&sortie.stdout);
+        if sortie_cite_le_programme(&texte, &regle.programme, profil.as_deref()) {
+            EtatRegle::Presente
+        } else {
+            EtatRegle::AutreProgramme
+        }
     }
 
-    fn ajouter(&mut self, regle: &RegleFd9) -> Result<(), EchecPareFeu> {
-        elevation::lancer_en_administrateur(&netsh(), &regle.arguments_ajout(), DELAI_NETSH_MS)
+    fn poser(&mut self, regle: &RegleFd9) -> Result<(), EchecPareFeu> {
+        elevation::lancer_en_administrateur(
+            self.fenetre,
+            &system32("cmd.exe"),
+            &regle.arguments_pose(&system32("netsh.exe")),
+            DELAI_NETSH_MS,
+        )
     }
 }
 
 #[cfg(not(windows))]
 impl PareFeu for PareFeuWindows {
-    fn regle_presente(&mut self) -> bool {
-        false
+    fn lire(&mut self, _: &RegleFd9) -> EtatRegle {
+        EtatRegle::Absente
     }
 
-    fn ajouter(&mut self, _: &RegleFd9) -> Result<(), EchecPareFeu> {
+    fn poser(&mut self, _: &RegleFd9) -> Result<(), EchecPareFeu> {
         Err(EchecPareFeu::Echec {
             detail: "pare-feu de Windows : pas sous Windows".into(),
         })
@@ -250,7 +323,10 @@ mod elevation {
 
     /// Lance `programme parametres` en administrateur, sans fenêtre, et
     /// attend sa fin au plus `delai_ms`. Réussit si le programme sort avec 0.
+    /// `fenetre` : `HWND` de l'application, parente de la fenêtre de contrôle
+    /// de compte (premier plan) ; 0 sans fenêtre connue.
     pub(super) fn lancer_en_administrateur(
+        fenetre: isize,
         programme: &Path,
         parametres: &str,
         delai_ms: u32,
@@ -261,7 +337,7 @@ mod elevation {
         let mut info = ShellExecuteInfoW {
             taille: std::mem::size_of::<ShellExecuteInfoW>() as u32,
             masque: SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC,
-            fenetre: std::ptr::null_mut(),
+            fenetre: fenetre as *mut c_void,
             verbe: verbe.as_ptr(),
             fichier: fichier.as_ptr(),
             parametres: parametres.as_ptr(),
@@ -331,13 +407,42 @@ mod elevation {
 
 #[cfg(test)]
 mod tests {
-    use super::NOM_REGLE;
+    use std::path::Path;
+
+    use super::{sortie_cite_le_programme, NOM_REGLE};
+
+    /// Lecture de la règle : le programme est reconnu sans casse, et sous la
+    /// forme `%USERPROFILE%` ; un autre programme ne l'est pas. Chemins fictifs.
+    #[test]
+    fn la_lecture_reconnait_le_programme_de_la_regle() {
+        let installe = Path::new(r"C:\Users\exemple\AppData\Local\myiro-libre\pont-fd9-x86.exe");
+        let profil = Path::new(r"C:\Users\exemple");
+        let sortie =
+            |programme: &str| format!("Rule Name: {NOM_REGLE}\r\nProgram: {programme}\r\n");
+        assert!(sortie_cite_le_programme(
+            &sortie(r"c:\users\exemple\appdata\local\myiro-libre\pont-fd9-x86.exe"),
+            installe,
+            Some(profil)
+        ));
+        assert!(sortie_cite_le_programme(
+            &sortie(r"%USERPROFILE%\AppData\Local\myiro-libre\pont-fd9-x86.exe"),
+            installe,
+            Some(profil)
+        ));
+        assert!(!sortie_cite_le_programme(
+            &sortie(r"C:\depot\target\i686-pc-windows-msvc\debug\pont-fd9.exe"),
+            installe,
+            Some(profil)
+        ));
+    }
 
     /// Le désinstallateur retire la règle sous le même nom.
     #[test]
     fn le_desinstallateur_retire_la_meme_regle() {
         let crochets = include_str!("../../installateur/pare-feu.nsh");
         assert!(crochets.contains(&format!("\"{NOM_REGLE}\"")), "{crochets}");
+        // Une mise à jour garde la règle.
+        assert!(crochets.contains("${If} $UpdateMode <> 1"), "{crochets}");
         let config = include_str!("../../tauri.conf.json");
         assert!(config.contains("installateur/pare-feu.nsh"), "{config}");
     }

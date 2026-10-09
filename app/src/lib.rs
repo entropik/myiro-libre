@@ -33,7 +33,9 @@ struct PareFeuFd9(Mutex<AutorisationPareFeu<PareFeuWindows>>);
 
 impl Default for PareFeuFd9 {
     fn default() -> Self {
-        PareFeuFd9(Mutex::new(AutorisationPareFeu::new(PareFeuWindows)))
+        PareFeuFd9(Mutex::new(AutorisationPareFeu::new(
+            PareFeuWindows::default(),
+        )))
     }
 }
 
@@ -82,6 +84,19 @@ fn retenir_sdk(app: &AppHandle, dll: &std::path::Path) {
     }
 }
 
+/// `HWND` de la fenêtre de l'application, 0 si elle est introuvable.
+fn fenetre_principale(app: &AppHandle) -> isize {
+    #[cfg(windows)]
+    if let Some(fenetre) = app.webview_windows().values().next() {
+        if let Ok(hwnd) = fenetre.hwnd() {
+            return hwnd.0 as isize;
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = app;
+    0
+}
+
 /// Ferme l'instrument en cours, puis en ouvre un nouveau, en essayant les
 /// emplacements dans l'ordre de `emplacements_a_essayer`.
 fn ouvrir(app: &AppHandle, instruments: &Instruments, choisi: Option<PathBuf>) -> Vue {
@@ -89,6 +104,9 @@ fn ouvrir(app: &AppHandle, instruments: &Instruments, choisi: Option<PathBuf>) -
     *courant = None;
     let pare_feu = app.state::<PareFeuFd9>();
     let mut autorisation = pare_feu.0.lock().unwrap_or_else(|e| e.into_inner());
+    // La fenêtre de contrôle de compte s'ouvre au premier plan, sur celle de
+    // l'application.
+    autorisation.pare_feu_mut().fenetre = fenetre_principale(app);
     let dossier_exe = std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(PathBuf::from))
