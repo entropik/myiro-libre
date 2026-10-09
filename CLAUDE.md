@@ -2,9 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Le travail courant se fait sur `dev`, un agent à la fois dans le dossier principal,
+selon `AGENTS.md`. Pour le périmètre fonctionnel validé et l'ordre de livraison,
+consulter [la spécification couleur](docs/specifications/poste-travail-couleur.md).
+
 ## Objectif du projet
 
-Construire un outil de mesure et de profilage ICC pour deux spectrophotomètres Konica Minolta dont le support logiciel est arrêté : le **MYIRO-1** (piloté par `FDXSDK.dll`) et le **FD-9** (piloté par `FD9SDK.dll`). Le dépôt contient un audit statique des installations du poste (Windows) et le code Rust du pont MYIRO-1, qui pilote l'instrument réel de la version du SDK jusqu'à la lecture en bande (7 octobre 2026). `.gitignore` exclut `collecte/`, `SDK/` et tout binaire ou manuel Konica Minolta. Le plan d'action est dans `PLAN-ACTION.md` (application Rust libre GPL-3.0, MYIRO-1 d'abord, FD-9 en parallèle ; le FD-9 du poste est piloté par FD-S2w en réseau). `Audit-MYIRO/retroanalyse/` contient les désassemblages Capstone produits par `Audit-MYIRO/outils/desassemble.py`.
+Construire un outil de mesure et de profilage ICC pour deux spectrophotomètres Konica Minolta dont le support logiciel est arrêté : le **MYIRO-1** (piloté par `FDXSDK.dll`) et le **FD-9** (piloté par `FD9SDK.dll`). Le dépôt contient un audit statique des installations du poste (Windows) et le code Rust du pont MYIRO-1, qui pilote l'instrument réel de la version du SDK jusqu'à la lecture en bande (7 octobre 2026). `.gitignore` exclut `collecte/`, `SDK/` et tout binaire ou manuel Konica Minolta. Le plan d'action est dans `PLAN-ACTION.md` (application Rust libre GPL-3.0, MYIRO-1 et FD-9 dans la première livraison RVB vérifiée ; le FD-9 du poste est piloté par FD-S2w en réseau). `Audit-MYIRO/retroanalyse/` contient les désassemblages Capstone produits par `Audit-MYIRO/outils/desassemble.py`.
 
 La documentation de l'audit et les scripts sont en français ; garder cette langue pour les rapports et notes.
 
@@ -61,7 +65,7 @@ cargo test -p pont-fd9 --target i686-pc-windows-msvc --test dll -- --ignored pal
 
 Les tests `--ignored` de `crates/pont-myiro1/tests/dll.rs` parlent au vrai MYIRO-1 et, à partir de l'étalonnage, demandent des gestes à l'opérateur : ne les lancer qu'avec son accord, palier par palier. Leurs sorties (mesures) vont dans `Archivage/donnees/`, local et non versionné. Ceux de `crates/pont-fd9/tests/dll.rs` aussi, FD-S2w fermé ; `FD9SDK_DLL` désigne une autre DLL, et leurs sorties (adresse, identifiant réels) restent à l'écran.
 
-Intégration continue (`.github/workflows/ci.yml`, GitHub Actions) à chaque PR et à chaque poussée sur `main`. Job `windows` : `cargo fmt --all --check`, clippy, `cargo test` en 64 puis 32 bits. Job `linux` : fmt, clippy et tests limités aux crates qui doivent rester indépendantes de Windows (liste explicite `CRATES` dans le workflow, aujourd'hui `pont-protocole`, `jeu-validation` et `colorimetrie`). Les deux jobs lancent `python outils/test_verifier_docs.py` et `python outils/verifier_docs.py`. `main` exige ces deux contrôles verts : ne pas renommer les jobs. La CI ne couvre pas la DLL ni l'instrument (tests `--ignored`, aucun fichier Konica Minolta sur GitHub), ni les écrans, ni les mots interdits (la liste `.mots-interdits.local` reste sur le poste ; sans elle, le contrôle est sauté et annoncé).
+Intégration continue (`.github/workflows/ci.yml`, GitHub Actions) à chaque PR et à chaque poussée sur `main` et `dev`. Job `windows` : `cargo fmt --all --check`, clippy, `cargo test` en 64 puis 32 bits. Job `linux` : fmt, clippy et tests limités aux crates qui doivent rester indépendantes de Windows (liste explicite `CRATES` dans le workflow, aujourd'hui `pont-protocole`, `jeu-validation` et `colorimetrie`). Les deux jobs lancent `python outils/test_verifier_docs.py` et `python outils/verifier_docs.py`. `main` exige ces deux contrôles verts : ne pas renommer les jobs. La CI ne couvre pas la DLL ni l'instrument (tests `--ignored`, aucun fichier Konica Minolta sur GitHub), ni les écrans, ni les mots interdits (la liste `.mots-interdits.local` reste sur le poste ; sans elle, le contrôle est sauté et annoncé).
 
 ## Points techniques établis par l'audit
 

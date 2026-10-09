@@ -1,0 +1,23 @@
+name: Outils de publication
+on:
+  pull_request:
+    paths: ['outils/publier_tickets.py', 'outils/test_publier_tickets.py', 'outils/verifier_contexte.py', 'outils/test_verifier_contexte.py', 'outils/test_pre_push.py', '.githooks/pre-push', '.github/workflows/publication.yml']
+  push:
+    branches: [main, dev]
+    paths: ['outils/publier_tickets.py', 'outils/test_publier_tickets.py', 'outils/verifier_contexte.py', 'outils/test_verifier_contexte.py', 'outils/test_pre_push.py', '.githooks/pre-push', '.github/workflows/publication.yml']
+permissions:
+  contents: read
+jobs:
+  publication:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.x'
+      - run: python outils/test_publier_tickets.py
+      - run: python outils/test_verifier_contexte.py
+      - run: python outils/test_pre_push.py

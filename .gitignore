@@ -50,3 +50,6 @@ docs/sources/
 
 # Liste locale de mots interdits (voir outils/verifier_docs.py)
 .mots-interdits.local
+
+# États de publication, manifestes et preuves de reprise propres au poste
+.local/

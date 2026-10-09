@@ -1,0 +1,34 @@
+#!/bin/sh
+# Branches publiques uniquement ; refuser aussi un historique privé masqué par
+# un renommage ou par la suppression ultérieure des fichiers privés.
+while read local_ref local_sha remote_ref remote_sha; do
+  case "$local_ref" in
+    refs/heads/codex|refs/heads/prive|refs/heads/archive/*)
+      echo "pre-push : archive privée locale, publication refusée"; exit 1 ;;
+  esac
+  case "$remote_ref" in
+    refs/heads/main|refs/heads/dev|refs/heads/ticket/*) ;;
+    *) echo "pre-push : seules main, dev et ticket/* sont publiques"; exit 1 ;;
+  esac
+  case "$local_sha" in
+    0000000000000000000000000000000000000000)
+      echo "pre-push : suppression distante à traiter explicitement"; exit 1 ;;
+  esac
+  if git rev-parse --verify --quiet refs/heads/prive >/dev/null; then
+    git merge-base --is-ancestor refs/heads/prive "$local_sha"
+    result=$?
+    case "$result" in
+      0) echo "pre-push : historique privé, publication refusée"; exit 1 ;;
+      1) ;;
+      *) echo "pre-push : historique impossible à vérifier"; exit 1 ;;
+    esac
+  fi
+  private_objects=$(git rev-list --objects "$local_sha" -- Audit-ColorGPS/ Audit-MYIRO/analyse/ Audit-MYIRO/retroanalyse/ SDK/)
+  if [ $? -ne 0 ]; then
+    echo "pre-push : lecture de l'historique impossible"; exit 1
+  fi
+  if [ -n "$private_objects" ]; then
+    echo "pre-push : des chemins privés existent dans l'historique"; exit 1
+  fi
+done
+exit 0
