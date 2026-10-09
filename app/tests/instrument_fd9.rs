@@ -201,9 +201,8 @@ fn un_fd9_detecte_ne_propose_jamais_de_mesurer() {
     assert!(matches!(instrument.etat(), Etat::Detecte { .. }));
 
     assert!(!instrument.vue().mesurable);
-    let rendue = instrument.mesurer_ponctuelle(&mut |g: app::instrument::Geste| {
-        panic!("geste demandé : {g:?}")
-    });
+    let rendue = instrument
+        .mesurer_ponctuelle(&mut |g: app::instrument::Geste| panic!("geste demandé : {g:?}"));
 
     assert_eq!(rendue, None);
     assert_eq!(

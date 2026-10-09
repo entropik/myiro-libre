@@ -16,7 +16,7 @@ use serde::Serialize;
 pub const FICHIER_BASE: &str = "bibliotheque.sqlite";
 
 /// Version de l'organisation de la base ; une base plus récente est refusée.
-const VERSION_BASE: i32 = 1;
+const VERSION_BASE: i32 = 2;
 
 /// Ce qui peut empêcher une opération sur la bibliothèque.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -101,12 +101,17 @@ pub struct MesureEnregistree {
     pub instrument: Instrument,
     /// La mesure du pont, relue à l'identique.
     pub mesure: Mesure,
+    /// Nom donné par l'utilisateur ; aucun pour une mesure enregistrée sans
+    /// nom (bande, bibliothèque d'avant les noms).
+    pub nom: Option<String>,
 }
 
 /// Ce que la colonne de gauche montre d'une mesure, sans la relire en entier.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ResumeMesure {
     pub id: IdMesure,
+    /// Nom donné par l'utilisateur, s'il y en a un.
+    pub nom: Option<String>,
     /// Fin de la mesure, telle que le pont l'a datée.
     pub horodatage: String,
     pub instrument: Instrument,
@@ -198,6 +203,41 @@ impl Bibliotheque {
         condition: IdCondition,
         mesure: &Mesure,
     ) -> Resultat<IdMesure> {
+        self.enregistrer(condition, mesure, None)
+    }
+
+    /// Enregistre une mesure avec son nom, débarrassé de ses espaces de début
+    /// et de fin ; un nom vide est refusé et rien n'est enregistré. Deux
+    /// mesures peuvent porter le même nom.
+    pub fn enregistrer_mesure_nommee(
+        &self,
+        condition: IdCondition,
+        mesure: &Mesure,
+        nom: &str,
+    ) -> Resultat<IdMesure> {
+        let nom = nom_de_mesure(nom)?;
+        self.enregistrer(condition, mesure, Some(nom))
+    }
+
+    /// Renomme une mesure ; la mesure elle-même n'est pas touchée.
+    pub fn renommer_mesure(&self, id: IdMesure, nom: &str) -> Resultat<()> {
+        let nom = nom_de_mesure(nom)?;
+        let modifiees = self.base.execute(
+            "UPDATE mesures SET nom = ?1 WHERE id = ?2",
+            params![nom, id.0],
+        )?;
+        if modifiees == 0 {
+            return Err(ErreurBibliotheque::MesureInconnue(id));
+        }
+        Ok(())
+    }
+
+    fn enregistrer(
+        &self,
+        condition: IdCondition,
+        mesure: &Mesure,
+        nom: Option<&str>,
+    ) -> Resultat<IdMesure> {
         self.verifier_condition(condition)?;
         let provenance = mesure.provenance();
         let instrument = &provenance.instrument;
@@ -212,8 +252,8 @@ impl Bibliotheque {
             |l| l.get(0),
         )?;
         transaction.execute(
-            "INSERT INTO mesures (condition, instrument, horodatage, geometrie, plages, contenu)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO mesures (condition, instrument, horodatage, geometrie, plages, contenu, nom)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 condition.0,
                 id_instrument,
@@ -221,7 +261,8 @@ impl Bibliotheque {
                 serde_json::to_string(&provenance.geometrie)
                     .expect("une géométrie se sérialise toujours"),
                 mesure.plages().len(),
-                ecrire_mesure(mesure)
+                ecrire_mesure(mesure),
+                nom
             ],
         )?;
         let id = IdMesure(transaction.last_insert_rowid());
@@ -234,7 +275,7 @@ impl Bibliotheque {
         let ligne = self
             .base
             .query_row(
-                "SELECT m.condition, i.modele, i.numero_serie, m.contenu
+                "SELECT m.condition, i.modele, i.numero_serie, m.contenu, m.nom
                  FROM mesures m JOIN instruments i ON i.id = m.instrument
                  WHERE m.id = ?1",
                 params![id.0],
@@ -246,11 +287,12 @@ impl Bibliotheque {
                             numero_serie: l.get(2)?,
                         },
                         l.get::<_, String>(3)?,
+                        l.get::<_, Option<String>>(4)?,
                     ))
                 },
             )
             .optional()?;
-        let (condition, instrument, contenu) =
+        let (condition, instrument, contenu, nom) =
             ligne.ok_or(ErreurBibliotheque::MesureInconnue(id))?;
         let mesure = lire_mesure(&contenu).map_err(|e| ErreurBibliotheque::MesureIllisible {
             id,
@@ -261,6 +303,7 @@ impl Bibliotheque {
             condition,
             instrument,
             mesure,
+            nom,
         })
     }
 
@@ -268,8 +311,9 @@ impl Bibliotheque {
     /// recherche. Une recherche vide rend tout, conditions vides comprises.
     ///
     /// Chaque mot cherché doit se trouver, sans tenir compte des majuscules ni
-    /// des accents, dans le nom de la condition, le modèle ou le numéro de
-    /// série de l'instrument, ou la date de la mesure (`2026-10-07`). Une
+    /// des accents, dans le nom de la condition, le nom de la mesure, le modèle
+    /// ou le numéro de série de l'instrument, ou la date de la mesure
+    /// (`2026-10-07`). Une
     /// condition dont le nom suffit garde toutes ses mesures.
     pub fn arborescence(&self, recherche: &str) -> Resultat<Vec<Branche>> {
         let mots: Vec<String> = recherche.split_whitespace().map(replier).collect();
@@ -278,7 +322,8 @@ impl Bibliotheque {
             mots.iter().all(|m| texte.contains(m.as_str()))
         };
         let mut requete = self.base.prepare(
-            "SELECT m.id, m.condition, m.horodatage, m.geometrie, m.plages, i.modele, i.numero_serie
+            "SELECT m.id, m.condition, m.horodatage, m.geometrie, m.plages, i.modele, i.numero_serie,
+                    m.nom
              FROM mesures m JOIN instruments i ON i.id = m.instrument",
         )?;
         let lignes = requete.query_map([], |l| {
@@ -292,11 +337,12 @@ impl Bibliotheque {
                     modele: l.get(5)?,
                     numero_serie: l.get(6)?,
                 },
+                l.get::<_, Option<String>>(7)?,
             ))
         })?;
         let mut mesures = Vec::new();
         for ligne in lignes {
-            let (id, condition, horodatage, geometrie, plages, instrument) = ligne?;
+            let (id, condition, horodatage, geometrie, plages, instrument, nom) = ligne?;
             let geometrie = serde_json::from_str(&geometrie).map_err(|e| {
                 ErreurBibliotheque::MesureIllisible {
                     id,
@@ -305,6 +351,7 @@ impl Bibliotheque {
             })?;
             let resume = ResumeMesure {
                 id,
+                nom,
                 horodatage,
                 instrument,
                 geometrie,
@@ -328,8 +375,9 @@ impl Bibliotheque {
                 siennes
                     .filter(|m| {
                         trouve(&format!(
-                            "{} {} {} {}",
+                            "{} {} {} {} {}",
                             condition.nom,
+                            m.nom.as_deref().unwrap_or_default(),
                             m.instrument.modele,
                             m.instrument.numero_serie,
                             m.horodatage
@@ -462,6 +510,7 @@ fn migrer(base: &mut Connection) -> Resultat<()> {
     while version < VERSION_BASE {
         match version {
             0 => transaction.execute_batch(ORGANISATION_1)?,
+            1 => transaction.execute_batch(ORGANISATION_2)?,
             autre => unreachable!("aucune migration depuis l'organisation {autre}"),
         }
         version += 1;
@@ -469,6 +518,20 @@ fn migrer(base: &mut Connection) -> Resultat<()> {
     }
     transaction.commit()?;
     Ok(())
+}
+
+/// Organisation 2 (ticket #7) : le nom d'une mesure. Les mesures déjà
+/// enregistrées restent sans nom ; rien n'est réécrit ni effacé.
+const ORGANISATION_2: &str = "ALTER TABLE mesures ADD COLUMN nom TEXT;";
+
+/// Nom de mesure débarrassé de ses espaces de début et de fin, jamais vide.
+fn nom_de_mesure(nom: &str) -> Resultat<&str> {
+    let nom = nom.trim();
+    if nom.is_empty() {
+        Err(ErreurBibliotheque::NomVide)
+    } else {
+        Ok(nom)
+    }
 }
 
 /// Organisation 1. `IF NOT EXISTS` : la toute première version de cette

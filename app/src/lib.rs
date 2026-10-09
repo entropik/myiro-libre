@@ -281,7 +281,7 @@ fn mesurer(
             attente: &attente,
         },
         &condition,
-        |mesure| bibliotheque.enregistrer_mesure(condition.id, mesure),
+        |mesure, nom| bibliotheque.enregistrer_mesure_nommee(condition.id, mesure, nom),
         langue,
     );
     Ok(EcranMesurer {
@@ -300,16 +300,17 @@ fn mesures_seance(seance: State<'_, SeanceMesures>, langue: &str) -> EcranMesure
     }
 }
 
-/// Renomme une mesure de la séance.
+/// Renomme une mesure de la séance, et dans la bibliothèque si elle y est rangée.
 #[tauri::command]
 fn renommer_mesure(
     seance: State<'_, SeanceMesures>,
+    bibliotheque: State<'_, colonne::BibliothequeOuverte>,
     numero: usize,
     nom: &str,
     langue: &str,
 ) -> Result<EcranMesurer, &'static str> {
     let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
-    seance.renommer(numero, nom)?;
+    seance.renommer(numero, nom, |id, nom| bibliotheque.renommer_mesure(id, nom))?;
     Ok(EcranMesurer {
         instrument: None,
         mesures: seance.fiches(self::langue(langue)),

@@ -504,3 +504,151 @@ fn chaque_instrument_est_connu_une_seule_fois() {
         ]
     );
 }
+
+// ---- Nom d'une mesure (ticket #7) ----
+
+#[test]
+fn une_mesure_nommee_garde_son_nom_et_se_renomme() {
+    let (dossier, biblio) = bibliotheque_vide();
+    let offset = biblio.creer_condition("Offset").unwrap();
+    let mesure = ponctuelle(12345678, "2026-10-07T15:04:05+02:00");
+
+    let id = biblio
+        .enregistrer_mesure_nommee(offset.id, &mesure, "  Couleur 1 ")
+        .unwrap();
+    assert_eq!(biblio.mesure(id).unwrap().nom.as_deref(), Some("Couleur 1"));
+    assert_eq!(
+        biblio.arborescence("").unwrap()[0].mesures[0]
+            .nom
+            .as_deref(),
+        Some("Couleur 1")
+    );
+
+    biblio.renommer_mesure(id, "Magenta du logo").unwrap();
+    drop(biblio);
+    let biblio = Bibliotheque::ouvrir(dossier.path()).unwrap();
+    let relue = biblio.mesure(id).unwrap();
+    assert_eq!(relue.nom.as_deref(), Some("Magenta du logo"));
+    assert_eq!(relue.mesure, mesure, "renommer ne touche pas à la mesure");
+
+    assert_eq!(
+        biblio.renommer_mesure(id, "   "),
+        Err(ErreurBibliotheque::NomVide)
+    );
+    assert_eq!(
+        biblio.renommer_mesure(IdMesure(999), "Absente"),
+        Err(ErreurBibliotheque::MesureInconnue(IdMesure(999)))
+    );
+    assert_eq!(
+        biblio.mesure(id).unwrap().nom.as_deref(),
+        Some("Magenta du logo")
+    );
+}
+
+#[test]
+fn une_mesure_au_nom_vide_n_est_pas_enregistree() {
+    let (_dossier, biblio) = bibliotheque_vide();
+    let offset = biblio.creer_condition("Offset").unwrap();
+
+    assert_eq!(
+        biblio.enregistrer_mesure_nommee(
+            offset.id,
+            &ponctuelle(12345678, "2026-10-07T15:04:05+02:00"),
+            " "
+        ),
+        Err(ErreurBibliotheque::NomVide)
+    );
+    assert!(biblio.arborescence("").unwrap()[0].mesures.is_empty());
+}
+
+/// Une mesure enregistrée sans nom (bande, import) n'en reçoit pas d'office.
+#[test]
+fn une_mesure_sans_nom_reste_sans_nom() {
+    let (_dossier, biblio) = bibliotheque_garnie();
+    let branches = biblio.arborescence("").unwrap();
+    assert!(branches
+        .iter()
+        .flat_map(|b| &b.mesures)
+        .all(|m| m.nom.is_none()));
+    assert_eq!(biblio.mesure(branches[0].mesures[0].id).unwrap().nom, None);
+}
+
+#[test]
+fn la_recherche_trouve_une_mesure_par_son_nom() {
+    let (_dossier, biblio) = bibliotheque_garnie();
+    let offset = biblio.conditions().unwrap()[1].id;
+    biblio
+        .enregistrer_mesure_nommee(
+            offset,
+            &ponctuelle(12345678, "2026-10-08T10:00:00+02:00"),
+            "Rouge du logo",
+        )
+        .unwrap();
+
+    assert_eq!(
+        noms(biblio.arborescence("rouge LOGO").unwrap()),
+        vec![(
+            "Offset, couché mat".to_string(),
+            vec!["2026-10-08T10:00:00+02:00".to_string()]
+        )]
+    );
+}
+
+/// Organisation 1, telle que la première bibliothèque l'écrivait : figée ici
+/// pour vérifier la migration, même si le code évolue.
+const ORGANISATION_1: &str = "
+CREATE TABLE conditions (id INTEGER PRIMARY KEY, nom TEXT NOT NULL UNIQUE);
+CREATE TABLE instruments (
+    id INTEGER PRIMARY KEY, modele TEXT NOT NULL, numero_serie INTEGER NOT NULL,
+    UNIQUE (modele, numero_serie)
+);
+CREATE TABLE mesures (
+    id INTEGER PRIMARY KEY,
+    condition INTEGER NOT NULL REFERENCES conditions (id),
+    instrument INTEGER NOT NULL REFERENCES instruments (id),
+    horodatage TEXT NOT NULL, geometrie TEXT NOT NULL, plages INTEGER NOT NULL,
+    contenu TEXT NOT NULL
+);
+CREATE INDEX mesures_par_condition ON mesures (condition);
+PRAGMA user_version = 1;
+";
+
+/// Une bibliothèque écrite avant les noms de mesure se relit sans perte :
+/// ses mesures restent sans nom et peuvent ensuite en recevoir un.
+#[test]
+fn une_bibliotheque_d_avant_les_noms_se_relit_sans_perte() {
+    let dossier = tempfile::tempdir().unwrap();
+    let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
+    let mesure = ponctuelle(12345678, "2026-10-07T15:04:05+02:00");
+    let base = rusqlite::Connection::open(&chemin).unwrap();
+    base.execute_batch(ORGANISATION_1).unwrap();
+    base.execute_batch(&format!(
+        "INSERT INTO conditions (id, nom) VALUES (1, 'Offset');
+         INSERT INTO instruments (id, modele, numero_serie) VALUES (1, 'MYIRO-1', 12345678);
+         INSERT INTO mesures (id, condition, instrument, horodatage, geometrie, plages, contenu)
+         VALUES (1, 1, 1, '2026-10-07T15:04:05+02:00', '{{\"lecture\":\"ponctuelle\"}}', 1, '{}');",
+        pont_protocole::ecrire_mesure(&mesure).replace('\'', "''")
+    ))
+    .unwrap();
+    drop(base);
+
+    let biblio = Bibliotheque::ouvrir(dossier.path()).unwrap();
+
+    let relue = biblio.mesure(IdMesure(1)).unwrap();
+    assert_eq!(relue.mesure, mesure);
+    assert_eq!(relue.condition, IdCondition(1));
+    assert_eq!(relue.nom, None);
+    biblio.renommer_mesure(IdMesure(1), "Couleur 1").unwrap();
+    assert_eq!(
+        biblio.arborescence("").unwrap()[0].mesures[0]
+            .nom
+            .as_deref(),
+        Some("Couleur 1")
+    );
+    drop(biblio);
+    let version: i32 = rusqlite::Connection::open(&chemin)
+        .unwrap()
+        .pragma_query_value(None, "user_version", |l| l.get(0))
+        .unwrap();
+    assert_eq!(version, 2);
+}

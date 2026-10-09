@@ -9,7 +9,7 @@ use app::instrument::{Accord, Geste, Instrument};
 use app::mesurer::{FicheMesure, Seance};
 use app::pont::{Architecture, PontSimule};
 use app::textes::Langue;
-use bibliotheque::{Bibliotheque, ConditionImpression};
+use bibliotheque::{Bibliotheque, ConditionImpression, IdMesure};
 use pont_protocole::{
     Calcul, ConditionMesure, ConditionsCalcul, DonneesBrutes, Echantillonnage, Geometrie,
     Horodatage, Illuminant, Info, InstrumentMesurant, Lab, Mesure, Observateur, Palier, Plage,
@@ -61,12 +61,22 @@ fn bibliotheque(nom: &str) -> (Bibliotheque, ConditionImpression) {
 fn ranger<'a>(
     biblio: &'a Bibliotheque,
     condition: &'a ConditionImpression,
-) -> impl FnOnce(&Mesure) -> Result<bibliotheque::IdMesure, String> + 'a {
-    move |mesure| {
+) -> impl FnOnce(&Mesure, &str) -> Result<IdMesure, String> + 'a {
+    move |mesure, nom| {
         biblio
-            .enregistrer_mesure(condition.id, mesure)
+            .enregistrer_mesure_nommee(condition.id, mesure, nom)
             .map_err(|e| e.to_string())
     }
+}
+
+/// Renomme dans la bibliothèque, comme l'application.
+fn renommer_dans(biblio: &Bibliotheque) -> impl FnOnce(IdMesure, &str) -> Result<(), String> + '_ {
+    move |id, nom| biblio.renommer_mesure(id, nom).map_err(|e| e.to_string())
+}
+
+/// Nom conservé par la bibliothèque pour sa seule mesure (ou la plus récente).
+fn nom_range(biblio: &Bibliotheque) -> Option<String> {
+    biblio.arborescence("").unwrap()[0].mesures[0].nom.clone()
 }
 
 #[test]
@@ -92,6 +102,8 @@ fn une_mesure_rejoint_la_condition_d_impression_choisie_avec_sa_provenance() {
     // La bibliothèque garde la mesure du pont, provenance comprise.
     assert_eq!(&rangee.mesure, seance.mesure(numero).unwrap());
     assert_eq!(rangee.mesure.provenance().instrument.numero_serie, SERIE);
+    // Son nom aussi, celui de la liste de Mesurer.
+    assert_eq!(rangee.nom.as_deref(), Some("Couleur 1"));
 
     let fiches = seance.fiches(Langue::Francais);
     assert_eq!(fiches.len(), 1);
@@ -124,18 +136,56 @@ fn les_mesures_s_empilent_la_plus_recente_en_haut_avec_un_nom_modifiable() {
     };
     assert_eq!(noms(&seance), ["Couleur 2", "Couleur 1"]);
 
-    seance.renommer(1, "  Magenta du logo ").unwrap();
+    seance
+        .renommer(1, "  Magenta du logo ", renommer_dans(&biblio))
+        .unwrap();
     assert_eq!(noms(&seance), ["Couleur 2", "Magenta du logo"]);
+    // Le nouveau nom est conservé par la bibliothèque.
+    let rangees: Vec<_> = biblio.arborescence("").unwrap()[0]
+        .mesures
+        .iter()
+        .map(|m| m.nom.clone().unwrap())
+        .collect();
+    assert!(
+        rangees.contains(&"Magenta du logo".to_string()),
+        "{rangees:?}"
+    );
 
     assert_eq!(
-        seance.renommer(2, "   "),
+        seance.renommer(2, "   ", renommer_dans(&biblio)),
         Err("bibliotheque.erreur.nom_vide")
     );
     assert_eq!(
-        seance.renommer(9, "Absente"),
+        seance.renommer(9, "Absente", renommer_dans(&biblio)),
         Err("bibliotheque.erreur.autre")
     );
     assert_eq!(noms(&seance), ["Couleur 2", "Magenta du logo"]);
+}
+
+/// Si la bibliothèque refuse le nouveau nom, la liste garde l'ancien : les
+/// deux disent toujours la même chose.
+#[test]
+fn un_renommage_refuse_par_la_bibliotheque_ne_change_rien() {
+    let mut instrument = etalonne(PontSimule::avec_instruments(&[SERIE]), "renommage-refuse");
+    let (biblio, condition) = bibliotheque("renommage-refuse-biblio");
+    let mut seance = Seance::default();
+    seance
+        .mesurer(
+            &mut instrument,
+            &mut fait,
+            &condition,
+            ranger(&biblio, &condition),
+            Langue::Francais,
+        )
+        .expect("mesure faite");
+
+    assert_eq!(
+        seance.renommer(1, "Cyan", |_, _| Err("base verrouillée".into())),
+        Err("bibliotheque.erreur.autre")
+    );
+
+    assert_eq!(seance.fiches(Langue::Francais)[0].nom, "Couleur 1");
+    assert_eq!(nom_range(&biblio).as_deref(), Some("Couleur 1"));
 }
 
 /// Une mesure lue n'est jamais perdue : si la bibliothèque ne peut pas la
@@ -151,7 +201,7 @@ fn une_mesure_que_la_bibliotheque_refuse_reste_dans_la_seance() {
             &mut instrument,
             &mut fait,
             &condition,
-            |_| Err("disque plein".to_string()),
+            |_, _| Err("disque plein".to_string()),
             Langue::Francais,
         )
         .expect("mesure faite");
@@ -159,6 +209,13 @@ fn une_mesure_que_la_bibliotheque_refuse_reste_dans_la_seance() {
     assert!(seance.mesure(numero).is_some());
     let fiche = &seance.fiches(Langue::Francais)[0];
     assert_eq!(fiche.erreur_rangement, Some("mesurer.erreur.rangement"));
+    // Une mesure non rangée se renomme dans la séance seule.
+    seance
+        .renommer(numero, "Cyan", |_, _| {
+            panic!("rien à renommer dans la bibliothèque")
+        })
+        .unwrap();
+    assert_eq!(seance.fiches(Langue::Francais)[0].nom, "Cyan");
 }
 
 /// Sans mesure (instrument non étalonné), rien n'entre dans la séance ni

@@ -93,13 +93,20 @@ impl BibliothequeOuverte {
         self.avec(|b| b.conditions())
     }
 
-    /// Range une mesure dans une condition d'impression (tâche Mesurer).
-    pub fn enregistrer_mesure(
+    /// Range une mesure et son nom dans une condition d'impression (tâche
+    /// Mesurer).
+    pub fn enregistrer_mesure_nommee(
         &self,
         condition: IdCondition,
         mesure: &pont_protocole::Mesure,
+        nom: &str,
     ) -> Result<IdMesure, String> {
-        self.avec(|b| b.enregistrer_mesure(condition, mesure))
+        self.avec(|b| b.enregistrer_mesure_nommee(condition, mesure, nom))
+    }
+
+    /// Renomme une mesure rangée (tâche Mesurer).
+    pub fn renommer_mesure(&self, id: IdMesure, nom: &str) -> Result<(), String> {
+        self.avec(|b| b.renommer_mesure(id, nom))
     }
 }
 

@@ -253,6 +253,7 @@
       fiches = (await invoke("renommer_mesure", { numero, nom: champ.value, langue: langue() })).mesures;
       erreur = null;
       dessiner();
+      document.dispatchEvent(new CustomEvent("bibliotheque-modifiee")); // le nom, à gauche
     } catch (cle) {
       champ.classList.add("input--error");
       erreurListe.hidden = false;

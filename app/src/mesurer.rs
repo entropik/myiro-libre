@@ -120,14 +120,15 @@ fn valeurs(spectre: &[f32], langue: Langue) -> Option<Valeurs> {
 
 impl Seance {
     /// Mesure ponctuelle, puis rangement dans la condition d'impression
-    /// choisie par `ranger`. Rend le numéro de la nouvelle mesure, ou `None`
-    /// si rien n'a été mesuré (le module `instrument` dit pourquoi).
+    /// choisie par `ranger`, qui reçoit la mesure et son nom. Rend le numéro
+    /// de la nouvelle mesure, ou `None` si rien n'a été mesuré (le module
+    /// `instrument` dit pourquoi).
     pub fn mesurer<P: Pont>(
         &mut self,
         instrument: &mut Instrument<P>,
         gestes: &mut impl Gestes,
         condition: &ConditionImpression,
-        ranger: impl FnOnce(&Mesure) -> Result<IdMesure, String>,
+        ranger: impl FnOnce(&Mesure, &str) -> Result<IdMesure, String>,
         langue: Langue,
     ) -> Option<usize> {
         let acquise = instrument.mesurer_ponctuelle(gestes)?;
@@ -141,7 +142,7 @@ impl Seance {
             rangee: None,
         });
         let derniere = self.mesures.last_mut().expect("mesure ajoutée");
-        match ranger(&derniere.acquise.mesure) {
+        match ranger(&derniere.acquise.mesure, &derniere.nom) {
             Ok(id) => derniere.rangee = Some(id),
             Err(detail) => eprintln!("rangement de la mesure {numero} : {detail}"),
         }
@@ -154,8 +155,15 @@ impl Seance {
     }
 
     /// Renomme une mesure de la séance ; le nom est débarrassé de ses espaces
-    /// de début et de fin. Les refus sont des clés du catalogue.
-    pub fn renommer(&mut self, numero: usize, nom: &str) -> Result<(), &'static str> {
+    /// de début et de fin. Une mesure rangée est d'abord renommée dans la
+    /// bibliothèque par `renommer_rangee` : si celle-ci refuse, rien ne
+    /// change. Les refus sont des clés du catalogue.
+    pub fn renommer(
+        &mut self,
+        numero: usize,
+        nom: &str,
+        renommer_rangee: impl FnOnce(IdMesure, &str) -> Result<(), String>,
+    ) -> Result<(), &'static str> {
         let nom = nom.trim();
         if nom.is_empty() {
             return Err("bibliotheque.erreur.nom_vide");
@@ -165,6 +173,12 @@ impl Seance {
             .iter_mut()
             .find(|m| m.numero == numero)
             .ok_or("bibliotheque.erreur.autre")?;
+        if let Some(id) = mesure.rangee {
+            renommer_rangee(id, nom).map_err(|detail| {
+                eprintln!("renommage de la mesure {numero} : {detail}");
+                "bibliotheque.erreur.autre"
+            })?;
+        }
         mesure.nom = nom.to_string();
         Ok(())
     }
