@@ -27,6 +27,8 @@ use std::sync::Arc;
 enum Lue {
     /// Une demande, avec son numéro d'ordre.
     Ligne(u64, String),
+    /// Une demande `annuler`, avec son numéro et celui de la demande visée.
+    Annuler { numero: u64, visee: u64 },
     /// Une demande arrivée pendant une mesure active, qu'elle gênerait.
     Refusee,
     /// L'entrée ne se lit plus : comme sa fin.
@@ -82,9 +84,10 @@ pub fn servir<S: SdkMyiro1>(
 /// Fil de lecture : numérote les demandes et transmet chaque ligne. Une
 /// mesure lue rend la mesure active jusqu'à sa réponse ; pendant ce temps, une
 /// demande qui toucherait l'instrument est transmise comme refusée. `annuler`
-/// vise aussitôt la dernière demande acceptée ; la fin de l'entrée (ou une
-/// erreur de lecture) aussi, mais seulement si cette demande attend
-/// l'opérateur (une entrée lue d'un bloc puis fermée n'annule rien qui part).
+/// vise aussitôt la mesure active, ou, sans mesure active, la dernière demande
+/// acceptée ; la fin de l'entrée (ou une erreur de lecture) aussi, mais
+/// seulement si cette demande attend l'opérateur (une entrée lue d'un bloc
+/// puis fermée n'annule rien qui part).
 fn lire(
     entree: impl BufRead,
     envoi: Sender<Lue>,
@@ -93,11 +96,22 @@ fn lire(
 ) {
     let mut numero = 0;
     let mut derniere = 0;
+    // Numéro de la dernière mesure lue : la mesure active, s'il y en a une.
+    let mut mesure = 0;
+    // `version`, `detecter` ou `fermer`, acceptés pendant une mesure, ne
+    // détournent pas l'annulation de la mesure active.
+    let visee = |derniere, mesure| {
+        if mesure_active.load(Ordering::SeqCst) {
+            mesure
+        } else {
+            derniere
+        }
+    };
     for ligne in entree.lines() {
         let texte = match ligne {
             Ok(texte) => texte,
             Err(erreur) => {
-                annulations.viser_si_elle_attend(derniere);
+                annulations.viser_si_elle_attend(visee(derniere, mesure));
                 let _ = envoi.send(Lue::Erreur(erreur));
                 return;
             }
@@ -108,8 +122,12 @@ fn lire(
         numero += 1;
         let lue = match lire_requete(&texte) {
             Ok(Requete::Annuler {}) => {
-                annulations.viser(derniere);
-                Lue::Ligne(numero, texte)
+                let cible = visee(derniere, mesure);
+                annulations.viser(cible);
+                Lue::Annuler {
+                    numero,
+                    visee: cible,
+                }
             }
             Ok(requete)
                 if touche_l_instrument(&requete) && mesure_active.load(Ordering::SeqCst) =>
@@ -118,6 +136,7 @@ fn lire(
             }
             requete => {
                 if requete.as_ref().is_ok_and(est_une_mesure) {
+                    mesure = numero;
                     mesure_active.store(true, Ordering::SeqCst);
                 }
                 derniere = numero;
@@ -128,7 +147,7 @@ fn lire(
             return;
         }
     }
-    annulations.viser_si_elle_attend(derniere);
+    annulations.viser_si_elle_attend(visee(derniere, mesure));
 }
 
 fn repondre<S: SdkMyiro1>(
@@ -138,12 +157,23 @@ fn repondre<S: SdkMyiro1>(
     mesure_active: &AtomicBool,
 ) -> io::Result<()> {
     let annulations = session.annulations();
-    // La dernière demande acceptée (hors annulation) s'est terminée par une
-    // annulation.
-    let mut annulee = false;
+    // Dernière demande terminée par une annulation.
+    let mut annulee: Option<u64> = None;
     for lue in lignes {
         let (numero, ligne) = match lue {
             Lue::Ligne(numero, ligne) => (numero, ligne),
+            Lue::Annuler { numero, visee } => {
+                annulations.commencer(numero);
+                let effet = if annulee == Some(visee) {
+                    annulee = None;
+                    EffetAnnulation::Appliquee
+                } else {
+                    EffetAnnulation::SansEffet
+                };
+                writeln!(sortie, "{}", ecrire_reponse(&Reponse::Annulation { effet }))?;
+                sortie.flush()?;
+                continue;
+            }
             Lue::Refusee => {
                 let refus = Reponse::Erreur {
                     erreur: ErreurPont::EtatIncompatible {},
@@ -156,14 +186,6 @@ fn repondre<S: SdkMyiro1>(
         };
         annulations.commencer(numero);
         let (reponse, fin) = match lire_requete(&ligne) {
-            Ok(Requete::Annuler {}) => {
-                let effet = if std::mem::take(&mut annulee) {
-                    EffetAnnulation::Appliquee
-                } else {
-                    EffetAnnulation::SansEffet
-                };
-                (Reponse::Annulation { effet }, false)
-            }
             Ok(requete) => {
                 let mesure = est_une_mesure(&requete);
                 let (reponse, fin) = traiter(session, requete);
@@ -172,18 +194,17 @@ fn repondre<S: SdkMyiro1>(
                 if mesure {
                     mesure_active.store(false, Ordering::SeqCst);
                 }
-                annulee = matches!(
+                if matches!(
                     reponse,
                     Reponse::Erreur {
                         erreur: ErreurPont::MesureAnnulee { .. }
                     }
-                );
+                ) {
+                    annulee = Some(numero);
+                }
                 (reponse, fin)
             }
-            Err(detail) => {
-                annulee = false;
-                (Reponse::RequeteInvalide { detail }, false)
-            }
+            Err(detail) => (Reponse::RequeteInvalide { detail }, false),
         };
         writeln!(sortie, "{}", ecrire_reponse(&reponse))?;
         sortie.flush()?;

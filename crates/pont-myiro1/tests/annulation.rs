@@ -344,6 +344,64 @@ fn une_mesure_demandee_pendant_une_mesure_active_est_refusee() {
     assert_eq!(nombre_d_armements(&session), 1);
 }
 
+/// Une demande acceptée pendant la mesure (`version`) ne détourne pas
+/// `annuler` : la mesure active reste visée.
+#[test]
+fn annuler_vise_la_mesure_active_meme_apres_une_autre_demande() {
+    let (_, reponses, session, duree) = dialoguer_par_etapes(
+        sdk_qui_attend_le_bouton(),
+        vec![
+            Etape::Ecrire(avec_etalonnage(&[MESURER])),
+            Etape::AttendreArmement,
+            Etape::Ecrire(vec![r#"{"cmd":"version"}"#, ANNULER]),
+            Etape::AttendreReponses(3),
+        ],
+        false,
+    );
+    assert!(matches!(
+        reponses[0],
+        Reponse::Erreur {
+            erreur: ErreurPont::MesureAnnulee { .. }
+        }
+    ));
+    assert!(matches!(reponses[1], Reponse::Version { .. }));
+    assert_eq!(
+        reponses[2],
+        Reponse::Annulation {
+            effet: EffetAnnulation::Appliquee
+        }
+    );
+    assert_eq!(nombre_d_armements(&session), 1);
+    assert!(duree < Duration::from_secs(5), "{duree:?}");
+}
+
+/// « Mesure A, fermer, fin de l'entrée » : la fin de l'entrée vise la mesure
+/// active, pas `fermer` ; A est annulée, puis la fermeture se fait.
+#[test]
+fn la_fin_de_l_entree_vise_la_mesure_active_meme_apres_fermer() {
+    let (_, reponses, session, duree) = dialoguer_par_etapes(
+        sdk_qui_attend_le_bouton(),
+        vec![
+            Etape::Ecrire(avec_etalonnage(&[MESURER])),
+            Etape::AttendreArmement,
+            Etape::Ecrire(vec![r#"{"cmd":"fermer"}"#]),
+        ],
+        false,
+    );
+    assert!(matches!(
+        reponses[0],
+        Reponse::Erreur {
+            erreur: ErreurPont::MesureAnnulee { .. }
+        }
+    ));
+    assert!(matches!(
+        reponses[1],
+        Reponse::Ferme {} | Reponse::FermetureIncertaine { .. }
+    ));
+    assert_eq!(*appels(&session).last().unwrap(), "deconnecter");
+    assert!(duree < Duration::from_secs(5), "{duree:?}");
+}
+
 /// Une erreur de lecture de l'entrée vaut sa fin : la mesure en attente est
 /// annulée, puis la session fermée.
 #[test]

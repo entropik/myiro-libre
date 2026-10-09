@@ -38,9 +38,13 @@ fn dialoguer_brut(
                 let ferme = lignes.last().is_some_and(|l| {
                     l.contains(r#""rep":"ferme""#) || l.contains("fermeture_incertaine")
                 });
-                if lignes.len() > n || ferme || debut.elapsed().as_secs() >= 5 {
+                if lignes.len() > n || ferme {
                     break;
                 }
+                assert!(
+                    debut.elapsed().as_secs() < 5,
+                    "aucune réponse en 5 s à {requete}"
+                );
                 std::thread::sleep(std::time::Duration::from_millis(1));
             }
         }

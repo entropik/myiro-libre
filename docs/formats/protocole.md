@@ -73,7 +73,7 @@ Si la DLL ou l'instrument refuse le déclenchement, le pont désarme et répond 
 
 Le pont lit ses requêtes pendant qu'une mesure attend : `annuler` est vue tout de suite, sans attendre la fin de la mesure. Les appels à la DLL restent faits un par un, et **chaque requête reçoit une seule réponse, dans l'ordre d'arrivée** : d'abord celle de la mesure, puis celle de `annuler`.
 
-- `annuler` vise la dernière requête acceptée qui la précède (hors autre `annuler`), jamais la suivante.
+- `annuler` vise la mesure active ; sans mesure active, la dernière requête acceptée qui la précède (hors autre `annuler`). Jamais la suivante : un `version`, `detecter` ou `fermer` reçu pendant la mesure ne la détourne pas.
 - **Une seule mesure active.** De sa lecture jusqu'à sa réponse, toute requête qui toucherait l'instrument (`connecter`, `etalonner`, `mesurer_ponctuelle`, `mesurer_bande`) est refusée sans appel à la DLL, à son rang dans l'ordre des réponses :
 
   ```json
