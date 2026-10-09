@@ -314,6 +314,12 @@ const FRANCAIS: Catalogue = &[
     ("ecran.etalonnage.schema.instrument", "MYIRO-1"),
     ("ecran.etalonnage.schema.capuchon", "Capuchon"),
     ("ecran.etalonnage.schema.blanc", "Blanc de référence"),
+    // Mesure ponctuelle : feuille Mesurer ({n} est remplacé)
+    ("mesurer.nom_defaut", "Couleur {n}"),
+    (
+        "mesurer.erreur.rangement",
+        "La bibliothèque n’a pas pu ranger cette mesure. Elle reste affichée ici jusqu’à la fermeture de myiro-libre.",
+    ),
     // Mesure ponctuelle : problèmes
     (
         "probleme.mesure_echouee.cause",
@@ -620,6 +626,12 @@ const ANGLAIS: Catalogue = &[
     ("ecran.etalonnage.schema.instrument", "MYIRO-1"),
     ("ecran.etalonnage.schema.capuchon", "Cap"),
     ("ecran.etalonnage.schema.blanc", "Reference white"),
+    // Spot measurement: Measure sheet ({n} is replaced)
+    ("mesurer.nom_defaut", "Colour {n}"),
+    (
+        "mesurer.erreur.rangement",
+        "The library could not store this measurement. It stays shown here until myiro-libre is closed.",
+    ),
     // Spot measurement: problems
     (
         "probleme.mesure_echouee.cause",

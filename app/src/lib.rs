@@ -8,6 +8,7 @@
 pub mod colonne;
 pub mod demonstration;
 pub mod instrument;
+pub mod mesurer;
 pub mod pont;
 pub mod textes;
 
