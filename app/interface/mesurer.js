@@ -69,6 +69,8 @@
     if (occupe) return t("raison.recherche");
     if (!v || !v.modele) return t("raison.instrument");
     if (v.etat === "etalonnage_requis") return t("raison.etalonnage");
+    // FD-9 détecté : son pont s'arrête à la détection, la mesure viendra plus tard.
+    if (v.etat === "detecte") return t("raison.bientot");
     if (!v.mesurable) {
       return v.probleme && v.probleme.code === "repos_incertain" ? t("mesurer.raison.repos") : t("raison.instrument");
     }
