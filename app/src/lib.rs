@@ -21,7 +21,7 @@ use instrument::parefeu::{AutorisationPareFeu, PareFeuWindows};
 use instrument::{emplacements_a_essayer, fd9, Accord, Geste, Gestes};
 use mesurer::{
     choisir_condition, ecrire_declenchement, lire_declenchement, retenir_declenchement,
-    FicheMesure, RefusMesure, Seance,
+    FicheDensites, FicheMesure, RefusMesure, Seance,
 };
 use pont::Panne;
 use pont::{chercher_ponts, chercher_ponts_nommes, PontProcessus};
@@ -496,6 +496,24 @@ fn mesures_seance(seance: State<'_, SeanceMesures>, langue: &str) -> EcranMesure
     }
 }
 
+/// Densités de la mesure n° `numero` de la séance (ticket #31) : statut `E`
+/// ou `T`, absolues, ou relatives à la mesure n° `papier` prise comme blanc
+/// papier. Refus (clé du catalogue) pour une mesure ou un statut inconnus.
+#[tauri::command]
+fn densites_mesure(
+    seance: State<'_, SeanceMesures>,
+    numero: usize,
+    statut: &str,
+    papier: Option<usize>,
+    langue: &str,
+) -> Result<FicheDensites, &'static str> {
+    let statut = mesurer::lire_statut(statut).ok_or("bibliotheque.erreur.autre")?;
+    let seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
+    seance
+        .densites(numero, statut, papier, self::langue(langue))
+        .ok_or("bibliotheque.erreur.autre")
+}
+
 /// Renomme une mesure de la séance, et dans la bibliothèque si elle y est rangée.
 #[tauri::command]
 fn renommer_mesure(
@@ -537,6 +555,7 @@ pub fn lancer() {
             mode_mesure,
             choisir_mode_mesure,
             mesures_seance,
+            densites_mesure,
             renommer_mesure,
             ranger_a_nouveau,
             catalogue,

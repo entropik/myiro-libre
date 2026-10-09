@@ -540,6 +540,50 @@ const FRANCAIS: Catalogue = &[
     ("mesurer.ranger", "Ranger à nouveau"),
     ("mesurer.couleur", "Couleur à l’écran"),
     ("mesurer.approchee", "Couleur approchée à l’écran"),
+    // Panneau Densités (ticket #31)
+    ("densite.titre", "Densités"),
+    ("densite.statut", "Statut"),
+    ("densite.statut.libelle", "Statut de densité"),
+    ("densite.statut.E", "E (Europe)"),
+    ("densite.statut.T", "T (États-Unis)"),
+    ("densite.reference", "Référence"),
+    ("densite.absolue", "Absolue"),
+    ("densite.relative", "Relative au papier"),
+    ("densite.papier", "Blanc papier"),
+    ("densite.papier.choisir", "Choisir la mesure du papier"),
+    ("densite.cyan", "Cyan"),
+    ("densite.magenta", "Magenta"),
+    ("densite.jaune", "Jaune"),
+    ("densite.visuel", "Visuelle"),
+    ("densite.condition", "Condition de mesure"),
+    (
+        "densite.calcul",
+        "Calculées par myiro-libre à partir du spectre M0, avec les tables d’ArgyllCMS\u{202f}: statut E ou T pour le cyan, le magenta et le jaune, densité visuelle ISO.",
+    ),
+    (
+        "densite.limite",
+        "Sans filtre polarisant, une encre encore humide paraît plus dense qu’une fois sèche\u{202f}: mesurez une encre sèche. Ces densités ne se comparent pas telles quelles à celles d’un densitomètre à filtres.",
+    ),
+    (
+        "densite.inconnue.condition",
+        "Densités inconnues\u{202f}: cette mesure n’a pas de spectre M0 confirmé ou supposé.",
+    ),
+    (
+        "densite.inconnue.spectre",
+        "Densités inconnues\u{202f}: les longueurs d’onde du spectre ne sont pas établies.",
+    ),
+    (
+        "densite.inconnue.calcul",
+        "Densités inconnues\u{202f}: la couleur ne renvoie aucune lumière mesurable.",
+    ),
+    (
+        "densite.inconnue.papier",
+        "Densités relatives inconnues\u{202f}: choisissez le blanc papier parmi les mesures de la séance.",
+    ),
+    (
+        "densite.inconnue.papier_condition",
+        "Densités relatives inconnues\u{202f}: le blanc papier n’a pas été mesuré en M0, comme la couleur.",
+    ),
     (
         "mesurer.erreur.sans_instrument.cause",
         "Aucun instrument n’est prêt à mesurer.",
@@ -1114,6 +1158,50 @@ const ANGLAIS: Catalogue = &[
     ("mesurer.ranger", "Store again"),
     ("mesurer.couleur", "Colour on screen"),
     ("mesurer.approchee", "Approximate colour on screen"),
+    // Densities panel (ticket #31)
+    ("densite.titre", "Densities"),
+    ("densite.statut", "Status"),
+    ("densite.statut.libelle", "Density status"),
+    ("densite.statut.E", "E (Europe)"),
+    ("densite.statut.T", "T (United States)"),
+    ("densite.reference", "Reference"),
+    ("densite.absolue", "Absolute"),
+    ("densite.relative", "Relative to paper"),
+    ("densite.papier", "Paper white"),
+    ("densite.papier.choisir", "Choose the paper measurement"),
+    ("densite.cyan", "Cyan"),
+    ("densite.magenta", "Magenta"),
+    ("densite.jaune", "Yellow"),
+    ("densite.visuel", "Visual"),
+    ("densite.condition", "Measurement condition"),
+    (
+        "densite.calcul",
+        "Computed by myiro-libre from the M0 spectrum, with the ArgyllCMS tables: status E or T for cyan, magenta and yellow, ISO visual density.",
+    ),
+    (
+        "densite.limite",
+        "Without a polarising filter, ink that is still wet looks denser than once dry: measure dry ink. These densities cannot be compared as they are with those of a filter densitometer.",
+    ),
+    (
+        "densite.inconnue.condition",
+        "Densities unknown: this measurement has no confirmed or assumed M0 spectrum.",
+    ),
+    (
+        "densite.inconnue.spectre",
+        "Densities unknown: the wavelengths of the spectrum are not established.",
+    ),
+    (
+        "densite.inconnue.calcul",
+        "Densities unknown: the colour reflects no measurable light.",
+    ),
+    (
+        "densite.inconnue.papier",
+        "Relative densities unknown: choose the paper white among this session’s measurements.",
+    ),
+    (
+        "densite.inconnue.papier_condition",
+        "Relative densities unknown: the paper white was not measured in M0, like the colour.",
+    ),
     (
         "mesurer.erreur.sans_instrument.cause",
         "No instrument is ready to measure.",

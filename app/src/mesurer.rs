@@ -7,7 +7,10 @@
 //! séance avant d'être rangée, et y reste si la bibliothèque la refuse.
 
 use bibliotheque::{ConditionImpression, IdMesure};
-use pont_protocole::{ConditionMesure, Declenchement, Echantillonnage, Horodatage, Info, Mesure};
+use colorimetrie::StatutDensite;
+use pont_protocole::{
+    ConditionMesure, Declenchement, Echantillonnage, Horodatage, Info, Mesure, Plage,
+};
 use serde::Serialize;
 
 use crate::instrument::{Gestes, Instrument, MesureAcquise};
@@ -201,6 +204,140 @@ fn valeurs(spectre: &[f32], langue: Langue) -> Option<Valeurs> {
     })
 }
 
+// ---- Densités (ticket #31) ----
+
+/// Clé du catalogue de la limite connue des densités, toujours montrée :
+/// sans filtre polarisant (M3), une encre humide ne se mesure pas comme sèche.
+pub const LIMITE_DENSITE: &str = "densite.limite";
+
+/// Ce que le panneau Densités montre d'une plage.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct FicheDensites {
+    /// « E » ou « T ».
+    pub statut: &'static str,
+    /// Rapportée au blanc papier (sinon absolue, au blanc parfait).
+    pub relative: bool,
+    /// Condition du spectre M0 de la plage, telle que le pont l'a dite ;
+    /// inconnue si la plage n'a pas de spectre M0.
+    pub condition: Info<ConditionMesure>,
+    /// Condition du spectre M0 du papier, en densité relative.
+    pub condition_papier: Option<Info<ConditionMesure>>,
+    /// Nom du blanc papier dans la séance, en densité relative.
+    pub papier_nom: Option<String>,
+    /// Inconnues (avec leur raison) quand elles ne se calculent pas :
+    /// jamais zéro par défaut.
+    pub valeurs: Option<ValeursDensite>,
+    /// Clé du catalogue qui dit pourquoi les densités sont inconnues.
+    pub raison: Option<&'static str>,
+    /// Clé du catalogue de la limite connue.
+    pub limite: &'static str,
+}
+
+/// Densités d'une plage, à deux décimales dans la langue de l'écran.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ValeursDensite {
+    pub cyan: String,
+    pub magenta: String,
+    pub jaune: String,
+    pub visuel: String,
+}
+
+/// Lecture du statut demandé par la page (« E » ou « T »).
+pub fn lire_statut(code: &str) -> Option<StatutDensite> {
+    match code {
+        "E" => Some(StatutDensite::E),
+        "T" => Some(StatutDensite::T),
+        _ => None,
+    }
+}
+
+fn code_statut(statut: StatutDensite) -> &'static str {
+    match statut {
+        StatutDensite::E => "E",
+        StatutDensite::T => "T",
+    }
+}
+
+/// Spectre M0 de la plage n° `plage` et sa condition. `Err` : clé de la
+/// raison pour laquelle il n'y en a pas.
+fn spectre_m0(
+    mesure: &Mesure,
+    plage: usize,
+) -> Result<(Vec<f64>, Info<ConditionMesure>), &'static str> {
+    let (conditions, calculable) = conditions_de(mesure);
+    let rang = conditions
+        .iter()
+        .position(|c| c.valeur() == Some(&ConditionMesure::M0))
+        .ok_or("densite.inconnue.condition")?;
+    let p: &Plage = mesure
+        .plages()
+        .get(plage)
+        .filter(|_| calculable)
+        .ok_or("densite.inconnue.spectre")?;
+    let spectre = [p.m0(), p.m1(), p.m2()][rang];
+    Ok((
+        spectre.iter().map(|&v| f64::from(v)).collect(),
+        conditions[rang].clone(),
+    ))
+}
+
+/// Densités de la plage n° `plage` d'une mesure (ponctuelle : plage 0 ; mire :
+/// une plage de la bande), depuis son spectre M0. `papier` : la mesure et la
+/// plage du blanc papier, pour une densité relative ; son spectre M0 doit
+/// exister aussi, sinon la densité relative est inconnue.
+pub fn densites_plage(
+    mesure: &Mesure,
+    plage: usize,
+    statut: StatutDensite,
+    papier: Option<(&Mesure, usize)>,
+    langue: Langue,
+) -> FicheDensites {
+    let mut fiche = FicheDensites {
+        statut: code_statut(statut),
+        relative: papier.is_some(),
+        condition: Info::Inconnue,
+        condition_papier: None,
+        papier_nom: None,
+        valeurs: None,
+        raison: None,
+        limite: LIMITE_DENSITE,
+    };
+    let (spectre, condition) = match spectre_m0(mesure, plage) {
+        Ok(trouve) => trouve,
+        Err(raison) => {
+            fiche.raison = Some(raison);
+            return fiche;
+        }
+    };
+    fiche.condition = condition;
+    let calcul = match papier {
+        None => colorimetrie::densites(&spectre, statut),
+        Some((mesure_papier, plage_papier)) => match spectre_m0(mesure_papier, plage_papier) {
+            Ok((spectre_papier, condition_papier)) => {
+                fiche.condition_papier = Some(condition_papier);
+                colorimetrie::densites_relatives(&spectre, &spectre_papier, statut)
+            }
+            Err(_) => {
+                fiche.raison = Some("densite.inconnue.papier_condition");
+                return fiche;
+            }
+        },
+    };
+    match calcul {
+        Ok(d) => {
+            let t = |v| decimal(v, langue);
+            fiche.valeurs = Some(ValeursDensite {
+                cyan: t(d.cyan),
+                magenta: t(d.magenta),
+                jaune: t(d.jaune),
+                visuel: t(d.visuel),
+            });
+        }
+        Err(_) => fiche.raison = Some("densite.inconnue.calcul"),
+    }
+    fiche
+}
+
 impl Seance {
     pub fn declenchement(&self) -> Declenchement {
         self.declenchement
@@ -296,6 +433,33 @@ impl Seance {
         restantes
     }
 
+    /// Densités de la mesure n° `numero` (ponctuelle : une plage), absolues,
+    /// ou relatives à la mesure n° `papier` de la séance prise comme blanc
+    /// papier. `None` si la mesure n'est pas dans la séance.
+    pub fn densites(
+        &self,
+        numero: usize,
+        statut: StatutDensite,
+        papier: Option<usize>,
+        langue: Langue,
+    ) -> Option<FicheDensites> {
+        let mesure = &self.trouver(numero)?.acquise.mesure;
+        let Some(numero_papier) = papier else {
+            return Some(densites_plage(mesure, 0, statut, None, langue));
+        };
+        let Some(blanc) = self.trouver(numero_papier) else {
+            let mut fiche = densites_plage(mesure, 0, statut, None, langue);
+            fiche.relative = true;
+            fiche.valeurs = None;
+            // La raison propre à la plage, s'il y en a une, passe d'abord.
+            fiche.raison = fiche.raison.or(Some("densite.inconnue.papier"));
+            return Some(fiche);
+        };
+        let mut fiche = densites_plage(mesure, 0, statut, Some((&blanc.acquise.mesure, 0)), langue);
+        fiche.papier_nom = Some(blanc.nom.clone());
+        Some(fiche)
+    }
+
     fn trouver(&self, numero: usize) -> Option<&MesureDeSeance> {
         self.mesures.iter().find(|m| m.numero == numero)
     }
@@ -316,11 +480,12 @@ fn renseigne(texte: &str) -> Option<String> {
     (!texte.is_empty()).then(|| texte.to_string())
 }
 
-fn fiche(m: &MesureDeSeance, langue: Langue) -> FicheMesure {
-    let p = m.acquise.mesure.provenance();
-    // Ce que le pont a demandé ; une demande supposée rend chaque condition
-    // supposée au mieux. Jamais devinée d'après la place du spectre.
-    let (conditions, echantillonnage) = match &p.calcul.demande {
+/// Conditions de mesure des trois spectres d'une plage, et si leurs longueurs
+/// d'onde sont celles de nos calculs. Ce que le pont a demandé ; une demande
+/// supposée rend chaque condition supposée au mieux. Jamais devinées d'après
+/// la place du spectre.
+fn conditions_de(mesure: &Mesure) -> ([Info<ConditionMesure>; 3], bool) {
+    let (conditions, echantillonnage) = match &mesure.provenance().calcul.demande {
         Info::Confirmee(c) => (c.conditions_spectres.clone(), c.longueurs_onde.valeur()),
         Info::Supposee(c) => (
             c.conditions_spectres.clone().map(|i| match i {
@@ -331,7 +496,12 @@ fn fiche(m: &MesureDeSeance, langue: Langue) -> FicheMesure {
         ),
         Info::Inconnue => ([Info::Inconnue, Info::Inconnue, Info::Inconnue], None),
     };
-    let calculable = echantillonnage == Some(&ECHANTILLONNAGE);
+    (conditions, echantillonnage == Some(&ECHANTILLONNAGE))
+}
+
+fn fiche(m: &MesureDeSeance, langue: Langue) -> FicheMesure {
+    let p = m.acquise.mesure.provenance();
+    let (conditions, calculable) = conditions_de(&m.acquise.mesure);
     // Une mesure ponctuelle a exactement une plage (format `myiro-libre/mesure/1`).
     let plage = &m.acquise.mesure.plages()[0];
     let spectres = [plage.m0(), plage.m1(), plage.m2()]
