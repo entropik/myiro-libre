@@ -8,7 +8,8 @@
 use std::fmt;
 use std::path::Path;
 
-use pont_protocole::{ecrire_mesure, lire_mesure, Geometrie, Mesure};
+use cgats::MesureImportee;
+use pont_protocole::{ecrire_mesure, lire_mesure, Geometrie, Info, Mesure};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, TransactionBehavior, MAIN_DB};
 use serde::Serialize;
 
@@ -16,7 +17,7 @@ use serde::Serialize;
 pub const FICHIER_BASE: &str = "bibliotheque.sqlite";
 
 /// Version de l'organisation de la base ; une base plus récente est refusée.
-const VERSION_BASE: i32 = 2;
+const VERSION_BASE: i32 = 3;
 
 /// Ce qui peut empêcher une opération sur la bibliothèque.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -29,6 +30,8 @@ pub enum ErreurBibliotheque {
     MesureInconnue(IdMesure),
     /// La base a été écrite par une version plus récente de myiro-libre.
     VersionBase(i32),
+    /// Le fichier à importer n'est pas un CGATS lisible ; rien n'est importé.
+    ImportIllisible(String),
     /// Une mesure conservée ne se relit plus (format, contenu).
     MesureIllisible {
         id: IdMesure,
@@ -56,6 +59,9 @@ impl fmt::Display for ErreurBibliotheque {
             ),
             Self::MesureIllisible { id, detail } => {
                 write!(f, "mesure n° {} illisible : {detail}", id.0)
+            }
+            Self::ImportIllisible(detail) => {
+                write!(f, "fichier CGATS illisible, rien n'a été importé : {detail}")
             }
             Self::SauvegardeInvalide(detail) => {
                 write!(f, "sauvegarde inutilisable, rien n'a été restauré : {detail}")
@@ -126,11 +132,37 @@ pub struct ResumeMesure {
     pub plages: usize,
 }
 
-/// Une condition d'impression et ses mesures, les plus récentes d'abord.
+/// Une mesure importée d'un fichier CGATS, telle que la bibliothèque la
+/// conserve : le texte du fichier, relu à chaque fois. Ce n'est pas une
+/// mesure attestée par un pont (GLOSSARY : Mesure importée).
+#[derive(Clone, Debug, PartialEq)]
+pub struct MesureImporteeEnregistree {
+    pub id: IdMesure,
+    pub condition: IdCondition,
+    /// Nom du fichier d'origine, sans son dossier.
+    pub fichier: String,
+    pub mesure: MesureImportee,
+}
+
+/// Ce que la colonne de gauche montre d'une mesure importée.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ResumeImportee {
+    pub id: IdMesure,
+    /// Nom du fichier d'origine, sans son dossier.
+    pub fichier: String,
+    /// Date et instrument tels que le fichier les déclare.
+    pub date: Info<String>,
+    pub instrument: Info<String>,
+    pub plages: usize,
+}
+
+/// Une condition d'impression et ses mesures, les plus récentes d'abord ;
+/// les mesures importées à part, les dernières importées d'abord.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Branche {
     pub condition: ConditionImpression,
     pub mesures: Vec<ResumeMesure>,
+    pub importees: Vec<ResumeImportee>,
 }
 
 /// La bibliothèque ouverte : une base dans un dossier du poste.
@@ -369,37 +401,132 @@ impl Bibliotheque {
         // différents ne se comparent pas sur le texte de la date.
         mesures.sort_by_key(|(_, m)| std::cmp::Reverse((instant(&m.horodatage), m.id)));
 
+        let importees = self.resumes_importees()?;
+
         let mut branches = Vec::new();
         for condition in self.conditions()? {
-            let siennes = mesures
+            let tout = trouve(&condition.nom);
+            let retenues: Vec<ResumeMesure> = mesures
                 .iter()
                 .filter(|(c, _)| *c == condition.id)
-                .map(|(_, m)| m);
-            let retenues: Vec<ResumeMesure> = if trouve(&condition.nom) {
-                siennes.cloned().collect()
-            } else {
-                siennes
-                    .filter(|m| {
-                        trouve(&format!(
-                            "{} {} {} {} {}",
-                            condition.nom,
-                            m.nom.as_deref().unwrap_or_default(),
-                            m.instrument.modele,
-                            m.instrument.numero_serie,
-                            m.horodatage
-                        ))
-                    })
-                    .cloned()
-                    .collect()
-            };
-            if mots.is_empty() || trouve(&condition.nom) || !retenues.is_empty() {
+                .map(|(_, m)| m)
+                .filter(|m| {
+                    tout || trouve(&format!(
+                        "{} {} {} {} {}",
+                        condition.nom,
+                        m.nom.as_deref().unwrap_or_default(),
+                        m.instrument.modele,
+                        m.instrument.numero_serie,
+                        m.horodatage
+                    ))
+                })
+                .cloned()
+                .collect();
+            let declare = |info: &Info<String>| info.valeur().cloned().unwrap_or_default();
+            let importees_retenues: Vec<ResumeImportee> = importees
+                .iter()
+                .filter(|(c, _)| *c == condition.id)
+                .map(|(_, m)| m)
+                .filter(|m| {
+                    tout || trouve(&format!(
+                        "{} {} {} {}",
+                        condition.nom,
+                        m.fichier,
+                        declare(&m.instrument),
+                        declare(&m.date)
+                    ))
+                })
+                .cloned()
+                .collect();
+            if mots.is_empty() || tout || !retenues.is_empty() || !importees_retenues.is_empty() {
                 branches.push(Branche {
                     condition,
                     mesures: retenues,
+                    importees: importees_retenues,
                 });
             }
         }
         Ok(branches)
+    }
+
+    /// Mesures importées, les dernières importées d'abord, avec leur condition.
+    fn resumes_importees(&self) -> Resultat<Vec<(IdCondition, ResumeImportee)>> {
+        let mut requete = self.base.prepare(
+            "SELECT id, condition, fichier, contenu FROM mesures
+             WHERE origine = 'importee' ORDER BY id DESC",
+        )?;
+        let lignes = requete.query_map([], |l| {
+            Ok((
+                IdMesure(l.get(0)?),
+                IdCondition(l.get(1)?),
+                l.get::<_, String>(2)?,
+                l.get::<_, String>(3)?,
+            ))
+        })?;
+        let mut resumes = Vec::new();
+        for ligne in lignes {
+            let (id, condition, fichier, contenu) = ligne?;
+            let mesure = lire_importee(id, &contenu)?;
+            resumes.push((
+                condition,
+                ResumeImportee {
+                    id,
+                    fichier,
+                    date: mesure.date,
+                    instrument: mesure.instrument,
+                    plages: mesure.plages.len(),
+                },
+            ));
+        }
+        Ok(resumes)
+    }
+
+    /// Range dans une condition d'impression la mesure lue dans un fichier
+    /// CGATS. Le texte du fichier est conservé tel quel, et relu à chaque
+    /// fois : ce qu'il ne dit pas reste inconnu. Seul le nom du fichier est
+    /// gardé, pas son dossier. Un fichier illisible n'importe rien.
+    pub fn importer_mesure(
+        &self,
+        condition: IdCondition,
+        fichier: &str,
+        texte: &str,
+    ) -> Resultat<IdMesure> {
+        self.verifier_condition(condition)?;
+        let mesure =
+            cgats::lire(texte).map_err(|e| ErreurBibliotheque::ImportIllisible(e.to_string()))?;
+        let nom = fichier.rsplit(['/', '\\']).next().unwrap_or(fichier);
+        self.base.execute(
+            "INSERT INTO mesures (condition, origine, plages, fichier, contenu)
+             VALUES (?1, 'importee', ?2, ?3, ?4)",
+            params![condition.0, mesure.plages.len(), nom, texte],
+        )?;
+        Ok(IdMesure(self.base.last_insert_rowid()))
+    }
+
+    /// Relit une mesure importée.
+    pub fn mesure_importee(&self, id: IdMesure) -> Resultat<MesureImporteeEnregistree> {
+        let ligne = self
+            .base
+            .query_row(
+                "SELECT condition, fichier, contenu FROM mesures
+                 WHERE id = ?1 AND origine = 'importee'",
+                params![id.0],
+                |l| {
+                    Ok((
+                        IdCondition(l.get(0)?),
+                        l.get::<_, String>(1)?,
+                        l.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let (condition, fichier, contenu) = ligne.ok_or(ErreurBibliotheque::MesureInconnue(id))?;
+        Ok(MesureImporteeEnregistree {
+            id,
+            condition,
+            fichier,
+            mesure: lire_importee(id, &contenu)?,
+        })
     }
 
     /// Instruments qui ont produit au moins une mesure de la bibliothèque.
@@ -502,17 +629,38 @@ fn examiner_sauvegarde(fichier: &Path) -> Result<(), String> {
     if liens_rompus {
         return Err("mesures rattachées à une condition ou un instrument absent".into());
     }
+    // Avant l'organisation 3, toutes les mesures venaient d'un pont.
+    let origine = if version >= 3 { "origine" } else { "'pont'" };
     let mut requete = base
-        .prepare("SELECT id, contenu FROM mesures")
+        .prepare(&format!("SELECT id, {origine}, contenu FROM mesures"))
         .map_err(|e| e.to_string())?;
     let mesures = requete
-        .query_map([], |l| Ok((l.get::<_, i64>(0)?, l.get::<_, String>(1)?)))
+        .query_map([], |l| {
+            Ok((
+                l.get::<_, i64>(0)?,
+                l.get::<_, String>(1)?,
+                l.get::<_, String>(2)?,
+            ))
+        })
         .map_err(|e| e.to_string())?;
     for mesure in mesures {
-        let (id, contenu) = mesure.map_err(|e| e.to_string())?;
-        lire_mesure(&contenu).map_err(|e| format!("mesure n° {id} illisible : {e}"))?;
+        let (id, origine, contenu) = mesure.map_err(|e| e.to_string())?;
+        let lue = if origine == "importee" {
+            cgats::lire(&contenu).map(|_| ()).map_err(|e| e.to_string())
+        } else {
+            lire_mesure(&contenu).map(|_| ()).map_err(|e| e.to_string())
+        };
+        lue.map_err(|e| format!("mesure n° {id} illisible : {e}"))?;
     }
     Ok(())
+}
+
+/// Relit le texte CGATS conservé d'une mesure importée.
+fn lire_importee(id: IdMesure, contenu: &str) -> Resultat<MesureImportee> {
+    cgats::lire(contenu).map_err(|e| ErreurBibliotheque::MesureIllisible {
+        id,
+        detail: e.to_string(),
+    })
 }
 
 /// Instant UTC d'un horodatage RFC 3339 déjà vérifié par `pont-protocole` :
@@ -596,6 +744,7 @@ fn migrer(base: &mut Connection) -> Resultat<()> {
         match version {
             0 => transaction.execute_batch(ORGANISATION_1)?,
             1 => transaction.execute_batch(ORGANISATION_2)?,
+            2 => transaction.execute_batch(ORGANISATION_3)?,
             autre => unreachable!("aucune migration depuis l'organisation {autre}"),
         }
         version += 1;
@@ -643,4 +792,34 @@ CREATE TABLE IF NOT EXISTS mesures (
     contenu TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS mesures_par_condition ON mesures (condition);
+";
+
+/// Organisation 3 : les mesures importées (ticket #9), par-dessus
+/// l'organisation 2. La table des mesures est refaite pour accueillir une
+/// mesure sans instrument attesté, sans date ni géométrie connues, avec son
+/// origine et le nom de son fichier. Toutes les mesures existantes sont
+/// recopiées telles quelles, comme mesures d'un pont, avec leur numéro et
+/// leur nom ; rien n'est effacé avant d'être recopié, et le tout se fait
+/// dans la transaction de [`migrer`].
+const ORGANISATION_3: &str = "
+CREATE TABLE mesures_3 (
+    id INTEGER PRIMARY KEY,
+    condition INTEGER NOT NULL REFERENCES conditions (id),
+    origine TEXT NOT NULL DEFAULT 'pont' CHECK (origine IN ('pont', 'importee')),
+    instrument INTEGER REFERENCES instruments (id),
+    horodatage TEXT,
+    geometrie TEXT,
+    plages INTEGER NOT NULL,
+    fichier TEXT,
+    contenu TEXT NOT NULL,
+    nom TEXT,
+    CHECK (origine = 'importee' OR (instrument IS NOT NULL AND horodatage IS NOT NULL
+                                    AND geometrie IS NOT NULL)),
+    CHECK (origine = 'pont' OR fichier IS NOT NULL)
+);
+INSERT INTO mesures_3 (id, condition, origine, instrument, horodatage, geometrie, plages, contenu, nom)
+    SELECT id, condition, 'pont', instrument, horodatage, geometrie, plages, contenu, nom FROM mesures;
+DROP TABLE mesures;
+ALTER TABLE mesures_3 RENAME TO mesures;
+CREATE INDEX mesures_par_condition ON mesures (condition);
 ";

@@ -650,7 +650,231 @@ fn une_bibliotheque_d_avant_les_noms_se_relit_sans_perte() {
         .unwrap()
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
+}
+
+/// Base d'organisation 1 avec une condition et une bande.
+fn base_organisation_1(chemin: &std::path::Path) -> Mesure {
+    let mesure = bande("2026-10-07T15:04:05+02:00");
+    let base = rusqlite::Connection::open(chemin).unwrap();
+    base.execute_batch(ORGANISATION_1).unwrap();
+    base.execute_batch(
+        "INSERT INTO conditions (id, nom) VALUES (7, 'Offset');
+         INSERT INTO instruments (id, modele, numero_serie) VALUES (3, 'MYIRO-1', 12345678);",
+    )
+    .unwrap();
+    base.execute(
+        "INSERT INTO mesures VALUES (5, 7, 3, '2026-10-07T15:04:05+02:00', ?1, 3, ?2)",
+        rusqlite::params![
+            serde_json::to_string(&Geometrie::Bande { sens: 2 }).unwrap(),
+            pont_protocole::ecrire_mesure(&mesure)
+        ],
+    )
+    .unwrap();
+    mesure
+}
+
+#[test]
+fn une_bibliotheque_d_organisation_1_se_relit_sans_perte_apres_mise_a_niveau() {
+    let dossier = tempfile::tempdir().unwrap();
+    let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
+    let mesure = base_organisation_1(&chemin);
+
+    let biblio = Bibliotheque::ouvrir(dossier.path()).unwrap();
+    let relue = biblio.mesure(IdMesure(5)).unwrap();
+    assert_eq!(relue.mesure, mesure);
+    assert_eq!(relue.condition, IdCondition(7));
+    assert_eq!(
+        noms(biblio.arborescence("").unwrap()),
+        vec![(
+            "Offset".to_string(),
+            vec!["2026-10-07T15:04:05+02:00".to_string()]
+        )]
+    );
+    // La base mise à niveau accepte les mesures importées.
+    biblio
+        .importer_mesure(IdCondition(7), "lab.txt", &cgats_lab_seul())
+        .unwrap();
+    drop(biblio);
+    let version: i32 = rusqlite::Connection::open(&chemin)
+        .unwrap()
+        .pragma_query_value(None, "user_version", |l| l.get(0))
+        .unwrap();
+    assert_eq!(version, 3);
+}
+
+/// Fichier CGATS fictif d'un autre logiciel : Lab seuls, en M1 par la
+/// source lumineuse, pas de date.
+fn cgats_lab_seul() -> String {
+    "CGATS.17\nINSTRUMENTATION\t\"FD-9\"\nSERIAL\t\"12345678\"\nCREATED\t\"\"\n\
+     MEASUREMENT_SOURCE\t\"D50\"\nNUMBER_OF_FIELDS\t4\nBEGIN_DATA_FORMAT\n\
+     SAMPLE_ID\tLAB_L\tLAB_A\tLAB_B\nEND_DATA_FORMAT\nNUMBER_OF_SETS\t2\nBEGIN_DATA\n\
+     1\t50.0\t1.0\t-2.0\n2\t80.5\t-3.0\t4.0\nEND_DATA\n"
+        .to_string()
+}
+
+#[test]
+fn une_mesure_importee_est_rangee_dans_sa_condition_et_marquee_importee() {
+    let (_dossier, biblio) = bibliotheque_garnie();
+    let offset = biblio.conditions().unwrap()[1].clone();
+    let id = biblio
+        .importer_mesure(offset.id, r"C:\Exports\client\lab.txt", &cgats_lab_seul())
+        .unwrap();
+
+    let relue = biblio.mesure_importee(id).unwrap();
+    assert_eq!(relue.condition, offset.id);
+    // Le nom du fichier, jamais son chemin.
+    assert_eq!(relue.fichier, "lab.txt");
+    assert_eq!(relue.mesure, cgats::lire(&cgats_lab_seul()).unwrap());
+    assert_eq!(relue.mesure.plages[0].spectres[1], Info::Inconnue);
+
+    let branche = biblio
+        .arborescence("")
+        .unwrap()
+        .into_iter()
+        .find(|b| b.condition.id == offset.id)
+        .unwrap();
+    // Les mesures du pont restent à part : une importée ne s'y mêle pas.
+    assert_eq!(branche.mesures.len(), 1);
+    assert_eq!(branche.importees.len(), 1);
+    let resume = &branche.importees[0];
+    assert_eq!(resume.id, id);
+    assert_eq!(resume.fichier, "lab.txt");
+    assert_eq!(resume.plages, 2);
+    assert_eq!(resume.instrument, Info::Confirmee("FD-9".into()));
+    assert_eq!(resume.date, Info::Inconnue);
+    // Une importée n'est pas une mesure attestée, ni un instrument connu.
+    assert_eq!(
+        biblio.mesure(id).unwrap_err(),
+        ErreurBibliotheque::MesureInconnue(id)
+    );
+    assert_eq!(biblio.instruments().unwrap().len(), 2);
+
+    // La recherche la trouve par son fichier ou son instrument déclaré.
+    let trouvees = |mot: &str| -> usize {
+        biblio
+            .arborescence(mot)
+            .unwrap()
+            .iter()
+            .map(|b| b.importees.len())
+            .sum()
+    };
+    assert_eq!(trouvees("lab.txt"), 1);
+    assert_eq!(trouvees("fd-9"), 1);
+    assert_eq!(trouvees("introuvable"), 0);
+}
+
+#[test]
+fn un_fichier_illisible_ou_une_condition_absente_n_importe_rien() {
+    let (_dossier, biblio) = bibliotheque_garnie();
+    let jet = biblio.conditions().unwrap()[0].id;
+    assert!(matches!(
+        biblio.importer_mesure(jet, "x.txt", "rien de CGATS"),
+        Err(ErreurBibliotheque::ImportIllisible(_))
+    ));
+    assert_eq!(
+        biblio.importer_mesure(IdCondition(99), "x.txt", &cgats_lab_seul()),
+        Err(ErreurBibliotheque::ConditionInconnue(IdCondition(99)))
+    );
+    assert!(biblio
+        .arborescence("")
+        .unwrap()
+        .iter()
+        .all(|b| b.importees.is_empty()));
+}
+
+#[test]
+fn une_sauvegarde_garde_les_mesures_importees_et_une_ancienne_se_restaure() {
+    let (dossier, biblio) = bibliotheque_garnie();
+    let jet = biblio.conditions().unwrap()[0].id;
+    let id = biblio
+        .importer_mesure(jet, "lab.txt", &cgats_lab_seul())
+        .unwrap();
+    let fichier = dossier.path().join("sauvegarde.sqlite");
+    biblio.sauvegarder(&fichier).unwrap();
+
+    let (_ailleurs, mut autre) = bibliotheque_vide();
+    autre.restaurer(&fichier).unwrap();
+    assert_eq!(
+        autre.mesure_importee(id).unwrap(),
+        biblio.mesure_importee(id).unwrap()
+    );
+
+    // Une sauvegarde d'organisation 1 se restaure et se met à niveau.
+    let ancienne = dossier.path().join("ancienne.sqlite");
+    let mesure = base_organisation_1(&ancienne);
+    autre.restaurer(&ancienne).unwrap();
+    assert_eq!(autre.mesure(IdMesure(5)).unwrap().mesure, mesure);
+    autre
+        .importer_mesure(IdCondition(7), "lab.txt", &cgats_lab_seul())
+        .unwrap();
+}
+
+/// Organisation 2 (ticket #7), telle qu'elle a mis à niveau les
+/// bibliothèques réelles : figée ici, même si le code évolue.
+const ORGANISATION_2: &str = "ALTER TABLE mesures ADD COLUMN nom TEXT; PRAGMA user_version = 2;";
+
+/// Base d'organisation 2 : la bande de l'organisation 1, nommée, et une
+/// ponctuelle sans nom.
+fn base_organisation_2(chemin: &std::path::Path) -> (Mesure, Mesure) {
+    let bande = base_organisation_1(chemin);
+    let ponctuelle = ponctuelle(12345678, "2026-10-08T10:00:00+02:00");
+    let base = rusqlite::Connection::open(chemin).unwrap();
+    base.execute_batch(ORGANISATION_2).unwrap();
+    base.execute("UPDATE mesures SET nom = 'Bande du matin' WHERE id = 5", [])
+        .unwrap();
+    base.execute(
+        "INSERT INTO mesures (id, condition, instrument, horodatage, geometrie, plages, contenu)
+         VALUES (6, 7, 3, '2026-10-08T10:00:00+02:00', '{\"lecture\":\"ponctuelle\"}', 1, ?1)",
+        [pont_protocole::ecrire_mesure(&ponctuelle)],
+    )
+    .unwrap();
+    (bande, ponctuelle)
+}
+
+/// Les noms et les mesures d'une bibliothèque d'organisation 2 sont relus.
+fn verifier_organisation_2(biblio: &Bibliotheque, bande: &Mesure, ponctuelle: &Mesure) {
+    let relue = biblio.mesure(IdMesure(5)).unwrap();
+    assert_eq!(relue.mesure, *bande);
+    assert_eq!(relue.nom.as_deref(), Some("Bande du matin"));
+    let relue = biblio.mesure(IdMesure(6)).unwrap();
+    assert_eq!(relue.mesure, *ponctuelle);
+    assert_eq!(relue.nom, None);
+    assert_eq!(biblio.arborescence("matin").unwrap()[0].mesures.len(), 1);
+    // Mesure nommée et mesure importée vivent ensemble.
+    biblio
+        .importer_mesure(IdCondition(7), "lab.txt", &cgats_lab_seul())
+        .unwrap();
+    biblio.renommer_mesure(IdMesure(6), "Couleur 1").unwrap();
+    let branche = &biblio.arborescence("").unwrap()[0];
+    assert_eq!(branche.mesures.len(), 2);
+    assert_eq!(branche.importees.len(), 1);
+}
+
+#[test]
+fn une_bibliotheque_d_organisation_2_garde_ses_noms_apres_mise_a_niveau() {
+    let dossier = tempfile::tempdir().unwrap();
+    let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
+    let (bande, ponctuelle) = base_organisation_2(&chemin);
+
+    let biblio = Bibliotheque::ouvrir(dossier.path()).unwrap();
+    verifier_organisation_2(&biblio, &bande, &ponctuelle);
+    drop(biblio);
+    let version: i32 = rusqlite::Connection::open(&chemin)
+        .unwrap()
+        .pragma_query_value(None, "user_version", |l| l.get(0))
+        .unwrap();
+    assert_eq!(version, 3);
+}
+
+#[test]
+fn une_sauvegarde_d_organisation_2_se_restaure_puis_se_met_a_niveau() {
+    let (dossier, mut biblio) = bibliotheque_garnie();
+    let ancienne = dossier.path().join("organisation-2.sqlite");
+    let (bande, ponctuelle) = base_organisation_2(&ancienne);
+
+    biblio.restaurer(&ancienne).unwrap();
+    verifier_organisation_2(&biblio, &bande, &ponctuelle);
 }
 
 /// Tout ce que la bibliothèque montre : arborescence, instruments, mesures.
