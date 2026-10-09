@@ -15,7 +15,9 @@
 //! - `annulable` : comme `normal`, mais la mesure attend `annuler`, puis
 //!   répond `mesure_annulee` et `annulation appliquee` (ticket #26) ;
 //! - `resultat_tardif` : la mesure attend `annuler`, puis rend son résultat
-//!   (un délai) et `annulation sans_effet`.
+//!   (un délai) et `annulation sans_effet` ;
+//! - `annulation_illisible` : la mesure attend `annuler`, puis répond par une
+//!   ligne hors protocole, suivie d'une réponse correcte à `annuler`.
 
 use std::io::{BufRead, Write};
 use std::process::ExitCode;
@@ -62,6 +64,15 @@ fn main() -> ExitCode {
         let reponse = match scenario.as_str() {
             // La mesure attend la demande suivante : `annuler` l'interrompt.
             // Réponse de la mesure, puis celle de `annuler`, dans l'ordre.
+            // Réponse illisible à la mesure, puis réponse correcte à `annuler`.
+            "annulation_illisible" if matches!(requete, Ok(Requete::MesurerPonctuelle { .. })) => {
+                let suivante = lignes.next().and_then(Result::ok).unwrap_or_default();
+                assert_eq!(lire_requete(&suivante), Ok(Requete::Annuler {}));
+                writeln!(sortie, "pas du JSON").unwrap();
+                Reponse::Annulation {
+                    effet: EffetAnnulation::Appliquee,
+                }
+            }
             "annulable" | "resultat_tardif"
                 if matches!(requete, Ok(Requete::MesurerPonctuelle { .. })) =>
             {

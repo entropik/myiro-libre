@@ -73,7 +73,14 @@ Si la DLL ou l'instrument refuse le déclenchement, le pont désarme et répond 
 
 Le pont lit ses requêtes pendant qu'une mesure attend : `annuler` est vue tout de suite, sans attendre la fin de la mesure. Les appels à la DLL restent faits un par un, et **chaque requête reçoit une seule réponse, dans l'ordre d'arrivée** : d'abord celle de la mesure, puis celle de `annuler`.
 
-- `annuler` vise la dernière requête qui la précède (hors autre `annuler`), jamais la suivante.
+- `annuler` vise la dernière requête acceptée qui la précède (hors autre `annuler`), jamais la suivante.
+- **Une seule mesure active.** De sa lecture jusqu'à sa réponse, toute requête qui toucherait l'instrument (`connecter`, `etalonner`, `mesurer_ponctuelle`, `mesurer_bande`) est refusée sans appel à la DLL, à son rang dans l'ordre des réponses :
+
+  ```json
+  {"rep": "erreur", "erreur": {"type": "etat_incompatible"}}
+  ```
+
+  Les autres (`version`, `detecter`, `fermer`) attendent leur tour. L'application n'envoie une requête qu'après la réponse de la précédente ; ce refus protège d'un dialogue décalé.
 - Elle n'a d'effet que tant que la mesure attend l'appui sur le bouton (ou, en automatique, l'attente de mesure avant le déclenchement). Le pont désarme alors par la politique habituelle et la mesure répond :
 
   ```json
@@ -81,10 +88,10 @@ Le pont lit ses requêtes pendant qu'une mesure attend : `annuler` est vue tout 
   ```
 
   Rien n'a été lu. Un repos non prouvé bloque la mesure suivante (`repos_incertain`), comme après toute mesure.
-- Une mesure déjà partie (événement 2) ou terminée va à son terme : sa réponse est la mesure, avec sa provenance. Aucun abandon n'est annoncé sans être fait.
+- Une mesure déjà partie (événement 2) ou terminée va à son terme : sa réponse est la mesure, avec sa provenance. Aucun abandon n'est annoncé sans être fait. En automatique, les 2 s d'attente après un déclenchement refusé (-9986) ne s'annulent pas non plus.
 - Puis `annuler` reçoit `{"rep": "annulation", "effet": "appliquee"}` si la mesure a été interrompue, `{"rep": "annulation", "effet": "sans_effet"}` sinon (rien à interrompre).
 
-La fin de l'entrée (application fermée ou perdue) interrompt de même une mesure qui attend l'opérateur, puis le pont se ferme. Le pont FD-9, qui ne mesure pas, répond toujours `sans_effet`.
+La fin de l'entrée (application fermée ou perdue), ou une erreur de lecture de l'entrée, interrompt de même une mesure qui attend l'opérateur, puis le pont se ferme. Le pont FD-9, qui ne mesure pas, répond toujours `sans_effet`.
 
 Côté application, après l'envoi de `annuler`, chaque réponse est attendue au plus le délai ordinaire (30 s) ; au-delà, le pont est arrêté de force et l'instrument est dit dans un état incertain.
 

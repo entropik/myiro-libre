@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use fdx_sys::{ConditionCalcul, Port, Version, TAILLE_TAMPON_INFOS};
-use pont_myiro1::{Annulation, Evenement, Lecture, SdkMyiro1};
+use pont_myiro1::{Annulations, Evenement, Lecture, SdkMyiro1};
 use std::collections::VecDeque;
 use std::time::Duration;
 
@@ -49,7 +49,7 @@ pub struct SdkSimule {
     pub appels: Vec<String>,
     /// L'opérateur annule (ticket #26) la première fois que le pont attend un
     /// événement, instrument armé, alors qu'aucun n'est en file.
-    pub annuler_pendant_attente: Option<Annulation>,
+    pub annuler_pendant_attente: Option<Annulations>,
     /// Événements émis juste après cette annulation (mesure qui se termine
     /// quand même, par exemple).
     pub evenements_apres_annulation: Vec<Evenement>,
@@ -58,6 +58,8 @@ pub struct SdkSimule {
     /// Instrument armé et sans événement en file : l'attente dure vraiment
     /// son délai, comme la DLL (pour les essais de la boucle du pont).
     pub attente_reelle: bool,
+    /// Prévenu à chaque armement réussi (essais de la boucle du pont).
+    pub signal_armement: Option<std::sync::mpsc::Sender<()>>,
 }
 
 /// Motif répété 32 fois : l'empreinte SHA-256 fictive de la DLL simulée.
@@ -139,6 +141,9 @@ impl SdkMyiro1 for SdkSimule {
         self.arme = true;
         if let Some(salve) = self.salves.pop_front() {
             self.evenements.extend(salve);
+        }
+        if let Some(signal) = &self.signal_armement {
+            let _ = signal.send(());
         }
         Ok(0)
     }

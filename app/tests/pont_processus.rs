@@ -159,7 +159,7 @@ fn un_etalonnage_qui_depasse_le_delai_double_arrete_le_pont() {
 /// ponctuelle six fois le délai d'une autre demande (3 min).
 #[test]
 fn la_mesure_ponctuelle_a_six_fois_le_delai_d_une_autre_demande() {
-    assert_eq!(app::pont::DELAI_REPONSE * 6, Duration::from_secs(180));
+    assert_eq!(app::instrument::DELAI_REPONSE * 6, Duration::from_secs(180));
     let mut pont = lancer("mesure_lente").avec_delai(Duration::from_millis(200));
 
     assert!(matches!(
@@ -275,6 +275,23 @@ fn un_resultat_tardif_reste_celui_de_sa_mesure() {
         pont.demander(&Requete::Version {}),
         Ok(Reponse::Version { parties: [1, 0, 1] })
     );
+}
+
+/// Réponse illisible à la mesure après l'envoi de `annuler` : le pont est
+/// arrêté, sa réponse à `annuler` ne peut pas devenir celle d'une autre
+/// demande.
+#[test]
+fn une_reponse_illisible_apres_l_annulation_arrete_le_pont() {
+    let mut pont = lancer("annulation_illisible").avec_delai(Duration::from_millis(300));
+
+    let echange = pont.demander_annulable(&MESURER, &annuler_apres(Duration::from_millis(50)));
+
+    assert!(matches!(
+        echange.reponse,
+        Err(Panne::ReponseIllisible { .. })
+    ));
+    assert!(matches!(echange.annulation, Some(Err(_))));
+    assert!(pont.demander(&Requete::Version {}).is_err());
 }
 
 /// Sans annulation, la demande annulable se comporte comme une autre.

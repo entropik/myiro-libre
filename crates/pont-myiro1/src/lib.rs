@@ -73,7 +73,7 @@ pub const PAS_ANNULATION: Duration = Duration::from_millis(100);
 /// précises, par leur numéro d'ordre : elle ne touche que celles-là, jamais
 /// la suivante. Une session utilisée seule n'a qu'une demande, la n° 0.
 #[derive(Clone, Debug, Default)]
-pub struct Annulation(Arc<Visees>);
+pub struct Annulations(Arc<Visees>);
 
 #[derive(Debug, Default)]
 struct Visees {
@@ -90,7 +90,7 @@ struct Cibles {
     fin_entree: Option<u64>,
 }
 
-impl Annulation {
+impl Annulations {
     fn cibles(&self) -> std::sync::MutexGuard<'_, Cibles> {
         self.0.visees.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -366,8 +366,8 @@ pub struct Session<S: SdkMyiro1> {
     /// Résultat du désarmement de fermeture, posé dès la demande de fermeture :
     /// à partir de là, plus rien n'est transmis à la DLL hors déconnexion.
     fermeture: Option<RemiseAuRepos>,
-    /// Annulation d'une mesure en attente, demandée d'un autre fil (#26).
-    annulation: Annulation,
+    /// Annulations de mesures en attente, demandées d'un autre fil (#26).
+    annulations: Annulations,
 }
 
 /// Ce que vaut un refus -9986 sans événement, selon ce qui s'est passé depuis
@@ -409,14 +409,14 @@ impl<S: SdkMyiro1> Session<S> {
             repos: Repos::Suppose,
             dll_connectee: false,
             fermeture: None,
-            annulation: Annulation::default(),
+            annulations: Annulations::default(),
         }
     }
 
     /// Poignée d'annulation, à garder par qui lit les demandes pendant que
     /// la session attend l'instrument.
-    pub fn annulation(&self) -> Annulation {
-        self.annulation.clone()
+    pub fn annulations(&self) -> Annulations {
+        self.annulations.clone()
     }
 
     pub fn sdk(&self) -> &S {
@@ -570,7 +570,7 @@ impl<S: SdkMyiro1> Session<S> {
         declenchement: Declenchement,
     ) -> Result<MesurePonctuelle, ErreurPont> {
         let resultat = self.ponctuelle(declenchement);
-        self.annulation.terminer();
+        self.annulations.terminer();
         resultat
     }
 
@@ -612,7 +612,7 @@ impl<S: SdkMyiro1> Session<S> {
         plages_attendues: Option<u32>,
     ) -> Result<MesureBande, ErreurPont> {
         let resultat = self.bande(plages_attendues);
-        self.annulation.terminer();
+        self.annulations.terminer();
         resultat
     }
 
@@ -784,7 +784,7 @@ impl<S: SdkMyiro1> Session<S> {
                 remise_au_repos: avant,
             });
         }
-        if self.annulation.demandee() {
+        if self.annulations.demandee() {
             self.journal.push("annulation reçue avant armement".into());
             return Err(ErreurPont::MesureAnnulee {
                 remise_au_repos: avant,
@@ -989,7 +989,7 @@ impl<S: SdkMyiro1> Session<S> {
                 break;
             }
         }
-        if self.annulation.demandee() {
+        if self.annulations.demandee() {
             self.journal
                 .push("annulation reçue avant le déclenchement".into());
             return Err(annulee());
@@ -1072,7 +1072,7 @@ impl<S: SdkMyiro1> Session<S> {
                 .ok_or(ErreurPont::Delai {});
         }
         loop {
-            if self.annulation.demandee() {
+            if self.annulations.demandee() {
                 self.journal
                     .push("annulation reçue pendant l'attente de la mesure".into());
                 return Err(annulee());
@@ -1081,7 +1081,7 @@ impl<S: SdkMyiro1> Session<S> {
             let tranche = reste.min(PAS_ANNULATION);
             match self.sdk.attendre_evenement(tranche) {
                 Some(evenement) => return Ok(evenement),
-                None if self.annulation.demandee_en_attente() => {
+                None if self.annulations.demandee_en_attente() => {
                     self.journal
                         .push("entrée fermée pendant l'attente de la mesure".into());
                     return Err(annulee());

@@ -84,8 +84,12 @@ pub enum Issue {
     Echouee,
 }
 
+/// Délai de réponse du pont. La connexion la plus lente attend 10 s dans la
+/// DLL (`pont_myiro1::DELAI_CONNEXION`), plus la lecture de l'identité.
+pub const DELAI_REPONSE: Duration = Duration::from_secs(30);
+
 /// Délais du dialogue avec le pont, fixés par le module instrument et
-/// appliqués par le transport. Bornés : passé un délai, le pont est arrêté
+/// appliqués par `PontProcessus`. Bornés : passé un délai, le pont est arrêté
 /// de force et l'instrument dit dans un état incertain ; aucune demande n'est
 /// répétée d'elle-même.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,7 +100,7 @@ pub struct Delais {
 
 impl Default for Delais {
     fn default() -> Self {
-        Delais::new(crate::pont::DELAI_REPONSE)
+        Delais::new(DELAI_REPONSE)
     }
 }
 

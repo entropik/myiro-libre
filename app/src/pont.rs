@@ -176,13 +176,9 @@ pub fn chercher_ponts_nommes(dossier_exe: &Path, base: &str) -> Vec<(Architectur
 /// Code de sortie de `pont-myiro1` quand la DLL n'a pas pu être chargée.
 const CODE_DLL_REFUSEE: i32 = 3;
 
-/// Délai de réponse du pont. La connexion la plus lente attend 10 s dans la
-/// DLL (`pont_myiro1::DELAI_CONNEXION`), plus la lecture de l'identité.
-pub const DELAI_REPONSE: Duration = Duration::from_secs(30);
-
-/// Pendant une demande annulable, l'annulation est regardée au moins aussi
-/// souvent.
-const PAS_ANNULATION: Duration = Duration::from_millis(20);
+/// Pendant une demande annulable, la réponse est attendue par tranches de
+/// cette durée, pour voir l'annulation demandée.
+const PAS_ATTENTE_REPONSE: Duration = Duration::from_millis(20);
 
 /// Le vrai programme `pont-myiro1`, lancé avec la DLL et le plafond, auquel on
 /// parle par une ligne JSON par message (crate `pont-protocole`). Chaque
@@ -255,8 +251,7 @@ impl PontProcessus {
                     std::thread::sleep(Duration::from_millis(10))
                 }
                 _ => {
-                    let _ = self.enfant.kill();
-                    let _ = self.enfant.wait();
+                    self.arreter_de_force();
                     return None;
                 }
             }
@@ -307,15 +302,20 @@ impl PontProcessus {
     /// Arrête le pont de force : il n'a pas répondu à `ligne` à temps. Cela ne
     /// prouve pas que l'instrument est revenu au repos.
     fn couper(&mut self, ligne: &str, delai: Duration) -> Panne {
-        self.entree = None;
-        let _ = self.enfant.kill();
-        let _ = self.enfant.wait();
+        self.arreter_de_force();
         Panne::SansReponse {
             detail: format!(
                 "aucune réponse en {} ms à {ligne} ; pont arrêté de force",
                 delai.as_millis()
             ),
         }
+    }
+
+    /// Ferme l'entrée du pont et termine son processus, sans attendre.
+    fn arreter_de_force(&mut self) {
+        self.entree = None;
+        let _ = self.enfant.kill();
+        let _ = self.enfant.wait();
     }
 
     /// Lit la réponse à `ligne`, au plus `delai`.
@@ -370,7 +370,7 @@ impl Pont for PontProcessus {
                 debut = Instant::now();
             }
             let reste = delai.saturating_sub(debut.elapsed());
-            match self.lignes.recv_timeout(reste.min(PAS_ANNULATION)) {
+            match self.lignes.recv_timeout(reste.min(PAS_ATTENTE_REPONSE)) {
                 Ok(texte) => break lire(&texte),
                 Err(RecvTimeoutError::Disconnected) => break Err(self.arret()),
                 Err(RecvTimeoutError::Timeout) if reste.is_zero() => {
@@ -383,20 +383,30 @@ impl Pont for PontProcessus {
             return sans_annulation(reponse);
         }
         let effet = match &reponse {
-            // Pont déjà perdu : il n'y a plus rien à lire.
-            Err(panne) => Err(panne.clone()),
+            // Réponse illisible : le pont vit encore et sa réponse à
+            // `annuler` resterait à lire, prise ensuite pour celle d'une autre
+            // demande. Il est arrêté. Les autres pannes l'ont déjà arrêté.
+            Err(panne) => {
+                if matches!(panne, Panne::ReponseIllisible { .. }) {
+                    self.arreter_de_force();
+                }
+                Err(panne.clone())
+            }
             Ok(_) => match self.recevoir("{\"cmd\":\"annuler\"}", self.delais.apres_annulation()) {
                 Ok(Reponse::Annulation { effet }) => Ok(effet),
                 Ok(autre) => {
-                    let panne = Panne::ReponseIllisible {
+                    self.arreter_de_force();
+                    Err(Panne::ReponseIllisible {
                         detail: format!("réponse à annuler inattendue : {autre:?}"),
-                    };
-                    self.entree = None;
-                    let _ = self.enfant.kill();
-                    let _ = self.enfant.wait();
+                    })
+                }
+                // Une ligne illisible laisse aussi le pont vivant.
+                Err(panne) => {
+                    if matches!(panne, Panne::ReponseIllisible { .. }) {
+                        self.arreter_de_force();
+                    }
                     Err(panne)
                 }
-                Err(panne) => Err(panne),
             },
         };
         Echange {
