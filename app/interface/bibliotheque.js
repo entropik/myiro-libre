@@ -50,8 +50,8 @@
 
   function nombre(v) {
     return new Intl.NumberFormat(document.documentElement.lang, {
-      minimumFractionDigits: 2, maximumFractionDigits: 2,
-    }).format(v);
+      minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: "negative",
+    }).format(v); // « negative » : jamais « -0,00 »
   }
 
   function instrument(i) {
