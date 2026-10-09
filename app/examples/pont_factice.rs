@@ -11,14 +11,18 @@
 //! - `bloque` : lit une requête et ne répond jamais (DLL bloquée) ;
 //! - `sortie_fermee` : lit une requête, ferme sa sortie et ne se termine pas ;
 //! - `mesure_lente` : répond à une mesure ponctuelle après 800 ms ;
-//! - `mesure_muette` : un MYIRO-1 fictif qui s'étalonne, puis ne répond jamais à la mesure.
+//! - `mesure_muette` : un MYIRO-1 fictif qui s'étalonne, puis ne répond jamais à la mesure ;
+//! - `annulable` : comme `normal`, mais la mesure attend `annuler`, puis
+//!   répond `mesure_annulee` et `annulation appliquee` (ticket #26) ;
+//! - `resultat_tardif` : la mesure attend `annuler`, puis rend son résultat
+//!   (un délai) et `annulation sans_effet`.
 
 use std::io::{BufRead, Write};
 use std::process::ExitCode;
 
 use pont_protocole::{
-    ecrire_reponse, lire_requete, ErreurPont, Horodatage, Identite, InstrumentDetecte, Reponse,
-    Requete,
+    ecrire_reponse, lire_requete, EffetAnnulation, ErreurPont, Horodatage, Identite,
+    InstrumentDetecte, RemiseAuRepos, Reponse, Requete,
 };
 
 /// Ferme la sortie standard sans terminer le processus.
@@ -51,10 +55,37 @@ fn main() -> ExitCode {
     }
     let stdin = std::io::stdin();
     let mut sortie = std::io::stdout();
-    for ligne in stdin.lock().lines() {
+    let mut lignes = stdin.lock().lines();
+    while let Some(ligne) = lignes.next() {
         let Ok(ligne) = ligne else { break };
         let requete = lire_requete(&ligne);
         let reponse = match scenario.as_str() {
+            // La mesure attend la demande suivante : `annuler` l'interrompt.
+            // Réponse de la mesure, puis celle de `annuler`, dans l'ordre.
+            "annulable" | "resultat_tardif"
+                if matches!(requete, Ok(Requete::MesurerPonctuelle { .. })) =>
+            {
+                let suivante = lignes.next().and_then(Result::ok).unwrap_or_default();
+                assert_eq!(lire_requete(&suivante), Ok(Requete::Annuler {}));
+                let (mesure, effet) = if scenario == "annulable" {
+                    (
+                        ErreurPont::MesureAnnulee {
+                            remise_au_repos: RemiseAuRepos::AuRepos {},
+                        },
+                        EffetAnnulation::Appliquee,
+                    )
+                } else {
+                    // La mesure s'est terminée (ici, par le délai) juste avant.
+                    (ErreurPont::Delai {}, EffetAnnulation::SansEffet)
+                };
+                writeln!(
+                    sortie,
+                    "{}",
+                    ecrire_reponse(&Reponse::Erreur { erreur: mesure })
+                )
+                .unwrap();
+                Reponse::Annulation { effet }
+            }
             "muet" => {
                 eprintln!("arrêt simulé");
                 return ExitCode::from(1);
