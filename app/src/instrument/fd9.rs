@@ -65,6 +65,7 @@ impl<P: Pont> Instrument<P> {
                     identifiant,
                 },
                 probleme: None,
+                etalonnage: None,
             },
             Err(probleme) => Self::en_echec(None, probleme),
         }

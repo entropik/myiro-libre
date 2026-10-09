@@ -344,7 +344,8 @@ impl<P: Pont> Instrument<P> {
     pub fn etalonner(&mut self, gestes: &mut impl Gestes) {
         let fiche = match &self.etat {
             Etat::EtalonnageRequis(f) | Etat::Etalonne(f) => f.clone(),
-            Etat::NonDetecte | Etat::Connecte(_) => return,
+            // Un FD-9 détecté n'est pas connecté : son pont n'étalonne pas.
+            Etat::NonDetecte | Etat::Detecte { .. } | Etat::Connecte(_) => return,
         };
         let Some(pont) = self.pont.as_mut() else {
             return;
