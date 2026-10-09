@@ -13,6 +13,7 @@ use bibliotheque::{
 };
 use pont_protocole::{ConditionMesure, Geometrie, Horodatage, Info};
 use serde::Serialize;
+use tauri_plugin_dialog::DialogExt;
 
 /// La bibliothèque ouverte au lancement, partagée par les commandes.
 pub struct BibliothequeOuverte {
@@ -108,6 +109,98 @@ impl BibliothequeOuverte {
     pub fn renommer_mesure(&self, id: IdMesure, nom: &str) -> Result<(), String> {
         self.avec(|b| b.renommer_mesure(id, nom))
     }
+    /// Nom de fichier proposé pour l'export d'une mesure : sa date, telle que
+    /// le pont l'a écrite (`mesure-2026-10-06-0921.txt`).
+    pub fn nom_export(&self, id: IdMesure) -> Result<String, String> {
+        self.avec(|b| {
+            let mesure = b.mesure(id)?;
+            let h = mesure.mesure.provenance().horodatage.texte();
+            let jour = h.get(..10).unwrap_or("mesure");
+            let heure: String = h.get(11..16).unwrap_or_default().replace(':', "");
+            Ok(format!("mesure-{jour}-{heure}.txt"))
+        })
+    }
+
+    /// Écrit une mesure en CGATS.17 dans le fichier.
+    pub fn exporter_cgats(&self, id: IdMesure, fichier: &Path) -> Result<(), String> {
+        let mesure = self.avec(|b| b.mesure(id))?.mesure;
+        let texte = cgats::ecrire(&mesure).map_err(|e| {
+            eprintln!("{e}");
+            "bibliotheque.erreur.export".to_string()
+        })?;
+        std::fs::write(fichier, texte).map_err(|e| {
+            eprintln!("{} : {e}", fichier.display());
+            "bibliotheque.erreur.export".to_string()
+        })
+    }
+
+    /// Sauvegarde toute la bibliothèque dans un seul fichier.
+    pub fn sauvegarder(&self, fichier: &Path) -> Result<(), String> {
+        self.avec(|b| b.sauvegarder(fichier)).map_err(|cle| {
+            if cle == "bibliotheque.erreur.autre" {
+                "bibliotheque.erreur.export".to_string()
+            } else {
+                cle
+            }
+        })
+    }
+
+    /// Remplace toute la bibliothèque par une sauvegarde.
+    pub fn restaurer(&self, fichier: &Path) -> Result<(), String> {
+        let bibliotheque = self.bibliotheque.as_ref().map_err(|e| {
+            eprintln!("{e}");
+            "bibliotheque.erreur.ouverture".to_string()
+        })?;
+        let mut bibliotheque = bibliotheque.lock().unwrap_or_else(|e| e.into_inner());
+        bibliotheque
+            .restaurer(fichier)
+            .map_err(|e| cle_erreur(&e).to_string())
+    }
+}
+
+/// Ce que l'écran montre d'un fichier CGATS importé : ce qu'il contient, et
+/// ce qui y reste inconnu.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ResumeImport {
+    /// Nom du fichier, sans le dossier.
+    pub fichier: String,
+    pub plages: usize,
+    /// Écrit par myiro-libre (provenance complète dans l'en-tête).
+    pub myiro_libre: bool,
+    pub instrument: Info<String>,
+    pub numero_serie: Info<String>,
+    pub date: Info<String>,
+    /// Condition de mesure de chaque emplacement de spectre.
+    pub conditions: [Info<ConditionMesure>; 3],
+    /// Le fichier donne-t-il le spectre, le Lab, de chaque emplacement ?
+    pub spectres: [bool; 3],
+    pub lab: [bool; 3],
+}
+
+/// Lit un fichier CGATS en mesure importée et le résume pour l'écran.
+pub fn importer_cgats(fichier: &Path) -> Result<ResumeImport, String> {
+    let illisible = |detail: String| {
+        eprintln!("{} : {detail}", fichier.display());
+        "bibliotheque.erreur.cgats_illisible".to_string()
+    };
+    let octets = std::fs::read(fichier).map_err(|e| illisible(e.to_string()))?;
+    // Les exports d'autres logiciels ne sont pas toujours en UTF-8.
+    let texte = String::from_utf8_lossy(&octets);
+    let importee = cgats::lire(&texte).map_err(|e| illisible(e.to_string()))?;
+    let present = |quoi: &dyn Fn(&cgats::PlageImportee, usize) -> bool| {
+        [0, 1, 2].map(|e| importee.plages.iter().any(|p| quoi(p, e)))
+    };
+    Ok(ResumeImport {
+        fichier: nom_de(fichier),
+        plages: importee.plages.len(),
+        myiro_libre: importee.provenance != Info::Inconnue,
+        instrument: importee.instrument.clone(),
+        numero_serie: importee.numero_serie.clone(),
+        date: importee.date.clone(),
+        conditions: importee.conditions.clone(),
+        spectres: present(&|p, e| p.spectres[e] != Info::Inconnue),
+        lab: present(&|p, e| p.lab[e] != Info::Inconnue),
+    })
 }
 
 /// Clé du catalogue qui explique une erreur à l'utilisateur. Le détail
@@ -116,6 +209,10 @@ pub fn cle_erreur(erreur: &ErreurBibliotheque) -> &'static str {
     match erreur {
         ErreurBibliotheque::NomVide => "bibliotheque.erreur.nom_vide",
         ErreurBibliotheque::NomDejaPris(_) => "bibliotheque.erreur.nom_pris",
+        ErreurBibliotheque::SauvegardeInvalide(detail) => {
+            eprintln!("{detail}");
+            "bibliotheque.erreur.sauvegarde_invalide"
+        }
         autre => {
             eprintln!("{autre}");
             "bibliotheque.erreur.autre"
@@ -212,6 +309,93 @@ pub fn bibliotheque_renommer_condition(
     nom: &str,
 ) -> Result<(), String> {
     ouverte.renommer_condition(IdCondition(id), nom)
+}
+
+/// Fichier choisi dans le sélecteur de Windows ; `None` si l'opérateur a annulé.
+fn choisi(fichier: Option<tauri_plugin_dialog::FilePath>) -> Option<PathBuf> {
+    fichier?.into_path().ok()
+}
+
+/// Exporte la mesure en CGATS : le sélecteur de Windows demande où. Rend le
+/// nom du fichier écrit, ou `None` si l'opérateur a annulé.
+#[tauri::command(async)]
+pub fn bibliotheque_exporter_cgats(
+    app: tauri::AppHandle,
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+    id: i64,
+) -> Result<Option<String>, String> {
+    let id = IdMesure(id);
+    let nom = ouverte.nom_export(id)?;
+    let Some(fichier) = choisi(
+        app.dialog()
+            .file()
+            .set_file_name(nom)
+            .add_filter("CGATS", &["txt"])
+            .blocking_save_file(),
+    ) else {
+        return Ok(None);
+    };
+    ouverte.exporter_cgats(id, &fichier)?;
+    Ok(Some(nom_de(&fichier)))
+}
+
+/// Sauvegarde toute la bibliothèque, à l'endroit choisi dans le sélecteur.
+#[tauri::command(async)]
+pub fn bibliotheque_sauvegarder(
+    app: tauri::AppHandle,
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+) -> Result<Option<String>, String> {
+    let Some(fichier) = choisi(
+        app.dialog()
+            .file()
+            .set_file_name("bibliotheque-myiro-libre.sqlite")
+            .add_filter("SQLite", &["sqlite"])
+            .blocking_save_file(),
+    ) else {
+        return Ok(None);
+    };
+    ouverte.sauvegarder(&fichier)?;
+    Ok(Some(nom_de(&fichier)))
+}
+
+/// Remplace la bibliothèque par la sauvegarde choisie dans le sélecteur. La
+/// page a demandé l'accord de l'opérateur avant.
+#[tauri::command(async)]
+pub fn bibliotheque_restaurer(
+    app: tauri::AppHandle,
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+) -> Result<Option<String>, String> {
+    let Some(fichier) = choisi(
+        app.dialog()
+            .file()
+            .add_filter("SQLite", &["sqlite"])
+            .blocking_pick_file(),
+    ) else {
+        return Ok(None);
+    };
+    ouverte.restaurer(&fichier)?;
+    Ok(Some(nom_de(&fichier)))
+}
+
+/// Lit le fichier CGATS choisi dans le sélecteur et en rend le résumé.
+#[tauri::command(async)]
+pub fn bibliotheque_importer_cgats(app: tauri::AppHandle) -> Result<Option<ResumeImport>, String> {
+    let Some(fichier) = choisi(
+        app.dialog()
+            .file()
+            .add_filter("CGATS", &["txt", "cgats", "it8", "ti3"])
+            .blocking_pick_file(),
+    ) else {
+        return Ok(None);
+    };
+    importer_cgats(&fichier).map(Some)
+}
+
+fn nom_de(fichier: &Path) -> String {
+    fichier
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -367,6 +551,107 @@ mod tests {
             "bibliotheque.erreur.nom_pris",
             "bibliotheque.erreur.autre",
             "bibliotheque.erreur.ouverture",
+        ] {
+            assert!(
+                crate::textes::cles().any(|c| c == cle),
+                "{cle} manque au catalogue"
+            );
+        }
+    }
+
+    #[test]
+    fn une_mesure_exportee_en_cgats_se_relit_avec_ses_lab() {
+        let (dossier, ouverte) = demonstration();
+        let bande = ouverte.arborescence("").unwrap()[0].mesures[0].clone();
+        let fichier = dossier.path().join("export.txt");
+        ouverte.exporter_cgats(bande.id, &fichier).unwrap();
+
+        let relue = cgats::lire(&std::fs::read_to_string(&fichier).unwrap()).unwrap();
+        let detail = ouverte.detail_mesure(bande.id).unwrap();
+        assert_eq!(relue.plages.len(), detail.lab.len());
+        assert_eq!(
+            relue.plages[3].lab[1],
+            Info::Confirmee(pont_protocole::Lab::new(detail.lab[3][1]).unwrap())
+        );
+        assert_eq!(
+            ouverte.nom_export(bande.id).unwrap(),
+            "mesure-2026-10-06-0921.txt"
+        );
+    }
+
+    #[test]
+    fn une_sauvegarde_se_restaure_et_un_mauvais_fichier_est_refuse_en_clair() {
+        let (dossier, ouverte) = demonstration();
+        let avant = ouverte.arborescence("").unwrap();
+        let fichier = dossier.path().join("sauvegarde.sqlite");
+        ouverte.sauvegarder(&fichier).unwrap();
+        ouverte
+            .creer_condition("Ajoutée après la sauvegarde")
+            .unwrap();
+
+        ouverte.restaurer(&fichier).unwrap();
+        assert_eq!(ouverte.arborescence("").unwrap(), avant);
+
+        let texte = dossier.path().join("texte.sqlite");
+        std::fs::write(&texte, "pas une sauvegarde").unwrap();
+        assert_eq!(
+            ouverte.restaurer(&texte),
+            Err("bibliotheque.erreur.sauvegarde_invalide".to_string())
+        );
+        assert_eq!(ouverte.arborescence("").unwrap(), avant);
+    }
+
+    #[test]
+    fn un_fichier_cgats_importe_est_resume_sans_rien_deviner() {
+        let (dossier, ouverte) = demonstration();
+        let bande = ouverte.arborescence("").unwrap()[0].mesures[0].id;
+        let fichier = dossier.path().join("export.txt");
+        ouverte.exporter_cgats(bande, &fichier).unwrap();
+
+        let resume = importer_cgats(&fichier).unwrap();
+        assert_eq!(resume.fichier, "export.txt");
+        assert_eq!(resume.plages, 4);
+        assert!(resume.myiro_libre);
+        assert_eq!(resume.instrument, Info::Confirmee("MYIRO-1".into()));
+        assert_eq!(resume.spectres, [true, true, true]);
+        assert_eq!(
+            resume.conditions,
+            [
+                Info::Confirmee(ConditionMesure::M0),
+                Info::Confirmee(ConditionMesure::M1),
+                Info::Confirmee(ConditionMesure::M2),
+            ]
+        );
+
+        // Un fichier sans spectre : les spectres restent inconnus.
+        let sans_spectre = dossier.path().join("lab.txt");
+        std::fs::write(
+            &sans_spectre,
+            "CGATS.17\nMEASUREMENT_SOURCE\t\"D50\"\nNUMBER_OF_FIELDS\t4\nBEGIN_DATA_FORMAT\n\
+             SAMPLE_ID\tLAB_L\tLAB_A\tLAB_B\nEND_DATA_FORMAT\nNUMBER_OF_SETS\t1\nBEGIN_DATA\n\
+             1\t50.0\t1.0\t-2.0\nEND_DATA\n",
+        )
+        .unwrap();
+        let resume = importer_cgats(&sans_spectre).unwrap();
+        assert!(!resume.myiro_libre);
+        assert_eq!(resume.spectres, [false, false, false]);
+        assert_eq!(resume.lab, [false, true, false]);
+        assert_eq!(resume.instrument, Info::Inconnue);
+
+        let illisible = dossier.path().join("illisible.txt");
+        std::fs::write(&illisible, "rien de CGATS").unwrap();
+        assert_eq!(
+            importer_cgats(&illisible),
+            Err("bibliotheque.erreur.cgats_illisible".to_string())
+        );
+    }
+
+    #[test]
+    fn les_textes_de_l_export_existent_au_catalogue() {
+        for cle in [
+            "bibliotheque.erreur.sauvegarde_invalide",
+            "bibliotheque.erreur.cgats_illisible",
+            "bibliotheque.erreur.export",
         ] {
             assert!(
                 crate::textes::cles().any(|c| c == cle),

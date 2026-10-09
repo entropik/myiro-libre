@@ -300,8 +300,98 @@
     );
   }
 
+  // ---- Export et sauvegarde, sous la feuille ----
+  const exportZone = document.querySelector("[data-export]");
+  const exportPourquoi = exportZone.querySelector("[data-export-pourquoi]");
+  const exporterBouton = exportZone.querySelector("[data-exporter]");
+  const exportRaison = exportZone.querySelector("[data-export-raison]");
+  const exportMessage = exportZone.querySelector("[data-export-message]");
+  const restaurerAvis = exportZone.querySelector("[data-restaurer-avis]");
+  let format = "cgats"; // usage choisi dans le menu d'export
+
+  function dessinerExport() {
+    for (const b of exportZone.querySelectorAll("[data-format]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.format === format));
+    }
+    exportPourquoi.textContent = t("export.pourquoi." + format);
+    const sansMesure = format === "cgats" && !(choix && choix.type === "mesure");
+    exporterBouton.disabled = sansMesure;
+    exportRaison.hidden = !sansMesure;
+  }
+
+  function annoncer(texte) {
+    exportMessage.textContent = texte;
+    exportMessage.hidden = false;
+  }
+
+  // Le sélecteur de fichier de Windows s'ouvre côté Rust ; `null` : l'opérateur a annulé.
+  async function exporter() {
+    exportMessage.hidden = true;
+    try {
+      const nom = format === "cgats"
+        ? await invoke("bibliotheque_exporter_cgats", { id: choix.id })
+        : await invoke("bibliotheque_sauvegarder");
+      if (nom) annoncer(`${t("export.fait")} ${nom}`);
+    } catch (cle) {
+      annoncer(t(cle));
+    }
+  }
+
+  // Condition de l'emplacement de spectre n° e d'un fichier importé, telle que
+  // le fichier la donne : déduite, elle est « à confirmer » ; absente, inconnue.
+  function conditionImportee(c, e) {
+    if (c.statut === "inconnue") return `${e + 1} · ${t("cartouche.inconnue")}`;
+    return qualifiee(c, (v) => v, "cartouche.inconnue");
+  }
+
+  function montrerImport(r) {
+    const contenus = [0, 1, 2]
+      .filter((e) => r.spectres[e] || r.lab[e])
+      .map((e) => `${conditionImportee(r.conditions[e], e)} (${t(r.spectres[e] ? "import.spectre_et_lab" : "import.lab_seul")})`);
+    const instrumentLu = qualifiee(r.instrument, (i) =>
+      r.numero_serie.statut === "inconnue" ? i : `${i} ${t("details.numero")} ${r.numero_serie.valeur}`,
+    "cartouche.inconnu");
+    const cellules = [
+      cellule("import.plages", String(r.plages)),
+      cellule("import.date", qualifiee(r.date, (d) => date(d), "cartouche.inconnue")),
+      cellule("cartouche.instrument", instrumentLu, true),
+      cellule("import.provenance", t(r.myiro_libre ? "import.provenance.myiro" : "import.provenance.autre"), true),
+      cellule("cartouche.condition_mesure", contenus.join(", "), true),
+    ];
+    if (!r.spectres.some(Boolean)) cellules.push(cellule("import.spectres", t("import.aucun_spectre"), true));
+    montrerCartouche("import.titre", r.fichier, cellules);
+    annoncer(t("import.pas_enregistre"));
+  }
+
+  async function importer() {
+    exportMessage.hidden = true;
+    try {
+      const r = await invoke("bibliotheque_importer_cgats");
+      if (r) montrerImport(r);
+    } catch (cle) {
+      annoncer(t(cle));
+    }
+  }
+
+  async function restaurer() {
+    restaurerAvis.hidden = true;
+    exportMessage.hidden = true;
+    try {
+      const nom = await invoke("bibliotheque_restaurer");
+      if (!nom) return;
+      choix = null;
+      recherche.value = "";
+      await chargerArbre();
+      afficherChoix();
+      annoncer(`${t("export.restaure")} ${nom}`);
+    } catch (cle) {
+      annoncer(t(cle));
+    }
+  }
+
   function afficherChoix() {
     dessinerArbre();
+    dessinerExport();
     const b = choix && choix.type === "condition" ? brancheDe(choix.id) : null;
     if (b) return choisirCondition(b);
     if (choix && choix.type === "mesure") return choisirMesure(choix.id);
@@ -360,6 +450,19 @@
     if (nouvelle.value.trim()) creer();
     else nouvelle.focus();
   });
+
+  for (const b of exportZone.querySelectorAll("[data-format]")) {
+    b.addEventListener("click", () => { format = b.dataset.format; exportMessage.hidden = true; dessinerExport(); });
+  }
+  exporterBouton.addEventListener("click", exporter);
+  exportZone.querySelector("[data-importer]").addEventListener("click", importer);
+  // Restaurer remplace toute la bibliothèque : l'accord de l'opérateur est demandé d'abord.
+  exportZone.querySelector("[data-restaurer]").addEventListener("click", () => {
+    exportMessage.hidden = true;
+    restaurerAvis.hidden = false;
+  });
+  exportZone.querySelector("[data-restaurer-confirmer]").addEventListener("click", restaurer);
+  exportZone.querySelector("[data-restaurer-annuler]").addEventListener("click", () => { restaurerAvis.hidden = true; });
 
   // La langue est appliquée au lancement puis à chaque changement : tout se redessine.
   let premiereFois = true;

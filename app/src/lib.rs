@@ -483,6 +483,10 @@ pub fn lancer() {
             colonne::bibliotheque_detail_mesure,
             colonne::bibliotheque_creer_condition,
             colonne::bibliotheque_renommer_condition,
+            colonne::bibliotheque_exporter_cgats,
+            colonne::bibliotheque_sauvegarder,
+            colonne::bibliotheque_restaurer,
+            colonne::bibliotheque_importer_cgats,
             etalonner,
             repondre_geste
         ])
