@@ -9,8 +9,9 @@
 //! doit être mesuré en condition M0 (ISO 13655, compatible avec l'ISO 5-3) :
 //! c'est à l'appelant de le vérifier.
 //!
-//! Différence voulue avec ArgyllCMS : un facteur de réflexion pondéré nul ou
-//! négatif rend une densité inconnue, et non une densité plafonnée à 8.
+//! Comme ArgyllCMS, le facteur de réflexion pondéré est borné dans
+//! [1e-8, 2] : la densité va de −log10(2) ≈ −0,30 à 8. Seul écart voulu : un
+//! facteur nul ou négatif (noir total) rend une densité inconnue, et non 8.
 
 use crate::tables_densite::{
     Ponderation, E_BLEU, E_ROUGE, E_VERT, T_BLEU, T_ROUGE, T_VERT, VISUELLE_ISO,
@@ -81,7 +82,8 @@ fn densite(spectre: &[f64], filtre: &Ponderation) -> Result<f64, Inconnu> {
     if r <= 0.0 {
         return Err(Inconnu::ResultatNonFini);
     }
-    fini(-r.log10())
+    // Bornes d'ArgyllCMS : densité au plus 8, au moins −log10(2).
+    fini(-r.clamp(1e-8, 2.0).log10())
 }
 
 fn verifier_spectre(spectre: &[f64]) -> Result<(), Inconnu> {

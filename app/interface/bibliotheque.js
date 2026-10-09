@@ -30,7 +30,8 @@
   // Densités d'une mesure rangée (ticket #31) : statut E ou T, retenu comme dans Mesurer ;
   // absolues, ou au papier avec le rang de la plage du papier. Calculées par le module Rust.
   let statutDensite = memoire("statut-densite") === "T" ? "T" : "E";
-  let plagePapier = null; // rang (depuis 0) de la plage prise comme blanc papier ; null : absolues
+  let densiteRelative = false;
+  let plagePapier = null; // rang (depuis 0) de la plage prise comme blanc papier, choisi par l'utilisateur
 
   // ---- Petits outils ----
   function el(nom, classe, texte) {
@@ -311,31 +312,51 @@
     section.append(segmentDensite("statut", [["E", "E", t("densite.statut.E")], ["T", "T", t("densite.statut.T")]],
       statutDensite, (v) => { statutDensite = v; memoire("statut-densite", v); }));
     section.append(segmentDensite("mode", [[false, t("densite.absolue")], [true, t("densite.relative")]],
-      plagePapier !== null, (relative) => { plagePapier = relative ? 0 : null; }));
-    if (plagePapier !== null) {
+      densiteRelative, (relative) => { densiteRelative = relative; }));
+    if (densiteRelative) {
+      // Choix explicite, comme dans Mesurer : la liste commence vide, rien n'est deviné.
       const champ = el("div", "field");
       const etiquette = el("label", "label", t("densite.papier"));
       etiquette.htmlFor = "bibliotheque-densite-papier";
       const liste = el("select", "input");
       liste.id = etiquette.htmlFor;
+      const vide = el("option", "", t("densite.papier.choisir"));
+      vide.value = "";
+      liste.append(vide);
       for (let i = 0; i < nombrePlages; i++) {
         const o = el("option", "", `${t("details.plage")} ${i + 1}`);
         o.value = String(i);
         liste.append(o);
       }
-      liste.value = String(plagePapier);
-      liste.addEventListener("change", () => { plagePapier = Number(liste.value); afficherChoix(); });
+      liste.value = plagePapier === null ? "" : String(plagePapier);
+      liste.addEventListener("change", () => {
+        plagePapier = liste.value === "" ? null : Number(liste.value);
+        afficherChoix();
+      });
       champ.append(etiquette, liste);
       section.append(champ);
     }
     const resultat = el("div");
     section.append(resultat);
-    remplirDensites(resultat, id);
+    remplirDensites(resultat, id, nombrePlages);
     return section;
   }
 
-  // Densités inconnues : « inconnu » et la raison, jamais un zéro.
-  function afficherDensites(resultat, fiches) {
+  // Condition de mesure telle que le pont l'a dite : « à confirmer » si supposée.
+  function libelleCondition(info) {
+    if (info.statut === "inconnue") return t("cartouche.inconnue");
+    return info.statut === "supposee" ? `${info.valeur} (${t("details.a_confirmer")})` : info.valeur;
+  }
+
+  function celluleTexte(libelle, valeur) {
+    const c = el("div", "cell cell--wide");
+    c.append(el("span", "label", libelle), el("span", "", valeur));
+    return c;
+  }
+
+  // Densités inconnues : « inconnu » et la raison, jamais un zéro. `fiches` vide :
+  // `raisonPage` dit pourquoi (papier pas encore choisi, calcul indisponible).
+  function afficherDensites(resultat, fiches, nombrePlages, raisonPage) {
     const canaux = ["cyan", "magenta", "jaune", "visuel"];
     const table = el("table", "table--compact");
     const entete = el("tr");
@@ -343,30 +364,48 @@
     const thead = el("thead");
     thead.append(entete);
     const corps = el("tbody");
-    fiches.forEach((f, i) => {
+    for (let i = 0; i < nombrePlages; i++) {
+      const f = fiches[i];
       const tr = el("tr");
       tr.append(el("td", "id num", String(i + 1)));
       for (const c of canaux) {
-        tr.append(f.valeurs ? el("td", "r num", f.valeurs[c]) : el("td", "r mute", t("cartouche.inconnu")));
+        tr.append(f && f.valeurs ? el("td", "r num", f.valeurs[c]) : el("td", "r mute", t("cartouche.inconnu")));
       }
       corps.append(tr);
-    });
+    }
     table.append(thead, corps);
     const defile = el("div", "defile");
     defile.append(table);
-    const raisons = [...new Set(fiches.map((f) => f.raison).filter(Boolean))];
-    resultat.replaceChildren(defile, ...raisons.map((r) => el("p", "why", t(r))));
+    resultat.replaceChildren(defile);
+    // Les plages d'une mesure partagent leurs conditions : celles de la première suffisent.
+    if (fiches.length) {
+      const cells = el("div", "cells");
+      cells.append(celluleTexte(t("densite.condition"), libelleCondition(fiches[0].condition)));
+      const papier = fiches.find((f) => f.condition_papier);
+      if (papier) cells.append(celluleTexte(t("densite.condition_papier"), libelleCondition(papier.condition_papier)));
+      resultat.append(cells);
+    }
+    const raisons = fiches.length ? [...new Set(fiches.map((f) => f.raison).filter(Boolean))] : [raisonPage];
+    for (const r of raisons) resultat.append(el("p", "why", t(r)));
     if (!raisons.length) resultat.append(el("p", "why", t("densite.calcul")));
     resultat.append(el("p", "why", t("densite.limite")));
   }
 
-  async function remplirDensites(resultat, id) {
-    const demande = { id, statut: statutDensite, papier: plagePapier, langue: document.documentElement.lang || "fr" };
+  async function remplirDensites(resultat, id, nombrePlages) {
+    // Au papier sans papier choisi : rien à demander, la raison suffit.
+    if (densiteRelative && plagePapier === null) {
+      afficherDensites(resultat, [], nombrePlages, "densite.inconnue.papier");
+      return;
+    }
+    const demande = { id, statut: statutDensite, papier: densiteRelative ? plagePapier : null, langue: document.documentElement.lang || "fr" };
     try {
       const fiches = await invoke("bibliotheque_densites", demande);
-      if (resultat.isConnected) afficherDensites(resultat, fiches);
+      if (resultat.isConnected) afficherDensites(resultat, fiches, nombrePlages);
     } catch (cle) {
-      if (resultat.isConnected) resultat.replaceChildren(el("p", "why", t(cle)));
+      console.error("bibliotheque_densites", cle);
+      // La clé d'erreur si le catalogue la connaît, sinon « densités indisponibles ».
+      const raison = typeof cle === "string" && textes[cle] ? cle : "densite.indisponible";
+      if (resultat.isConnected) afficherDensites(resultat, [], nombrePlages, raison);
     }
   }
 

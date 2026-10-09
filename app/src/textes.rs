@@ -578,8 +578,25 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "densite.inconnue.papier",
-        "Densités relatives inconnues\u{202f}: choisissez le blanc papier parmi les mesures de la séance.",
+        "Densités relatives inconnues\u{202f}: choisissez le blanc papier dans la liste.",
     ),
+    (
+        "densite.inconnue.papier_spectre",
+        "Densités relatives inconnues\u{202f}: les longueurs d’onde du spectre du blanc papier ne sont pas établies.",
+    ),
+    (
+        "densite.inconnue.papier_calcul",
+        "Densités relatives inconnues\u{202f}: le blanc papier choisi ne renvoie aucune lumière mesurable.",
+    ),
+    (
+        "densite.inconnue.plage",
+        "Densités inconnues\u{202f}: cette plage n’existe pas dans la mesure.",
+    ),
+    (
+        "densite.indisponible",
+        "Densités indisponibles\u{202f}: myiro-libre n’a pas pu les calculer. Choisissez de nouveau la mesure.",
+    ),
+    ("densite.condition_papier", "Condition du blanc papier"),
     (
         "densite.inconnue.papier_condition",
         "Densités relatives inconnues\u{202f}: le blanc papier n’a pas été mesuré en M0, comme la couleur.",
@@ -1270,8 +1287,25 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "densite.inconnue.papier",
-        "Relative densities unknown: choose the paper white among this session’s measurements.",
+        "Relative densities unknown: choose the paper white in the list.",
     ),
+    (
+        "densite.inconnue.papier_spectre",
+        "Relative densities unknown: the wavelengths of the paper white’s spectrum are not established.",
+    ),
+    (
+        "densite.inconnue.papier_calcul",
+        "Relative densities unknown: the chosen paper white reflects no measurable light.",
+    ),
+    (
+        "densite.inconnue.plage",
+        "Densities unknown: this patch is not in the measurement.",
+    ),
+    (
+        "densite.indisponible",
+        "Densities unavailable: myiro-libre could not compute them. Choose the measurement again.",
+    ),
+    ("densite.condition_papier", "Paper white condition"),
     (
         "densite.inconnue.papier_condition",
         "Relative densities unknown: the paper white was not measured in M0, like the colour.",

@@ -107,18 +107,8 @@ impl BibliothequeOuverte {
     ) -> Result<Vec<FicheDensites>, String> {
         let enregistree = self.avec(|b| b.mesure(id))?;
         let mesure = &enregistree.mesure;
-        let nombre = mesure.plages().len();
-        Ok((0..nombre)
-            .map(|plage| match papier {
-                Some(p) if p >= nombre => {
-                    let mut fiche = densites_plage(mesure, plage, statut, None, langue);
-                    fiche.relative = true;
-                    fiche.valeurs = None;
-                    fiche.raison = fiche.raison.or(Some("densite.inconnue.papier"));
-                    fiche
-                }
-                _ => densites_plage(mesure, plage, statut, papier.map(|p| (mesure, p)), langue),
-            })
+        Ok((0..mesure.plages().len())
+            .map(|plage| densites_plage(mesure, plage, statut, papier.map(|p| (mesure, p)), langue))
             .collect())
     }
 

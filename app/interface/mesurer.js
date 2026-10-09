@@ -479,8 +479,14 @@
     return bloc;
   }
 
-  // Densités inconnues : la raison, jamais un zéro.
-  function afficherDensites(resultat, d) {
+  // Condition de mesure telle que le pont l'a dite : « à confirmer » si supposée.
+  function libelleCondition(info) {
+    if (info.statut === "inconnue") return t("cartouche.inconnue");
+    return info.statut === "supposee" ? `${info.valeur} (${t("details.a_confirmer")})` : info.valeur;
+  }
+
+  // Densités inconnues : la raison, jamais un zéro. `d` absent : `raisonPage` dit pourquoi.
+  function afficherDensites(resultat, d, raisonPage) {
     const inconnu = t("cartouche.inconnu");
     const v = d && d.valeurs;
     const corps = el("tbody");
@@ -497,14 +503,13 @@
     table.append(thead, corps);
     resultat.replaceChildren(table);
     if (d) {
-      const condition = d.condition.statut === "inconnue" ? t("cartouche.inconnue")
-        : d.condition.statut === "supposee" ? `${d.condition.valeur} (${t("details.a_confirmer")})` : d.condition.valeur;
       const cells = el("div", "cells");
-      cells.append(cellule(t("densite.condition"), condition, true));
+      cells.append(cellule(t("densite.condition"), libelleCondition(d.condition), true));
       if (d.papier_nom) cells.append(cellule(t("densite.papier"), d.papier_nom, true));
+      if (d.condition_papier) cells.append(cellule(t("densite.condition_papier"), libelleCondition(d.condition_papier), true));
       resultat.append(cells);
     }
-    const raison = d ? d.raison : "densite.inconnue.papier";
+    const raison = d ? d.raison : raisonPage;
     resultat.append(el("p", "why", raison ? t(raison) : t("densite.calcul")));
     resultat.append(el("p", "why", t("densite.limite")));
   }
@@ -512,7 +517,7 @@
   async function remplirDensites(resultat, numero) {
     // Relative sans papier choisi : rien à demander, la raison suffit.
     if (densiteRelative && papier === null) {
-      afficherDensites(resultat, null);
+      afficherDensites(resultat, null, "densite.inconnue.papier");
       return;
     }
     const demande = { numero, statut: statutDensite, papier: densiteRelative ? papier : null, langue: langue() };
@@ -521,7 +526,9 @@
       if (resultat.isConnected) afficherDensites(resultat, d);
     } catch (cle) {
       console.error("densites_mesure", cle);
-      if (resultat.isConnected) afficherDensites(resultat, { condition: { statut: "inconnue" }, valeurs: null, raison: null });
+      // La clé d'erreur si le catalogue la connaît, sinon « densités indisponibles ».
+      const raison = typeof cle === "string" && textes[cle] ? cle : "densite.indisponible";
+      if (resultat.isConnected) afficherDensites(resultat, null, raison);
     }
   }
 

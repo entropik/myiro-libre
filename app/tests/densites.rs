@@ -243,7 +243,51 @@ fn la_densite_d_une_plage_de_mire_se_lit_plage_par_plage() {
     // Une plage qui n'existe pas n'a pas de densité.
     let absente = densites_plage(&bande, 3, StatutDensite::E, None, Langue::Francais);
     assert_eq!(absente.valeurs, None);
-    assert_eq!(absente.raison, Some("densite.inconnue.spectre"));
+    assert_eq!(absente.raison, Some("densite.inconnue.plage"));
+    // Une plage de papier qui n'existe pas : pas de blanc papier.
+    let sans_papier = densites_plage(
+        &bande,
+        1,
+        StatutDensite::E,
+        Some((&bande, 7)),
+        Langue::Francais,
+    );
+    assert_eq!(sans_papier.valeurs, None);
+    assert_eq!(sans_papier.raison, Some("densite.inconnue.papier"));
+}
+
+#[test]
+fn chaque_defaut_du_papier_a_sa_propre_raison() {
+    let encre = ponctuelle(0.09);
+    let relative = |papier: &Mesure| {
+        densites_plage(
+            &encre,
+            0,
+            StatutDensite::T,
+            Some((papier, 0)),
+            Langue::Francais,
+        )
+    };
+    // Longueurs d'onde du papier inconnues.
+    let demande = Info::Confirmee(ConditionsCalcul {
+        conditions_spectres: [
+            Info::Confirmee(M0),
+            Info::Confirmee(M1),
+            Info::Confirmee(M2),
+        ],
+        longueurs_onde: Info::Inconnue,
+        illuminant_lab: Info::Confirmee(Illuminant::D50),
+        observateur_lab: Info::Supposee(Observateur::DeuxDegres),
+    });
+    let papier = mesure(&[[0.9, 0.9, 0.9]], demande, Geometrie::Ponctuelle {});
+    let fiche = relative(&papier);
+    assert_eq!(fiche.valeurs, None);
+    assert_eq!(fiche.raison, Some("densite.inconnue.papier_spectre"));
+    // Papier noir : il ne renvoie aucune lumière, c'est lui qui est en cause.
+    let fiche = relative(&ponctuelle(0.0));
+    assert_eq!(fiche.valeurs, None);
+    assert_eq!(fiche.raison, Some("densite.inconnue.papier_calcul"));
+    assert_eq!(fiche.condition_papier, Some(Info::Confirmee(M0)));
 }
 
 #[test]
@@ -262,6 +306,11 @@ fn la_limite_connue_et_les_raisons_ont_un_texte_dans_les_deux_langues() {
         "densite.inconnue.calcul",
         "densite.inconnue.papier",
         "densite.inconnue.papier_condition",
+        "densite.inconnue.papier_spectre",
+        "densite.inconnue.papier_calcul",
+        "densite.inconnue.plage",
+        "densite.indisponible",
+        "densite.condition_papier",
         // Libellés que le panneau compose (`densite.${…}` dans mesurer.js).
         "densite.statut",
         "densite.mode",
@@ -375,4 +424,43 @@ fn un_papier_absent_de_la_seance_rend_la_densite_relative_inconnue() {
     assert!(fiche.relative);
     assert_eq!(fiche.valeurs, None);
     assert_eq!(fiche.raison, Some("densite.inconnue.papier"));
+}
+
+// ---- Les deux panneaux de la page, lus comme des fichiers ----
+
+fn script(nom: &str) -> String {
+    std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("interface")
+            .join(nom),
+    )
+    .unwrap()
+}
+
+/// Un échec de la commande donne une raison, jamais le texte du calcul.
+#[test]
+fn un_echec_du_calcul_s_affiche_avec_sa_raison() {
+    for nom in ["mesurer.js", "bibliotheque.js"] {
+        assert!(script(nom).contains("\"densite.indisponible\""), "{nom}");
+    }
+}
+
+/// « Au papier » ne choisit jamais le papier à la place de l'utilisateur :
+/// la liste commence vide, comme dans Mesurer.
+#[test]
+fn le_blanc_papier_de_la_bibliotheque_se_choisit_explicitement() {
+    let s = script("bibliotheque.js");
+    assert!(!s.contains("relative ? 0"), "papier choisi d'office");
+    assert!(s.contains("t(\"densite.papier.choisir\")"));
+}
+
+/// Les deux panneaux montrent la condition de la plage, et celle du papier
+/// en densité relative.
+#[test]
+fn les_deux_panneaux_montrent_les_conditions() {
+    for nom in ["mesurer.js", "bibliotheque.js"] {
+        let s = script(nom);
+        assert!(s.contains("t(\"densite.condition\")"), "{nom}");
+        assert!(s.contains("t(\"densite.condition_papier\")"), "{nom}");
+    }
 }

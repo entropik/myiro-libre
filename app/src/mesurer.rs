@@ -418,11 +418,10 @@ fn spectre_m0(
         .iter()
         .position(|c| c.valeur() == Some(&ConditionMesure::M0))
         .ok_or("densite.inconnue.condition")?;
-    let p: &Plage = mesure
-        .plages()
-        .get(plage)
-        .filter(|_| calculable)
-        .ok_or("densite.inconnue.spectre")?;
+    let p: &Plage = mesure.plages().get(plage).ok_or("densite.inconnue.plage")?;
+    if !calculable {
+        return Err("densite.inconnue.spectre");
+    }
     let spectre = [p.m0(), p.m1(), p.m2()][rang];
     Ok((
         spectre.iter().map(|&v| f64::from(v)).collect(),
@@ -459,31 +458,39 @@ pub fn densites_plage(
         }
     };
     fiche.condition = condition;
-    let calcul = match papier {
-        None => colorimetrie::densites(&spectre, statut),
-        Some((mesure_papier, plage_papier)) => match spectre_m0(mesure_papier, plage_papier) {
-            Ok((spectre_papier, condition_papier)) => {
-                fiche.condition_papier = Some(condition_papier);
-                colorimetrie::densites_relatives(&spectre, &spectre_papier, statut)
-            }
-            Err(_) => {
-                fiche.raison = Some("densite.inconnue.papier_condition");
+    let Ok(mut d) = colorimetrie::densites(&spectre, statut) else {
+        fiche.raison = Some("densite.inconnue.calcul");
+        return fiche;
+    };
+    if let Some((mesure_papier, plage_papier)) = papier {
+        // Chaque défaut du papier a sa raison : c'est lui qui est en cause.
+        let (spectre_papier, condition_papier) = match spectre_m0(mesure_papier, plage_papier) {
+            Ok(trouve) => trouve,
+            Err(raison) => {
+                fiche.raison = Some(match raison {
+                    "densite.inconnue.plage" => "densite.inconnue.papier",
+                    "densite.inconnue.spectre" => "densite.inconnue.papier_spectre",
+                    _ => "densite.inconnue.papier_condition",
+                });
                 return fiche;
             }
-        },
-    };
-    match calcul {
-        Ok(d) => {
-            let t = |v| decimal(v, langue);
-            fiche.valeurs = Some(ValeursDensite {
-                cyan: t(d.cyan),
-                magenta: t(d.magenta),
-                jaune: t(d.jaune),
-                visuel: t(d.visuel),
-            });
-        }
-        Err(_) => fiche.raison = Some("densite.inconnue.calcul"),
+        };
+        fiche.condition_papier = Some(condition_papier);
+        // La plage se calcule (vu plus haut) : un échec vient du papier.
+        let Ok(relatives) = colorimetrie::densites_relatives(&spectre, &spectre_papier, statut)
+        else {
+            fiche.raison = Some("densite.inconnue.papier_calcul");
+            return fiche;
+        };
+        d = relatives;
     }
+    let t = |v| decimal(v, langue);
+    fiche.valeurs = Some(ValeursDensite {
+        cyan: t(d.cyan),
+        magenta: t(d.magenta),
+        jaune: t(d.jaune),
+        visuel: t(d.visuel),
+    });
     fiche
 }
 

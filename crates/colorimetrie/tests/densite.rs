@@ -132,9 +132,9 @@ fn un_spectre_absent_ou_invalide_donne_une_densite_inconnue() {
 }
 
 #[test]
-fn un_noir_total_n_a_pas_de_densite_finie_et_n_est_pas_rabote() {
+fn un_noir_total_a_une_densite_inconnue() {
     // Rien de renvoyé : la densité serait infinie. Pas de valeur plafonnée
-    // inventée (ArgyllCMS rendrait 8).
+    // inventée (ArgyllCMS rendrait 8) : c'est le seul écart avec lui.
     assert_eq!(
         densites(&[0.0; 36], StatutDensite::T),
         Err(Inconnu::ResultatNonFini)
@@ -150,4 +150,18 @@ fn un_noir_total_n_a_pas_de_densite_finie_et_n_est_pas_rabote() {
         densites_relatives(&CYAN, &[0.0; 36], StatutDensite::T),
         Err(Inconnu::ResultatNonFini)
     );
+}
+
+#[test]
+fn le_facteur_pondere_est_borne_comme_dans_argyllcms() {
+    // ArgyllCMS borne le facteur de réflexion pondéré dans [1e-8, 2] : une
+    // plage presque noire plafonne à 8, une plage qui renvoie plus du double
+    // de la lumière ne descend pas sous −log10(2).
+    let plancher = -(2f64.log10());
+    for statut in [StatutDensite::E, StatutDensite::T] {
+        proche(densites(&[1e-9; 36], statut).unwrap(), [8.0; 4], 1e-12);
+        proche(densites(&[1e-8; 36], statut).unwrap(), [8.0; 4], 1e-9);
+        proche(densites(&[3.0; 36], statut).unwrap(), [plancher; 4], 1e-12);
+        proche(densites(&[2.0; 36], statut).unwrap(), [plancher; 4], 1e-9);
+    }
 }
