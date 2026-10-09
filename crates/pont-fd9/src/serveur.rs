@@ -71,7 +71,7 @@ fn traiter<S: SdkFd9>(session: &mut Session<S>, requete: Requete) -> (Reponse, b
             Err(session.hors_paliers(Palier::Connexion))
         }
         Requete::Etalonner {} => Err(session.hors_paliers(Palier::Etalonnage)),
-        Requete::MesurerPonctuelle {} => Err(session.hors_paliers(Palier::MesurePonctuelle)),
+        Requete::MesurerPonctuelle { .. } => Err(session.hors_paliers(Palier::MesurePonctuelle)),
         Requete::MesurerBande { .. } => Err(session.hors_paliers(Palier::Bande)),
         // Aucune session n'est ouverte avec l'instrument : rien à désarmer ni
         // à déconnecter, la fermeture est confirmée.
