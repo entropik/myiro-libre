@@ -55,7 +55,7 @@ fn le_pont_recoit_la_dll_et_le_plafond_en_arguments() {
 
     match pont.demander(&Requete::Version {}) {
         Ok(Reponse::RequeteInvalide { detail }) => {
-            assert_eq!(detail, "--dll echo --plafond etalonnage")
+            assert_eq!(detail, "--dll echo --plafond mesure_ponctuelle")
         }
         autre => panic!("réponse inattendue : {autre:?}"),
     }
@@ -152,6 +152,20 @@ fn un_etalonnage_qui_depasse_le_delai_double_arrete_le_pont() {
         debut.elapsed()
     );
     assert!(pont.demander(&Requete::Version {}).is_err());
+}
+
+/// Le pont attend jusqu'à 2 min l'appui sur le bouton de l'instrument, plus
+/// deux désarmements de 15 s au plus : l'application laisse à la mesure
+/// ponctuelle six fois le délai d'une autre demande (3 min).
+#[test]
+fn la_mesure_ponctuelle_a_six_fois_le_delai_d_une_autre_demande() {
+    assert_eq!(app::pont::DELAI_REPONSE * 6, Duration::from_secs(180));
+    let mut pont = lancer("mesure_lente").avec_delai(Duration::from_millis(200));
+
+    assert!(matches!(
+        pont.demander(&Requete::MesurerPonctuelle {}),
+        Ok(Reponse::Erreur { .. })
+    ));
 }
 
 /// Fermer un pont bloqué ne bloque pas non plus.

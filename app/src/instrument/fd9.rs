@@ -82,6 +82,7 @@ impl<P: Pont> Instrument<P> {
                 },
                 probleme: None,
                 etalonnage: None,
+                repos_incertain: false,
             },
             Err(probleme) => Self::en_echec(None, probleme),
         }

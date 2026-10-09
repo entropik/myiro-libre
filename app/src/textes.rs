@@ -314,6 +314,39 @@ const FRANCAIS: Catalogue = &[
     ("ecran.etalonnage.schema.instrument", "MYIRO-1"),
     ("ecran.etalonnage.schema.capuchon", "Capuchon"),
     ("ecran.etalonnage.schema.blanc", "Blanc de référence"),
+    // Mesure ponctuelle : problèmes
+    (
+        "probleme.mesure_echouee.cause",
+        "La mesure n’a pas réussi. Le MYIRO-1 n’était peut-être pas bien à plat sur la couleur.",
+    ),
+    (
+        "probleme.mesure_echouee.action",
+        "Posez-le bien à plat, cliquez sur «\u{202f}Mesurer\u{202f}», puis appuyez sur son bouton.",
+    ),
+    (
+        "probleme.mesure_delai.cause",
+        "Le bouton du MYIRO-1 n’a pas été appuyé à temps.",
+    ),
+    (
+        "probleme.mesure_delai.action",
+        "Cliquez de nouveau sur «\u{202f}Mesurer\u{202f}», puis appuyez sur le bouton de l’instrument dans les deux minutes.",
+    ),
+    (
+        "probleme.etalonnage_a_refaire.cause",
+        "Le MYIRO-1 demande un nouvel étalonnage.",
+    ),
+    (
+        "probleme.etalonnage_a_refaire.action",
+        "Cliquez sur «\u{202f}Étalonner\u{202f}», en haut, puis mesurez de nouveau.",
+    ),
+    (
+        "probleme.repos_incertain.cause",
+        "Le MYIRO-1 n’a pas confirmé la fin de la mesure. La mesure est gardée.",
+    ),
+    (
+        "probleme.repos_incertain.action",
+        "Pour mesurer de nouveau, cliquez sur «\u{202f}Réessayer\u{202f}»\u{202f}: l’instrument sera reconnecté, puis à étalonner.",
+    ),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -587,6 +620,39 @@ const ANGLAIS: Catalogue = &[
     ("ecran.etalonnage.schema.instrument", "MYIRO-1"),
     ("ecran.etalonnage.schema.capuchon", "Cap"),
     ("ecran.etalonnage.schema.blanc", "Reference white"),
+    // Spot measurement: problems
+    (
+        "probleme.mesure_echouee.cause",
+        "The measurement failed. The MYIRO-1 may not have been flat on the colour.",
+    ),
+    (
+        "probleme.mesure_echouee.action",
+        "Set it flat, click “Measure”, then press its button.",
+    ),
+    (
+        "probleme.mesure_delai.cause",
+        "The MYIRO-1 button was not pressed in time.",
+    ),
+    (
+        "probleme.mesure_delai.action",
+        "Click “Measure” again, then press the instrument’s button within two minutes.",
+    ),
+    (
+        "probleme.etalonnage_a_refaire.cause",
+        "The MYIRO-1 needs to be calibrated again.",
+    ),
+    (
+        "probleme.etalonnage_a_refaire.action",
+        "Click “Calibrate” at the top, then measure again.",
+    ),
+    (
+        "probleme.repos_incertain.cause",
+        "The MYIRO-1 did not confirm the end of the measurement. The measurement is kept.",
+    ),
+    (
+        "probleme.repos_incertain.action",
+        "To measure again, click “Try again”: the instrument will be reconnected, then needs calibrating.",
+    ),
 ];
 
 fn catalogue(langue: Langue) -> Catalogue {
