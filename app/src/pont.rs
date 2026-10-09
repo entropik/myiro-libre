@@ -361,6 +361,8 @@ pub struct PontSimule {
     etalonnage: Option<Horodatage>,
     /// Remise au repos rendue avec chaque mesure.
     remise_au_repos: Info<RemiseAuRepos>,
+    /// Réponse à `fermer` (par défaut : fermeture confirmée).
+    fermeture: Box<Result<Reponse, Panne>>,
 }
 
 impl PontSimule {
@@ -373,12 +375,20 @@ impl PontSimule {
             connecte: None,
             etalonnage: None,
             remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
+            fermeture: Box::new(Ok(Reponse::Ferme {})),
         }
     }
 
     /// Remise au repos rendue avec chaque mesure (par défaut : au repos, prouvé).
     pub fn avec_remise_au_repos(mut self, remise_au_repos: Info<RemiseAuRepos>) -> Self {
         self.remise_au_repos = remise_au_repos;
+        self
+    }
+
+    /// À la demande `fermer`, rend ce résultat (ticket #24 : `ferme`,
+    /// `fermeture_incertaine`, une erreur, ou une panne du pont).
+    pub fn fermer_par(mut self, resultat: Result<Reponse, Panne>) -> Self {
+        self.fermeture = Box::new(resultat);
         self
     }
 
@@ -414,7 +424,7 @@ impl Pont for PontSimule {
             Requete::Etalonner {} => Palier::Etalonnage,
             Requete::MesurerPonctuelle {} => Palier::MesurePonctuelle,
             Requete::MesurerBande { .. } => Palier::Bande,
-            Requete::Fermer {} => return Ok(Reponse::Ferme {}),
+            Requete::Fermer {} => return (*self.fermeture).clone(),
             // Comme `pont-myiro1` : la connexion par adresse est celle du FD-9.
             Requete::ConnecterAdresse { .. } => {
                 return Ok(Reponse::RequeteInvalide {

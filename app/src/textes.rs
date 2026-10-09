@@ -276,6 +276,67 @@ const FRANCAIS: Catalogue = &[
         "probleme.instrument_perdu.action",
         "Vérifiez le câble, puis cliquez sur «\u{202f}Réessayer\u{202f}» pour le reconnecter.",
     ),
+    // Choix de l’instrument (ticket #49)
+    ("choix.libelle", "Changer d’instrument"),
+    ("choix.titre", "Instruments du poste"),
+    (
+        "choix.aide",
+        "Un seul instrument sert à la fois. En choisir un autre ferme d’abord celui qui est en service.",
+    ),
+    ("choix.ligne", "{modele} ({liaison}), {etat}"),
+    ("choix.liaison.usb", "USB"),
+    ("choix.liaison.reseau", "réseau"),
+    ("choix.etat.non_detecte", "non trouvé"),
+    ("choix.etat.detecte", "détecté"),
+    ("choix.etat.connecte", "connecté"),
+    ("choix.etat.etalonnage_requis", "étalonnage requis"),
+    ("choix.etat.etalonne", "étalonné"),
+    ("choix.etat.en_attente", "en attente"),
+    ("choix.etat.non_trouve", "non trouvé la dernière fois"),
+    ("choix.en_service", "En service"),
+    ("choix.utiliser", "Utiliser"),
+    ("choix.fermer", "Fermer la liste"),
+    (
+        "choix.annonce.sans_choix",
+        "Aucun instrument n’avait été choisi\u{202f}: le {modele}, trouvé sur ce poste, est en service. Choisissez ici celui que vous voulez utiliser.",
+    ),
+    (
+        "choix.annonce.remplace",
+        "Le {modele}, choisi la dernière fois, n’a pas été trouvé\u{202f}: le {autre} est en service à sa place.",
+    ),
+    ("choix.annonce.ferme", "Le {modele} a été fermé."),
+    (
+        "choix.annonce.ferme_repos_suppose",
+        "Le {modele} a été fermé. Aucune mesure n’était en cours\u{202f}: il devrait être au repos.",
+    ),
+    (
+        "choix.annonce.ferme_incertain",
+        "Le {modele} a été fermé, mais il n’a pas confirmé son retour au repos. S’il clignote ou ne répond plus, débranchez-le puis rebranchez-le.",
+    ),
+    (
+        "choix.annonce.ferme_echec",
+        "Le {modele} n’a pas pu être fermé normalement. Débranchez-le puis rebranchez-le avant de vous en servir de nouveau.",
+    ),
+    (
+        "refus.occupe.recherche",
+        "Recherche de l’instrument en cours\u{202f}: attendez qu’elle se termine.",
+    ),
+    (
+        "refus.occupe.etalonnage",
+        "Un étalonnage est en cours\u{202f}: attendez qu’il se termine.",
+    ),
+    (
+        "refus.occupe.mesure",
+        "Une mesure est en cours\u{202f}: attendez qu’elle se termine.",
+    ),
+    (
+        "refus.occupe.changement",
+        "Changement d’instrument en cours\u{202f}: attendez qu’il se termine.",
+    ),
+    (
+        "refus.absent",
+        "Le logiciel du fabricant de cet instrument n’est pas trouvé sur ce poste.",
+    ),
     // Étalonnage guidé
     ("instrument.etalonner", "Étalonner"),
     (
@@ -644,6 +705,67 @@ const ANGLAIS: Catalogue = &[
         "probleme.instrument_perdu.action",
         "Check the cable, then click “Try again” to reconnect it.",
     ),
+    // Instrument choice (ticket #49)
+    ("choix.libelle", "Change instrument"),
+    ("choix.titre", "Instruments on this computer"),
+    (
+        "choix.aide",
+        "Only one instrument works at a time. Choosing another first closes the one in use.",
+    ),
+    ("choix.ligne", "{modele} ({liaison}), {etat}"),
+    ("choix.liaison.usb", "USB"),
+    ("choix.liaison.reseau", "network"),
+    ("choix.etat.non_detecte", "not found"),
+    ("choix.etat.detecte", "detected"),
+    ("choix.etat.connecte", "connected"),
+    ("choix.etat.etalonnage_requis", "calibration required"),
+    ("choix.etat.etalonne", "calibrated"),
+    ("choix.etat.en_attente", "on standby"),
+    ("choix.etat.non_trouve", "not found last time"),
+    ("choix.en_service", "In use"),
+    ("choix.utiliser", "Use"),
+    ("choix.fermer", "Close the list"),
+    (
+        "choix.annonce.sans_choix",
+        "No instrument had been chosen: the {modele}, found on this computer, is in use. Choose here the one you want to use.",
+    ),
+    (
+        "choix.annonce.remplace",
+        "The {modele}, chosen last time, was not found: the {autre} is in use instead.",
+    ),
+    ("choix.annonce.ferme", "The {modele} has been closed."),
+    (
+        "choix.annonce.ferme_repos_suppose",
+        "The {modele} has been closed. No measurement was running: it should be at rest.",
+    ),
+    (
+        "choix.annonce.ferme_incertain",
+        "The {modele} has been closed, but it did not confirm it is back at rest. If it blinks or stops responding, unplug it and plug it back in.",
+    ),
+    (
+        "choix.annonce.ferme_echec",
+        "The {modele} could not be closed normally. Unplug it and plug it back in before using it again.",
+    ),
+    (
+        "refus.occupe.recherche",
+        "Looking for the instrument: wait until it is done.",
+    ),
+    (
+        "refus.occupe.etalonnage",
+        "A calibration is running: wait until it is done.",
+    ),
+    (
+        "refus.occupe.mesure",
+        "A measurement is running: wait until it is done.",
+    ),
+    (
+        "refus.occupe.changement",
+        "Changing instrument: wait until it is done.",
+    ),
+    (
+        "refus.absent",
+        "The manufacturer software for this instrument is not found on this computer.",
+    ),
     // Guided calibration
     ("instrument.etalonner", "Calibrate"),
     (
@@ -852,6 +974,11 @@ mod tests {
                 "raison.etalonnage",
                 "ecran.choix.titre.logiciel_absent",
                 "ecran.choix.titre.logiciel_inutilisable",
+                "choix.ligne",
+                "choix.liaison.usb",
+                "choix.liaison.reseau",
+                "choix.en_service",
+                "choix.utiliser",
             ]
             .map(String::from),
         );

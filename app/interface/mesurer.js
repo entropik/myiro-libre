@@ -271,7 +271,7 @@
     dessiner();
     try {
       const r = await invoke("mesurer", { condition: Number(choixCondition.value), langue: langue() });
-      if (r.instrument) vueInstrument = r.instrument;
+      if (r.instrument) recevoir(r.instrument); // app.js : instrument actif et liste du poste
       if (r.mesures.length > fiches.length) {
         choisie = r.mesures[0].numero;
         document.dispatchEvent(new CustomEvent("bibliotheque-modifiee"));
