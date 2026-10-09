@@ -161,5 +161,25 @@ pub fn remplir(biblio: &Bibliotheque) -> Result<(), ErreurBibliotheque> {
         offset.id,
         &ponctuelle(&CYAN, "2026-10-07T14:06:10+02:00", etalonnage),
     )?;
+    // Mesure importée d'un fichier CGATS fictif : Lab seuls, en M1 d'après
+    // la source lumineuse, sans date ; ses spectres restent inconnus.
+    biblio.importer_mesure(jet.id, "releve-lab.txt", CGATS_LAB_SEUL)?;
     Ok(())
 }
+
+const CGATS_LAB_SEUL: &str = "CGATS.17\r\n\
+ORIGINATOR\t\"Logiciel fictif\"\r\n\
+CREATED\t\"\"\r\n\
+INSTRUMENTATION\t\"FD-9\"\r\n\
+SERIAL\t\"12345678\"\r\n\
+MEASUREMENT_SOURCE\t\"D50\"\r\n\
+NUMBER_OF_FIELDS\t4\r\n\
+BEGIN_DATA_FORMAT\r\n\
+SAMPLE_ID\tLAB_L\tLAB_A\tLAB_B\r\n\
+END_DATA_FORMAT\r\n\
+NUMBER_OF_SETS\t3\r\n\
+BEGIN_DATA\r\n\
+1\t95.10\t0.40\t-3.20\r\n\
+2\t55.30\t-37.00\t-50.10\r\n\
+3\t48.20\t74.00\t-3.10\r\n\
+END_DATA\r\n";

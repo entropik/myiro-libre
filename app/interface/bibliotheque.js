@@ -92,6 +92,19 @@
     return branches.find((b) => b.condition.id === idCondition);
   }
 
+  function nombreMesures(b) {
+    return b.mesures.length + b.importees.length;
+  }
+
+  // Condition d'impression du choix courant : la condition elle-même, ou celle
+  // de la mesure choisie.
+  function conditionChoisie() {
+    if (!choix) return null;
+    if (choix.type === "condition") return choix.id;
+    const b = branches.find((b) => b.mesures.some((m) => m.id === choix.id) || b.importees.some((m) => m.id === choix.id));
+    return b ? b.condition.id : null;
+  }
+
   // ---- Arborescence, à gauche ----
   function ligne(numero, texte, droite, choixLigne, niveau1) {
     const li = el("li", niveau1 ? "l1" : "");
@@ -109,13 +122,18 @@
   function dessinerArbre() {
     arbre.replaceChildren();
     branches.forEach((b, i) => {
-      arbre.append(ligne(String(i + 1), b.condition.nom, String(b.mesures.length),
+      arbre.append(ligne(String(i + 1), b.condition.nom, String(nombreMesures(b)),
         { type: "condition", id: b.condition.id }, true));
       b.mesures.forEach((m, j) => {
         // Le nom donné à la mesure (tâche Mesurer) passe devant la date ; sans nom, la date seule.
         const quand = `${date(m.horodatage)} · ${lecture(m.geometrie, m.plages)} · ${m.instrument.modele}`;
         arbre.append(ligne(`${i + 1}.${j + 1}`, m.nom ? `${m.nom} · ${quand}` : quand, "",
           { type: "mesure", id: m.id }, false));
+      });
+      // Les mesures importées suivent, marquées comme telles avec le nom de leur fichier.
+      b.importees.forEach((m, j) => {
+        arbre.append(ligne(`${i + 1}.${b.mesures.length + j + 1}`, `${t("import.importee")} · ${m.fichier}`, "",
+          { type: "importee", id: m.id }, false));
       });
     });
     message.hidden = branches.length > 0;
@@ -185,7 +203,9 @@
     return tete;
   }
 
-  function tableauLab(d) {
+  // Tableau des Lab : `libelles` nomme les trois spectres de chaque plage,
+  // `lab[plage][spectre]` vaut trois nombres, ou `null` si la valeur est inconnue.
+  function tableauLab(libelles, lab) {
     const section = el("div", "section");
     const tete = el("div", "section__head");
     tete.append(el("span", "label label--ink", t("details.valeurs")));
@@ -193,7 +213,7 @@
     seg.setAttribute("role", "group");
     seg.setAttribute("aria-label", t("details.valeurs.libelle"));
     [0, 1, 2].forEach((i) => {
-      const b = el("button", "", conditionSpectre(d, i));
+      const b = el("button", "", libelles[i]);
       b.setAttribute("aria-pressed", String(i === spectreChoisi));
       b.addEventListener("click", () => { spectreChoisi = i; afficherChoix(); });
       seg.append(b);
@@ -206,10 +226,12 @@
     const thead = el("thead");
     thead.append(entete);
     const corps = el("tbody");
-    d.lab.forEach((plage, i) => {
+    lab.forEach((plage, i) => {
       const tr = el("tr");
       tr.append(el("td", "id num", String(i + 1)));
-      for (const v of plage[spectreChoisi]) tr.append(el("td", "r num", nombre(v)));
+      const valeurs = plage[spectreChoisi];
+      if (valeurs) for (const v of valeurs) tr.append(el("td", "r num", nombre(v)));
+      else for (let k = 0; k < 3; k++) tr.append(el("td", "r mute", t("cartouche.inconnu")));
       corps.append(tr);
     });
     table.append(thead, corps);
@@ -233,7 +255,7 @@
       if (!instruments.includes(nom)) instruments.push(nom);
     }
     montrerCartouche("details.condition", b.condition.nom, [
-      cellule("bibliotheque.mesures", String(b.mesures.length)),
+      cellule("bibliotheque.mesures", String(nombreMesures(b))),
       cellule("cartouche.reference", t("cartouche.aucune")),
       cellule("details.instruments", instruments.join(", ") || t("cartouche.aucun"), true),
     ]);
@@ -268,7 +290,7 @@
     const section = el("div", "section");
     section.append(champ, actions);
     montrerCentre(
-      enTete(b.condition.nom, `${b.mesures.length} ${t(b.mesures.length > 1 ? "compte.mesures" : "compte.mesure")}`),
+      enTete(b.condition.nom, `${nombreMesures(b)} ${t(nombreMesures(b) > 1 ? "compte.mesures" : "compte.mesure")}`),
       section,
     );
   }
@@ -295,8 +317,50 @@
     ]);
     montrerCentre(
       enTete(date(d.horodatage), [lu, nomCondition].filter(Boolean).join(" · ")),
-      tableauLab(d),
+      tableauLab([0, 1, 2].map((i) => conditionSpectre(d, i)), d.lab),
       emplacementSpectre(),
+    );
+  }
+
+  // Condition de l'emplacement de spectre n° e d'une mesure importée, telle que
+  // le fichier la donne : déduite, elle est « à confirmer » ; absente, inconnue.
+  function conditionImportee(c, e) {
+    if (c.statut === "inconnue") return `${e + 1} · ${t("cartouche.inconnue")}`;
+    return qualifiee(c, (v) => v, "cartouche.inconnue");
+  }
+
+  // Une mesure importée : son cartouche dit « importée » et le fichier d'origine.
+  async function choisirImportee(id) {
+    let d;
+    try {
+      d = await invoke("bibliotheque_detail_importee", { id });
+    } catch (cle) {
+      cacherCartouche();
+      montrerCentre(el("p", "why", t(cle)));
+      return;
+    }
+    if (!choix || choix.type !== "importee" || choix.id !== id) return; // choix changé entre-temps
+    const presents = [0, 1, 2].filter((e) => d.spectres[e] || d.lab.some((p) => p[e].statut !== "inconnue"));
+    const contenus = presents.map((e) =>
+      `${conditionImportee(d.conditions[e], e)} (${t(d.spectres[e] ? "import.spectre_et_lab" : "import.lab_seul")})`);
+    const instrumentLu = qualifiee(d.instrument, (i) =>
+      d.numero_serie.statut === "inconnue" ? i : `${i} ${t("details.numero")} ${d.numero_serie.valeur}`,
+    "cartouche.inconnu");
+    const cellules = [
+      cellule("import.origine", t("import.importee")),
+      cellule("import.date", qualifiee(d.date, (h) => date(h), "cartouche.inconnue")),
+      cellule("import.fichier", d.fichier, true),
+      cellule("cartouche.instrument", instrumentLu, true),
+      cellule("import.provenance", t(d.myiro_libre ? "import.provenance.myiro" : "import.provenance.autre"), true),
+      cellule("cartouche.condition_mesure", contenus.join(", ") || t("cartouche.inconnue"), true),
+    ];
+    if (!d.spectres.some(Boolean)) cellules.push(cellule("import.spectres", t("import.aucun_spectre"), true));
+    cellules.push(cellule("details.condition", d.nom_condition, true));
+    montrerCartouche("import.titre", d.fichier, cellules);
+    const lab = d.lab.map((p) => p.map((v) => (v.statut === "inconnue" ? null : v.valeur)));
+    montrerCentre(
+      enTete(d.fichier, [t("import.importee"), `${d.plages} ${t(d.plages > 1 ? "lecture.plages" : "lecture.plage")}`, d.nom_condition].join(" · ")),
+      tableauLab([0, 1, 2].map((e) => conditionImportee(d.conditions[e], e)), lab),
     );
   }
 
@@ -307,6 +371,8 @@
   const exportRaison = exportZone.querySelector("[data-export-raison]");
   const exportMessage = exportZone.querySelector("[data-export-message]");
   const restaurerAvis = exportZone.querySelector("[data-restaurer-avis]");
+  const importerBouton = exportZone.querySelector("[data-importer]");
+  const importRaison = exportZone.querySelector("[data-import-raison]");
   let format = "cgats"; // usage choisi dans le menu d'export
 
   function dessinerExport() {
@@ -317,6 +383,9 @@
     const sansMesure = format === "cgats" && !(choix && choix.type === "mesure");
     exporterBouton.disabled = sansMesure;
     exportRaison.hidden = !sansMesure;
+    const sansCondition = conditionChoisie() === null;
+    importerBouton.disabled = sansCondition;
+    importRaison.hidden = !sansCondition;
   }
 
   function annoncer(texte) {
@@ -337,37 +406,19 @@
     }
   }
 
-  // Condition de l'emplacement de spectre n° e d'un fichier importé, telle que
-  // le fichier la donne : déduite, elle est « à confirmer » ; absente, inconnue.
-  function conditionImportee(c, e) {
-    if (c.statut === "inconnue") return `${e + 1} · ${t("cartouche.inconnue")}`;
-    return qualifiee(c, (v) => v, "cartouche.inconnue");
-  }
-
-  function montrerImport(r) {
-    const contenus = [0, 1, 2]
-      .filter((e) => r.spectres[e] || r.lab[e])
-      .map((e) => `${conditionImportee(r.conditions[e], e)} (${t(r.spectres[e] ? "import.spectre_et_lab" : "import.lab_seul")})`);
-    const instrumentLu = qualifiee(r.instrument, (i) =>
-      r.numero_serie.statut === "inconnue" ? i : `${i} ${t("details.numero")} ${r.numero_serie.valeur}`,
-    "cartouche.inconnu");
-    const cellules = [
-      cellule("import.plages", String(r.plages)),
-      cellule("import.date", qualifiee(r.date, (d) => date(d), "cartouche.inconnue")),
-      cellule("cartouche.instrument", instrumentLu, true),
-      cellule("import.provenance", t(r.myiro_libre ? "import.provenance.myiro" : "import.provenance.autre"), true),
-      cellule("cartouche.condition_mesure", contenus.join(", "), true),
-    ];
-    if (!r.spectres.some(Boolean)) cellules.push(cellule("import.spectres", t("import.aucun_spectre"), true));
-    montrerCartouche("import.titre", r.fichier, cellules);
-    annoncer(t("import.pas_enregistre"));
-  }
-
+  // La mesure importée est rangée dans la condition d'impression choisie, puis montrée.
   async function importer() {
     exportMessage.hidden = true;
+    const condition = conditionChoisie();
+    if (condition === null) return;
     try {
-      const r = await invoke("bibliotheque_importer_cgats");
-      if (r) montrerImport(r);
+      const id = await invoke("bibliotheque_importer_cgats", { condition });
+      if (id === null) return;
+      recherche.value = "";
+      choix = { type: "importee", id };
+      await chargerArbre();
+      afficherChoix();
+      annoncer(t("import.rangee"));
     } catch (cle) {
       annoncer(t(cle));
     }
@@ -395,6 +446,7 @@
     const b = choix && choix.type === "condition" ? brancheDe(choix.id) : null;
     if (b) return choisirCondition(b);
     if (choix && choix.type === "mesure") return choisirMesure(choix.id);
+    if (choix && choix.type === "importee") return choisirImportee(choix.id);
     cacherCartouche();
     centreSansChoix();
   }
@@ -455,7 +507,7 @@
     b.addEventListener("click", () => { format = b.dataset.format; exportMessage.hidden = true; dessinerExport(); });
   }
   exporterBouton.addEventListener("click", exporter);
-  exportZone.querySelector("[data-importer]").addEventListener("click", importer);
+  importerBouton.addEventListener("click", importer);
   // Restaurer remplace toute la bibliothèque : l'accord de l'opérateur est demandé d'abord.
   exportZone.querySelector("[data-restaurer]").addEventListener("click", () => {
     exportMessage.hidden = true;

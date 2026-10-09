@@ -487,6 +487,7 @@ pub fn lancer() {
             colonne::bibliotheque_sauvegarder,
             colonne::bibliotheque_restaurer,
             colonne::bibliotheque_importer_cgats,
+            colonne::bibliotheque_detail_importee,
             etalonner,
             repondre_geste
         ])

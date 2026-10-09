@@ -71,6 +71,8 @@ Plusieurs tableaux doivent porter les mêmes plages, dans le même ordre. Un fic
 
 Écrire une mesure puis la relire rend exactement ses spectres, ses Lab et sa provenance (test de la crate).
 
+À l'écran, « Importer un fichier CGATS… » range la mesure importée dans la condition d'impression choisie à gauche. La bibliothèque conserve le texte du fichier tel quel, avec le seul nom du fichier (pas son dossier), et le relit à chaque affichage : la colonne de gauche et le cartouche disent « Importée » et le fichier d'origine, et une valeur absente du fichier s'affiche « inconnue ».
+
 ## Comparaison avec l'export CGATS de référence du fabricant
 
 Comparé à l'export MYIROtools d'une couleur, archivé sur le poste (non versionné), et à des exports CGATS du FD-9 par le logiciel du fabricant. Mêmes conventions : identifiant `CGATS.17`, tabulations, chaînes entre guillemets, `ORIGINATOR`, `FILE_DESCRIPTOR`, `CREATED`, `INSTRUMENTATION`, `SERIAL`, `MEASUREMENT_SOURCE`, `WEIGHTING_FUNCTION`, `KEYWORD`, `NUMBER_OF_FIELDS`, `NUMBER_OF_SETS`, colonnes `SAMPLE_ID`, `LAB_L`, `LAB_A`, `LAB_B` et spectre en `nmNNN` (réflectance de 0 à 1).

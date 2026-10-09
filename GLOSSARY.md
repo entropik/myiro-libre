@@ -140,7 +140,7 @@ Forme écrite d'une mesure, identique dans le protocole et dans la bibliothèque
 _Éviter_ : schéma, export (réservé à CGATS)
 
 **Mesure importée** :
-Mesure lue dans un fichier CGATS.17 (écrit par myiro-libre ou par un autre logiciel), et non produite par un pont : ce qu'elle dit vient du fichier, pas d'une provenance attestée. Ce que le fichier ne donne pas, spectre compris, reste inconnu. Description : `docs/formats/cgats.md`.
+Mesure lue dans un fichier CGATS.17 (écrit par myiro-libre ou par un autre logiciel), et non produite par un pont : ce qu'elle dit vient du fichier, pas d'une provenance attestée. Elle est rangée dans une condition d'impression, marquée « Importée » avec le nom de son fichier. Ce que le fichier ne donne pas, spectre compris, reste inconnu. Description : `docs/formats/cgats.md`.
 _Éviter_ : mesure externe, mesure chargée
 
 **Conditions demandées / observées** :

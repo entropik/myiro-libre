@@ -9,7 +9,7 @@ use std::sync::Mutex;
 
 use bibliotheque::{
     Bibliotheque, Branche, ConditionImpression, ErreurBibliotheque, IdCondition, IdMesure,
-    Instrument, MesureEnregistree,
+    Instrument, MesureEnregistree, MesureImporteeEnregistree,
 };
 use pont_protocole::{ConditionMesure, Geometrie, Horodatage, Info};
 use serde::Serialize;
@@ -156,13 +156,45 @@ impl BibliothequeOuverte {
             .restaurer(fichier)
             .map_err(|e| cle_erreur(&e).to_string())
     }
+
+    /// Lit un fichier CGATS et range la mesure importée dans la condition
+    /// d'impression.
+    pub fn importer_cgats(
+        &self,
+        condition: IdCondition,
+        fichier: &Path,
+    ) -> Result<IdMesure, String> {
+        let octets = std::fs::read(fichier).map_err(|e| {
+            eprintln!("{} : {e}", fichier.display());
+            "bibliotheque.erreur.cgats_illisible".to_string()
+        })?;
+        // Les exports d'autres logiciels ne sont pas toujours en UTF-8.
+        let texte = String::from_utf8_lossy(&octets);
+        self.avec(|b| b.importer_mesure(condition, &nom_de(fichier), &texte))
+    }
+
+    pub fn detail_importee(&self, id: IdMesure) -> Result<DetailImportee, String> {
+        self.avec(|b| {
+            let enregistree = b.mesure_importee(id)?;
+            let nom = b
+                .conditions()?
+                .into_iter()
+                .find(|c| c.id == enregistree.condition)
+                .map(|c| c.nom)
+                .unwrap_or_default();
+            Ok(DetailImportee::de(enregistree, nom))
+        })
+    }
 }
 
-/// Ce que l'écran montre d'un fichier CGATS importé : ce qu'il contient, et
-/// ce qui y reste inconnu.
+/// Ce que la feuille et le cartouche montrent d'une mesure importée : ce que
+/// le fichier contient, et ce qui y reste inconnu.
 #[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct ResumeImport {
-    /// Nom du fichier, sans le dossier.
+pub struct DetailImportee {
+    pub id: IdMesure,
+    pub condition: IdCondition,
+    pub nom_condition: String,
+    /// Nom du fichier d'origine, sans le dossier.
     pub fichier: String,
     pub plages: usize,
     /// Écrit par myiro-libre (provenance complète dans l'en-tête).
@@ -172,35 +204,42 @@ pub struct ResumeImport {
     pub date: Info<String>,
     /// Condition de mesure de chaque emplacement de spectre.
     pub conditions: [Info<ConditionMesure>; 3],
-    /// Le fichier donne-t-il le spectre, le Lab, de chaque emplacement ?
+    /// Le fichier donne-t-il un spectre pour chaque emplacement ?
     pub spectres: [bool; 3],
-    pub lab: [bool; 3],
+    /// Lab de chaque plage, par emplacement ; inconnu s'il manque au fichier.
+    pub lab: Vec<[Info<[f32; 3]>; 3]>,
 }
 
-/// Lit un fichier CGATS en mesure importée et le résume pour l'écran.
-pub fn importer_cgats(fichier: &Path) -> Result<ResumeImport, String> {
-    let illisible = |detail: String| {
-        eprintln!("{} : {detail}", fichier.display());
-        "bibliotheque.erreur.cgats_illisible".to_string()
-    };
-    let octets = std::fs::read(fichier).map_err(|e| illisible(e.to_string()))?;
-    // Les exports d'autres logiciels ne sont pas toujours en UTF-8.
-    let texte = String::from_utf8_lossy(&octets);
-    let importee = cgats::lire(&texte).map_err(|e| illisible(e.to_string()))?;
-    let present = |quoi: &dyn Fn(&cgats::PlageImportee, usize) -> bool| {
-        [0, 1, 2].map(|e| importee.plages.iter().any(|p| quoi(p, e)))
-    };
-    Ok(ResumeImport {
-        fichier: nom_de(fichier),
-        plages: importee.plages.len(),
-        myiro_libre: importee.provenance != Info::Inconnue,
-        instrument: importee.instrument.clone(),
-        numero_serie: importee.numero_serie.clone(),
-        date: importee.date.clone(),
-        conditions: importee.conditions.clone(),
-        spectres: present(&|p, e| p.spectres[e] != Info::Inconnue),
-        lab: present(&|p, e| p.lab[e] != Info::Inconnue),
-    })
+impl DetailImportee {
+    fn de(enregistree: MesureImporteeEnregistree, nom_condition: String) -> DetailImportee {
+        let m = enregistree.mesure;
+        let spectres = [0, 1, 2].map(|e| m.plages.iter().any(|p| p.spectres[e] != Info::Inconnue));
+        let lab = m
+            .plages
+            .iter()
+            .map(|p| {
+                p.lab.clone().map(|l| match l {
+                    Info::Confirmee(l) => Info::Confirmee(l.valeurs()),
+                    Info::Supposee(l) => Info::Supposee(l.valeurs()),
+                    Info::Inconnue => Info::Inconnue,
+                })
+            })
+            .collect();
+        DetailImportee {
+            id: enregistree.id,
+            condition: enregistree.condition,
+            nom_condition,
+            fichier: enregistree.fichier,
+            plages: m.plages.len(),
+            myiro_libre: m.provenance != Info::Inconnue,
+            instrument: m.instrument,
+            numero_serie: m.numero_serie,
+            date: m.date,
+            conditions: m.conditions,
+            spectres,
+            lab,
+        }
+    }
 }
 
 /// Clé du catalogue qui explique une erreur à l'utilisateur. Le détail
@@ -209,6 +248,10 @@ pub fn cle_erreur(erreur: &ErreurBibliotheque) -> &'static str {
     match erreur {
         ErreurBibliotheque::NomVide => "bibliotheque.erreur.nom_vide",
         ErreurBibliotheque::NomDejaPris(_) => "bibliotheque.erreur.nom_pris",
+        ErreurBibliotheque::ImportIllisible(detail) => {
+            eprintln!("{detail}");
+            "bibliotheque.erreur.cgats_illisible"
+        }
         ErreurBibliotheque::SauvegardeInvalide(detail) => {
             eprintln!("{detail}");
             "bibliotheque.erreur.sauvegarde_invalide"
@@ -377,9 +420,14 @@ pub fn bibliotheque_restaurer(
     Ok(Some(nom_de(&fichier)))
 }
 
-/// Lit le fichier CGATS choisi dans le sélecteur et en rend le résumé.
+/// Range dans la condition d'impression la mesure du fichier CGATS choisi
+/// dans le sélecteur. Rend son numéro, ou `None` si l'opérateur a annulé.
 #[tauri::command(async)]
-pub fn bibliotheque_importer_cgats(app: tauri::AppHandle) -> Result<Option<ResumeImport>, String> {
+pub fn bibliotheque_importer_cgats(
+    app: tauri::AppHandle,
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+    condition: i64,
+) -> Result<Option<IdMesure>, String> {
     let Some(fichier) = choisi(
         app.dialog()
             .file()
@@ -388,7 +436,17 @@ pub fn bibliotheque_importer_cgats(app: tauri::AppHandle) -> Result<Option<Resum
     ) else {
         return Ok(None);
     };
-    importer_cgats(&fichier).map(Some)
+    ouverte
+        .importer_cgats(IdCondition(condition), &fichier)
+        .map(Some)
+}
+
+#[tauri::command]
+pub fn bibliotheque_detail_importee(
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+    id: i64,
+) -> Result<DetailImportee, String> {
+    ouverte.detail_importee(IdMesure(id))
 }
 
 fn nom_de(fichier: &Path) -> String {
@@ -496,6 +554,17 @@ mod tests {
             .iter()
             .flat_map(|b| &b.mesures)
             .all(|m| m.instrument.numero_serie == 12345678));
+        // Une mesure importée, à part, marquée par son fichier.
+        let fichiers: Vec<_> = branches
+            .iter()
+            .map(|b| {
+                b.importees
+                    .iter()
+                    .map(|m| m.fichier.as_str())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert_eq!(fichiers, [vec!["releve-lab.txt"], vec![], vec![]]);
     }
 
     #[test]
@@ -602,26 +671,37 @@ mod tests {
     }
 
     #[test]
-    fn un_fichier_cgats_importe_est_resume_sans_rien_deviner() {
+    fn un_fichier_cgats_importe_est_range_dans_sa_condition_sans_rien_deviner() {
         let (dossier, ouverte) = demonstration();
-        let bande = ouverte.arborescence("").unwrap()[0].mesures[0].id;
+        let branches = ouverte.arborescence("").unwrap();
+        let bande = branches[0].mesures[0].id;
+        let offset = branches[1].condition.id;
         let fichier = dossier.path().join("export.txt");
         ouverte.exporter_cgats(bande, &fichier).unwrap();
 
-        let resume = importer_cgats(&fichier).unwrap();
-        assert_eq!(resume.fichier, "export.txt");
-        assert_eq!(resume.plages, 4);
-        assert!(resume.myiro_libre);
-        assert_eq!(resume.instrument, Info::Confirmee("MYIRO-1".into()));
-        assert_eq!(resume.spectres, [true, true, true]);
+        let id = ouverte.importer_cgats(offset, &fichier).unwrap();
+        let rangee = &ouverte.arborescence("").unwrap()[1];
+        assert_eq!(rangee.importees.len(), 1);
+        assert_eq!(rangee.importees[0].id, id);
+        assert_eq!(rangee.importees[0].fichier, "export.txt");
+
+        let detail = ouverte.detail_importee(id).unwrap();
+        assert_eq!(detail.fichier, "export.txt");
+        assert_eq!(detail.nom_condition, "Offset, couché mat 150\u{202f}g");
+        assert_eq!(detail.plages, 4);
+        assert!(detail.myiro_libre);
+        assert_eq!(detail.instrument, Info::Confirmee("MYIRO-1".into()));
+        assert_eq!(detail.spectres, [true, true, true]);
         assert_eq!(
-            resume.conditions,
+            detail.conditions,
             [
                 Info::Confirmee(ConditionMesure::M0),
                 Info::Confirmee(ConditionMesure::M1),
                 Info::Confirmee(ConditionMesure::M2),
             ]
         );
+        let origine = ouverte.detail_mesure(bande).unwrap();
+        assert_eq!(detail.lab[3][1], Info::Confirmee(origine.lab[3][1]));
 
         // Un fichier sans spectre : les spectres restent inconnus.
         let sans_spectre = dossier.path().join("lab.txt");
@@ -632,18 +712,28 @@ mod tests {
              1\t50.0\t1.0\t-2.0\nEND_DATA\n",
         )
         .unwrap();
-        let resume = importer_cgats(&sans_spectre).unwrap();
-        assert!(!resume.myiro_libre);
-        assert_eq!(resume.spectres, [false, false, false]);
-        assert_eq!(resume.lab, [false, true, false]);
-        assert_eq!(resume.instrument, Info::Inconnue);
+        let id = ouverte.importer_cgats(offset, &sans_spectre).unwrap();
+        let detail = ouverte.detail_importee(id).unwrap();
+        assert!(!detail.myiro_libre);
+        assert_eq!(detail.spectres, [false, false, false]);
+        assert_eq!(
+            detail.lab[0],
+            [
+                Info::Inconnue,
+                Info::Confirmee([50.0, 1.0, -2.0]),
+                Info::Inconnue
+            ]
+        );
+        assert_eq!(detail.instrument, Info::Inconnue);
+        assert_eq!(detail.date, Info::Inconnue);
 
         let illisible = dossier.path().join("illisible.txt");
         std::fs::write(&illisible, "rien de CGATS").unwrap();
         assert_eq!(
-            importer_cgats(&illisible),
+            ouverte.importer_cgats(offset, &illisible),
             Err("bibliotheque.erreur.cgats_illisible".to_string())
         );
+        assert_eq!(ouverte.arborescence("").unwrap()[1].importees.len(), 2);
     }
 
     #[test]
