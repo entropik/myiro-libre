@@ -164,7 +164,7 @@ Quantité maximale utile d'un canal d'encre, au-delà de laquelle la couleur ne 
 _Éviter_ : ink limit, saturation
 
 **Vérification de profil** :
-Contrôle d'impression d'un tirage imprimé à travers un profil, dont la référence est calculée à partir de ce profil.
+Évaluation d'un tirage d'une seconde mire imprimée à travers un profil : elle distingue la fidélité aux couleurs demandées de l'accord entre les mesures et la prédiction du profil. Les deux résultats conservent leurs références et leurs tolérances.
 _Éviter_ : validation de profil, test de profil
 
 ### Densitométrie et contrôle
