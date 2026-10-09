@@ -170,3 +170,20 @@ fn une_ligne_illisible_ne_declenche_rien() {
         .all(|r| matches!(r, Reponse::RequeteInvalide { .. })));
     assert!(session.sdk().appels.is_empty());
 }
+
+/// Le FD-9 ne mesure pas : `annuler` n'a jamais rien à interrompre (#26).
+#[test]
+fn annuler_est_sans_effet_et_sans_appel_a_la_dll() {
+    let (lignes, session) = dialoguer(
+        Fd9Simule::avec_un_fd9(),
+        Palier::Detection,
+        &[r#"{"cmd":"annuler"}"#],
+    );
+    assert_eq!(
+        reponses(&lignes),
+        vec![Reponse::Annulation {
+            effet: pont_protocole::EffetAnnulation::SansEffet
+        }]
+    );
+    assert!(session.sdk().appels.is_empty());
+}

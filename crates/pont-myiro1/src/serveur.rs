@@ -1,44 +1,112 @@
 //! Boucle du pont : lit une requête JSON par ligne, la confie à la session et
 //! écrit une réponse JSON par ligne (ADR 0005).
+//!
+//! Les lignes sont lues par un fil à part, qui ne bloque jamais sur
+//! l'instrument : une demande `annuler` est vue pendant qu'une mesure attend
+//! (ticket #26). Les appels à la DLL restent tous faits par le fil principal,
+//! une demande après l'autre, et chaque demande reçoit une seule réponse, dans
+//! l'ordre d'arrivée.
 
-use crate::{Connexion, Fermeture, MesurePlage, SdkMyiro1, Session};
+use crate::{Annulation, Connexion, Fermeture, MesurePlage, SdkMyiro1, Session};
 use fdx_sys::Liaison;
 use pont_protocole::{
-    ecrire_reponse, lire_requete, DonneesBrutes, ErreurMesure, ErreurPont, Identite, Info,
-    InstrumentDetecte, Lab, Mesure, Plage, Provenance, RemiseAuRepos, Reponse, Requete, Spectre,
+    ecrire_reponse, lire_requete, DonneesBrutes, EffetAnnulation, ErreurMesure, ErreurPont,
+    Identite, Info, InstrumentDetecte, Lab, Mesure, Plage, Provenance, RemiseAuRepos, Reponse,
+    Requete, Spectre,
 };
 use std::io::{self, BufRead, Write};
+use std::sync::mpsc::{self, Receiver, Sender};
+
+/// Une ligne lue, avec son numéro d'ordre parmi les demandes.
+type LigneNumerotee = (u64, io::Result<String>);
 
 /// Sert les requêtes jusqu'à une fermeture faite ou la fin de l'entrée. Une
-/// ligne illisible reçoit `requete_invalide` et ne déclenche rien. À la fin de
-/// l'entrée, ou sur une erreur d'écriture, la session est fermée par la même
+/// ligne illisible reçoit `requete_invalide` et ne déclenche rien. `annuler`
+/// interrompt la demande qui la précède si elle attend encore l'instrument.
+/// À la fin de l'entrée, la mesure en attente est annulée de la même façon ;
+/// puis, comme sur une erreur d'écriture, la session est fermée par la même
 /// politique que `fermer` (sans réponse, faute de demande) ; une fermeture déjà
 /// faite n'est pas refaite.
 pub fn servir<S: SdkMyiro1>(
     session: &mut Session<S>,
-    entree: impl BufRead,
+    entree: impl BufRead + Send + 'static,
     sortie: &mut impl Write,
 ) -> io::Result<()> {
-    let resultat = repondre(session, entree, sortie);
+    let (envoi, lignes) = mpsc::channel();
+    let annulation = session.annulation();
+    // Les demandes sont numérotées à partir de 1 pour cette entrée-ci.
+    annulation.effacer();
+    // Le fil de lecture s'arrête de lui-même à la fin de l'entrée, ou à la fin
+    // du processus.
+    std::thread::spawn(move || lire(entree, envoi, annulation));
+    let resultat = repondre(session, lignes, sortie);
     // Sans demande, pas de réponse à écrire : `fermer` note son résultat au
     // journal de la session.
     let _ = session.fermer();
     resultat
 }
 
+/// Fil de lecture : numérote les demandes et transmet chaque ligne. `annuler`
+/// vise aussitôt la dernière demande qui n'est pas elle-même une annulation ;
+/// la fin de l'entrée aussi, mais seulement si cette demande attend
+/// l'opérateur (une entrée lue d'un bloc puis fermée n'annule rien qui part).
+fn lire(entree: impl BufRead, envoi: Sender<LigneNumerotee>, annulation: Annulation) {
+    let mut numero = 0;
+    let mut derniere = 0;
+    for ligne in entree.lines() {
+        let erreur = ligne.is_err();
+        if let Ok(texte) = &ligne {
+            if texte.trim().is_empty() {
+                continue;
+            }
+            numero += 1;
+            if lire_requete(texte) == Ok(Requete::Annuler {}) {
+                annulation.viser(derniere);
+            } else {
+                derniere = numero;
+            }
+        }
+        if envoi.send((numero, ligne)).is_err() || erreur {
+            return;
+        }
+    }
+    annulation.viser_si_elle_attend(derniere);
+}
+
 fn repondre<S: SdkMyiro1>(
     session: &mut Session<S>,
-    entree: impl BufRead,
+    lignes: Receiver<LigneNumerotee>,
     sortie: &mut impl Write,
 ) -> io::Result<()> {
-    for ligne in entree.lines() {
+    let annulation = session.annulation();
+    // La dernière demande (hors annulation) s'est terminée par une annulation.
+    let mut annulee = false;
+    for (numero, ligne) in lignes {
         let ligne = ligne?;
-        if ligne.trim().is_empty() {
-            continue;
-        }
+        annulation.commencer(numero);
         let (reponse, fin) = match lire_requete(&ligne) {
-            Ok(requete) => traiter(session, requete),
-            Err(detail) => (Reponse::RequeteInvalide { detail }, false),
+            Ok(Requete::Annuler {}) => {
+                let effet = if std::mem::take(&mut annulee) {
+                    EffetAnnulation::Appliquee
+                } else {
+                    EffetAnnulation::SansEffet
+                };
+                (Reponse::Annulation { effet }, false)
+            }
+            Ok(requete) => {
+                let (reponse, fin) = traiter(session, requete);
+                annulee = matches!(
+                    reponse,
+                    Reponse::Erreur {
+                        erreur: ErreurPont::MesureAnnulee { .. }
+                    }
+                );
+                (reponse, fin)
+            }
+            Err(detail) => {
+                annulee = false;
+                (Reponse::RequeteInvalide { detail }, false)
+            }
         };
         writeln!(sortie, "{}", ecrire_reponse(&reponse))?;
         sortie.flush()?;
@@ -115,6 +183,11 @@ fn traiter<S: SdkMyiro1>(session: &mut Session<S>, requete: Requete) -> (Reponse
             }
             Err(erreur) => Err(erreur),
         },
+        // Traitée par la boucle, qui sait si la demande précédente a été
+        // interrompue ; seule, elle n'a rien à interrompre.
+        Requete::Annuler {} => Ok(Reponse::Annulation {
+            effet: EffetAnnulation::SansEffet,
+        }),
     };
     (
         reponse.unwrap_or_else(|erreur| Reponse::Erreur { erreur }),

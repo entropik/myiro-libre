@@ -25,7 +25,7 @@ fn dialoguer_brut(
     let mut session = Session::new(sdk, plafond);
     let entree = requetes.join("\n");
     let mut sortie = Vec::new();
-    servir(&mut session, entree.as_bytes(), &mut sortie).unwrap();
+    servir(&mut session, std::io::Cursor::new(entree), &mut sortie).unwrap();
     let lignes = String::from_utf8(sortie)
         .unwrap()
         .lines()
@@ -343,7 +343,7 @@ fn une_fermeture_reprise_apres_echec_finit_par_la_deconnexion() {
     let mut sortie = Vec::new();
     servir(
         &mut session,
-        sequence(&[r#"{"cmd":"fermer"}"#]).join("\n").as_bytes(),
+        std::io::Cursor::new(sequence(&[r#"{"cmd":"fermer"}"#]).join("\n")),
         &mut sortie,
     )
     .unwrap();
@@ -351,7 +351,7 @@ fn une_fermeture_reprise_apres_echec_finit_par_la_deconnexion() {
     let mut sortie = Vec::new();
     servir(
         &mut session,
-        &b"{\"cmd\":\"fermer\"}\n{\"cmd\":\"version\"}"[..],
+        &b"{\"cmd\":\"fermer\"}\n{\"cmd\":\"version\"}"[..], // 'static
         &mut sortie,
     )
     .unwrap();
