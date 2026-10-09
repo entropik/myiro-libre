@@ -148,9 +148,10 @@
       arbre.append(ligne(String(i + 1), b.condition.nom, String(nombreMesures(b)),
         { type: "condition", id: b.condition.id }, true));
       b.mesures.forEach((m, j) => {
-        // Ligne 1 : le nom donné à la mesure (tâche Mesurer), ou la date ; ligne 2 : date courte · lecture.
-        const nom = m.nom || date(m.horodatage);
-        const detail = `${dateCourte(m.horodatage)} · ${lecture(m.geometrie, m.plages)}`;
+        // Ligne 1 : le nom donné à la mesure (tâche Mesurer), sinon la lecture ; ligne 2 : la date
+        // courte, suivie de la lecture si elle n'est pas déjà en ligne 1. Jamais la date deux fois.
+        const nom = m.nom || lecture(m.geometrie, m.plages);
+        const detail = m.nom ? `${dateCourte(m.horodatage)} · ${lecture(m.geometrie, m.plages)}` : dateCourte(m.horodatage);
         arbre.append(ligne(`${i + 1}.${j + 1}`, [nom, detail], "",
           { type: "mesure", id: m.id }, false));
       });

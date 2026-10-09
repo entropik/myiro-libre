@@ -223,7 +223,50 @@ fn la_colonne_de_la_bibliotheque_est_assez_large() {
         .any(|c| c.contains("grid-column:4/span6")));
     let page_app = regle(&css, ".app .page").join(";");
     assert!(
-        page_app.contains("padding:0var(--space-4)"),
+        page_app.contains("padding-left:var(--space-4)")
+            && page_app.contains("padding-right:var(--space-4)"),
         "marges : {page_app}"
     );
+}
+
+/// Le haut des trois zones garde l'espace sous le bandeau : la marge
+/// latérale de l'application ne remet pas à zéro l'espace du haut du cadre
+/// (`.page frame`).
+#[test]
+fn le_haut_des_zones_garde_son_espace_sous_le_bandeau() {
+    let css = composants();
+    assert!(regle(&css, ".frame")
+        .iter()
+        .any(|c| c.contains("padding-top:var(--space-8)")));
+    for selecteur in [".app .page", ".app > .frame"] {
+        for corps in regle(&css, selecteur) {
+            assert!(
+                !corps.contains("padding:") && !corps.contains("padding-top:"),
+                "{selecteur} écrase l'espace du haut : {corps}"
+            );
+        }
+    }
+}
+
+/// Un nom trop long dans la liste des mesures finit par des points, et le
+/// nom entier se lit au survol.
+#[test]
+fn un_nom_de_mesure_trop_long_se_lit_au_survol() {
+    let css = composants();
+    assert!(regle(&css, ".input")
+        .iter()
+        .any(|c| c.contains("text-overflow:ellipsis")));
+    let script = lire("interface/mesurer.js");
+    assert!(script.contains("nom.title = f.nom;"), "pas de nom au survol");
+}
+
+/// Une mesure sans nom, à gauche : la lecture en ligne 1, la date courte
+/// seule en ligne 2 (jamais la date deux fois).
+#[test]
+fn une_mesure_sans_nom_ne_montre_pas_sa_date_deux_fois() {
+    let script = lire("interface/bibliotheque.js");
+    assert!(script.contains("const nom = m.nom || lecture(m.geometrie, m.plages);"));
+    assert!(script.contains(
+        "const detail = m.nom ? `${dateCourte(m.horodatage)} · ${lecture(m.geometrie, m.plages)}` : dateCourte(m.horodatage);"
+    ));
 }

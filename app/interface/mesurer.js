@@ -120,6 +120,7 @@
       const tr = el("tr", f.numero === choisie ? "hl" : "");
       const nom = el("input", "input");
       nom.value = f.nom;
+      nom.title = f.nom; // nom entier au survol, s'il finit par des points
       nom.autocomplete = "off";
       nom.setAttribute("aria-label", t("details.nom"));
       nom.addEventListener("change", () => renommer(f.numero, nom));
