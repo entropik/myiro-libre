@@ -1033,3 +1033,107 @@ fn une_sauvegarde_dont_une_mesure_ne_se_relit_plus_est_refusee() {
     ));
     assert_eq!(contenu(&biblio), attendu);
 }
+
+// ---- Spectres par condition de mesure (ticket #10) ----
+
+#[test]
+fn les_spectres_d_une_mesure_se_lisent_par_condition_sans_deviner_la_condition_inconnue() {
+    let (_dossier, biblio) = bibliotheque_vide();
+    let jet = biblio.creer_condition("Jet").unwrap();
+    let id = biblio
+        .enregistrer_mesure(jet.id, &bande("2026-10-07T15:04:05+02:00"))
+        .unwrap();
+
+    let spectres = biblio.spectres(id).unwrap();
+    // 36 valeurs de 380 à 730 nm par 10 nm, telles que le pont les a demandées.
+    let Info::Confirmee(nm) = &spectres.longueurs_onde else {
+        panic!("longueurs d'onde confirmées par le pont");
+    };
+    assert_eq!(nm.len(), 36);
+    assert_eq!((nm[0], nm[1], nm[35]), (380, 390, 730));
+    assert_eq!(spectres.plages.len(), 3);
+
+    let deuxieme = &spectres.plages[1];
+    assert_eq!(deuxieme.identifiant, "2");
+    let [m0, m1, m2] = &deuxieme.conditions;
+    // M0 confirmé par le pont : premier spectre, tel quel.
+    let m0 = m0.as_ref().unwrap();
+    assert!(!m0.supposee);
+    assert_eq!(m0.valeurs[0], 0.4);
+    assert_eq!(m0.valeurs.len(), 36);
+    // M1 supposé : deuxième spectre, marqué « à confirmer ».
+    let m1 = m1.as_ref().unwrap();
+    assert!(m1.supposee);
+    assert_eq!(m1.valeurs[0], 0.4 + 0.001);
+    // Le troisième spectre n'a pas de condition connue : M2 n'est pas
+    // disponible, jamais rempli d'après la place du spectre.
+    assert!(m2.is_none());
+}
+
+#[test]
+fn les_spectres_d_une_mesure_importee_suivent_ce_que_le_fichier_declare() {
+    let (_dossier, biblio) = bibliotheque_vide();
+    let jet = biblio.creer_condition("Jet").unwrap();
+    // Un seul tableau, en M1 d'après sa source lumineuse (supposée), avec
+    // ses longueurs d'onde nommées.
+    let m1_seul = "CGATS.17\nMEASUREMENT_SOURCE\t\"D50\"\nNUMBER_OF_FIELDS\t4\n\
+         BEGIN_DATA_FORMAT\nSAMPLE_ID\tnm380\tnm390\tnm400\nEND_DATA_FORMAT\n\
+         NUMBER_OF_SETS\t1\nBEGIN_DATA\nA1\t0.25\t0.5\t1.05\nEND_DATA\n";
+    let id = biblio.importer_mesure(jet.id, "m1.txt", m1_seul).unwrap();
+
+    let spectres = biblio.spectres(id).unwrap();
+    assert_eq!(spectres.longueurs_onde, Info::Confirmee(vec![380, 390, 400]));
+    assert_eq!(spectres.plages.len(), 1);
+    assert_eq!(spectres.plages[0].identifiant, "A1");
+    let [m0, m1, m2] = &spectres.plages[0].conditions;
+    assert!(m0.is_none() && m2.is_none(), "M0 et M2 non disponibles");
+    let m1 = m1.as_ref().unwrap();
+    assert!(m1.supposee);
+    // Plus de 100 % (papier azuré) : une mesure, pas une erreur.
+    assert_eq!(m1.valeurs, vec![0.25, 0.5, 1.05]);
+
+    // Un fichier de Lab seuls : aucun spectre, longueurs d'onde inconnues.
+    let lab = biblio
+        .importer_mesure(jet.id, "lab.txt", &cgats_lab_seul())
+        .unwrap();
+    let spectres = biblio.spectres(lab).unwrap();
+    assert_eq!(spectres.longueurs_onde, Info::Inconnue);
+    assert_eq!(spectres.plages.len(), 2);
+    assert!(spectres
+        .plages
+        .iter()
+        .all(|p| p.conditions.iter().all(Option::is_none)));
+}
+
+#[test]
+fn une_demande_supposee_rend_chaque_spectre_a_confirmer() {
+    let (_dossier, biblio) = bibliotheque_vide();
+    let jet = biblio.creer_condition("Jet").unwrap();
+    let mut provenance = provenance(
+        12345678,
+        "2026-10-07T15:04:05+02:00",
+        Geometrie::Ponctuelle {},
+    );
+    let Info::Confirmee(conditions) = provenance.calcul.demande.clone() else {
+        unreachable!()
+    };
+    provenance.calcul.demande = Info::Supposee(conditions);
+    let mesure = Mesure::new(vec![plage(0.3)], provenance).unwrap();
+    let id = biblio.enregistrer_mesure(jet.id, &mesure).unwrap();
+
+    let spectres = biblio.spectres(id).unwrap();
+    assert!(matches!(spectres.longueurs_onde, Info::Supposee(_)));
+    let [m0, m1, m2] = &spectres.plages[0].conditions;
+    assert!(m0.as_ref().unwrap().supposee);
+    assert!(m1.as_ref().unwrap().supposee);
+    assert!(m2.is_none());
+}
+
+#[test]
+fn les_spectres_d_une_mesure_inconnue_sont_refuses() {
+    let (_dossier, biblio) = bibliotheque_vide();
+    assert_eq!(
+        biblio.spectres(IdMesure(42)).unwrap_err(),
+        ErreurBibliotheque::MesureInconnue(IdMesure(42))
+    );
+}

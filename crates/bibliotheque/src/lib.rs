@@ -5,8 +5,14 @@
 //! sont conservées dans leur format versionné (`docs/formats/mesure.md`), sans
 //! rien recalculer ni compléter.
 
+mod spectres;
+
 use std::fmt;
 use std::path::Path;
+
+pub use spectres::{
+    spectres_importee, spectres_mesure, SpectreCondition, SpectresMesure, SpectresPlage,
+};
 
 use cgats::MesureImportee;
 use pont_protocole::{ecrire_mesure, lire_mesure, Geometrie, Info, Mesure};
@@ -580,6 +586,25 @@ impl Bibliotheque {
             fichier,
             mesure: lire_importee(id, &contenu)?,
         })
+    }
+
+    /// Spectres d'une mesure, du pont ou importée, rangés par condition de
+    /// mesure (M0, M1, M2) : une condition que la mesure ne dit pas reste
+    /// absente, jamais devinée d'après la place du spectre.
+    pub fn spectres(&self, id: IdMesure) -> Resultat<SpectresMesure> {
+        let origine: Option<String> = self
+            .base
+            .query_row(
+                "SELECT origine FROM mesures WHERE id = ?1",
+                params![id.0],
+                |l| l.get(0),
+            )
+            .optional()?;
+        match origine.as_deref() {
+            Some("importee") => Ok(spectres_importee(&self.mesure_importee(id)?.mesure)),
+            Some(_) => Ok(spectres_mesure(&self.mesure(id)?.mesure)),
+            None => Err(ErreurBibliotheque::MesureInconnue(id)),
+        }
     }
 
     /// Instruments qui ont produit au moins une mesure de la bibliothèque.
