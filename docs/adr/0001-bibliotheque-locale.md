@@ -17,3 +17,9 @@ Les mesures, conditions d'impression, références, profils et linéarisations s
 - Une mesure est rattachée à une condition d'impression (choisie par l'utilisateur) et à un instrument, reconnu par le modèle et le numéro de série de sa provenance ; le micrologiciel reste dans la provenance de chaque mesure, puisqu'il peut changer.
 - Les noms de condition d'impression sont uniques sans tenir compte des majuscules (« Offset » et « offset » sont la même condition), espaces de début et de fin retirés. Les mesures se rangent des plus récentes aux plus anciennes selon l'instant réel de la mesure, fuseau compris, et non selon le texte de la date. La recherche ne tient compte ni des majuscules ni des accents ; elle porte sur le nom de la condition, l'instrument et la date de la mesure.
 - Pas encore : suppression, export et import CGATS, sauvegarde et restauration, contexte de la condition d'impression (support, encres, RIP…).
+
+## Complément du 9 octobre 2026 : nom d'une mesure (ticket #7)
+
+- Une mesure peut porter un nom, donné par l'utilisateur dans la tâche Mesurer (« Couleur 1 » par défaut) et modifiable. Il est enregistré avec la mesure, à côté de son format versionné, qui ne change pas : le nom n'est pas une donnée du pont. Espaces de début et de fin retirés ; un nom vide est refusé ; deux mesures peuvent porter le même nom.
+- Organisation 2 de la base : une colonne `nom` ajoutée à la table des mesures. Rien n'est réécrit ni effacé ; les mesures déjà enregistrées restent sans nom, et une mesure enregistrée sans nom (bande, import) n'en reçoit pas d'office. Un test relit sans perte une base de l'organisation 1.
+- La colonne de gauche montre le nom devant la date ; la recherche porte aussi sur le nom de la mesure.

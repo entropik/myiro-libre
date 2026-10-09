@@ -50,7 +50,7 @@ Pièce qui se fixe sous le MYIRO-1 et contient son blanc de référence, une tui
 _Éviter_ : socle, support, tuile (la tuile n'en est qu'une partie)
 
 **Geste** :
-Action que seul l'opérateur peut faire, demandée par le module `instrument` à travers l'écran : poser le MYIRO-1 sur son capuchon (plus tard, passer la bande). L'opérateur le fait ou y renonce ; s'il renonce, rien n'est envoyé à l'instrument.
+Action que seul l'opérateur peut faire, demandée par le module `instrument` à travers l'écran : poser le MYIRO-1 sur son capuchon, le poser sur la couleur à mesurer (plus tard, passer la bande). L'opérateur le fait ou y renonce ; s'il renonce, rien n'est envoyé à l'instrument.
 _Éviter_ : action manuelle, interaction
 
 **Condition de mesure** :

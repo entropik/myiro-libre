@@ -6,15 +6,18 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use pont_protocole::{ErreurPont, Horodatage, Palier, Reponse, Requete};
+use pont_protocole::{
+    ErreurPont, Geometrie, Horodatage, Info, Mesure, Palier, RemiseAuRepos, Reponse, Requete,
+};
 use serde::Serialize;
 
 use crate::pont::{architecture, Architecture, Panne, Pont};
 
-/// Dernier palier que l'application autorise au pont : l'étalonnage. Les
-/// mesures viendront avec leurs écrans. L'ouverture s'arrête à la connexion ;
-/// l'étalonnage n'est demandé que par [`Instrument::etalonner`].
-pub const PLAFOND: Palier = Palier::Etalonnage;
+/// Dernier palier que l'application autorise au pont : la mesure ponctuelle,
+/// jamais la bande (ticket #7). L'ouverture s'arrête à la connexion ;
+/// l'étalonnage et la mesure ne sont demandés que par
+/// [`Instrument::etalonner`] et [`Instrument::mesurer_ponctuelle`].
+pub const PLAFOND: Palier = Palier::MesurePonctuelle;
 
 /// Geste que l'instrument demande à l'opérateur (ADR 0005 : « les gestes
 /// humains passent par un trait dédié »).
@@ -23,6 +26,30 @@ pub const PLAFOND: Palier = Palier::Etalonnage;
 pub enum Geste {
     /// Poser le MYIRO-1 sur son capuchon, où se trouve son blanc de référence.
     PoserSurBlanc,
+    /// Poser le MYIRO-1 à plat sur la couleur à mesurer ; l'opérateur appuiera
+    /// ensuite sur le bouton de l'instrument, une fois celui-ci armé.
+    PoserSurCouleur,
+}
+
+/// Une mesure lue par l'instrument, telle que le pont l'a rendue : sa
+/// provenance est celle du pont, jamais refaite par l'application.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MesureAcquise {
+    pub mesure: Mesure,
+    /// Retour au repos de l'instrument après la lecture (ticket #24). La
+    /// mesure reste valable même s'il n'est pas prouvé.
+    pub remise_au_repos: Info<RemiseAuRepos>,
+}
+
+impl MesureAcquise {
+    /// Le pont permet d'armer de nouveau : repos prouvé, ou supposé faute
+    /// d'armement. Un repos inconnu n'est jamais pris pour une réussite.
+    pub fn repos_sur(&self) -> bool {
+        matches!(
+            self.remise_au_repos,
+            Info::Confirmee(RemiseAuRepos::AuRepos {} | RemiseAuRepos::ReposSuppose {})
+        )
+    }
 }
 
 /// Réponse de l'opérateur à un geste demandé.
@@ -133,6 +160,9 @@ pub enum Ecran {
     ChoixDossier,
     /// Étalonnage à refaire : schéma du blanc et bouton « Étalonner ».
     Etalonnage,
+    /// Feuille de la tâche Mesurer : l'avis s'affiche au-dessus du bouton
+    /// « Mesurer », l'instrument reste connecté.
+    Mesure,
 }
 
 /// Pourquoi l'instrument n'est pas prêt.
@@ -175,6 +205,18 @@ pub enum Probleme {
     /// Liaison perdue avec l'instrument (événement 6) : rien n'est possible
     /// avant une nouvelle connexion.
     InstrumentPerdu { detail: String },
+    /// Après une mesure (gardée), le retour au repos de l'instrument n'est
+    /// pas prouvé : le pont refuserait d'armer de nouveau. Seul un nouveau
+    /// pont (« Réessayer ») lève ce doute (ticket #24).
+    ReposIncertain { detail: String },
+    /// L'instrument a signalé l'échec de la mesure (événement 4), l'a refusée,
+    /// ou sa lecture est inexploitable : l'instrument reste étalonné.
+    MesureEchouee { detail: String },
+    /// Personne n'a appuyé sur le bouton de l'instrument dans le délai du pont.
+    MesureDelai { detail: String },
+    /// L'instrument ne se dit plus étalonné au moment de mesurer : son
+    /// étalonnage est à refaire avant toute mesure.
+    EtalonnageARefaire { detail: String },
 }
 
 impl Probleme {
@@ -196,6 +238,10 @@ impl Probleme {
             | Probleme::DetectionImpossible { .. }
             | Probleme::ConnexionImpossible { .. }
             | Probleme::InstrumentPerdu { .. } => Ecran::NonDetecte,
+            Probleme::ReposIncertain { .. }
+            | Probleme::MesureEchouee { .. }
+            | Probleme::MesureDelai { .. }
+            | Probleme::EtalonnageARefaire { .. } => Ecran::Mesure,
         }
     }
 
@@ -233,6 +279,10 @@ impl Probleme {
             Probleme::EtalonnageEchoue { .. } => "etalonnage_echoue",
             Probleme::EtalonnageDelai { .. } => "etalonnage_delai",
             Probleme::InstrumentPerdu { .. } => "instrument_perdu",
+            Probleme::ReposIncertain { .. } => "repos_incertain",
+            Probleme::MesureEchouee { .. } => "mesure_echouee",
+            Probleme::MesureDelai { .. } => "mesure_delai",
+            Probleme::EtalonnageARefaire { .. } => "etalonnage_a_refaire",
         }
     }
 
@@ -251,6 +301,10 @@ impl Probleme {
             | Probleme::ConnexionImpossible { detail: d }
             | Probleme::EtalonnageEchoue { detail: d }
             | Probleme::EtalonnageDelai { detail: d }
+            | Probleme::ReposIncertain { detail: d }
+            | Probleme::MesureEchouee { detail: d }
+            | Probleme::MesureDelai { detail: d }
+            | Probleme::EtalonnageARefaire { detail: d }
             | Probleme::InstrumentPerdu { detail: d } => Some(d),
         }
     }
@@ -265,6 +319,9 @@ pub struct Vue {
     pub modele: Option<String>,
     /// L'instrument peut mesurer (connecté sans étalonnage à faire, ou étalonné).
     pub pret: bool,
+    /// Une mesure peut partir : instrument prêt, et repos de l'instrument non
+    /// mis en doute par la mesure précédente.
+    pub mesurable: bool,
     pub probleme: Option<VueProbleme>,
 }
 
@@ -311,6 +368,10 @@ pub struct Instrument<P: Pont> {
     /// rendue : celle de la provenance des mesures qui suivent. Effacée dès
     /// qu'un nouvel étalonnage commence.
     etalonnage: Option<Horodatage>,
+    /// Le repos de l'instrument n'a pas été prouvé après une mesure : le pont
+    /// refuserait d'armer de nouveau (ticket #24). Seul un nouveau pont lève
+    /// ce doute.
+    repos_incertain: bool,
 }
 
 impl<P: Pont> Instrument<P> {
@@ -345,6 +406,7 @@ impl<P: Pont> Instrument<P> {
                 etat: Etat::EtalonnageRequis(fiche),
                 probleme: None,
                 etalonnage: None,
+                repos_incertain: false,
             },
             Err(probleme) => Self::en_echec(Some(dll), probleme),
         }
@@ -358,6 +420,7 @@ impl<P: Pont> Instrument<P> {
             etat: Etat::NonDetecte,
             probleme: Some(probleme),
             etalonnage: None,
+            repos_incertain: false,
         }
     }
 
@@ -415,6 +478,88 @@ impl<P: Pont> Instrument<P> {
         self.probleme = Some(probleme);
     }
 
+    /// Une mesure peut-elle partir vers le pont ?
+    fn mesurable(&self) -> bool {
+        self.pont.is_some()
+            && !self.repos_incertain
+            && matches!(self.etat, Etat::Connecte(_) | Etat::Etalonne(_))
+    }
+
+    /// Mesure ponctuelle : demande d'abord à l'opérateur de poser l'instrument
+    /// sur la couleur, puis la mesure au pont, qui arme l'instrument et attend
+    /// l'appui sur son bouton. Rend la mesure telle que le pont l'a donnée,
+    /// avec sa provenance et sa remise au repos. Sans instrument étalonné, si
+    /// le repos de la mesure précédente est incertain, ou si l'opérateur
+    /// renonce, rien n'est envoyé.
+    pub fn mesurer_ponctuelle(&mut self, gestes: &mut impl Gestes) -> Option<MesureAcquise> {
+        if !self.mesurable() {
+            return None;
+        }
+        let pont = self.pont.as_mut()?;
+        if gestes.demander(Geste::PoserSurCouleur) == Accord::Annule {
+            return None;
+        }
+        self.probleme = None;
+        let probleme = match pont.demander(&Requete::MesurerPonctuelle {}) {
+            Ok(Reponse::Mesure {
+                mesure,
+                remise_au_repos,
+            }) if mesure.provenance().geometrie == Geometrie::Ponctuelle {} => {
+                let acquise = MesureAcquise {
+                    mesure,
+                    remise_au_repos,
+                };
+                // La mesure est gardée ; seule la suivante est bloquée.
+                if !acquise.repos_sur() {
+                    self.repos_incertain = true;
+                    self.probleme = Some(Probleme::ReposIncertain {
+                        detail: format!("remise au repos : {:?}", acquise.remise_au_repos),
+                    });
+                }
+                return Some(acquise);
+            }
+            Ok(Reponse::Erreur { erreur }) => {
+                let detail = format!("mesure ponctuelle : {erreur:?}");
+                match erreur {
+                    ErreurPont::MesureEchouee { .. }
+                    | ErreurPont::EtatIncompatible {}
+                    | ErreurPont::ParametreRefuse {}
+                    | ErreurPont::ReponseInattendue { .. }
+                    | ErreurPont::Sdk { .. } => Probleme::MesureEchouee { detail },
+                    ErreurPont::Delai {} => Probleme::MesureDelai { detail },
+                    ErreurPont::NonEtalonne {} | ErreurPont::EtalonnageRequis {} => {
+                        Probleme::EtalonnageARefaire { detail }
+                    }
+                    ErreurPont::ReposIncertain { .. } => Probleme::ReposIncertain { detail },
+                    ErreurPont::InstrumentPerdu {} => Probleme::InstrumentPerdu { detail },
+                    ErreurPont::SessionInexploitable {} => Probleme::ConnexionImpossible { detail },
+                    _ => Probleme::PontEnPanne { detail },
+                }
+            }
+            Ok(autre) => inattendue(autre),
+            Err(panne) => panne.into(),
+        };
+        match &probleme {
+            // L'instrument reste connecté et étalonné : une nouvelle mesure suffit.
+            Probleme::MesureEchouee { .. } | Probleme::MesureDelai { .. } => {}
+            Probleme::ReposIncertain { .. } => self.repos_incertain = true,
+            Probleme::EtalonnageARefaire { .. } => {
+                if let Etat::Etalonne(fiche) | Etat::Connecte(fiche) = &self.etat {
+                    self.etat = Etat::EtalonnageRequis(fiche.clone());
+                }
+                self.etalonnage = None;
+            }
+            // Sinon le pont est fermé, et « Réessayer » en relance un.
+            _ => {
+                self.pont = None;
+                self.etat = Etat::NonDetecte;
+                self.etalonnage = None;
+            }
+        }
+        self.probleme = Some(probleme);
+        None
+    }
+
     /// Heure du dernier étalonnage réussi, avec fuseau, tant qu'il est valable.
     pub fn etalonnage(&self) -> Option<&Horodatage> {
         self.etalonnage.as_ref()
@@ -445,12 +590,14 @@ impl<P: Pont> Instrument<P> {
             etat,
             modele: modele.cloned(),
             pret: matches!(self.etat, Etat::Connecte(_) | Etat::Etalonne(_)),
+            mesurable: self.mesurable(),
             probleme: self.probleme.as_ref().map(|p| VueProbleme {
                 code: p.code(),
                 ecran: match p.ecran() {
                     Ecran::NonDetecte => "non_detecte",
                     Ecran::ChoixDossier => "choix_dossier",
                     Ecran::Etalonnage => "etalonnage",
+                    Ecran::Mesure => "mesure",
                 },
                 guide_cablage: p.guide_cablage(),
                 autoriser_pare_feu: p.autoriser_pare_feu(),

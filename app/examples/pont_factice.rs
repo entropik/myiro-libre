@@ -9,13 +9,16 @@
 //! - `illisible` : répond par une ligne hors protocole ;
 //! - `erreur_inconnue` : répond par une erreur d'un type inconnu du protocole ;
 //! - `bloque` : lit une requête et ne répond jamais (DLL bloquée) ;
-//! - `sortie_fermee` : lit une requête, ferme sa sortie et ne se termine pas.
+//! - `sortie_fermee` : lit une requête, ferme sa sortie et ne se termine pas ;
+//! - `mesure_lente` : répond à une mesure ponctuelle après 800 ms ;
+//! - `mesure_muette` : un MYIRO-1 fictif qui s'étalonne, puis ne répond jamais à la mesure.
 
 use std::io::{BufRead, Write};
 use std::process::ExitCode;
 
 use pont_protocole::{
-    ecrire_reponse, lire_requete, Horodatage, Identite, InstrumentDetecte, Reponse, Requete,
+    ecrire_reponse, lire_requete, ErreurPont, Horodatage, Identite, InstrumentDetecte, Reponse,
+    Requete,
 };
 
 /// Ferme la sortie standard sans terminer le processus.
@@ -89,6 +92,22 @@ fn main() -> ExitCode {
             }
             // Plus long que le double du délai : l'application doit couper.
             "etalonnage_trop_lent" if matches!(requete, Ok(Requete::Etalonner {})) => loop {
+                std::thread::sleep(std::time::Duration::from_secs(60));
+            },
+            // Mesure plus longue que trois fois le délai d'une autre demande
+            // (200 ms dans le test), mais moins que six fois ; l'instrument
+            // fictif n'a pas vu d'appui sur son bouton.
+            "mesure_lente" if matches!(requete, Ok(Requete::MesurerPonctuelle {})) => {
+                std::thread::sleep(std::time::Duration::from_millis(800));
+                Reponse::Erreur {
+                    erreur: ErreurPont::Delai {},
+                }
+            }
+            // MYIRO-1 fictif qui s'étalonne, puis ne répond jamais à la mesure.
+            "mesure_muette" if matches!(requete, Ok(Requete::Etalonner {})) => Reponse::Etalonne {
+                date: Horodatage::new("2026-10-07T09:30:00+02:00").unwrap(),
+            },
+            "mesure_muette" if matches!(requete, Ok(Requete::MesurerPonctuelle {})) => loop {
                 std::thread::sleep(std::time::Duration::from_secs(60));
             },
             "echo" => Reponse::RequeteInvalide {

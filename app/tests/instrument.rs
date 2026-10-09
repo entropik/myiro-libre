@@ -10,7 +10,9 @@ use app::instrument::{
 };
 use app::pont::{Architecture, Panne, PontSimule, DATE_ETALONNAGE_SIMULEE};
 use app::textes::{texte, Langue};
-use pont_protocole::{ErreurPont, Palier, Reponse, Requete};
+use pont_protocole::{
+    ErreurPont, Geometrie, Horodatage, Info, Palier, RemiseAuRepos, Reponse, Requete,
+};
 
 /// Numéro de série fictif : jamais celui d'un instrument réel.
 const SERIE: u32 = 12345678;
@@ -314,11 +316,12 @@ fn un_fichier_designe_qui_n_est_pas_fdxsdk_est_refuse() {
     );
 }
 
-/// Le plafond est relevé jusqu'à l'étalonnage, jamais au-delà : aucune
-/// mesure dans ce ticket. Ouvrir s'arrête à la connexion, sans étalonner.
+/// Le plafond est relevé jusqu'à la mesure ponctuelle, jamais à la bande
+/// (ticket #7). Ouvrir s'arrête à la connexion, sans étalonner ni mesurer.
 #[test]
-fn le_pont_est_lance_avec_le_plafond_etalonnage_sans_etalonner_a_l_ouverture() {
-    assert_eq!(PLAFOND, Palier::Etalonnage);
+fn le_pont_est_lance_avec_le_plafond_mesure_ponctuelle_sans_rien_faire_a_l_ouverture() {
+    assert_eq!(PLAFOND, Palier::MesurePonctuelle);
+    assert!(PLAFOND < Palier::Bande);
     let sdk = sdk_factice("plafond");
     let mut recu = None;
     let simule = PontSimule::avec_instruments(&[SERIE]);
@@ -329,7 +332,7 @@ fn le_pont_est_lance_avec_le_plafond_etalonnage_sans_etalonner_a_l_ouverture() {
         Ok(simule)
     });
 
-    assert_eq!(recu, Some(Palier::Etalonnage));
+    assert_eq!(recu, Some(Palier::MesurePonctuelle));
     assert!(!journal.requetes().iter().any(|r| matches!(
         r,
         Requete::Etalonner {} | Requete::MesurerPonctuelle {} | Requete::MesurerBande { .. }
@@ -508,6 +511,7 @@ fn la_barre_recoit_le_modele_et_l_etat_sans_numero_de_serie() {
             "etat": "etalonnage_requis",
             "modele": "MYIRO-1",
             "pret": false,
+            "mesurable": false,
             "probleme": null,
         })
     );
@@ -566,6 +570,10 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
         Probleme::InstrumentPerdu { detail: d() },
         Probleme::AucunFd9 { detail: d() },
         Probleme::PareFeuFerme { detail: d() },
+        Probleme::MesureEchouee { detail: d() },
+        Probleme::MesureDelai { detail: d() },
+        Probleme::EtalonnageARefaire { detail: d() },
+        Probleme::ReposIncertain { detail: d() },
     ];
     // Garde : ajouter une variante à `Probleme` casse la compilation ici ;
     // on lui donne alors un numéro, et l'assertion exige qu'elle soit listée.
@@ -584,13 +592,17 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
             Probleme::InstrumentPerdu { .. } => 10,
             Probleme::AucunFd9 { .. } => 11,
             Probleme::PareFeuFerme { .. } => 12,
+            Probleme::MesureEchouee { .. } => 13,
+            Probleme::MesureDelai { .. } => 14,
+            Probleme::EtalonnageARefaire { .. } => 15,
+            Probleme::ReposIncertain { .. } => 16,
         }
     }
     let mut numeros: Vec<usize> = tous.iter().map(numero).collect();
     numeros.sort();
     assert_eq!(
         numeros,
-        (0..13).collect::<Vec<_>>(),
+        (0..17).collect::<Vec<_>>(),
         "chaque problème est listé une fois"
     );
     for probleme in tous {
@@ -845,4 +857,268 @@ fn un_nouvel_etalonnage_qui_echoue_efface_l_ancien() {
     assert!(matches!(instrument.etat(), Etat::EtalonnageRequis(_)));
     assert_eq!(instrument.etalonnage(), None);
     assert!(!instrument.vue().pret);
+}
+
+// ---- Mesure ponctuelle (ticket #7) ----
+
+/// Instrument ouvert et étalonné sur le pont simulé donné.
+fn etalonne(simule: PontSimule, nom: &str) -> Instrument<PontSimule> {
+    let mut instrument = ouvrir(simule, &sdk_factice(nom));
+    instrument.etalonner(&mut fait);
+    assert!(matches!(instrument.etat(), Etat::Etalonne(_)));
+    instrument
+}
+
+#[test]
+fn une_mesure_ponctuelle_demande_de_poser_sur_la_couleur_puis_rend_la_mesure_du_pont() {
+    let simule = PontSimule::avec_instruments(&[SERIE]);
+    let journal = simule.journal();
+    let mut instrument = etalonne(simule, "mesure-reussie");
+    assert!(instrument.vue().mesurable);
+    let mut demandes = Vec::new();
+
+    let acquise = instrument
+        .mesurer_ponctuelle(&mut |geste: Geste| {
+            // Le geste est demandé avant que la mesure parte vers le pont.
+            assert!(!journal.requetes().contains(&Requete::MesurerPonctuelle {}));
+            demandes.push(geste);
+            Accord::Fait
+        })
+        .expect("mesure rendue");
+
+    assert_eq!(demandes, vec![Geste::PoserSurCouleur]);
+    assert_eq!(
+        journal.requetes().last(),
+        Some(&Requete::MesurerPonctuelle {})
+    );
+    // La provenance est celle du pont, telle quelle.
+    let provenance = acquise.mesure.provenance();
+    assert_eq!(provenance.instrument.numero_serie, SERIE);
+    assert_eq!(provenance.geometrie, Geometrie::Ponctuelle {});
+    assert_eq!(
+        provenance.etalonnage,
+        Info::Confirmee(Horodatage::new(DATE_ETALONNAGE_SIMULEE).unwrap())
+    );
+    assert_eq!(acquise.mesure.plages().len(), 1);
+    assert_eq!(
+        acquise.remise_au_repos,
+        Info::Confirmee(RemiseAuRepos::AuRepos {})
+    );
+    assert!(matches!(instrument.etat(), Etat::Etalonne(_)));
+    assert_eq!(instrument.probleme(), None);
+    assert!(
+        instrument.vue().mesurable,
+        "la mesure suivante est possible"
+    );
+}
+
+/// Le bouton « Mesurer » est inactif avant l'étalonnage ; le module refuse
+/// aussi de lui-même : aucun geste, rien vers le pont.
+#[test]
+fn sans_etalonnage_aucune_mesure_ne_part() {
+    let simule = PontSimule::avec_instruments(&[SERIE]);
+    let journal = simule.journal();
+    let mut instrument = ouvrir(simule, &sdk_factice("mesure-sans-etalonnage"));
+    let avant = journal.requetes().len();
+    assert!(!instrument.vue().mesurable);
+
+    let rendue = instrument
+        .mesurer_ponctuelle(&mut |geste: Geste| -> Accord { panic!("geste demandé : {geste:?}") });
+
+    assert_eq!(rendue, None);
+    assert_eq!(journal.requetes().len(), avant);
+}
+
+#[test]
+fn si_l_operateur_renonce_a_la_mesure_rien_n_est_envoye() {
+    let simule = PontSimule::avec_instruments(&[SERIE]);
+    let journal = simule.journal();
+    let mut instrument = etalonne(simule, "mesure-annulee");
+    let avant = journal.requetes().len();
+
+    let rendue = instrument.mesurer_ponctuelle(&mut |_: Geste| Accord::Annule);
+
+    assert_eq!(rendue, None);
+    assert_eq!(journal.requetes().len(), avant);
+    assert!(matches!(instrument.etat(), Etat::Etalonne(_)));
+    assert_eq!(instrument.probleme(), None);
+}
+
+/// Une mesure lue n'est jamais perdue, même si l'instrument n'a pas prouvé
+/// son retour au repos ; mais la suivante est bloquée, sans geste ni appel,
+/// et l'écran dit quoi faire.
+#[test]
+fn une_mesure_au_repos_incertain_est_rendue_et_bloque_la_suivante() {
+    for (n, remise) in [
+        Info::Confirmee(RemiseAuRepos::ReposNonSignale {}),
+        Info::Confirmee(RemiseAuRepos::ArretRefuse { code: -9987 }),
+        Info::Confirmee(RemiseAuRepos::LiaisonPerdue {}),
+        Info::Inconnue,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let simule = PontSimule::avec_instruments(&[SERIE]).avec_remise_au_repos(remise.clone());
+        let journal = simule.journal();
+        let mut instrument = etalonne(simule, &format!("mesure-repos-{n}"));
+
+        let acquise = instrument
+            .mesurer_ponctuelle(&mut fait)
+            .expect("mesure gardée");
+
+        assert_eq!(acquise.remise_au_repos, remise);
+        let probleme = instrument.probleme().expect("problème");
+        assert_eq!(probleme.code(), "repos_incertain", "{remise:?}");
+        assert_eq!(probleme.ecran(), Ecran::Mesure);
+        assert!(!instrument.vue().mesurable);
+
+        let avant = journal.requetes().len();
+        let suivante = instrument
+            .mesurer_ponctuelle(&mut |g: Geste| -> Accord { panic!("geste demandé : {g:?}") });
+        assert_eq!(suivante, None);
+        assert_eq!(journal.requetes().len(), avant, "rien vers le pont");
+        assert_eq!(instrument.probleme().unwrap().code(), "repos_incertain");
+    }
+}
+
+/// Repos seulement supposé (rien armé depuis la connexion) : le pont permet
+/// d'armer, la mesure suivante reste possible.
+#[test]
+fn un_repos_suppose_laisse_mesurer_de_nouveau() {
+    let simule = PontSimule::avec_instruments(&[SERIE])
+        .avec_remise_au_repos(Info::Confirmee(RemiseAuRepos::ReposSuppose {}));
+    let mut instrument = etalonne(simule, "mesure-repos-suppose");
+
+    assert!(instrument.mesurer_ponctuelle(&mut fait).is_some());
+
+    assert_eq!(instrument.probleme(), None);
+    assert!(instrument.vue().mesurable);
+}
+
+/// Mesure d'un instrument étalonné dont le pont rend `resultat`.
+fn mesurer_avec(nom: &str, resultat: Result<Reponse, Panne>) -> Instrument<PontSimule> {
+    let simule =
+        PontSimule::avec_instruments(&[SERIE]).echouer_a(Palier::MesurePonctuelle, resultat);
+    let mut instrument = etalonne(simule, nom);
+    assert_eq!(instrument.mesurer_ponctuelle(&mut fait), None);
+    instrument
+}
+
+/// Échec signalé par l'instrument, ou lecture inexploitable : l'instrument
+/// reste étalonné, l'avis s'affiche sur la feuille Mesurer et une nouvelle
+/// mesure est possible.
+#[test]
+fn une_mesure_echouee_reste_sur_la_feuille_mesurer_avec_une_action() {
+    for (n, refus) in [
+        ErreurPont::MesureEchouee { erreur: -9990 },
+        ErreurPont::EtatIncompatible {},
+        ErreurPont::ParametreRefuse {},
+        ErreurPont::Sdk { code: -9999 },
+        ErreurPont::ReponseInattendue {
+            detail: "valeur non finie".into(),
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let instrument = mesurer_avec(&format!("mesure-echouee-{n}"), erreur(refus.clone()));
+        let probleme = instrument.probleme().expect("problème");
+        assert_eq!(probleme.code(), "mesure_echouee", "{refus:?}");
+        assert_eq!(probleme.ecran(), Ecran::Mesure);
+        assert!(!probleme.guide_cablage());
+        assert!(matches!(instrument.etat(), Etat::Etalonne(_)), "{refus:?}");
+        assert!(instrument.vue().mesurable, "{refus:?}");
+    }
+}
+
+/// Personne n'a appuyé sur le bouton de l'instrument dans le délai du pont.
+#[test]
+fn une_mesure_sans_appui_a_temps_a_son_propre_probleme() {
+    let instrument = mesurer_avec("mesure-delai", erreur(ErreurPont::Delai {}));
+
+    let probleme = instrument.probleme().unwrap();
+    assert_eq!(probleme.code(), "mesure_delai");
+    assert_eq!(probleme.ecran(), Ecran::Mesure);
+    assert!(instrument.vue().mesurable);
+}
+
+/// L'instrument ne se dit plus étalonné : l'étalonnage est à refaire, son
+/// heure ne garantit plus rien, et « Mesurer » attend un nouvel étalonnage.
+#[test]
+fn un_instrument_qui_n_est_plus_etalonne_demande_un_nouvel_etalonnage() {
+    for (n, refus) in [ErreurPont::NonEtalonne {}, ErreurPont::EtalonnageRequis {}]
+        .into_iter()
+        .enumerate()
+    {
+        let instrument = mesurer_avec(&format!("mesure-non-etalonne-{n}"), erreur(refus));
+        assert!(matches!(instrument.etat(), Etat::EtalonnageRequis(_)));
+        assert_eq!(instrument.etalonnage(), None);
+        let probleme = instrument.probleme().unwrap();
+        assert_eq!(probleme.code(), "etalonnage_a_refaire");
+        assert_eq!(probleme.ecran(), Ecran::Mesure);
+        assert!(!instrument.vue().mesurable);
+    }
+}
+
+/// Le pont refuse lui-même d'armer, faute de repos prouvé : même avis que
+/// lorsque le module le sait déjà, et la suivante est bloquée.
+#[test]
+fn un_refus_du_pont_faute_de_repos_bloque_les_mesures() {
+    let instrument = mesurer_avec(
+        "mesure-repos-refus",
+        erreur(ErreurPont::ReposIncertain {
+            remise_au_repos: RemiseAuRepos::ArretRefuse { code: -9986 },
+        }),
+    );
+
+    assert_eq!(instrument.probleme().unwrap().code(), "repos_incertain");
+    assert!(!instrument.vue().mesurable);
+}
+
+#[test]
+fn un_instrument_perdu_pendant_la_mesure_doit_etre_reconnecte() {
+    let mut instrument = mesurer_avec("mesure-perdu", erreur(ErreurPont::InstrumentPerdu {}));
+
+    assert_eq!(instrument.etat(), &Etat::NonDetecte);
+    assert_eq!(instrument.probleme().unwrap().code(), "instrument_perdu");
+    assert_eq!(instrument.etalonnage(), None);
+    assert_eq!(
+        instrument
+            .mesurer_ponctuelle(&mut |g: Geste| -> Accord { panic!("geste demandé : {g:?}") }),
+        None
+    );
+}
+
+/// Un pont qui se tait, s'arrête ou répond hors de propos (une bande, un
+/// plafond trop bas) n'a jamais rendu de mesure : il est fermé.
+#[test]
+fn une_panne_du_pont_pendant_la_mesure_est_signalee() {
+    for (n, (resultat, code)) in [
+        (
+            Err(Panne::SansReponse {
+                detail: "aucune réponse".into(),
+            }),
+            "pont_bloque",
+        ),
+        (
+            erreur(ErreurPont::PalierNonAutorise {
+                demande: Palier::MesurePonctuelle,
+                plafond: Palier::Etalonnage,
+            }),
+            "pont_en_panne",
+        ),
+        (Ok(Reponse::Ferme {}), "pont_en_panne"),
+        (
+            erreur(ErreurPont::SessionInexploitable {}),
+            "connexion_impossible",
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let instrument = mesurer_avec(&format!("mesure-panne-{n}"), resultat);
+        assert_eq!(instrument.etat(), &Etat::NonDetecte);
+        assert_eq!(instrument.probleme().unwrap().code(), code);
+        assert!(!instrument.vue().mesurable);
+    }
 }

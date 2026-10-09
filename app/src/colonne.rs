@@ -87,6 +87,27 @@ impl BibliothequeOuverte {
     pub fn renommer_condition(&self, id: IdCondition, nom: &str) -> Result<(), String> {
         self.avec(|b| b.renommer_condition(id, nom))
     }
+
+    /// Conditions d'impression, pour la feuille Mesurer.
+    pub fn conditions(&self) -> Result<Vec<ConditionImpression>, String> {
+        self.avec(|b| b.conditions())
+    }
+
+    /// Range une mesure et son nom dans une condition d'impression (tâche
+    /// Mesurer).
+    pub fn enregistrer_mesure_nommee(
+        &self,
+        condition: IdCondition,
+        mesure: &pont_protocole::Mesure,
+        nom: &str,
+    ) -> Result<IdMesure, String> {
+        self.avec(|b| b.enregistrer_mesure_nommee(condition, mesure, nom))
+    }
+
+    /// Renomme une mesure rangée (tâche Mesurer).
+    pub fn renommer_mesure(&self, id: IdMesure, nom: &str) -> Result<(), String> {
+        self.avec(|b| b.renommer_mesure(id, nom))
+    }
 }
 
 /// Clé du catalogue qui explique une erreur à l'utilisateur. Le détail

@@ -112,7 +112,9 @@
       arbre.append(ligne(String(i + 1), b.condition.nom, String(b.mesures.length),
         { type: "condition", id: b.condition.id }, true));
       b.mesures.forEach((m, j) => {
-        arbre.append(ligne(`${i + 1}.${j + 1}`, `${date(m.horodatage)} · ${lecture(m.geometrie, m.plages)} · ${m.instrument.modele}`, "",
+        // Le nom donné à la mesure (tâche Mesurer) passe devant la date ; sans nom, la date seule.
+        const quand = `${date(m.horodatage)} · ${lecture(m.geometrie, m.plages)} · ${m.instrument.modele}`;
+        arbre.append(ligne(`${i + 1}.${j + 1}`, m.nom ? `${m.nom} · ${quand}` : quand, "",
           { type: "mesure", id: m.id }, false));
       });
     });
@@ -373,6 +375,8 @@
     afficherChoix();
   }
   document.addEventListener("langue-appliquee", langueAppliquee);
+  // Une mesure vient d'être rangée (mesurer.js) : l'arborescence la montre.
+  document.addEventListener("bibliotheque-modifiee", chargerArbre);
   // Le catalogue a pu arriver avant le chargement de ce script.
   if (Object.keys(textes).length > 0) langueAppliquee();
 })();

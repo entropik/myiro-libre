@@ -192,6 +192,25 @@ fn un_fd9_du_reseau_est_detecte_et_la_barre_le_montre() {
     assert_eq!(vue.probleme, None);
 }
 
+/// Le pont FD-9 s'arrête à la détection : un FD-9 détecté ne propose jamais
+/// « Mesurer », et une mesure demandée quand même ne part pas (ticket #7).
+#[test]
+fn un_fd9_detecte_ne_propose_jamais_de_mesurer() {
+    let simule = PontFd9Simule::avec_un_fd9();
+    let mut instrument = ouvrir_fd9(simule.clone(), &fd_s2w("sans-mesure"));
+    assert!(matches!(instrument.etat(), Etat::Detecte { .. }));
+
+    assert!(!instrument.vue().mesurable);
+    let rendue = instrument
+        .mesurer_ponctuelle(&mut |g: app::instrument::Geste| panic!("geste demandé : {g:?}"));
+
+    assert_eq!(rendue, None);
+    assert_eq!(
+        simule.requetes(),
+        vec![Requete::Version {}, Requete::Detecter {}]
+    );
+}
+
 #[test]
 fn sans_fd9_visible_le_pare_feu_est_cite_comme_cause_possible() {
     // Essai du 9 octobre 2026 : sans règle entrante du pare-feu, la réponse du

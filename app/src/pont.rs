@@ -11,7 +11,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use pont_protocole::{
-    lire_reponse, ErreurPont, Horodatage, Identite, InstrumentDetecte, Palier, Reponse, Requete,
+    lire_reponse, Calcul, ConditionMesure, ConditionsCalcul, DonneesBrutes, Echantillonnage,
+    ErreurPont, Geometrie, Horodatage, Identite, Illuminant, Info, InstrumentDetecte,
+    InstrumentMesurant, Lab, Mesure, Observateur, Palier, Plage, Provenance, RemiseAuRepos,
+    Reponse, Requete, Spectre, MODELE_MYIRO1,
 };
 
 /// Le pont n'a pas pu répondre : ce n'est pas une erreur de l'instrument, mais
@@ -224,8 +227,12 @@ impl Pont for PontProcessus {
         }
         // L'étalonnage attend jusqu'à 30 s dans le pont
         // (`pont_myiro1::DELAI_ETALONNAGE`), en plus de l'appel à la DLL.
+        // La mesure ponctuelle attend jusqu'à 2 min l'appui sur le bouton
+        // (`pont_myiro1::DELAI_APPUI`), plus un désarmement avant et un après
+        // (15 s au plus chacun) et les lectures.
         let delai = match requete {
             Requete::Etalonner {} => self.delai * 2,
+            Requete::MesurerPonctuelle {} => self.delai * 6,
             _ => self.delai,
         };
         match self.lignes.recv_timeout(delai) {
@@ -260,6 +267,76 @@ impl Drop for PontProcessus {
 /// Date fictive rendue par le pont simulé à un étalonnage réussi.
 pub const DATE_ETALONNAGE_SIMULEE: &str = "2026-10-07T09:30:00+02:00";
 
+/// Date fictive des mesures ponctuelles du pont simulé.
+pub const DATE_MESURE_SIMULEE: &str = "2026-10-07T09:31:00+02:00";
+
+/// Spectre fictif d'un magenta (380 à 730 nm par 10 nm) : un creux vers 540 nm.
+/// `uv` règle la part d'azurant vue (0 pour M2, sans UV).
+fn spectre_simule(uv: f32) -> Spectre {
+    let valeurs = (0..36)
+        .map(|i| {
+            let nm = 380.0 + 10.0 * i as f32;
+            let x = (nm - 540.0) / 45.0;
+            let bleu = (nm - 440.0) / 25.0;
+            0.85 * (1.0 - 0.78 * (-x * x).exp()) + uv * 0.03 * (-bleu * bleu).exp()
+        })
+        .collect();
+    Spectre::new(valeurs).expect("spectre fictif valable")
+}
+
+/// Mesure ponctuelle fictive, avec la provenance qu'un pont aurait posée.
+fn mesure_simulee(serie: u32, etalonnage: Option<Horodatage>) -> Mesure {
+    let lab = |l, a, b| Lab::new([l, a, b]).expect("Lab fictif fini");
+    let plage = Plage::new(
+        [
+            spectre_simule(0.5),
+            spectre_simule(1.0),
+            spectre_simule(0.0),
+        ],
+        DonneesBrutes::new((0..152).map(|i| 30_000.0 + i as f32).collect()).unwrap(),
+        // Lab « de la DLL », fictifs : l'application calcule les siens.
+        [
+            lab(50.0, 60.0, -5.0),
+            lab(50.1, 60.2, -5.6),
+            lab(49.9, 59.9, -4.8),
+        ],
+    )
+    .expect("plage fictive valable");
+    let provenance = Provenance {
+        instrument: InstrumentMesurant {
+            modele: MODELE_MYIRO1.into(),
+            numero_serie: serie,
+            micrologiciel: "1.00".into(),
+            code_produit: "simule".into(),
+        },
+        version_sdk: [1, 0, 1],
+        empreinte_dll: Info::Inconnue,
+        version_pont: "simulé".into(),
+        architecture: "x86_64".into(),
+        horodatage: Horodatage::new(DATE_MESURE_SIMULEE).expect("date fictive valable"),
+        etalonnage: etalonnage.map_or(Info::Inconnue, Info::Confirmee),
+        geometrie: Geometrie::Ponctuelle {},
+        calcul: Calcul {
+            libelle: "pont simulé, données fictives".into(),
+            demande: Info::Confirmee(ConditionsCalcul {
+                conditions_spectres: [
+                    Info::Confirmee(ConditionMesure::M0),
+                    Info::Confirmee(ConditionMesure::M1),
+                    Info::Confirmee(ConditionMesure::M2),
+                ],
+                longueurs_onde: Info::Confirmee(Echantillonnage {
+                    debut_nm: 380,
+                    pas_nm: 10,
+                }),
+                illuminant_lab: Info::Confirmee(Illuminant::D50),
+                observateur_lab: Info::Supposee(Observateur::DeuxDegres),
+            }),
+            observe: Info::Inconnue,
+        },
+    };
+    Mesure::new(vec![plage], provenance).expect("mesure fictive valable")
+}
+
 /// Requêtes reçues par un pont simulé, lisibles après coup par les tests.
 #[derive(Clone, Default)]
 pub struct Journal(Arc<Mutex<Vec<Requete>>>);
@@ -278,6 +355,12 @@ pub struct PontSimule {
     /// Par palier : nombre de demandes encore réussies, puis le résultat imposé.
     echecs: BTreeMap<Palier, (usize, Result<Reponse, Panne>)>,
     journal: Journal,
+    /// Numéro de série de l'instrument connecté.
+    connecte: Option<u32>,
+    /// Date du dernier étalonnage réussi de la connexion.
+    etalonnage: Option<Horodatage>,
+    /// Remise au repos rendue avec chaque mesure.
+    remise_au_repos: Info<RemiseAuRepos>,
 }
 
 impl PontSimule {
@@ -287,7 +370,16 @@ impl PontSimule {
             instruments: series.to_vec(),
             echecs: BTreeMap::new(),
             journal: Journal::default(),
+            connecte: None,
+            etalonnage: None,
+            remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
         }
+    }
+
+    /// Remise au repos rendue avec chaque mesure (par défaut : au repos, prouvé).
+    pub fn avec_remise_au_repos(mut self, remise_au_repos: Info<RemiseAuRepos>) -> Self {
+        self.remise_au_repos = remise_au_repos;
+        self
     }
 
     /// Au palier donné, rend ce résultat au lieu de la réponse normale.
@@ -351,30 +443,47 @@ impl Pont for PontSimule {
                     .collect(),
             },
             Requete::Connecter { instrument } => match self.instruments.get(*instrument as usize) {
-                Some(serie) => Reponse::Connecte {
-                    identite: Identite {
-                        numero_serie: *serie,
-                        micrologiciel: "1.00".into(),
-                        code_produit: "simule".into(),
-                        adresse_mac: "00:00:00:00:00:00".into(),
-                        date_initiale: None,
-                        anomalie_date_initiale: false,
-                        brute_hex: String::new(),
-                    },
-                },
+                Some(serie) => {
+                    // Une nouvelle connexion efface l'étalonnage de la précédente (#23).
+                    self.connecte = Some(*serie);
+                    self.etalonnage = None;
+                    Reponse::Connecte {
+                        identite: Identite {
+                            numero_serie: *serie,
+                            micrologiciel: "1.00".into(),
+                            code_produit: "simule".into(),
+                            adresse_mac: "00:00:00:00:00:00".into(),
+                            date_initiale: None,
+                            anomalie_date_initiale: false,
+                            brute_hex: String::new(),
+                        },
+                    }
+                }
                 None => Reponse::Erreur {
                     erreur: ErreurPont::InstrumentInconnu {},
                 },
             },
-            Requete::Etalonner {} => Reponse::Etalonne {
-                date: Horodatage::new(DATE_ETALONNAGE_SIMULEE).expect("date fictive valable"),
+            Requete::Etalonner {} => {
+                let date = Horodatage::new(DATE_ETALONNAGE_SIMULEE).expect("date fictive valable");
+                self.etalonnage = Some(date.clone());
+                Reponse::Etalonne { date }
+            }
+            // Comme `pont-myiro1` : pas de mesure sans étalonnage de la connexion.
+            Requete::MesurerPonctuelle {} => match (self.connecte, &self.etalonnage) {
+                (Some(serie), Some(date)) => Reponse::Mesure {
+                    mesure: mesure_simulee(serie, Some(date.clone())),
+                    remise_au_repos: self.remise_au_repos.clone(),
+                },
+                _ => Reponse::Erreur {
+                    erreur: ErreurPont::EtalonnageRequis {},
+                },
             },
-            // Le simulé ne va pas plus loin que l'étalonnage, comme le plafond
-            // de l'application.
+            // Le simulé ne va pas plus loin que la mesure ponctuelle, comme le
+            // plafond de l'application.
             _ => Reponse::Erreur {
                 erreur: ErreurPont::PalierNonAutorise {
                     demande: palier,
-                    plafond: Palier::Etalonnage,
+                    plafond: Palier::MesurePonctuelle,
                 },
             },
         })

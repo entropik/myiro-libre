@@ -314,6 +314,101 @@ const FRANCAIS: Catalogue = &[
     ("ecran.etalonnage.schema.instrument", "MYIRO-1"),
     ("ecran.etalonnage.schema.capuchon", "Capuchon"),
     ("ecran.etalonnage.schema.blanc", "Blanc de référence"),
+    // Mesure ponctuelle : feuille Mesurer ({n} est remplacé)
+    ("mesurer.nom_defaut", "Couleur {n}"),
+    (
+        "mesurer.consigne",
+        "Posez le MYIRO-1 bien à plat sur la couleur, cliquez sur «\u{202f}Mesurer\u{202f}», puis appuyez sur le bouton de l’instrument.",
+    ),
+    ("mesurer.action", "Mesurer"),
+    (
+        "mesurer.en_cours",
+        "Appuyez sur le bouton du MYIRO-1 et gardez-le immobile jusqu’à la fin de la mesure.",
+    ),
+    ("mesurer.liste", "Dernières mesures"),
+    ("mesurer.non_rangee", "Pas rangée"),
+    (
+        "mesurer.raison.aucune_condition",
+        "Disponible quand une condition d’impression existe. Ajoutez-en une à gauche.",
+    ),
+    (
+        "mesurer.raison.repos",
+        "Disponible une fois l’instrument reconnecté.",
+    ),
+    ("mesurer.valeurs", "Valeurs"),
+    (
+        "mesurer.calcul",
+        "Calculées par myiro-libre à partir du spectre, avec ses propres tables\u{202f}: illuminant D50, observateur 2°.",
+    ),
+    ("mesurer.ranger", "Ranger à nouveau"),
+    ("mesurer.couleur", "Couleur à l’écran"),
+    ("mesurer.approchee", "Couleur approchée à l’écran"),
+    (
+        "mesurer.erreur.sans_instrument.cause",
+        "Aucun instrument n’est prêt à mesurer.",
+    ),
+    (
+        "mesurer.erreur.sans_instrument.action",
+        "Branchez le MYIRO-1 et attendez qu’il apparaisse en haut de la fenêtre.",
+    ),
+    (
+        "mesurer.erreur.condition_absente.cause",
+        "Cette condition d’impression n’existe plus dans la bibliothèque. Rien n’a été mesuré.",
+    ),
+    (
+        "mesurer.erreur.condition_absente.action",
+        "Choisissez-en une autre dans la liste, puis mesurez de nouveau.",
+    ),
+    (
+        "mesurer.erreur.bibliotheque_fermee.cause",
+        "La bibliothèque n’a pas pu s’ouvrir. Rien n’a été mesuré.",
+    ),
+    (
+        "mesurer.erreur.bibliotheque_fermee.action",
+        "Fermez puis relancez myiro-libre.",
+    ),
+    ("mesurer.lab", "L*, a*, b*"),
+    ("mesurer.lch", "L*, C*, h°"),
+    ("mesurer.xyz", "X, Y, Z"),
+    ("cartouche.micrologiciel", "Micrologiciel"),
+    ("cartouche.date", "Date"),
+    (
+        "mesurer.erreur.rangement",
+        "La bibliothèque n’a pas pu ranger cette mesure. Elle reste affichée ici jusqu’à la fermeture de myiro-libre.",
+    ),
+    // Mesure ponctuelle : problèmes
+    (
+        "probleme.mesure_echouee.cause",
+        "La mesure n’a pas réussi. Le MYIRO-1 n’était peut-être pas bien à plat sur la couleur.",
+    ),
+    (
+        "probleme.mesure_echouee.action",
+        "Posez-le bien à plat, cliquez sur «\u{202f}Mesurer\u{202f}», puis appuyez sur son bouton.",
+    ),
+    (
+        "probleme.mesure_delai.cause",
+        "Le bouton du MYIRO-1 n’a pas été appuyé à temps.",
+    ),
+    (
+        "probleme.mesure_delai.action",
+        "Cliquez de nouveau sur «\u{202f}Mesurer\u{202f}», puis appuyez sur le bouton de l’instrument dans les deux minutes.",
+    ),
+    (
+        "probleme.etalonnage_a_refaire.cause",
+        "Le MYIRO-1 demande un nouvel étalonnage.",
+    ),
+    (
+        "probleme.etalonnage_a_refaire.action",
+        "Cliquez sur «\u{202f}Étalonner\u{202f}», en haut, puis mesurez de nouveau.",
+    ),
+    (
+        "probleme.repos_incertain.cause",
+        "Le MYIRO-1 n’a pas confirmé la fin de la mesure. La mesure est gardée.",
+    ),
+    (
+        "probleme.repos_incertain.action",
+        "Pour mesurer de nouveau, cliquez sur «\u{202f}Réessayer\u{202f}»\u{202f}: l’instrument sera reconnecté, puis à étalonner.",
+    ),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -587,6 +682,101 @@ const ANGLAIS: Catalogue = &[
     ("ecran.etalonnage.schema.instrument", "MYIRO-1"),
     ("ecran.etalonnage.schema.capuchon", "Cap"),
     ("ecran.etalonnage.schema.blanc", "Reference white"),
+    // Spot measurement: Measure sheet ({n} is replaced)
+    ("mesurer.nom_defaut", "Colour {n}"),
+    (
+        "mesurer.consigne",
+        "Set the MYIRO-1 flat on the colour, click “Measure”, then press the instrument’s button.",
+    ),
+    ("mesurer.action", "Measure"),
+    (
+        "mesurer.en_cours",
+        "Press the MYIRO-1 button and keep it still until the measurement is over.",
+    ),
+    ("mesurer.liste", "Latest measurements"),
+    ("mesurer.non_rangee", "Not stored"),
+    (
+        "mesurer.raison.aucune_condition",
+        "Available once a printing condition exists. Add one on the left.",
+    ),
+    (
+        "mesurer.raison.repos",
+        "Available once the instrument is reconnected.",
+    ),
+    ("mesurer.valeurs", "Values"),
+    (
+        "mesurer.calcul",
+        "Computed by myiro-libre from the spectrum, with its own tables: illuminant D50, 2° observer.",
+    ),
+    ("mesurer.ranger", "Store again"),
+    ("mesurer.couleur", "Colour on screen"),
+    ("mesurer.approchee", "Approximate colour on screen"),
+    (
+        "mesurer.erreur.sans_instrument.cause",
+        "No instrument is ready to measure.",
+    ),
+    (
+        "mesurer.erreur.sans_instrument.action",
+        "Plug in the MYIRO-1 and wait for it to appear at the top of the window.",
+    ),
+    (
+        "mesurer.erreur.condition_absente.cause",
+        "This printing condition is no longer in the library. Nothing was measured.",
+    ),
+    (
+        "mesurer.erreur.condition_absente.action",
+        "Choose another one in the list, then measure again.",
+    ),
+    (
+        "mesurer.erreur.bibliotheque_fermee.cause",
+        "The library could not open. Nothing was measured.",
+    ),
+    (
+        "mesurer.erreur.bibliotheque_fermee.action",
+        "Close and restart myiro-libre.",
+    ),
+    ("mesurer.lab", "L*, a*, b*"),
+    ("mesurer.lch", "L*, C*, h°"),
+    ("mesurer.xyz", "X, Y, Z"),
+    ("cartouche.micrologiciel", "Firmware"),
+    ("cartouche.date", "Date"),
+    (
+        "mesurer.erreur.rangement",
+        "The library could not store this measurement. It stays shown here until myiro-libre is closed.",
+    ),
+    // Spot measurement: problems
+    (
+        "probleme.mesure_echouee.cause",
+        "The measurement failed. The MYIRO-1 may not have been flat on the colour.",
+    ),
+    (
+        "probleme.mesure_echouee.action",
+        "Set it flat, click “Measure”, then press its button.",
+    ),
+    (
+        "probleme.mesure_delai.cause",
+        "The MYIRO-1 button was not pressed in time.",
+    ),
+    (
+        "probleme.mesure_delai.action",
+        "Click “Measure” again, then press the instrument’s button within two minutes.",
+    ),
+    (
+        "probleme.etalonnage_a_refaire.cause",
+        "The MYIRO-1 needs to be calibrated again.",
+    ),
+    (
+        "probleme.etalonnage_a_refaire.action",
+        "Click “Calibrate” at the top, then measure again.",
+    ),
+    (
+        "probleme.repos_incertain.cause",
+        "The MYIRO-1 did not confirm the end of the measurement. The measurement is kept.",
+    ),
+    (
+        "probleme.repos_incertain.action",
+        "To measure again, click “Try again”: the instrument will be reconnected, then needs calibrating.",
+    ),
 ];
 
 fn catalogue(langue: Langue) -> Catalogue {
@@ -700,6 +890,44 @@ mod tests {
                 fautes.is_empty(),
                 "« {libelle} » sans guillemets : {fautes:?}"
             );
+        }
+    }
+
+    /// Chaque texte demandé par la feuille Mesurer (`t("…")` dans
+    /// `mesurer.js`) existe au catalogue.
+    #[test]
+    fn la_feuille_mesurer_ne_demande_que_des_cles_du_catalogue() {
+        let script = include_str!("../interface/mesurer.js");
+        // `t("…")` seul, pas la fin d'un autre nom (`CustomEvent("…")`).
+        let demandees: Vec<&str> = script
+            .match_indices("t(\"")
+            .filter(|(i, _)| {
+                !script[..*i]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.')
+            })
+            .filter_map(|(i, _)| script[i + 3..].split('"').next())
+            .collect();
+        assert!(demandees.len() > 10, "clés lues : {demandees:?}");
+        let inconnues: Vec<_> = demandees
+            .iter()
+            .filter(|c| !cles().any(|k| k == **c))
+            .collect();
+        assert!(
+            inconnues.is_empty(),
+            "clés absentes du catalogue : {inconnues:?}"
+        );
+    }
+
+    /// L'illuminant et l'observateur affichés sont ceux de notre calcul, pas
+    /// une affirmation sur l'instrument : le texte le dit.
+    #[test]
+    fn l_observateur_affiche_est_celui_de_notre_calcul() {
+        for langue in [Langue::Francais, Langue::Anglais] {
+            let calcul = texte(langue, "mesurer.calcul");
+            assert!(calcul.contains("myiro-libre"), "{calcul}");
+            assert!(calcul.contains("D50") && calcul.contains("2°"), "{calcul}");
         }
     }
 
