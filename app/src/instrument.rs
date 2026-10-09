@@ -151,6 +151,9 @@ pub enum Probleme {
     PontBloque { detail: String },
     /// Le pont répond, mais ne voit aucun instrument.
     AucunInstrument,
+    /// Le pont FD-9 ne voit aucun FD-9 : sur le réseau, le pare-feu de
+    /// Windows bloque peut-être la réponse (fiche `FD9_GetDeviceList`).
+    AucunFd9 { detail: String },
     /// La recherche des instruments branchés a échoué.
     DetectionImpossible { detail: String },
     /// L'instrument détecté a refusé la connexion ou ne répond pas.
@@ -181,6 +184,7 @@ impl Probleme {
             | Probleme::PontEnPanne { .. }
             | Probleme::PontBloque { .. }
             | Probleme::AucunInstrument
+            | Probleme::AucunFd9 { .. }
             | Probleme::DetectionImpossible { .. }
             | Probleme::ConnexionImpossible { .. }
             | Probleme::InstrumentPerdu { .. } => Ecran::NonDetecte,
@@ -209,6 +213,7 @@ impl Probleme {
             Probleme::PontEnPanne { .. } => "pont_en_panne",
             Probleme::PontBloque { .. } => "pont_bloque",
             Probleme::AucunInstrument => "aucun_instrument",
+            Probleme::AucunFd9 { .. } => "aucun_fd9",
             Probleme::DetectionImpossible { .. } => "detection_impossible",
             Probleme::ConnexionImpossible { .. } => "connexion_impossible",
             Probleme::EtalonnageEchoue { .. } => "etalonnage_echoue",
@@ -226,6 +231,7 @@ impl Probleme {
             | Probleme::PontIntrouvable { detail: d }
             | Probleme::PontEnPanne { detail: d }
             | Probleme::PontBloque { detail: d }
+            | Probleme::AucunFd9 { detail: d }
             | Probleme::DetectionImpossible { detail: d }
             | Probleme::ConnexionImpossible { detail: d }
             | Probleme::EtalonnageEchoue { detail: d }

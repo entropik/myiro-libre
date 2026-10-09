@@ -10,6 +10,7 @@ use app::instrument::choix::{ouvrir_l_un_ou_l_autre, Recherche};
 use app::instrument::fd9::{emplacements_fd9, EMPLACEMENTS_FD9, PLAFOND_FD9};
 use app::instrument::{Etat, Instrument, Probleme};
 use app::pont::{chercher_ponts_nommes, Architecture, Panne, Pont, PontSimule};
+use app::textes::{texte, Langue};
 use pont_protocole::{ErreurPont, Info, InstrumentFd9, LiaisonFd9, Palier, Reponse, Requete};
 
 /// Identifiant et adresse fictifs : jamais ceux d'un instrument réel.
@@ -161,12 +162,36 @@ fn un_fd9_du_reseau_est_detecte_et_la_barre_le_montre() {
 }
 
 #[test]
-fn sans_fd9_visible_le_probleme_est_aucun_instrument() {
+fn sans_fd9_visible_le_pare_feu_est_cite_comme_cause_possible() {
+    // Essai du 9 octobre 2026 : sans règle entrante du pare-feu, la réponse du
+    // FD-9 à la diffusion est bloquée et la liste revient vide, sans erreur.
     let mut simule = PontFd9Simule::avec_un_fd9();
     simule.liste.clear();
     let instrument = ouvrir_fd9(simule, &fd_s2w("aucun"));
     assert_eq!(instrument.etat(), &Etat::NonDetecte);
-    assert_eq!(instrument.probleme(), Some(&Probleme::AucunInstrument));
+    let probleme = instrument.probleme().expect("un problème");
+    assert!(matches!(probleme, Probleme::AucunFd9 { .. }));
+    let vue = instrument.vue().probleme.unwrap();
+    assert_eq!(vue.code, "aucun_fd9");
+    assert_eq!(vue.ecran, "non_detecte");
+    // Câble et port USB ne servent pas : le FD-9 est sur le réseau.
+    assert!(!vue.guide_cablage);
+    let detail = vue.detail.unwrap();
+    assert!(
+        detail.contains("49152") && detail.contains("pont-fd9"),
+        "{detail}"
+    );
+    for (langue, mot) in [
+        (Langue::Francais, "pare-feu"),
+        (Langue::Anglais, "firewall"),
+    ] {
+        let cause = texte(langue, "probleme.aucun_fd9.cause");
+        let action = texte(langue, "probleme.aucun_fd9.action");
+        assert!(
+            cause.contains(mot) || action.contains(mot),
+            "{cause} {action}"
+        );
+    }
 }
 
 #[test]

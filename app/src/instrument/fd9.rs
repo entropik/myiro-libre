@@ -72,6 +72,14 @@ impl<P: Pont> Instrument<P> {
     }
 }
 
+/// Détail technique quand la détection ne voit aucun FD-9 : sans règle
+/// entrante du pare-feu, la réponse à la diffusion est bloquée (confirmé sur
+/// le poste le 9 octobre 2026, fiche `FD9_GetDeviceList`).
+const DETAIL_AUCUN_FD9: &str = "détection du FD-9 : liste vide, sans erreur. \
+Le FD-9 répond sur le port UDP 49152 de l'ordinateur ; le pare-feu de Windows \
+bloque cette réponse sans règle entrante pour le programme pont-fd9 \
+(UDP, port local 49152, adresse du FD-9). FD-S2w doit aussi être fermé.";
+
 /// Paliers du FD-9 : version (lue sur le fichier de la DLL), puis détection.
 /// Rend l'identifiant du premier FD-9 vu.
 fn detecter(pont: &mut impl Pont) -> Result<Info<String>, Probleme> {
@@ -89,7 +97,9 @@ fn detecter(pont: &mut impl Pont) -> Result<Info<String>, Probleme> {
             .into_iter()
             .next()
             .map(|fd9| fd9.identifiant)
-            .ok_or(Probleme::AucunInstrument),
+            .ok_or_else(|| Probleme::AucunFd9 {
+                detail: DETAIL_AUCUN_FD9.into(),
+            }),
         Reponse::Erreur { erreur } => Err(Probleme::DetectionImpossible {
             detail: format!("détection du FD-9 : {erreur:?}"),
         }),
