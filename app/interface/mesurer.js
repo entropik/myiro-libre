@@ -273,9 +273,8 @@
       return;
     }
     if (courbeMontree !== cle) return; // autre mesure choisie entre-temps
-    const nombre = (v) => new Intl.NumberFormat(langue(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
     zoneCourbe.replaceChildren(CourbeSpectre.section(
-      { cle: `seance:${f.numero}:0`, titre: f.nom, donnees, plage: 0 }, t, nombre));
+      { cle: `seance:${f.numero}:0`, titre: f.nom, donnees, plage: 0 }, t));
   }
 
   // ---- Conditions d'impression : celle choisie est retenue d'une fois sur l'autre ----

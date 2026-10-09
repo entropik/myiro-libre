@@ -264,7 +264,7 @@
   function courbe(type, id, titre, spectres) {
     if (!spectres) return null;
     const plage = Math.min(plageChoisie, spectres.plages.length - 1);
-    return CourbeSpectre.section({ cle: `${type}:${id}:${plage}`, titre, donnees: spectres, plage }, t, nombre);
+    return CourbeSpectre.section({ cle: `${type}:${id}:${plage}`, titre, donnees: spectres, plage }, t);
   }
 
   // Spectres d'une mesure de la bibliothèque, ou null si la commande les refuse.

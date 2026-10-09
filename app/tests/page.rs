@@ -2,6 +2,7 @@
 //! ferait de ses attributs et du système graphique.
 
 use std::collections::BTreeSet;
+use std::io::Write;
 use std::path::Path;
 
 fn lire(relatif: &str) -> String {
@@ -37,7 +38,8 @@ fn classes_qui_fixent_display(css: &str) -> BTreeSet<String> {
 
 /// Les modules de la page testés par leurs données (`tests/interface/*.test.js`),
 /// avec le lanceur de tests de Node, sans npm ni dépendance. Sans Node sur le
-/// poste, le contrôle est sauté et annoncé.
+/// poste, le contrôle est sauté et annoncé ; en intégration continue (variable
+/// `CI`), Node est exigé et son absence fait échouer le test.
 #[test]
 fn les_modules_de_la_page_passent_leurs_tests() {
     let dossier = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/interface");
@@ -55,7 +57,10 @@ fn les_modules_de_la_page_passent_leurs_tests() {
     {
         Ok(sortie) => sortie,
         Err(e) => {
-            eprintln!("Node absent ({e}) : tests des modules de la page sautés.");
+            let avis = sans_node(std::env::var_os("CI").is_some(), &e.to_string())
+                .unwrap_or_else(|faute| panic!("{faute}"));
+            // Écrit hors de la capture de `cargo test` : le saut se voit.
+            let _ = writeln!(std::io::stderr(), "{avis}");
             return;
         }
     };
@@ -65,6 +70,40 @@ fn les_modules_de_la_page_passent_leurs_tests() {
         String::from_utf8_lossy(&sortie.stdout),
         String::from_utf8_lossy(&sortie.stderr)
     );
+}
+
+/// Dans Mesurer, la courbe de spectre vient après la liste des mesures de la
+/// séance : elle ne la pousse jamais hors de la zone (règle d'écran du
+/// mainteneur).
+#[test]
+fn la_courbe_de_spectre_ne_coupe_pas_la_liste_de_mesurer() {
+    let page = lire("interface/index.html");
+    let position = |attribut: &str| {
+        page.find(attribut)
+            .unwrap_or_else(|| panic!("{attribut} absent"))
+    };
+    assert!(position("data-mesurer-liste") < position("data-mesurer-spectre"));
+}
+
+/// Sans Node : l'avis de saut sur le poste, l'échec en intégration continue.
+fn sans_node(ci: bool, erreur: &str) -> Result<String, String> {
+    if ci {
+        Err(format!(
+            "Node absent en intégration continue ({erreur}) : les tests des modules de la page doivent tourner."
+        ))
+    } else {
+        Ok(format!(
+            "SAUTÉ : Node absent ({erreur}), tests des modules de la page non lancés."
+        ))
+    }
+}
+
+#[test]
+fn sans_node_le_poste_annonce_le_saut_et_la_ci_echoue() {
+    assert!(sans_node(false, "introuvable")
+        .unwrap()
+        .starts_with("SAUTÉ"));
+    assert!(sans_node(true, "introuvable").is_err());
 }
 
 /// Un élément caché par l'attribut `hidden` doit vraiment l'être : une classe

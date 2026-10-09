@@ -128,14 +128,21 @@ pub fn spectres_mesure(mesure: &Mesure) -> SpectresMesure {
 
 /// Spectres d'une mesure importée, d'après ce que le fichier déclare.
 pub fn spectres_importee(mesure: &MesureImportee) -> SpectresMesure {
-    let n = mesure
+    let mut tailles = mesure
         .plages
         .iter()
         .flat_map(|p| p.spectres.iter())
-        .find_map(|s| s.valeur().map(|s| s.len()))
-        .unwrap_or(0);
+        .filter_map(|s| s.valeur().map(|s| s.len()));
+    let n = tailles.next().unwrap_or(0);
+    // Une seule grille par mesure : des spectres de tailles différentes n'en
+    // ont pas de commune, et rien n'est placé au hasard.
+    let echantillonnage = if tailles.all(|t| t == n) {
+        mesure.longueurs_onde.clone()
+    } else {
+        Info::Inconnue
+    };
     SpectresMesure {
-        longueurs_onde: longueurs(mesure.longueurs_onde.clone(), n),
+        longueurs_onde: longueurs(echantillonnage, n),
         plages: mesure
             .plages
             .iter()

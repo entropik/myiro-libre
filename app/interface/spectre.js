@@ -21,8 +21,10 @@ const CourbeSpectre = (() => {
     const sansLongueurs = [];
     series.forEach((s, i) => {
       const lo = s.donnees.longueurs_onde;
-      if (lo.statut === "inconnue" || !lo.valeur.length) sansLongueurs.push(i);
-      else placables.push(i);
+      // Un spectre qui n'a pas une valeur par longueur d'onde n'est pas placé.
+      const placable = lo.statut !== "inconnue" && lo.valeur.length > 0 &&
+        s.donnees.plages[s.plage].conditions.every((c) => !c || c.valeurs.length === lo.valeur.length);
+      (placable ? placables : sansLongueurs).push(i);
     });
     const tous = placables.flatMap((i) => series[i].donnees.longueurs_onde.valeur);
     const xMin = tous.length ? Math.min(...tous) : 0;
@@ -67,32 +69,72 @@ const CourbeSpectre = (() => {
     const axeY = [];
     for (let v = 0; v <= yMax; v += PAS_Y) axeY.push({ valeur: v, y: y(v) });
 
-    return { series, cadre, xMin, xMax, yMax, x, y, courbes, nonDisponibles, sansLongueurs, axeX, axeY };
+    return { series, cadre, xMin, xMax, yMax, x, y, courbes, nonDisponibles, sansLongueurs, placables, axeX, axeY };
   }
 
-  // Longueur d'onde mesurée la plus proche de `nm`, parmi celles des séries placées.
+  // Indice de la valeur de `liste` la plus proche de `nm` (la plus petite en cas d'égalité).
+  function indiceProche(liste, nm) {
+    let k = 0;
+    liste.forEach((l, i) => { if (Math.abs(l - nm) < Math.abs(liste[k] - nm)) k = i; });
+    return k;
+  }
+
+  // Toutes les longueurs d'onde mesurées des séries placées, dans l'ordre.
+  function grille(trace) {
+    const toutes = new Set(trace.placables.flatMap((i) => trace.series[i].donnees.longueurs_onde.valeur));
+    return [...toutes].sort((a, b) => a - b);
+  }
+
+  // Longueur d'onde mesurée la plus proche de `nm`, parmi celles de toutes les séries.
   function plusProche(trace, nm) {
-    let meilleure = null;
-    for (const s of trace.series) {
-      if (s.donnees.longueurs_onde.statut === "inconnue") continue;
-      for (const l of s.donnees.longueurs_onde.valeur) {
-        if (meilleure === null || Math.abs(l - nm) < Math.abs(meilleure - nm)) meilleure = l;
-      }
-    }
-    return meilleure;
+    const g = grille(trace);
+    return g.length ? g[indiceProche(g, nm)] : null;
+  }
+
+  // Longueur d'onde suivante (`pas` = 1) ou précédente (-1) de la grille commune ; sans
+  // lecture en cours, la première ou la dernière.
+  function voisine(trace, nm, pas) {
+    const g = grille(trace);
+    if (!g.length) return null;
+    if (nm === null) return pas > 0 ? g[0] : g[g.length - 1];
+    return g[Math.min(g.length - 1, Math.max(0, g.indexOf(plusProche(trace, nm)) + pas))];
   }
 
   // Réflectance (%) de chaque série et condition à la longueur d'onde mesurée la plus
-  // proche ; `null` : condition non disponible, ou pas mesurée à cette longueur d'onde.
+  // proche ; chaque série donne sa propre valeur la plus proche. `null` : condition
+  // absente, ou longueur d'onde hors des mesures de la série.
   function lire(trace, nm) {
     const proche = plusProche(trace, nm);
-    const valeurs = trace.series.map((s) => {
-      const lo = s.donnees.longueurs_onde;
-      const k = lo.statut === "inconnue" ? -1 : lo.valeur.indexOf(proche);
-      return s.donnees.plages[s.plage].conditions.map((c) =>
-        (c && k >= 0 ? arrondi(c.valeurs[k] * 100) : null));
+    const valeurs = trace.series.map((s, i) => {
+      const conditions = s.donnees.plages[s.plage].conditions;
+      const g = s.donnees.longueurs_onde.valeur;
+      const dedans = proche !== null && trace.placables.includes(i) && proche >= g[0] && proche <= g[g.length - 1];
+      const k = dedans ? indiceProche(g, proche) : -1;
+      return conditions.map((c) => (c && k >= 0 ? arrondi(c.valeurs[k] * 100) : null));
     });
     return { nm: proche, valeurs };
+  }
+
+  // Numéro de la mesure posé sur chacune de ses courbes, à une abscisse propre à la
+  // mesure et à la condition : des courbes confondues gardent des numéros lisibles.
+  function reperes(trace) {
+    const { gauche, droite, largeur } = trace.cadre;
+    return trace.courbes.map((c) => {
+      const part = Math.min(0.92, 0.06 + 0.2 * c.serie + 0.06 * c.condition);
+      const px = arrondi(gauche + part * (largeur - gauche - droite));
+      // Ordonnée de la courbe à cette abscisse, entre ses deux points voisins.
+      let py = c.points[0][1];
+      for (let k = 1; k < c.points.length; k++) {
+        const [x0, y0] = c.points[k - 1];
+        const [x1, y1] = c.points[k];
+        if (px >= x0 && px <= x1) {
+          py = x1 > x0 ? y0 + ((px - x0) / (x1 - x0)) * (y1 - y0) : y0;
+          break;
+        }
+        if (px > x1) py = y1;
+      }
+      return { serie: c.serie, condition: c.condition, texte: String(c.serie + 1), x: px, y: arrondi(py - 4) };
+    });
   }
 
   // Longueur d'onde lue sous l'abscisse `px` du cadre.
@@ -128,9 +170,16 @@ const CourbeSpectre = (() => {
     return s;
   }
 
+  // Réflectance à l'écran : une décimale, comme la lecture (arrondie à 0,1 %).
+  function nombre(v) {
+    return new Intl.NumberFormat(document.documentElement.lang || "fr", {
+      minimumFractionDigits: 1, maximumFractionDigits: 1,
+    }).format(v);
+  }
+
   // Section « Courbe de spectre » de la mesure `courante` ({ cle, titre, donnees, plage }).
-  // `t` : catalogue ; `nombre(v)` : nombre à l'écran dans la langue de la page.
-  function section(courante, t, nombre) {
+  // `t` : catalogue.
+  function section(courante, t) {
     const racine = el("div", "section spectre");
 
     function dessiner() {
@@ -177,6 +226,12 @@ const CourbeSpectre = (() => {
       const corps = el("tbody");
       const cellules = series.map((s, i) => {
         const tr = el("tr", s.courante ? "spectre__ligne--courante" : "");
+        // Survoler une ligne fait ressortir les courbes et les numéros de sa mesure.
+        const surligner = (oui) => {
+          for (const e of figure.querySelectorAll(`[data-serie="${i}"]`)) e.classList.toggle("spectre__surlignee", oui);
+        };
+        tr.addEventListener("pointerenter", () => surligner(true));
+        tr.addEventListener("pointerleave", () => surligner(false));
         tr.append(el("td", "id num", String(i + 1)), el("td", "", s.titre));
         const cases = CONDITIONS.map(() => el("td", "r num"));
         tr.append(...cases);
@@ -210,7 +265,8 @@ const CourbeSpectre = (() => {
             else if (sans) td.textContent = t("spectre.longueurs_inconnues");
             else if (lecture) {
               const v = lecture.valeurs[i][c];
-              td.textContent = v === null ? t("spectre.non_disponible") : t("spectre.valeur").replace("{}", nombre(v));
+              // Condition présente mais pas mesurée à cette longueur d'onde : un tiret.
+              td.textContent = v === null ? "–" : t("spectre.valeur").replace("{}", nombre(v));
             } else td.textContent = conditions[c].supposee ? t("details.a_confirmer") : "";
           });
         });
@@ -237,15 +293,12 @@ const CourbeSpectre = (() => {
         // Les mesures gardées d'abord, la mesure choisie par-dessus.
         for (const c of [...trace.courbes].reverse()) {
           const sorte = series[c.serie].courante ? "courante" : "gardee";
-          dessin.append(svg("path", { class: `spectre__courbe spectre__courbe--m${c.condition} spectre__courbe--${sorte}`, d: c.d }));
+          dessin.append(svg("path", { class: `spectre__courbe spectre__courbe--m${c.condition} spectre__courbe--${sorte}`, d: c.d, "data-serie": c.serie }));
         }
-        // Un seul numéro par mesure, au bout de sa courbe la plus haute.
-        series.forEach((_, serie) => {
-          const bouts = trace.courbes.filter((c) => c.serie === serie).map((c) => c.points[c.points.length - 1]);
-          if (!bouts.length) return;
-          const [px, py] = bouts.reduce((a, b) => (b[1] < a[1] ? b : a));
-          dessin.append(svg("text", { class: "spectre__numero", x: px + 4, y: py + 4 }, String(serie + 1)));
-        });
+        // Le numéro de sa mesure sur chaque courbe.
+        for (const r of reperes(trace)) {
+          dessin.append(svg("text", { class: "spectre__numero", x: r.x, y: r.y, "text-anchor": "middle", "data-serie": r.serie }, r.texte));
+        }
         const repere = svg("line", { class: "spectre__repere", x1: 0, x2: 0, y1: cadre.haut, y2: bas, visibility: "hidden" });
         dessin.append(repere);
         figure.replaceChildren(dessin);
@@ -271,12 +324,8 @@ const CourbeSpectre = (() => {
         figure.onkeydown = (e) => {
           if (!trace.courbes.length || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
           e.preventDefault();
-          const pas = e.key === "ArrowLeft" ? -1 : 1;
-          const ecart = trace.series.find((s) => s.donnees.longueurs_onde.statut !== "inconnue");
-          const valeurs = ecart ? ecart.donnees.longueurs_onde.valeur : [];
-          const k = lu === null ? (pas > 0 ? -1 : valeurs.length) : valeurs.indexOf(lire(trace, lu).nm);
-          const suivant = valeurs[Math.min(valeurs.length - 1, Math.max(0, k + pas))];
-          if (suivant !== undefined) { lu = suivant; placerRepere(); }
+          lu = voisine(trace, lu, e.key === "ArrowLeft" ? -1 : 1);
+          placerRepere();
         };
         figure.onblur = () => { lu = null; placerRepere(); };
         placerRepere();
@@ -295,7 +344,7 @@ const CourbeSpectre = (() => {
     return racine;
   }
 
-  return { preparer, lire, nmSous, section };
+  return { preparer, lire, nmSous, grille, voisine, reperes, section };
 })();
 
 if (typeof module !== "undefined") module.exports = CourbeSpectre;

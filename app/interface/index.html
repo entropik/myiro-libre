@@ -165,8 +165,6 @@
       <p class="prose" role="status" data-mesurer-en-cours data-t="mesurer.en_cours.automatique" hidden></p>
       <details class="replie" data-mesurer-details-techniques hidden><summary data-t="ecran.details"></summary><pre data-details-texte></pre></details>
       <h2 class="empty__text" data-mesurer-vide data-t="vide.mesurer.phrase"></h2>
-      <!-- Courbe de spectre de la mesure choisie dans la liste (spectre.js). -->
-      <div data-mesurer-spectre></div>
       <div class="section" data-mesurer-liste hidden>
         <div class="section__head"><span class="label label--ink" data-t="mesurer.liste"></span></div>
         <table>
@@ -178,6 +176,8 @@
              L'enveloppe sans classe porte `hidden` : `.actions` fixe `display` et l'emporterait. -->
         <div data-mesurer-ranger-actions hidden><div class="actions"><button class="btn" data-mesurer-ranger data-t="mesurer.ranger"></button></div></div>
       </div>
+      <!-- Courbe de spectre de la mesure choisie, sous la liste : elle ne la coupe jamais (spectre.js). -->
+      <div data-mesurer-spectre></div>
     </section>
     <section class="empty" data-vue="controler" hidden>
       <h2 class="empty__text" data-t="vide.controler.phrase"></h2>

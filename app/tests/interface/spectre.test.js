@@ -69,6 +69,62 @@ test("une plage choisie trace ses propres spectres", () => {
   assert.deepEqual(t.nonDisponibles.map((n) => n.condition), [0, 1]);
 });
 
+// Une mesure sur une autre grille : de 380 à 420 nm par 20 nm, M1 seul.
+function parVingt(m1) {
+  return {
+    longueurs_onde: { statut: "confirmee", valeur: [380, 400, 420] },
+    plages: [{ identifiant: "1", conditions: [null, { valeurs: m1, supposee: false }, null] }],
+  };
+}
+
+test("sur des grilles différentes, chaque mesure donne sa valeur la plus proche", () => {
+  const t = Courbe.preparer([
+    { donnees: mesure([0.2, 0.3, 0.4], [0.5, 0.5, 0.5]), plage: 0 },
+    { donnees: parVingt([0.6, 0.7, 0.8]), plage: 0 },
+  ], cadre);
+  assert.deepEqual(Courbe.grille(t), [380, 390, 400, 420]);
+  // 390 nm : la seconde mesure n'a que 380 et 400, elle donne la plus proche (380).
+  assert.deepEqual(Courbe.lire(t, 390).valeurs, [[30, 50, null], [null, 60, null]]);
+  // 420 nm : hors de la première mesure, rien n'est lu pour elle (ce n'est pas
+  // « non disponible » : ses conditions existent).
+  assert.deepEqual(Courbe.lire(t, 420).valeurs, [[null, null, null], [null, 80, null]]);
+  assert.equal(Courbe.lire(t, 420).nm, 420);
+});
+
+test("les flèches du clavier parcourent toutes les longueurs d'onde des mesures", () => {
+  const t = Courbe.preparer([
+    { donnees: mesure([0.2, 0.3, 0.4], [0.5, 0.5, 0.5]), plage: 0 },
+    { donnees: parVingt([0.6, 0.7, 0.8]), plage: 0 },
+  ], cadre);
+  assert.equal(Courbe.voisine(t, null, 1), 380);
+  assert.equal(Courbe.voisine(t, null, -1), 420);
+  assert.equal(Courbe.voisine(t, 390, 1), 400);
+  assert.equal(Courbe.voisine(t, 400, 1), 420);
+  assert.equal(Courbe.voisine(t, 420, 1), 420);
+  assert.equal(Courbe.voisine(t, 380, -1), 380);
+});
+
+test("chaque courbe porte le numéro de sa mesure, à une place à elle", () => {
+  const t = Courbe.preparer([
+    { donnees: mesure([0.2, 0.2, 0.2], [0.3, 0.3, 0.3]), plage: 0 },
+    { donnees: mesure([0.2, 0.2, 0.2], [0.3, 0.3, 0.3]), plage: 0 },
+  ], cadre);
+  const reperes = Courbe.reperes(t);
+  assert.deepEqual(reperes.map((r) => [r.serie, r.condition, r.texte]),
+    [[0, 0, "1"], [0, 1, "1"], [1, 0, "2"], [1, 1, "2"]]);
+  // Courbes confondues : les numéros ne se recouvrent pas.
+  const places = new Set(reperes.map((r) => `${r.x},${r.y}`));
+  assert.equal(places.size, 4);
+});
+
+test("un spectre qui n'a pas la taille de la grille n'est pas tracé", () => {
+  const d = mesure([0.2, 0.3], [0.5, 0.5, 0.5]);
+  const t = Courbe.preparer([{ donnees: d, plage: 0 }], cadre);
+  assert.deepEqual(t.courbes, []);
+  assert.deepEqual(t.sansLongueurs, [0]);
+  assert.ok(!JSON.stringify(t).includes("NaN"));
+});
+
 test("la position du pointeur donne la longueur d'onde lue", () => {
   const t = Courbe.preparer([{ donnees: mesure([0.2, 0.2, 0.2], [0.3, 0.3, 0.3]), plage: 0 }], cadre);
   assert.equal(Courbe.nmSous(t, 160), 390);

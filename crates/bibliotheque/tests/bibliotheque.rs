@@ -1108,6 +1108,28 @@ fn les_spectres_d_une_mesure_importee_suivent_ce_que_le_fichier_declare() {
         .all(|p| p.conditions.iter().all(Option::is_none)));
 }
 
+/// Deux tableaux au même départ et au même pas, mais pas au même nombre de
+/// valeurs : aucune grille ne vaut pour les deux, les longueurs d'onde sont
+/// signalées inconnues (la courbe ne trace rien au hasard).
+#[test]
+fn des_spectres_de_longueurs_differentes_n_ont_pas_de_longueurs_d_onde() {
+    let (_dossier, biblio) = bibliotheque_vide();
+    let jet = biblio.creer_condition("Jet").unwrap();
+    let texte = "CGATS.17\nMEASUREMENT_SOURCE\t\"A\"\nNUMBER_OF_FIELDS\t4\n\
+         BEGIN_DATA_FORMAT\nSAMPLE_ID\tnm380\tnm390\tnm400\nEND_DATA_FORMAT\n\
+         NUMBER_OF_SETS\t1\nBEGIN_DATA\n1\t0.2\t0.3\t0.4\nEND_DATA\n\
+         CGATS.17\nMEASUREMENT_SOURCE\t\"D50\"\nNUMBER_OF_FIELDS\t3\n\
+         BEGIN_DATA_FORMAT\nSAMPLE_ID\tnm380\tnm390\nEND_DATA_FORMAT\n\
+         NUMBER_OF_SETS\t1\nBEGIN_DATA\n1\t0.2\t0.3\nEND_DATA\n";
+    let id = biblio.importer_mesure(jet.id, "inegal.txt", texte).unwrap();
+
+    let spectres = biblio.spectres(id).unwrap();
+    assert_eq!(spectres.longueurs_onde, Info::Inconnue);
+    let [m0, m1, _] = &spectres.plages[0].conditions;
+    assert_eq!(m0.as_ref().unwrap().valeurs.len(), 3);
+    assert_eq!(m1.as_ref().unwrap().valeurs.len(), 2);
+}
+
 #[test]
 fn une_demande_supposee_rend_chaque_spectre_a_confirmer() {
     let (_dossier, biblio) = bibliotheque_vide();
