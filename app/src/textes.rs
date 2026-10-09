@@ -338,7 +338,32 @@ const FRANCAIS: Catalogue = &[
     ("mesurer.valeurs", "Valeurs"),
     (
         "mesurer.calcul",
-        "Calculées à partir du spectre\u{202f}: illuminant D50, observateur 2°.",
+        "Calculées par myiro-libre à partir du spectre, avec ses propres tables\u{202f}: illuminant D50, observateur 2°.",
+    ),
+    ("mesurer.ranger", "Ranger à nouveau"),
+    (
+        "mesurer.erreur.sans_instrument.cause",
+        "Aucun instrument n’est prêt à mesurer.",
+    ),
+    (
+        "mesurer.erreur.sans_instrument.action",
+        "Branchez le MYIRO-1 et attendez qu’il apparaisse en haut de la fenêtre.",
+    ),
+    (
+        "mesurer.erreur.condition_absente.cause",
+        "Cette condition d’impression n’existe plus dans la bibliothèque. Rien n’a été mesuré.",
+    ),
+    (
+        "mesurer.erreur.condition_absente.action",
+        "Choisissez-en une autre dans la liste, puis mesurez de nouveau.",
+    ),
+    (
+        "mesurer.erreur.bibliotheque_fermee.cause",
+        "La bibliothèque n’a pas pu s’ouvrir. Rien n’a été mesuré.",
+    ),
+    (
+        "mesurer.erreur.bibliotheque_fermee.action",
+        "Fermez puis relancez myiro-libre.",
     ),
     ("mesurer.lab", "L*, a*, b*"),
     ("mesurer.lch", "L*, C*, h°"),
@@ -679,7 +704,32 @@ const ANGLAIS: Catalogue = &[
     ("mesurer.valeurs", "Values"),
     (
         "mesurer.calcul",
-        "Computed from the spectrum: illuminant D50, 2° observer.",
+        "Computed by myiro-libre from the spectrum, with its own tables: illuminant D50, 2° observer.",
+    ),
+    ("mesurer.ranger", "Store again"),
+    (
+        "mesurer.erreur.sans_instrument.cause",
+        "No instrument is ready to measure.",
+    ),
+    (
+        "mesurer.erreur.sans_instrument.action",
+        "Plug in the MYIRO-1 and wait for it to appear at the top of the window.",
+    ),
+    (
+        "mesurer.erreur.condition_absente.cause",
+        "This printing condition is no longer in the library. Nothing was measured.",
+    ),
+    (
+        "mesurer.erreur.condition_absente.action",
+        "Choose another one in the list, then measure again.",
+    ),
+    (
+        "mesurer.erreur.bibliotheque_fermee.cause",
+        "The library could not open. Nothing was measured.",
+    ),
+    (
+        "mesurer.erreur.bibliotheque_fermee.action",
+        "Close and restart myiro-libre.",
     ),
     ("mesurer.lab", "L*, a*, b*"),
     ("mesurer.lch", "L*, C*, h°"),
@@ -864,6 +914,17 @@ mod tests {
             inconnues.is_empty(),
             "clés absentes du catalogue : {inconnues:?}"
         );
+    }
+
+    /// L'illuminant et l'observateur affichés sont ceux de notre calcul, pas
+    /// une affirmation sur l'instrument : le texte le dit.
+    #[test]
+    fn l_observateur_affiche_est_celui_de_notre_calcul() {
+        for langue in [Langue::Francais, Langue::Anglais] {
+            let calcul = texte(langue, "mesurer.calcul");
+            assert!(calcul.contains("myiro-libre"), "{calcul}");
+            assert!(calcul.contains("D50") && calcul.contains("2°"), "{calcul}");
+        }
     }
 
     #[test]

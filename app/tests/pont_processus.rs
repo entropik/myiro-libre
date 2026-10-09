@@ -168,6 +168,38 @@ fn la_mesure_ponctuelle_a_six_fois_le_delai_d_une_autre_demande() {
     ));
 }
 
+/// Une mesure qui ne répond jamais : passé six fois le délai, le pont est
+/// arrêté de force et l'instrument est dit dans un état incertain, sans
+/// mesure ni nouvelle tentative possible (ticket #7, relecture).
+#[test]
+fn une_mesure_sans_reponse_laisse_l_instrument_dans_un_etat_incertain() {
+    let programme = pont_factice();
+    let arch = architecture(&programme).expect("le pont factice est un exécutable");
+    let dossier = dossier_vide("mesure-muette");
+    faux_programme(&dossier.join("FDXSDK.dll"), arch);
+    let mut instrument =
+        Instrument::ouvrir(&[dossier], &[(arch, programme)], |prog, _dll, plafond| {
+            PontProcessus::lancer(prog, Path::new("mesure_muette"), plafond)
+                .map(|p| p.avec_delai(Duration::from_millis(100)))
+        });
+    instrument.etalonner(&mut |_: app::instrument::Geste| app::instrument::Accord::Fait);
+    assert!(instrument.vue().mesurable, "{:?}", instrument.probleme());
+    let debut = Instant::now();
+
+    let rendue = instrument
+        .mesurer_ponctuelle(&mut |_: app::instrument::Geste| app::instrument::Accord::Fait);
+
+    assert_eq!(rendue, None);
+    assert!(
+        debut.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        debut.elapsed()
+    );
+    assert_eq!(instrument.probleme().unwrap().code(), "pont_bloque");
+    assert_eq!(instrument.etat(), &Etat::NonDetecte);
+    assert!(!instrument.vue().mesurable);
+}
+
 /// Fermer un pont bloqué ne bloque pas non plus.
 #[test]
 fn la_fermeture_d_un_pont_bloque_est_bornee() {

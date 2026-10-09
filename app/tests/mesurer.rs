@@ -294,10 +294,15 @@ fn gris(demande: Info<ConditionsCalcul>) -> Mesure {
 
 /// Mesure le gris et rend sa fiche, dans la langue donnée.
 fn fiche_du_gris(nom: &str, demande: Info<ConditionsCalcul>, langue: Langue) -> FicheMesure {
+    fiche_de(nom, gris(demande), langue)
+}
+
+/// Mesure rendue telle quelle par le pont simulé, et sa fiche.
+fn fiche_de(nom: &str, mesure: Mesure, langue: Langue) -> FicheMesure {
     let simule = PontSimule::avec_instruments(&[SERIE]).echouer_a(
         Palier::MesurePonctuelle,
         Ok(Reponse::Mesure {
-            mesure: gris(demande),
+            mesure,
             remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
         }),
     );
@@ -370,4 +375,118 @@ fn sans_conditions_de_calcul_tout_reste_inconnu() {
         assert_eq!(spectre.condition, Info::Inconnue);
         assert_eq!(spectre.valeurs, None);
     }
+}
+
+// ---- Corrections de relecture ----
+
+/// Un micrologiciel que le pont n'a pas su lire (texte vide) est inconnu,
+/// jamais une case vide du cartouche.
+#[test]
+fn un_micrologiciel_vide_est_inconnu() {
+    let mut mesure = gris(demande_myiro1());
+    let mut provenance = mesure.provenance().clone();
+    provenance.instrument.micrologiciel = "  ".into();
+    mesure = Mesure::new(mesure.plages().to_vec(), provenance).unwrap();
+
+    let fiche = fiche_de("micrologiciel-vide", mesure, Langue::Francais);
+
+    assert_eq!(fiche.micrologiciel, None);
+    assert_eq!(fiche.modele.as_deref(), Some("MYIRO-1"));
+    let lue = fiche_du_gris("micrologiciel-lu", demande_myiro1(), Langue::Francais);
+    assert_eq!(lue.micrologiciel.as_deref(), Some("1.00"));
+}
+
+/// Sans instrument, sans la condition d'impression choisie ou sans
+/// bibliothèque, rien n'est mesuré, et l'écran dit pourquoi et quoi faire,
+/// dans les deux langues.
+#[test]
+fn chaque_refus_avant_la_mesure_a_sa_cause_et_son_action() {
+    use app::mesurer::{choisir_condition, RefusMesure};
+    use app::textes::texte;
+    let (_biblio, condition) = bibliotheque("refus-avant");
+
+    assert_eq!(
+        choisir_condition(Ok(vec![condition.clone()]), condition.id.0),
+        Ok(condition.clone())
+    );
+    assert_eq!(
+        choisir_condition(Ok(vec![condition.clone()]), condition.id.0 + 1),
+        Err(RefusMesure::ConditionAbsente)
+    );
+    assert_eq!(
+        choisir_condition(Err("bibliotheque.erreur.ouverture".into()), 1),
+        Err(RefusMesure::BibliothequeFermee)
+    );
+
+    for refus in [
+        RefusMesure::SansInstrument,
+        RefusMesure::ConditionAbsente,
+        RefusMesure::BibliothequeFermee,
+    ] {
+        assert!(refus.code().starts_with("mesurer.erreur."), "{refus:?}");
+        for langue in [Langue::Francais, Langue::Anglais] {
+            for partie in ["cause", "action"] {
+                let cle = format!("{}.{partie}", refus.code());
+                assert_ne!(texte(langue, &cle), cle, "texte manquant : {cle}");
+            }
+        }
+    }
+}
+
+/// Une mesure que la bibliothèque a refusée peut être rangée à nouveau,
+/// avec son nom, dans sa condition d'impression ; une mesure déjà rangée ne
+/// l'est jamais deux fois.
+#[test]
+fn une_mesure_refusee_se_range_a_nouveau() {
+    let mut instrument = etalonne(PontSimule::avec_instruments(&[SERIE]), "ranger-a-nouveau");
+    let (biblio, condition) = bibliotheque("ranger-a-nouveau-biblio");
+    let mut seance = Seance::default();
+    seance
+        .mesurer(
+            &mut instrument,
+            &mut fait,
+            &condition,
+            ranger(&biblio, &condition),
+            Langue::Francais,
+        )
+        .expect("mesure rangée");
+    let numero = seance
+        .mesurer(
+            &mut instrument,
+            &mut fait,
+            &condition,
+            |_, _| Err("base verrouillée".into()),
+            Langue::Francais,
+        )
+        .expect("mesure gardée");
+    seance
+        .renommer(numero, "Cyan", |_, _| panic!("pas encore rangée"))
+        .unwrap();
+
+    // Encore refusée : rien ne change.
+    assert_eq!(seance.ranger_a_nouveau(|_, _, _| Err("toujours".into())), 1);
+    assert_eq!(biblio.arborescence("").unwrap()[0].mesures.len(), 1);
+
+    let mut appels = 0;
+    let restantes = seance.ranger_a_nouveau(|cond, mesure, nom| {
+        appels += 1;
+        biblio
+            .enregistrer_mesure_nommee(cond.id, mesure, nom)
+            .map_err(|e| e.to_string())
+    });
+
+    assert_eq!(
+        (restantes, appels),
+        (0, 1),
+        "la mesure déjà rangée n'est pas refaite"
+    );
+    assert!(seance
+        .fiches(Langue::Francais)
+        .iter()
+        .all(|f| f.erreur_rangement.is_none()));
+    assert_eq!(nom_range(&biblio).as_deref(), Some("Cyan"));
+    assert_eq!(
+        seance.ranger_a_nouveau(|_, _, _| panic!("rien à ranger")),
+        0
+    );
 }

@@ -18,7 +18,7 @@ use std::sync::{mpsc, Mutex};
 
 use instrument::parefeu::{AutorisationPareFeu, PareFeuWindows};
 use instrument::{choix, emplacements_a_essayer, fd9, Accord, Geste, Gestes, Instrument, Vue};
-use mesurer::{FicheMesure, Seance};
+use mesurer::{choisir_condition, FicheMesure, RefusMesure, Seance};
 use pont::{chercher_ponts, chercher_ponts_nommes, PontProcessus};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -266,13 +266,13 @@ fn mesurer(
     langue: &str,
 ) -> Result<EcranMesurer, String> {
     let langue = self::langue(langue);
-    let condition = bibliotheque
-        .conditions()?
-        .into_iter()
-        .find(|c| c.id.0 == condition)
-        .ok_or("bibliotheque.erreur.autre")?;
+    // Refus avant toute mesure : un code `mesurer.erreur.*` (cause et action).
+    let condition = choisir_condition(bibliotheque.conditions(), condition)
+        .map_err(|refus| refus.code().to_string())?;
     let mut courant = instruments.0.lock().unwrap_or_else(|e| e.into_inner());
-    let instrument = courant.as_mut().ok_or("bibliotheque.erreur.autre")?;
+    let instrument = courant
+        .as_mut()
+        .ok_or(RefusMesure::SansInstrument.code().to_string())?;
     let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
     seance.mesurer(
         instrument,
@@ -288,6 +288,23 @@ fn mesurer(
         instrument: Some(instrument.vue()),
         mesures: seance.fiches(langue),
     })
+}
+
+/// Range à nouveau les mesures que la bibliothèque avait refusées.
+#[tauri::command]
+fn ranger_a_nouveau(
+    seance: State<'_, SeanceMesures>,
+    bibliotheque: State<'_, colonne::BibliothequeOuverte>,
+    langue: &str,
+) -> EcranMesurer {
+    let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
+    seance.ranger_a_nouveau(|condition, mesure, nom| {
+        bibliotheque.enregistrer_mesure_nommee(condition.id, mesure, nom)
+    });
+    EcranMesurer {
+        instrument: None,
+        mesures: seance.fiches(self::langue(langue)),
+    }
 }
 
 /// Mesures de la séance, dans la langue de l'écran.
@@ -340,6 +357,7 @@ pub fn lancer() {
             mesurer,
             mesures_seance,
             renommer_mesure,
+            ranger_a_nouveau,
             catalogue,
             langue_demandee,
             ouvrir_instrument,

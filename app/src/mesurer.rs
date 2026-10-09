@@ -17,6 +17,40 @@ use crate::textes::{texte, Langue};
 /// Clé du catalogue d'une mesure que la bibliothèque n'a pas pu ranger.
 pub const ERREUR_RANGEMENT: &str = "mesurer.erreur.rangement";
 
+/// Pourquoi une mesure ne part pas, avant même de demander le geste. Les
+/// textes de l'écran sont `<code>.cause` et `<code>.action` du catalogue.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RefusMesure {
+    /// Aucun instrument ouvert.
+    SansInstrument,
+    /// La condition d'impression choisie n'est plus dans la bibliothèque.
+    ConditionAbsente,
+    /// La bibliothèque ne s'est pas ouverte : rien ne pourrait être rangé.
+    BibliothequeFermee,
+}
+
+impl RefusMesure {
+    pub fn code(self) -> &'static str {
+        match self {
+            RefusMesure::SansInstrument => "mesurer.erreur.sans_instrument",
+            RefusMesure::ConditionAbsente => "mesurer.erreur.condition_absente",
+            RefusMesure::BibliothequeFermee => "mesurer.erreur.bibliotheque_fermee",
+        }
+    }
+}
+
+/// La condition d'impression `id` parmi celles de la bibliothèque.
+pub fn choisir_condition(
+    conditions: Result<Vec<ConditionImpression>, String>,
+    id: i64,
+) -> Result<ConditionImpression, RefusMesure> {
+    conditions
+        .map_err(|_| RefusMesure::BibliothequeFermee)?
+        .into_iter()
+        .find(|c| c.id.0 == id)
+        .ok_or(RefusMesure::ConditionAbsente)
+}
+
 /// Une mesure de la séance.
 struct MesureDeSeance {
     numero: usize,
@@ -43,9 +77,11 @@ pub struct FicheMesure {
     pub condition_impression: String,
     /// Clé du catalogue si la mesure n'est pas rangée dans la bibliothèque.
     pub erreur_rangement: Option<&'static str>,
-    pub modele: String,
+    /// Modèle et micrologiciel ; `None` si le pont les a rendus vides : le
+    /// cartouche écrit alors « inconnu », jamais une case vide.
+    pub modele: Option<String>,
     pub numero_serie: u32,
-    pub micrologiciel: String,
+    pub micrologiciel: Option<String>,
     pub etalonnage: Info<Horodatage>,
     /// Les trois spectres de la plage, dans l'ordre où le pont les a rendus.
     pub spectres: Vec<FicheSpectre>,
@@ -183,6 +219,26 @@ impl Seance {
         Ok(())
     }
 
+    /// Range à nouveau, avec leur nom et dans leur condition d'impression,
+    /// les mesures que la bibliothèque avait refusées ; les autres ne sont
+    /// pas touchées. Rend le nombre de mesures toujours pas rangées.
+    pub fn ranger_a_nouveau(
+        &mut self,
+        mut ranger: impl FnMut(&ConditionImpression, &Mesure, &str) -> Result<IdMesure, String>,
+    ) -> usize {
+        let mut restantes = 0;
+        for m in self.mesures.iter_mut().filter(|m| m.rangee.is_none()) {
+            match ranger(&m.condition, &m.acquise.mesure, &m.nom) {
+                Ok(id) => m.rangee = Some(id),
+                Err(detail) => {
+                    eprintln!("rangement de la mesure {} : {detail}", m.numero);
+                    restantes += 1;
+                }
+            }
+        }
+        restantes
+    }
+
     fn trouver(&self, numero: usize) -> Option<&MesureDeSeance> {
         self.mesures.iter().find(|m| m.numero == numero)
     }
@@ -195,6 +251,12 @@ impl Seance {
             .map(|m| fiche(m, langue))
             .collect()
     }
+}
+
+/// Texte rendu par le pont, ou `None` s'il est vide.
+fn renseigne(texte: &str) -> Option<String> {
+    let texte = texte.trim();
+    (!texte.is_empty()).then(|| texte.to_string())
 }
 
 fn fiche(m: &MesureDeSeance, langue: Langue) -> FicheMesure {
@@ -229,9 +291,9 @@ fn fiche(m: &MesureDeSeance, langue: Langue) -> FicheMesure {
         horodatage: p.horodatage.texte().to_string(),
         condition_impression: m.condition.nom.clone(),
         erreur_rangement: m.rangee.is_none().then_some(ERREUR_RANGEMENT),
-        modele: p.instrument.modele.clone(),
+        modele: renseigne(&p.instrument.modele),
         numero_serie: p.instrument.numero_serie,
-        micrologiciel: p.instrument.micrologiciel.clone(),
+        micrologiciel: renseigne(&p.instrument.micrologiciel),
         etalonnage: p.etalonnage.clone(),
         spectres,
     }

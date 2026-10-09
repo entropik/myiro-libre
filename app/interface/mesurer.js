@@ -21,6 +21,8 @@
   const liste = feuille.querySelector("[data-mesurer-liste]");
   const lignes = feuille.querySelector("[data-mesurer-lignes]");
   const erreurListe = feuille.querySelector("[data-mesurer-erreur]");
+  const rangerActions = feuille.querySelector("[data-mesurer-ranger-actions]");
+  const rangerBouton = feuille.querySelector("[data-mesurer-ranger]");
   const detail = document.querySelector("[data-mesurer-detail]");
 
   let conditions = []; // conditions d'impression de la bibliothèque
@@ -61,6 +63,12 @@
   function etalonnage(info) {
     if (info.statut === "inconnue") return t("cartouche.inconnu");
     return info.statut === "supposee" ? `${date(info.valeur)} (${t("details.a_confirmer")})` : date(info.valeur);
+  }
+
+  // Refus d'une commande : un code `mesurer.erreur.*` a sa cause et son action.
+  function refus(cle) {
+    const cause = textes[cle + ".cause"];
+    return cause ? `${cause} ${textes[cle + ".action"]}` : t(cle);
   }
 
   // ---- Raison d'un bouton « Mesurer » inactif ; null s'il est actif ----
@@ -118,6 +126,8 @@
     const nonRangee = fiches.find((f) => f.erreur_rangement);
     erreurListe.hidden = !nonRangee;
     erreurListe.textContent = nonRangee ? textes[nonRangee.erreur_rangement] : "";
+    rangerActions.hidden = !nonRangee;
+    rangerBouton.disabled = enCours;
   }
 
   // ---- Détails à droite : valeurs, puis cartouche de provenance ----
@@ -169,8 +179,9 @@
     titre.append(el("span", "label", t("cartouche.libelle")), el("strong", "", f.nom));
     const cells = el("div", "cells");
     cells.append(
-      cellule(t("cartouche.instrument"), `${f.modele} ${t("details.numero")} ${f.numero_serie}`),
-      cellule(t("cartouche.micrologiciel"), f.micrologiciel),
+      // Une donnée que le pont n'a pas rendue s'écrit « inconnu », jamais une case vide.
+      cellule(t("cartouche.instrument"), `${f.modele || t("cartouche.inconnu")} ${t("details.numero")} ${f.numero_serie}`),
+      cellule(t("cartouche.micrologiciel"), f.micrologiciel || t("cartouche.inconnu")),
       cellule(t("cartouche.etalonnage"), etalonnage(f.etalonnage)),
       cellule(t("cartouche.condition_mesure"), conditionSpectre(f, spectreChoisi)),
       cellule(t("cartouche.date"), date(f.horodatage), true),
@@ -187,8 +198,8 @@
   function dessiner() {
     const pourquoi = enCours ? null : raison();
     bouton.disabled = enCours || pourquoi !== null;
-    // Raison du bouton inactif, ou refus de la dernière demande.
-    const ligne = pourquoi || (erreur && !enCours ? t(erreur) : null);
+    // Raison du bouton inactif, ou refus de la dernière demande (cause puis action).
+    const ligne = pourquoi || (erreur && !enCours ? refus(erreur) : null);
     raisonTexte.hidden = ligne === null;
     raisonTexte.textContent = ligne || "";
     consigne.hidden = enCours;
@@ -268,6 +279,15 @@
   });
 
   bouton.addEventListener("click", mesurer);
+  rangerBouton.addEventListener("click", async () => {
+    try {
+      fiches = (await invoke("ranger_a_nouveau", { langue: langue() })).mesures;
+      document.dispatchEvent(new CustomEvent("bibliotheque-modifiee"));
+    } catch (e) {
+      console.error("ranger_a_nouveau", e);
+    }
+    dessiner();
+  });
   choixCondition.addEventListener("change", () => memoire("condition-mesure", choixCondition.value));
   document.addEventListener("instrument-affiche", dessiner);
   document.addEventListener("tache-affichee", (e) => { if (e.detail === "mesurer") chargerConditions(); });
