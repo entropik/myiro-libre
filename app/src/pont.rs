@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use pont_protocole::{
-    lire_reponse, ErreurPont, Identite, InstrumentDetecte, Palier, Reponse, Requete,
+    lire_reponse, ErreurPont, Horodatage, Identite, InstrumentDetecte, Palier, Reponse, Requete,
 };
 
 /// Le pont n'a pas pu répondre : ce n'est pas une erreur de l'instrument, mais
@@ -217,7 +217,13 @@ impl Pont for PontProcessus {
         if envoi.is_err() {
             return Err(self.arret());
         }
-        match self.lignes.recv_timeout(self.delai) {
+        // L'étalonnage attend jusqu'à 30 s dans le pont
+        // (`pont_myiro1::DELAI_ETALONNAGE`), en plus de l'appel à la DLL.
+        let delai = match requete {
+            Requete::Etalonner {} => self.delai * 2,
+            _ => self.delai,
+        };
+        match self.lignes.recv_timeout(delai) {
             Ok(reponse) => lire_reponse(reponse.trim()).map_err(|e| Panne::ReponseIllisible {
                 detail: format!("{e} : {}", reponse.trim()),
             }),
@@ -229,7 +235,7 @@ impl Pont for PontProcessus {
                 Err(Panne::SansReponse {
                     detail: format!(
                         "aucune réponse en {} ms à {ligne} ; pont arrêté de force",
-                        self.delai.as_millis()
+                        delai.as_millis()
                     ),
                 })
             }
@@ -246,6 +252,9 @@ impl Drop for PontProcessus {
     }
 }
 
+/// Date fictive rendue par le pont simulé à un étalonnage réussi.
+pub const DATE_ETALONNAGE_SIMULEE: &str = "2026-10-07T09:30:00+02:00";
+
 /// Requêtes reçues par un pont simulé, lisibles après coup par les tests.
 #[derive(Clone, Default)]
 pub struct Journal(Arc<Mutex<Vec<Requete>>>);
@@ -261,7 +270,8 @@ impl Journal {
 /// Il ne dit rien de l'ABI de la DLL : seul l'instrument réel la confirme.
 pub struct PontSimule {
     instruments: Vec<u32>,
-    echecs: BTreeMap<Palier, Result<Reponse, Panne>>,
+    /// Par palier : nombre de demandes encore réussies, puis le résultat imposé.
+    echecs: BTreeMap<Palier, (usize, Result<Reponse, Panne>)>,
     journal: Journal,
 }
 
@@ -276,8 +286,19 @@ impl PontSimule {
     }
 
     /// Au palier donné, rend ce résultat au lieu de la réponse normale.
-    pub fn echouer_a(mut self, palier: Palier, resultat: Result<Reponse, Panne>) -> Self {
-        self.echecs.insert(palier, resultat);
+    pub fn echouer_a(self, palier: Palier, resultat: Result<Reponse, Panne>) -> Self {
+        self.echouer_apres(palier, 0, resultat)
+    }
+
+    /// Au palier donné, répond normalement `reussites` fois, puis rend ce
+    /// résultat à chaque demande suivante.
+    pub fn echouer_apres(
+        mut self,
+        palier: Palier,
+        reussites: usize,
+        resultat: Result<Reponse, Panne>,
+    ) -> Self {
+        self.echecs.insert(palier, (reussites, resultat));
         self
     }
 
@@ -298,8 +319,11 @@ impl Pont for PontSimule {
             Requete::MesurerBande { .. } => Palier::Bande,
             Requete::Fermer {} => return Ok(Reponse::Ferme {}),
         };
-        if let Some(resultat) = self.echecs.get(&palier) {
-            return resultat.clone();
+        if let Some((reussites, resultat)) = self.echecs.get_mut(&palier) {
+            if *reussites == 0 {
+                return resultat.clone();
+            }
+            *reussites -= 1;
         }
         Ok(match requete {
             Requete::Version {} => Reponse::Version { parties: [1, 0, 1] },
@@ -331,12 +355,15 @@ impl Pont for PontSimule {
                     erreur: ErreurPont::InstrumentInconnu {},
                 },
             },
-            // Le simulé ne va pas plus loin que la connexion, comme le plafond
-            // de ce ticket.
+            Requete::Etalonner {} => Reponse::Etalonne {
+                date: Horodatage::new(DATE_ETALONNAGE_SIMULEE).expect("date fictive valable"),
+            },
+            // Le simulé ne va pas plus loin que l'étalonnage, comme le plafond
+            // de l'application.
             _ => Reponse::Erreur {
                 erreur: ErreurPont::PalierNonAutorise {
                     demande: palier,
-                    plafond: Palier::Connexion,
+                    plafond: Palier::Etalonnage,
                 },
             },
         })

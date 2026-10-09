@@ -15,14 +15,15 @@
 <body class="app" hidden>
 <header class="masthead"><div class="page"><div class="grid">
   <div class="c-1-2 brand">myiro-libre</div>
-  <nav class="c-3-9 nav" data-t-aria="nav.libelle">
+  <nav class="c-3-7 nav" data-t-aria="nav.libelle">
     <button data-tache="mesurer" aria-current="page"><span class="label num">01</span><span data-t="tache.mesurer"></span></button>
     <button data-tache="controler"><span class="label num">02</span><span data-t="tache.controler"></span></button>
     <button data-tache="profiler"><span class="label num">03</span><span data-t="tache.profiler"></span></button>
     <button data-tache="bibliotheque"><span class="label num">04</span><span data-t="tache.bibliotheque"></span></button>
   </nav>
-  <div class="c-10-12 masthead__tools">
+  <div class="c-8-12 masthead__tools">
     <span class="state state--warn" data-t-aria="instrument.libelle" data-instrument role="status"><i></i><span data-instrument-texte></span></span>
+    <button class="btn" data-etalonner data-t="instrument.etalonner" hidden></button>
     <div class="seg" role="group" data-t-aria="theme.libelle">
       <button data-theme-choix="light" data-t="theme.clair"></button><button data-theme-choix="dark" data-t="theme.sombre"></button>
     </div>
@@ -71,6 +72,53 @@
       <p class="prose" data-t="ecran.choix.explication"></p>
       <div class="notice notice--warn" data-avis hidden><p><b data-avis-cause></b> <span data-avis-action></span></p></div>
       <div class="actions"><button class="btn btn--primary" data-action="choisir_dossier" data-t="ecran.choix.action"></button></div>
+      <p class="why" data-raison-recherche data-t="raison.recherche" hidden></p>
+      <details class="replie" data-details hidden><summary data-t="ecran.details"></summary><pre data-details-texte></pre></details>
+    </section>
+    <!-- Étalonnage guidé : une seule feuille, l’étape courante change sur place (aucune fenêtre empilée). -->
+    <section data-ecran="etalonnage" hidden>
+      <div class="steps" data-etapes role="list" data-t-aria="ecran.etalonnage.etapes">
+        <button role="listitem" disabled data-etape="blanc"><span class="label num">01</span><span data-t="ecran.etalonnage.etape.blanc"></span></button>
+        <button role="listitem" disabled data-etape="etalonnage"><span class="label num">02</span><span data-t="ecran.etalonnage.etape.etalonnage"></span></button>
+        <button role="listitem" disabled data-etape="mesure"><span class="label num">03</span><span data-t="ecran.etalonnage.etape.mesure"></span></button>
+      </div>
+      <div data-phase="geste en_cours">
+        <h2 class="empty__text" data-t="ecran.etalonnage.titre"></h2>
+        <p class="prose" data-pourquoi data-t="ecran.etalonnage.pourquoi"></p>
+        <figure class="schema">
+          <svg viewBox="0 0 240 150" role="img" data-t-aria="ecran.etalonnage.schema">
+            <line class="schema__sol" x1="0" y1="136" x2="240" y2="136"/>
+            <path class="schema__trait" d="M32 18v44m-7-9l7 9 7-9M208 18v44m-7-9l7 9 7-9"/>
+            <polygon class="schema__trait" points="64,14 176,14 176,76 156,104 84,104 64,76"/>
+            <rect class="schema__plein" x="112" y="22" width="16" height="4"/>
+            <rect class="schema__trait" x="56" y="104" width="128" height="32"/>
+            <rect class="schema__blanc" x="96" y="104" width="48" height="6"/>
+            <line class="schema__repere" x1="120" y1="110" x2="120" y2="117"/>
+            <text x="120" y="64" text-anchor="middle">1</text>
+            <text x="72" y="127" text-anchor="middle">2</text>
+            <text x="120" y="130" text-anchor="middle">3</text>
+          </svg>
+          <ol class="schema__legende">
+            <li><span class="label num">1</span><span data-t="ecran.etalonnage.schema.instrument"></span></li>
+            <li><span class="label num">2</span><span data-t="ecran.etalonnage.schema.capuchon"></span></li>
+            <li><span class="label num">3</span><span data-t="ecran.etalonnage.schema.blanc"></span></li>
+          </ol>
+        </figure>
+      </div>
+      <div class="notice notice--warn" data-avis hidden><p><b data-avis-cause></b> <span data-avis-action></span></p></div>
+      <div data-phase="geste">
+        <p class="prose" data-geste-texte data-t="ecran.etalonnage.geste"></p>
+        <div class="actions">
+          <button class="btn btn--primary" data-geste="fait" data-t="ecran.etalonnage.lancer"></button>
+          <button class="btn" data-geste="annule" data-t="ecran.etalonnage.annuler"></button>
+        </div>
+      </div>
+      <p class="prose" data-phase="en_cours" role="status" data-t="ecran.etalonnage.en_cours"></p>
+      <div data-phase="reussi">
+        <h2 class="empty__text" data-t="ecran.etalonnage.reussi"></h2>
+        <p class="prose" data-t="ecran.etalonnage.reussi.suite"></p>
+        <div class="actions"><button class="btn btn--primary" data-fin-etalonnage data-t="ecran.etalonnage.continuer"></button></div>
+      </div>
       <p class="why" data-raison-recherche data-t="raison.recherche" hidden></p>
       <details class="replie" data-details hidden><summary data-t="ecran.details"></summary><pre data-details-texte></pre></details>
     </section>

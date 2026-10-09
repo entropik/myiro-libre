@@ -45,6 +45,14 @@ _Éviter_ : appareil, device, spectro
 Mise à zéro de l'instrument sur son blanc de référence avant mesure.
 _Éviter_ : calibration (ambigu avec la linéarisation)
 
+**Capuchon** :
+Pièce qui se fixe sous le MYIRO-1 et contient son blanc de référence, une tuile appairée à l'instrument par son n° de série. Pour l'étalonnage, l'instrument est posé à plat dessus.
+_Éviter_ : socle, support, tuile (la tuile n'en est qu'une partie)
+
+**Geste** :
+Action que seul l'opérateur peut faire, demandée par le module `instrument` à travers l'écran : poser le MYIRO-1 sur son capuchon (plus tard, passer la bande). L'opérateur le fait ou y renonce ; s'il renonce, rien n'est envoyé à l'instrument.
+_Éviter_ : action manuelle, interaction
+
 **Condition de mesure** :
 Condition d'éclairage de l'instrument selon l'ISO 13655 (M0, M1, M2…) sous laquelle un spectre est obtenu.
 _Éviter_ : mode de mesure, filtre

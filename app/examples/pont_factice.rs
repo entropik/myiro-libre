@@ -14,7 +14,9 @@
 use std::io::{BufRead, Write};
 use std::process::ExitCode;
 
-use pont_protocole::{ecrire_reponse, lire_requete, Identite, InstrumentDetecte, Reponse, Requete};
+use pont_protocole::{
+    ecrire_reponse, lire_requete, Horodatage, Identite, InstrumentDetecte, Reponse, Requete,
+};
 
 /// Ferme la sortie standard sans terminer le processus.
 #[cfg(windows)]
@@ -77,6 +79,18 @@ fn main() -> ExitCode {
                 writeln!(sortie, "pas du JSON").unwrap();
                 continue;
             }
+            // Étalonnage plus long que le délai d'une autre demande (300 ms
+            // dans le test), mais moins que le double.
+            "etalonnage_lent" if matches!(requete, Ok(Requete::Etalonner {})) => {
+                std::thread::sleep(std::time::Duration::from_millis(450));
+                Reponse::Etalonne {
+                    date: Horodatage::new("2026-10-07T09:30:00+02:00").unwrap(),
+                }
+            }
+            // Plus long que le double du délai : l'application doit couper.
+            "etalonnage_trop_lent" if matches!(requete, Ok(Requete::Etalonner {})) => loop {
+                std::thread::sleep(std::time::Duration::from_secs(60));
+            },
             "echo" => Reponse::RequeteInvalide {
                 detail: args.join(" "),
             },

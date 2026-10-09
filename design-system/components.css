@@ -31,6 +31,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .c-1-2 { grid-column: 1 / span 2; }
 .c-3-9 { grid-column: 3 / span 7; }
 .c-10-12 { grid-column: 10 / span 3; }
+.c-3-7 { grid-column: 3 / span 5; }
+.c-8-12 { grid-column: 8 / span 5; }
 .c-1-6 { grid-column: 1 / span 6; }
 .c-7-12 { grid-column: 7 / span 6; }
 .c-1-4 { grid-column: 1 / span 4; }
@@ -136,6 +138,18 @@ tr.hl td { background: var(--color-hair); }
 .steps button.done { border-top-color: var(--color-ink); color: var(--color-ink); }
 .steps button[aria-current="step"] { border-top-color: var(--color-ink); color: var(--color-ink); font-weight: 700; }
 
+/* ---- Schéma d’un geste : dessin au trait, repères numérotés, légende à côté ---- */
+.schema { display: grid; grid-template-columns: minmax(0, calc(var(--space-24) * 2.5)) 1fr; column-gap: var(--space-6); align-items: center; margin: var(--space-6) 0; max-width: var(--measure); }
+.schema svg { display: block; width: 100%; height: auto; }
+.schema__trait { fill: none; stroke: var(--color-ink); stroke-width: var(--rule-strong); }
+.schema__blanc { fill: var(--color-paper); stroke: var(--color-ink); stroke-width: var(--rule-heavy); }
+.schema__plein { fill: var(--color-ink); }
+.schema__sol { stroke: var(--color-hair); stroke-width: var(--rule-strong); }
+.schema__repere { stroke: var(--color-muted); stroke-width: var(--rule); }
+.schema text { fill: var(--color-ink); font-family: var(--font-body); font-size: var(--text-sm); font-weight: 700; }
+.schema__legende { list-style: none; margin: 0; padding: 0; font-size: var(--text-sm); }
+.schema__legende li { display: grid; grid-template-columns: var(--space-6) 1fr; padding: var(--space-2) 0; border-top: var(--rule) solid var(--color-hair); }
+
 /* ---- Contrôle segmenté, champs ---- */
 .seg { display: inline-flex; border: var(--rule-strong) solid var(--color-ink); }
 .seg button { padding: var(--space-2) var(--space-4); font-size: var(--text-sm); font-weight: 600; }
@@ -202,12 +216,15 @@ tr.hl td { background: var(--color-hair); }
 
 /* ---- État vide : une phrase en grand corps, une action ---- */
 .empty__text { font-size: var(--text-3xl); font-weight: 600; letter-spacing: var(--tracking-snug); line-height: var(--leading-snug); max-width: var(--measure); }
+.empty__text + p { margin-top: var(--space-3); }
 
-@media (max-width: 64rem) {
-  .c-1-2, .c-3-9, .c-10-12, .c-1-6, .c-7-12, .c-1-4, .c-5-8, .c-9-12, .c-5-12 { grid-column: 1 / -1; }
+/* Strictement sous 64 rem : à 1024 px, largeur minimale de la fenêtre, le plein cadre reste. */
+@media (max-width: 63.99rem) {
+  .c-1-2, .c-3-9, .c-10-12, .c-3-7, .c-8-12, .c-1-6, .c-7-12, .c-1-4, .c-5-8, .c-9-12, .c-5-12 { grid-column: 1 / -1; }
   .nav { gap: var(--space-4); flex-wrap: wrap; }
   table { display: block; overflow-x: auto; }
   .steps { grid-template-columns: repeat(2, 1fr); row-gap: var(--space-2); }
+  .schema { grid-template-columns: minmax(0, calc(var(--space-24) * 2)) 1fr; }
   .kpis .n { font-size: var(--text-4xl); }
   /* Zones empilées : la page défile de nouveau, les zones ne défilent plus seules. */
   .app:not([hidden]) { display: block; height: auto; overflow: visible; }

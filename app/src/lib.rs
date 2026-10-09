@@ -13,11 +13,11 @@ pub mod textes;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{mpsc, Mutex};
 
-use instrument::{emplacements_a_essayer, Instrument, Vue};
+use instrument::{emplacements_a_essayer, Accord, Geste, Gestes, Instrument, Vue};
 use pont::{chercher_ponts, PontProcessus};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use textes::Langue;
 
@@ -121,12 +121,75 @@ fn ouvrir_bibliotheque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
+/// Temps laissé à l'opérateur pour répondre à un geste ; au-delà, il est
+/// réputé avoir renoncé et l'écran d'étalonnage se ferme.
+const DELAI_GESTE: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
+/// Geste montré à l'écran, en attente de la réponse de l'opérateur.
+#[derive(Default)]
+struct GesteEnAttente(Mutex<Option<mpsc::Sender<Accord>>>);
+
+/// Adapter réel du trait `Gestes` : l'écran. Il envoie le geste à la page
+/// (événement `geste`), puis attend la réponse de l'opérateur, donnée par la
+/// commande `repondre_geste`.
+struct GestesEcran<'a> {
+    app: &'a AppHandle,
+    attente: &'a GesteEnAttente,
+}
+
+impl Gestes for GestesEcran<'_> {
+    fn demander(&mut self, geste: Geste) -> Accord {
+        let (envoi, reponse) = mpsc::channel();
+        *self.attente.0.lock().unwrap_or_else(|e| e.into_inner()) = Some(envoi);
+        if self.app.emit("geste", geste).is_err() {
+            return Accord::Annule;
+        }
+        // Sans réponse (page fermée, opérateur parti), l'opérateur a renoncé :
+        // l'attente est bornée, car l'instrument reste verrouillé pendant ce temps.
+        let accord = reponse.recv_timeout(DELAI_GESTE).unwrap_or(Accord::Annule);
+        self.attente
+            .0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        accord
+    }
+}
+
+/// Étalonne l'instrument ouvert : l'écran demande d'abord de le poser sur
+/// son blanc. Rend la nouvelle vue, ou `None` sans instrument ouvert.
+#[tauri::command(async)]
+fn etalonner(
+    app: AppHandle,
+    instruments: State<'_, Instruments>,
+    attente: State<'_, GesteEnAttente>,
+) -> Option<Vue> {
+    let mut courant = instruments.0.lock().unwrap_or_else(|e| e.into_inner());
+    let instrument = courant.as_mut()?;
+    instrument.etalonner(&mut GestesEcran {
+        app: &app,
+        attente: &attente,
+    });
+    Some(instrument.vue())
+}
+
+/// Réponse de l'opérateur au geste en attente : fait, ou annulé. Sans geste
+/// en attente, rien ne se passe.
+#[tauri::command]
+fn repondre_geste(fait: bool, attente: State<'_, GesteEnAttente>) {
+    let envoi = attente.0.lock().unwrap_or_else(|e| e.into_inner()).take();
+    if let Some(envoi) = envoi {
+        let _ = envoi.send(if fait { Accord::Fait } else { Accord::Annule });
+    }
+}
+
 /// Ouvre la fenêtre principale.
 pub fn lancer() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Instruments::default())
         .setup(ouvrir_bibliotheque)
+        .manage(GesteEnAttente::default())
         .invoke_handler(tauri::generate_handler![
             catalogue,
             langue_demandee,
@@ -138,6 +201,8 @@ pub fn lancer() {
             colonne::bibliotheque_detail_mesure,
             colonne::bibliotheque_creer_condition,
             colonne::bibliotheque_renommer_condition,
+            etalonner,
+            repondre_geste
         ])
         .run(tauri::generate_context!())
         .expect("lancement de l'application");

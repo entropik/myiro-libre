@@ -109,6 +109,29 @@ fn une_erreur_sans_detail_s_ecrit_par_son_seul_type() {
     }
 }
 
+/// L'étalonnage réussi porte sa date, posée par le pont (ADR 0005 : la
+/// provenance vient du pont). Sans elle, ou mal formée, la réponse est refusée.
+#[test]
+fn un_etalonnage_reussi_porte_la_date_du_pont() {
+    use pont_protocole::{ecrire_reponse, lire_reponse, Horodatage, Reponse};
+    let reponse = Reponse::Etalonne {
+        date: Horodatage::new("2026-10-07T09:30:00+02:00").unwrap(),
+    };
+    let ligne = ecrire_reponse(&reponse);
+    assert_eq!(
+        ligne,
+        r#"{"rep":"etalonne","date":"2026-10-07T09:30:00+02:00"}"#
+    );
+    assert_eq!(lire_reponse(&ligne), Ok(reponse));
+    for refusee in [
+        r#"{"rep":"etalonne"}"#,
+        r#"{"rep":"etalonne","date":"2026-10-07T09:30:00"}"#,
+        r#"{"rep":"etalonne","date":null}"#,
+    ] {
+        assert!(lire_reponse(refusee).is_err(), "{refusee}");
+    }
+}
+
 #[test]
 fn une_reponse_relue_par_l_application_redonne_la_meme() {
     use pont_protocole::{ecrire_reponse, lire_reponse, InstrumentDetecte, Reponse};

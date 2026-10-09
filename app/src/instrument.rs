@@ -6,14 +6,46 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use pont_protocole::{Palier, Reponse, Requete};
+use pont_protocole::{ErreurPont, Horodatage, Palier, Reponse, Requete};
 use serde::Serialize;
 
 use crate::pont::{architecture, Architecture, Panne, Pont};
 
-/// Dernier palier que l'application demande : la connexion. L'étalonnage et
-/// les mesures viendront avec leurs écrans.
-pub const PLAFOND: Palier = Palier::Connexion;
+/// Dernier palier que l'application autorise au pont : l'étalonnage. Les
+/// mesures viendront avec leurs écrans. L'ouverture s'arrête à la connexion ;
+/// l'étalonnage n'est demandé que par [`Instrument::etalonner`].
+pub const PLAFOND: Palier = Palier::Etalonnage;
+
+/// Geste que l'instrument demande à l'opérateur (ADR 0005 : « les gestes
+/// humains passent par un trait dédié »).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Geste {
+    /// Poser le MYIRO-1 sur son capuchon, où se trouve son blanc de référence.
+    PoserSurBlanc,
+}
+
+/// Réponse de l'opérateur à un geste demandé.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Accord {
+    /// Le geste est fait : l'instrument peut continuer.
+    Fait,
+    /// L'opérateur renonce : rien n'est envoyé à l'instrument.
+    Annule,
+}
+
+/// Les gestes humains. L'adapter réel est l'écran (il montre le geste et
+/// attend la réponse de l'opérateur) ; en test, une fonction simule l'opérateur.
+pub trait Gestes {
+    fn demander(&mut self, geste: Geste) -> Accord;
+}
+
+/// Opérateur simulé : toute fonction `Geste -> Accord`.
+impl<F: FnMut(Geste) -> Accord> Gestes for F {
+    fn demander(&mut self, geste: Geste) -> Accord {
+        self(geste)
+    }
+}
 
 /// Nom de la DLL du MYIRO-1 cherchée dans le logiciel du fabricant.
 pub const NOM_DLL: &str = "FDXSDK.dll";
@@ -86,6 +118,8 @@ pub enum Ecran {
     NonDetecte,
     /// Logiciel du fabricant introuvable : choisir son dossier.
     ChoixDossier,
+    /// Étalonnage à refaire : schéma du blanc et bouton « Étalonner ».
+    Etalonnage,
 }
 
 /// Pourquoi l'instrument n'est pas prêt.
@@ -110,6 +144,16 @@ pub enum Probleme {
     DetectionImpossible { detail: String },
     /// L'instrument détecté a refusé la connexion ou ne répond pas.
     ConnexionImpossible { detail: String },
+    /// L'instrument a refusé ou raté l'étalonnage (événement d'échec, refus) :
+    /// il reste connecté, l'étalonnage est à refaire. Le message suppose que
+    /// l'instrument était mal posé ; l'événement 9 sans capuchon n'a pas été
+    /// observé (fiche `docs/abi/FDX_Calibration.md`, « Reste à vérifier »).
+    EtalonnageEchoue { detail: String },
+    /// L'instrument n'a pas terminé l'étalonnage dans le délai du pont.
+    EtalonnageDelai { detail: String },
+    /// Liaison perdue avec l'instrument (événement 6) : rien n'est possible
+    /// avant une nouvelle connexion.
+    InstrumentPerdu { detail: String },
 }
 
 impl Probleme {
@@ -119,12 +163,16 @@ impl Probleme {
             Probleme::LogicielAbsent { .. } | Probleme::LogicielInutilisable { .. } => {
                 Ecran::ChoixDossier
             }
+            Probleme::EtalonnageEchoue { .. } | Probleme::EtalonnageDelai { .. } => {
+                Ecran::Etalonnage
+            }
             Probleme::PontIntrouvable { .. }
             | Probleme::PontEnPanne { .. }
             | Probleme::PontBloque { .. }
             | Probleme::AucunInstrument
             | Probleme::DetectionImpossible { .. }
-            | Probleme::ConnexionImpossible { .. } => Ecran::NonDetecte,
+            | Probleme::ConnexionImpossible { .. }
+            | Probleme::InstrumentPerdu { .. } => Ecran::NonDetecte,
         }
     }
 
@@ -136,6 +184,7 @@ impl Probleme {
             Probleme::AucunInstrument
                 | Probleme::DetectionImpossible { .. }
                 | Probleme::ConnexionImpossible { .. }
+                | Probleme::InstrumentPerdu { .. }
         )
     }
 
@@ -151,6 +200,9 @@ impl Probleme {
             Probleme::AucunInstrument => "aucun_instrument",
             Probleme::DetectionImpossible { .. } => "detection_impossible",
             Probleme::ConnexionImpossible { .. } => "connexion_impossible",
+            Probleme::EtalonnageEchoue { .. } => "etalonnage_echoue",
+            Probleme::EtalonnageDelai { .. } => "etalonnage_delai",
+            Probleme::InstrumentPerdu { .. } => "instrument_perdu",
         }
     }
 
@@ -164,7 +216,10 @@ impl Probleme {
             | Probleme::PontEnPanne { detail: d }
             | Probleme::PontBloque { detail: d }
             | Probleme::DetectionImpossible { detail: d }
-            | Probleme::ConnexionImpossible { detail: d } => Some(d),
+            | Probleme::ConnexionImpossible { detail: d }
+            | Probleme::EtalonnageEchoue { detail: d }
+            | Probleme::EtalonnageDelai { detail: d }
+            | Probleme::InstrumentPerdu { detail: d } => Some(d),
         }
     }
 }
@@ -212,13 +267,16 @@ impl From<Panne> for Probleme {
 /// (spécification #21).
 pub struct Instrument<P: Pont> {
     /// Pont gardé ouvert tant que l'instrument est connecté ; il se ferme quand
-    /// l'instrument est abandonné. Les paliers suivants passeront par lui.
-    #[allow(dead_code)]
+    /// l'instrument est abandonné. Les paliers suivants passent par lui.
     pont: Option<P>,
     /// DLL retenue, pour la retrouver directement la fois suivante.
     sdk: Option<PathBuf>,
     etat: Etat,
     probleme: Option<Probleme>,
+    /// Date du dernier étalonnage réussi, avec fuseau, telle que le pont l'a
+    /// rendue : celle de la provenance des mesures qui suivent. Effacée dès
+    /// qu'un nouvel étalonnage commence.
+    etalonnage: Option<Horodatage>,
 }
 
 impl<P: Pont> Instrument<P> {
@@ -252,6 +310,7 @@ impl<P: Pont> Instrument<P> {
                 sdk: Some(dll),
                 etat: Etat::EtalonnageRequis(fiche),
                 probleme: None,
+                etalonnage: None,
             },
             Err(probleme) => Self::en_echec(Some(dll), probleme),
         }
@@ -264,7 +323,66 @@ impl<P: Pont> Instrument<P> {
             sdk,
             etat: Etat::NonDetecte,
             probleme: Some(probleme),
+            etalonnage: None,
         }
+    }
+
+    /// Étalonnage sur le blanc : demande d'abord à l'opérateur de poser
+    /// l'instrument sur son capuchon, puis demande l'étalonnage au pont.
+    /// Sans instrument connecté, ou si l'opérateur renonce, rien n'est envoyé.
+    pub fn etalonner(&mut self, gestes: &mut impl Gestes) {
+        let fiche = match &self.etat {
+            Etat::EtalonnageRequis(f) | Etat::Etalonne(f) => f.clone(),
+            Etat::NonDetecte | Etat::Connecte(_) => return,
+        };
+        let Some(pont) = self.pont.as_mut() else {
+            return;
+        };
+        if gestes.demander(Geste::PoserSurBlanc) == Accord::Annule {
+            return;
+        }
+        // Un nouvel étalonnage rend l'ancien inutilisable dès son début (#23).
+        self.etalonnage = None;
+        self.etat = Etat::EtalonnageRequis(fiche.clone());
+        self.probleme = None;
+        let probleme = match pont.demander(&Requete::Etalonner {}) {
+            Ok(Reponse::Etalonne { date }) => {
+                // La date du pont, telle quelle : c'est elle que porteront les
+                // mesures (ADR 0005, la provenance est posée par le pont).
+                self.etat = Etat::Etalonne(fiche);
+                self.etalonnage = Some(date);
+                return;
+            }
+            Ok(Reponse::Erreur { erreur }) => {
+                let detail = format!("étalonnage : {erreur:?}");
+                match erreur {
+                    ErreurPont::Delai {} => Probleme::EtalonnageDelai { detail },
+                    ErreurPont::EtalonnageEchoue { .. }
+                    | ErreurPont::EtalonnageRequis {}
+                    | ErreurPont::NonEtalonne {}
+                    | ErreurPont::EtatIncompatible {}
+                    | ErreurPont::ParametreRefuse {}
+                    | ErreurPont::Sdk { .. } => Probleme::EtalonnageEchoue { detail },
+                    ErreurPont::InstrumentPerdu {} => Probleme::InstrumentPerdu { detail },
+                    ErreurPont::SessionInexploitable {} => Probleme::ConnexionImpossible { detail },
+                    _ => Probleme::PontEnPanne { detail },
+                }
+            }
+            Ok(autre) => inattendue(autre),
+            Err(panne) => panne.into(),
+        };
+        // L'instrument reste connecté si seul l'étalonnage est à refaire ;
+        // sinon le pont est fermé, et « Réessayer » en relance un.
+        if probleme.ecran() != Ecran::Etalonnage {
+            self.pont = None;
+            self.etat = Etat::NonDetecte;
+        }
+        self.probleme = Some(probleme);
+    }
+
+    /// Heure du dernier étalonnage réussi, avec fuseau, tant qu'il est valable.
+    pub fn etalonnage(&self) -> Option<&Horodatage> {
+        self.etalonnage.as_ref()
     }
 
     pub fn etat(&self) -> &Etat {
@@ -296,6 +414,7 @@ impl<P: Pont> Instrument<P> {
                 ecran: match p.ecran() {
                     Ecran::NonDetecte => "non_detecte",
                     Ecran::ChoixDossier => "choix_dossier",
+                    Ecran::Etalonnage => "etalonnage",
                 },
                 guide_cablage: p.guide_cablage(),
                 detail: p.detail().map(String::from),

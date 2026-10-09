@@ -59,7 +59,12 @@ pub enum Reponse {
     Connecte {
         identite: Identite,
     },
-    Etalonne {},
+    /// Étalonnage réussi. `date` est l'heure du pont, avec fuseau, à la fin
+    /// de l'étalonnage : celle que porteront les mesures qui suivent
+    /// (`Provenance::etalonnage`). Une réponse sans date est refusée.
+    Etalonne {
+        date: Horodatage,
+    },
     /// Une plage en mesure ponctuelle, une par plage reconnue en bande, avec
     /// sa provenance (ADR 0005), au format conservable versionné.
     Mesure {
