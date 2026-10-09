@@ -123,6 +123,14 @@ _Éviter_ : nettoyage réussi, arrêt (au sens du résultat)
 Fin volontaire de la session avec l'instrument : désarmement, puis déconnexion. Elle est confirmée seulement si les deux sont faits et le repos prouvé ; sinon elle est incertaine (déconnecté, repos supposé ou non prouvé) ou en échec (déconnexion refusée, à redemander).
 _Éviter_ : arrêt, sortie, déconnexion (qui n'en est qu'une étape)
 
+**Annulation** :
+Demande de l'opérateur d'interrompre la mesure en cours tant qu'elle attend (le bouton, ou en automatique le déclenchement). Elle ne vise que cette mesure, jamais la suivante. Le pont désarme l'instrument et rapporte la remise au repos ; une mesure déjà partie ou terminée est gardée. L'issue d'une mesure est unique : acquise, annulée, abandonnée (rien envoyé), refusée ou échouée.
+_Éviter_ : arrêt, abandon (pour une mesure déjà envoyée), interruption forcée
+
+**Interruption forcée** :
+Arrêt du programme pont par l'application, quand il ne répond plus dans le délai. L'état de l'instrument devient incertain et une récupération est demandée (débrancher, rebrancher, réessayer) : un pont arrêté ne prouve jamais que l'instrument est au repos.
+_Éviter_ : annulation, fermeture
+
 **Données brutes** :
 Valeurs rendues par l'instrument avant tout calcul de spectre (152 par plage pour le MYIRO-1), conservées avec chaque mesure pour valider le pilote libre (ADR 0006).
 _Éviter_ : raw, données capteur
