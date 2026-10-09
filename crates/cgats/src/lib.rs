@@ -79,5 +79,27 @@ pub struct PlageImportee {
     pub lab: [Info<Lab>; 3],
 }
 
+/// Texte d'un fichier : UTF-8 s'il en est, sinon Windows-1252 (Latin-1 de
+/// Windows), courant dans les exports d'autres logiciels ; aucun accent n'est
+/// abîmé. Les cinq octets que Windows-1252 n'attribue pas restent le
+/// caractère de contrôle de même numéro.
+pub fn decoder(octets: &[u8]) -> String {
+    if let Ok(texte) = std::str::from_utf8(octets) {
+        return texte.to_string();
+    }
+    const DE_80_A_9F: [char; 32] = [
+        '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž',
+        '\u{8f}', '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}',
+        'ž', 'Ÿ',
+    ];
+    octets
+        .iter()
+        .map(|&o| match o {
+            0x80..=0x9f => DE_80_A_9F[usize::from(o - 0x80)],
+            _ => char::from(o),
+        })
+        .collect()
+}
+
 /// Noms des trois emplacements de spectre d'une plage.
 pub(crate) const EMPLACEMENTS: [&str; 3] = ["m0", "m1", "m2"];

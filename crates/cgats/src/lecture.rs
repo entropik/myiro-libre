@@ -180,6 +180,17 @@ fn nombre(texte: &str, quoi: &str) -> Result<f32, ErreurCgats> {
         .ok_or_else(|| ErreurCgats(format!("{quoi} : « {texte} » n'est pas un nombre")))
 }
 
+/// Pourcentage ramené à une réflectance de 0 à 1. Calculé en f64 : une valeur
+/// écrite par [`crate::ecrire`] (f32 × 100, en f64) se relit à l'identique.
+fn pourcent(texte: &str, quoi: &str) -> Result<f32, ErreurCgats> {
+    texte
+        .parse::<f64>()
+        .ok()
+        .map(|v| (v / 100.0) as f32)
+        .filter(|v| v.is_finite())
+        .ok_or_else(|| ErreurCgats(format!("{quoi} : « {texte} » n'est pas un nombre")))
+}
+
 /// Ce qu'un tableau apporte : un emplacement de spectre et ses plages.
 struct Lu {
     emplacement: usize,
@@ -231,14 +242,19 @@ fn lire_tableau(t: &Tableau, rang: usize) -> Result<Lu, ErreurCgats> {
     let id = colonne("SAMPLE_ID");
     let lab = [colonne("LAB_L"), colonne("LAB_A"), colonne("LAB_B")];
 
-    // Colonnes de spectre : `nm380` (longueur d'onde écrite) ou
-    // `MYIRO_LIBRE_SPECTRE_1` (longueurs d'onde inconnues).
+    // Colonnes de spectre, chacune avec son échelle, jamais devinée :
+    // `nm380` du fabricant (réflectance de 0 à 1), `SPEC_380` d'ArgyllCMS
+    // (pourcentage), `MYIRO_LIBRE_SPECTRE_1` de myiro-libre quand les
+    // longueurs d'onde sont inconnues (pourcentage).
     let mut nm: Vec<(u32, usize)> = Vec::new();
+    let mut spec: Vec<(u32, usize)> = Vec::new();
     let mut rangs: Vec<(u32, usize)> = Vec::new();
     for (i, champ) in t.champs.iter().enumerate() {
         let minuscule = champ.to_ascii_lowercase();
         if let Some(l) = minuscule.strip_prefix("nm").and_then(|l| l.parse().ok()) {
             nm.push((l, i));
+        } else if let Some(l) = minuscule.strip_prefix("spec_").and_then(|l| l.parse().ok()) {
+            spec.push((l, i));
         } else if let Some(r) = champ
             .strip_prefix(&format!("{PREFIXE}SPECTRE_"))
             .and_then(|r| r.parse().ok())
@@ -246,19 +262,24 @@ fn lire_tableau(t: &Tableau, rang: usize) -> Result<Lu, ErreurCgats> {
             rangs.push((r, i));
         }
     }
-    if !nm.is_empty() && !rangs.is_empty() {
+    let sortes = [!nm.is_empty(), !spec.is_empty(), !rangs.is_empty()];
+    if sortes.iter().filter(|s| **s).count() > 1 {
         return erreur(format!(
             "tableau {rang} : deux sortes de colonnes de spectre"
         ));
     }
+    let pourcentage = nm.is_empty();
+    let nm = if nm.is_empty() { spec } else { nm };
     let (longueurs_onde, colonnes_spectre) = if !nm.is_empty() {
+        let mut nm = nm;
         nm.sort();
         let debut = nm[0].0;
         let pas = nm.get(1).map_or(0, |(l, _)| l - debut);
+        // En 64 bits : des longueurs d'onde démesurées ne débordent pas.
         let reguliere = nm
             .iter()
             .enumerate()
-            .all(|(i, (l, _))| *l == debut + pas * i as u32);
+            .all(|(i, (l, _))| u64::from(*l) == u64::from(debut) + u64::from(pas) * i as u64);
         if nm.len() > 1 && (pas == 0 || !reguliere) {
             return erreur(format!(
                 "tableau {rang} : longueurs d'onde irrégulières ou en double"
@@ -317,7 +338,13 @@ fn lire_tableau(t: &Tableau, rang: usize) -> Result<Lu, ErreurCgats> {
         } else {
             let valeurs = colonnes_spectre
                 .iter()
-                .map(|&c| nombre(&ligne[c], &quoi(&t.champs[c])))
+                .map(|&c| {
+                    if pourcentage {
+                        pourcent(&ligne[c], &quoi(&t.champs[c]))
+                    } else {
+                        nombre(&ligne[c], &quoi(&t.champs[c]))
+                    }
+                })
                 .collect::<Result<Vec<_>, _>>()?;
             Info::Confirmee(
                 Spectre::new(valeurs)

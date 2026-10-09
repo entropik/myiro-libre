@@ -2,7 +2,7 @@
 
 use std::fmt::Write as _;
 
-use pont_protocole::{ConditionMesure, ConditionsCalcul, Info, Mesure, Spectre};
+use pont_protocole::{ConditionMesure, ConditionsCalcul, Echantillonnage, Info, Mesure, Spectre};
 
 use crate::provenance::{self, PREFIXE};
 use crate::{erreur, ErreurCgats, EMPLACEMENTS, FORMAT_CGATS};
@@ -100,6 +100,15 @@ pub fn ecrire(mesure: &Mesure) -> Result<String, ErreurCgats> {
         let echantillonnage = demande
             .valeur()
             .and_then(|c| c.longueurs_onde.valeur().copied());
+        // Longueur d'onde de la valeur n° i, en 64 bits : pas de débordement.
+        let nm =
+            |e: Echantillonnage, i: usize| u64::from(e.debut_nm) + u64::from(e.pas_nm) * i as u64;
+        // Bandes décrites comme ArgyllCMS les attend (`ti3_format`).
+        if let Some(e) = echantillonnage.filter(|_| longueur > 0) {
+            s.mot_cle_declare("SPECTRAL_BANDS", &longueur.to_string())?;
+            s.mot_cle_declare("SPECTRAL_START_NM", &e.debut_nm.to_string())?;
+            s.mot_cle_declare("SPECTRAL_END_NM", &nm(e, longueur - 1).to_string())?;
+        }
         let mut champs = vec![
             "SAMPLE_ID".to_string(),
             "LAB_L".into(),
@@ -107,7 +116,7 @@ pub fn ecrire(mesure: &Mesure) -> Result<String, ErreurCgats> {
             "LAB_B".into(),
         ];
         champs.extend((0..longueur).map(|i| match echantillonnage {
-            Some(e) => format!("nm{}", e.debut_nm as usize + i * e.pas_nm as usize),
+            Some(e) => format!("SPEC_{}", nm(e, i)),
             None => format!("{PREFIXE}SPECTRE_{}", i + 1),
         }));
 
@@ -119,10 +128,15 @@ pub fn ecrire(mesure: &Mesure) -> Result<String, ErreurCgats> {
         s.ligne("BEGIN_DATA");
         for (rang, (plage, spectre)) in mesure.plages().iter().zip(&spectres).enumerate() {
             let mut ligne = (rang + 1).to_string();
-            // `{}` d'un f32 : la plus courte écriture décimale qui se relit à
-            // l'identique, sans exposant.
-            for v in plage.lab()[n].valeurs().iter().chain(spectre.iter()) {
+            // `{}` d'un nombre : la plus courte écriture décimale qui se relit
+            // à l'identique, sans exposant.
+            for v in plage.lab()[n].valeurs() {
                 let _ = write!(ligne, "\t{v}");
+            }
+            // Spectre en pourcentage, comme ArgyllCMS : le f32 × 100 est exact
+            // en f64, et se relit à l'identique en divisant par 100.
+            for v in spectre.iter() {
+                let _ = write!(ligne, "\t{}", f64::from(*v) * 100.0);
             }
             s.ligne(&ligne);
         }

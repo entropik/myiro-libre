@@ -151,8 +151,28 @@ fn l_en_tete_dit_la_provenance_et_les_conditions_confirmees_en_mots_cles_standar
         .skip_while(|l| *l != "BEGIN_DATA_FORMAT")
         .nth(1)
         .unwrap();
-    assert!(format.starts_with("SAMPLE_ID\tLAB_L\tLAB_A\tLAB_B\tnm380\tnm390\t"));
-    assert!(format.ends_with("\tnm730"));
+    // Spectre à la manière d'ArgyllCMS : colonnes SPEC_380…, en pourcentage,
+    // bandes décrites dans l'en-tête.
+    assert!(format.starts_with("SAMPLE_ID\tLAB_L\tLAB_A\tLAB_B\tSPEC_380\tSPEC_390\t"));
+    assert!(format.ends_with("\tSPEC_730"));
+    for attendu in [
+        "SPECTRAL_BANDS\t\"36\"",
+        "SPECTRAL_START_NM\t\"380\"",
+        "SPECTRAL_END_NM\t\"730\"",
+    ] {
+        assert!(
+            en_tete.contains(&attendu),
+            "manque {attendu:?} dans {en_tete:#?}"
+        );
+    }
+    let premiere_ligne = texte
+        .lines()
+        .skip_while(|l| *l != "BEGIN_DATA")
+        .nth(1)
+        .unwrap();
+    let valeur: f64 = premiere_ligne.split('\t').nth(4).unwrap().parse().unwrap();
+    // 0,1 de réflectance (plage fictive 0.1, M0) s'écrit 10 %.
+    assert!((valeur - 10.0).abs() < 1e-4, "{premiere_ligne}");
     // Un tableau par emplacement de spectre.
     assert_eq!(texte.lines().filter(|l| *l == "CGATS.17").count(), 3);
     assert!(texte.contains("MEASUREMENT_SOURCE\t\"UVCUT\""));
@@ -173,7 +193,8 @@ fn ce_que_le_pont_n_a_pas_dit_reste_inconnu_dans_le_fichier_et_a_la_relecture() 
         "MEASUREMENT_CONDITION",
         "MEASUREMENT_SOURCE",
         "WEIGHTING_FUNCTION",
-        "nm380",
+        "SPEC_380",
+        "SPECTRAL_BANDS",
     ] {
         assert!(!texte.contains(absent), "{absent} écrit sans être connu");
     }
@@ -232,7 +253,7 @@ fn export_tiers(source: &str, avec_spectre: bool) -> String {
         } else {
             String::new()
         };
-        format!("{id}\t{loc}\t0.00\t117.61\t199.05\t2.359\t0.652\t0.329\t1.067\t{lab}{sp}\r\n")
+        format!("{id}\t{loc}\t10.00\t120.00\t200.00\t2.100\t0.700\t0.300\t1.000\t{lab}{sp}\r\n")
     };
     format!(
         "CGATS.17\r\nORIGINATOR\t\"Fabricant fictif\"\r\nFILE_DESCRIPTOR\t\"Logiciel fictif\"\r\n\
@@ -243,8 +264,9 @@ fn export_tiers(source: &str, avec_spectre: bool) -> String {
          NUMBER_OF_FIELDS\t{n}\r\nBEGIN_DATA_FORMAT\r\n\
          SAMPLE_ID\tSAMPLE_LOC\tRGB_R\tRGB_G\tRGB_B\tD_RED\tD_GREEN\tD_BLUE\tD_VIS\tLAB_L\tLAB_A\tLAB_B{champs}\r\n\
          END_DATA_FORMAT\r\nNUMBER_OF_SETS\t2\r\nBEGIN_DATA\r\n{}{}END_DATA\r\n",
-        ligne(1, "1A1", "42.09\t-28.00\t-60.57", 0.02),
-        ligne(2, "1B1", "83.86\t7.54\t107.39", 0.4),
+        // Valeurs inventées, sans rapport avec une mesure réelle.
+        ligne(1, "A1", "41.50\t-27.25\t-58.75", 0.02),
+        ligne(2, "A2", "82.25\t6.50\t101.75", 0.4),
     )
 }
 
@@ -284,7 +306,7 @@ fn un_export_tiers_se_lit_en_mesure_importee_sans_provenance_myiro_libre() {
     let premiere = &importee.plages[0];
     assert_eq!(
         premiere.lab[1],
-        Info::Confirmee(Lab::new([42.09, -28.0, -60.57]).unwrap())
+        Info::Confirmee(Lab::new([41.5, -27.25, -58.75]).unwrap())
     );
     let Info::Confirmee(spectre) = &premiere.spectres[1] else {
         panic!("le spectre M1 est dans le fichier");
@@ -327,9 +349,61 @@ fn un_fichier_mal_forme_est_refuse_en_clair() {
     assert!(lire(&tronque).unwrap_err().0.contains("incomplet"));
     let mal_compte = export_tiers("D50", true).replace("NUMBER_OF_SETS\t2", "NUMBER_OF_SETS\t3");
     assert!(lire(&mal_compte).unwrap_err().0.contains("annoncées"));
-    let illisible = export_tiers("D50", true).replace("42.09", "4x.09");
-    assert!(lire(&illisible).unwrap_err().0.contains("« 4x.09 »"));
+    let illisible = export_tiers("D50", true).replace("41.50", "4x.50");
+    assert!(lire(&illisible).unwrap_err().0.contains("« 4x.50 »"));
     assert!(lire("").is_err());
+}
+
+/// Fichier fictif d'une plage : `champs` nomme les colonnes de spectre,
+/// `valeurs` les remplit.
+fn fichier_spectre(champs: &str, valeurs: &str) -> String {
+    format!(
+        "CGATS.17\nMEASUREMENT_SOURCE\t\"D50\"\nBEGIN_DATA_FORMAT\nSAMPLE_ID\t{champs}\n\
+         END_DATA_FORMAT\nNUMBER_OF_SETS\t1\nBEGIN_DATA\n1\t{valeurs}\nEND_DATA\n"
+    )
+}
+
+#[test]
+fn des_longueurs_d_onde_demesurees_sont_refusees_sans_planter() {
+    let texte = fichier_spectre("nm0\tnm3000000000\tnm4000000000", "0.1\t0.2\t0.3");
+    assert!(lire(&texte).unwrap_err().0.contains("longueurs d'onde"));
+    let texte = fichier_spectre("SPEC_0\tSPEC_4294967295", "10\t20");
+    assert!(lire(&texte).is_ok());
+}
+
+#[test]
+fn un_spectre_en_pourcentage_ou_de_0_a_1_se_relit_en_reflectance() {
+    // ArgyllCMS : SPEC_xxx en pourcentage.
+    let argyll = lire(&fichier_spectre("SPEC_400\tSPEC_410", "50\t87.5")).unwrap();
+    // Fabricant : nmxxx de 0 à 1.
+    let fabricant = lire(&fichier_spectre("nm400\tnm410", "0.5\t0.875")).unwrap();
+    for importee in [argyll, fabricant] {
+        assert_eq!(
+            importee.plages[0].spectres[1],
+            Info::Confirmee(Spectre::new(vec![0.5, 0.875]).unwrap())
+        );
+        assert_eq!(
+            importee.longueurs_onde,
+            Info::Confirmee(Echantillonnage {
+                debut_nm: 400,
+                pas_nm: 10
+            })
+        );
+    }
+    // Deux échelles dans le même tableau : refusé plutôt que deviné.
+    assert!(lire(&fichier_spectre("SPEC_400\tnm410", "50\t0.5")).is_err());
+}
+
+#[test]
+fn un_fichier_en_latin_1_garde_ses_accents() {
+    let mut octets = fichier_spectre("nm400", "0.5").into_bytes();
+    let fin = octets.len();
+    octets.splice(fin..fin, b"# Relev\xe9 \x80\n".iter().copied());
+    let texte = cgats::decoder(&octets);
+    assert!(texte.ends_with("# Relevé €\n"), "{texte:?}");
+    assert!(lire(&texte).is_ok());
+    // Un fichier UTF-8 reste tel quel.
+    assert_eq!(cgats::decoder("Relevé".as_bytes()), "Relevé");
 }
 
 #[test]
