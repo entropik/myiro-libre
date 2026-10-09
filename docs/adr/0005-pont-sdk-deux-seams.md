@@ -104,6 +104,19 @@ Palier Version vérifié sur le poste le 9 octobre 2026 avec la DLL de FD-S2w (3
 
 Vérifié contre le pont FD-9 simulé et le pare-feu simulé seulement. L'essai sur le poste (fenêtre de contrôle de compte, règle créée, FD-9 trouvé) reste à faire avec le mainteneur, après retrait de sa règle manuelle d'essai.
 
+### Complément du 9 octobre 2026 : mesure ponctuelle (ticket #7)
+
+- **Plafond relevé à la mesure ponctuelle, jamais à la bande.** L'application lance le pont avec le plafond `MesurePonctuelle`. L'ouverture s'arrête toujours à la connexion ; la mesure n'est demandée que par `Instrument::mesurer_ponctuelle`, quand l'opérateur clique sur « Mesurer ».
+- **Geste.** Le trait `Gestes` gagne `PoserSurCouleur`, demandé avant l'envoi de `mesurer_ponctuelle` ; s'il est annulé, rien n'est envoyé. La consigne est affichée au-dessus du bouton : à l'écran, le clic sur « Mesurer » vaut accord. Le pont arme ensuite l'instrument et attend l'appui sur son bouton.
+- **La mesure est celle du pont.** Elle est rendue telle quelle (`MesureAcquise`), provenance comprise, avec sa `remise_au_repos`. Rien n'est mesuré sans instrument étalonné : le module refuse de lui-même, sans geste ni appel.
+- **Repos incertain.** Une mesure dont le retour au repos n'est pas prouvé (repos non signalé, arrêt refusé, liaison perdue, ou inconnu) est gardée, mais la suivante est bloquée par le module, sans geste ni appel ; le refus `repos_incertain` du pont mène au même état. Seul un nouveau pont lève ce doute (complément du ticket #24) : l'avis propose « Réessayer », qui relance le pont, puis l'étalonnage.
+- **Échecs**, sur la feuille Mesurer (écran `mesure`), l'instrument restant connecté : `mesure_echouee` (événement 4, refus de la DLL, lecture inexploitable), `mesure_delai` (bouton non appuyé dans les 2 min du pont), `etalonnage_a_refaire` (`non_etalonne`, `etalonnage_requis` : l'heure d'étalonnage est effacée). Liaison perdue, session inexploitable, pont en panne ou bloqué : comme pour l'étalonnage, pont fermé et écran « non détecté ». Un délai ou un échec de lecture ne retire pas l'étalonnage (supposé, comme au complément du ticket #23).
+- **Transport.** La réponse à `mesurer_ponctuelle` est attendue six fois le délai ordinaire (3 min) : 2 min d'attente de l'appui dans le pont, plus un désarmement avant et un après (15 s au plus chacun) et les lectures.
+- **Valeurs et rangement** (module `mesurer` de l'application). Lab, LCH et XYZ sont calculés par la crate `colorimetrie` (D50, 2°) à partir de chaque spectre, seulement si le pont déclare des longueurs d'onde de 380 nm par 10 nm ; sinon ils sont inconnus. Les Lab de la DLL restent dans la mesure conservée, sans être affichés. La mesure entre dans la séance avant d'être rangée dans la condition d'impression choisie ; si la bibliothèque la refuse, elle reste affichée jusqu'à la fermeture.
+- **Noms.** Le nom d'une mesure (« Couleur 1 » par défaut, modifiable) n'existe que dans la séance : la bibliothèque ne conserve pas encore de nom de mesure.
+
+Vérifié contre le pont simulé et le pont factice seulement ; la mesure sur le vrai MYIRO-1 et l'écran restent à valider par le mainteneur.
+
 ## Options écartées
 
 - **Commande brute et catalogue dynamique** (appeler un export par son nom). Ils ouvrent un chemin vers des exports arbitraires, contraire à la règle de sécurité matérielle. Un banc d'exploration éventuel serait un binaire séparé, hors build de production.
