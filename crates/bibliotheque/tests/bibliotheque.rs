@@ -1,7 +1,9 @@
 //! Bibliothèque locale (ADR 0001), vue par son API publique, sur une
 //! bibliothèque temporaire. Toutes les mesures sont fictives (n° 12345678).
 
-use bibliotheque::{Bibliotheque, Branche, ErreurBibliotheque, IdCondition, IdMesure, Instrument};
+use bibliotheque::{
+    Bibliotheque, Branche, ErreurBibliotheque, IdCondition, IdMesure, Instrument, ReferenceCouleur,
+};
 use pont_protocole::{
     Calcul, ConditionMesure, ConditionsCalcul, DonneesBrutes, Echantillonnage, Empreinte,
     Geometrie, Horodatage, Illuminant, Info, InstrumentMesurant, Lab, Mesure, Observateur, Plage,
@@ -650,7 +652,153 @@ fn une_bibliotheque_d_avant_les_noms_se_relit_sans_perte() {
         .unwrap()
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 3);
+    assert_eq!(version, 4);
+}
+
+// ---- Couleur de référence (ticket #8) ----
+
+/// Une bibliothèque avec une condition et deux mesures ponctuelles.
+fn deux_mesures() -> (TempDir, Bibliotheque, IdMesure, IdMesure) {
+    let (dossier, biblio) = bibliotheque_vide();
+    let offset = biblio.creer_condition("Offset").unwrap();
+    let a = biblio
+        .enregistrer_mesure_nommee(
+            offset.id,
+            &ponctuelle(12345678, "2026-10-09T10:00:00+02:00"),
+            "Magenta",
+        )
+        .unwrap();
+    let b = biblio
+        .enregistrer_mesure(
+            offset.id,
+            &ponctuelle(12345678, "2026-10-09T10:01:00+02:00"),
+        )
+        .unwrap();
+    (dossier, biblio, a, b)
+}
+
+#[test]
+fn une_mesure_devient_couleur_de_reference_avec_ou_sans_seuil() {
+    let (dossier, biblio, a, b) = deux_mesures();
+    assert_eq!(biblio.reference(a).unwrap(), None);
+
+    // Sans seuil : aucune valeur à la place, le seuil est absent.
+    biblio.designer_reference(a, None).unwrap();
+    assert_eq!(
+        biblio.reference(a).unwrap(),
+        Some(ReferenceCouleur {
+            mesure: a,
+            seuil: None
+        })
+    );
+    biblio.designer_reference(a, Some(2.5)).unwrap();
+    biblio.designer_reference(b, Some(1.0)).unwrap();
+    drop(biblio);
+
+    // Le seuil est conservé avec la référence, à la réouverture.
+    let biblio = Bibliotheque::ouvrir(dossier.path()).unwrap();
+    assert_eq!(
+        biblio.references().unwrap(),
+        vec![
+            ReferenceCouleur {
+                mesure: a,
+                seuil: Some(2.5)
+            },
+            ReferenceCouleur {
+                mesure: b,
+                seuil: Some(1.0)
+            },
+        ]
+    );
+    biblio.retirer_reference(a).unwrap();
+    assert_eq!(biblio.reference(a).unwrap(), None);
+    // La mesure elle-même reste, avec son nom.
+    assert_eq!(biblio.mesure(a).unwrap().nom.as_deref(), Some("Magenta"));
+    // Retirer une référence absente ne change rien.
+    biblio.retirer_reference(a).unwrap();
+}
+
+#[test]
+fn un_seuil_impossible_ou_une_mesure_inconnue_sont_refuses() {
+    let (_dossier, biblio, a, _) = deux_mesures();
+    for seuil in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        assert_eq!(
+            biblio.designer_reference(a, Some(seuil)),
+            Err(ErreurBibliotheque::SeuilInvalide),
+            "{seuil}"
+        );
+    }
+    assert_eq!(biblio.reference(a).unwrap(), None, "rien n'a été écrit");
+    assert_eq!(
+        biblio.designer_reference(IdMesure(99), None),
+        Err(ErreurBibliotheque::MesureInconnue(IdMesure(99)))
+    );
+}
+
+/// Une bibliothèque de l'organisation 2 (avec les noms) se relit sans
+/// perte : aucune mesure n'y est couleur de référence.
+#[test]
+fn une_bibliotheque_d_avant_les_references_se_relit_sans_perte() {
+    let dossier = tempfile::tempdir().unwrap();
+    let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
+    let mesure = ponctuelle(12345678, "2026-10-07T15:04:05+02:00");
+    let base = rusqlite::Connection::open(&chemin).unwrap();
+    base.execute_batch(ORGANISATION_1).unwrap();
+    base.execute_batch(&format!(
+        "ALTER TABLE mesures ADD COLUMN nom TEXT;
+         PRAGMA user_version = 2;
+         INSERT INTO conditions (id, nom) VALUES (1, 'Offset');
+         INSERT INTO instruments (id, modele, numero_serie) VALUES (1, 'MYIRO-1', 12345678);
+         INSERT INTO mesures (id, condition, instrument, horodatage, geometrie, plages, contenu, nom)
+         VALUES (1, 1, 1, '2026-10-07T15:04:05+02:00', '{{\"lecture\":\"ponctuelle\"}}', 1, '{}', 'Cyan');",
+        pont_protocole::ecrire_mesure(&mesure).replace('\'', "''")
+    ))
+    .unwrap();
+    drop(base);
+
+    let biblio = Bibliotheque::ouvrir(dossier.path()).unwrap();
+
+    let relue = biblio.mesure(IdMesure(1)).unwrap();
+    assert_eq!(relue.mesure, mesure);
+    assert_eq!(relue.nom.as_deref(), Some("Cyan"));
+    assert_eq!(biblio.references().unwrap(), vec![]);
+    biblio.designer_reference(IdMesure(1), Some(2.0)).unwrap();
+    assert_eq!(
+        biblio.reference(IdMesure(1)).unwrap(),
+        Some(ReferenceCouleur {
+            mesure: IdMesure(1),
+            seuil: Some(2.0)
+        })
+    );
+}
+
+/// Remplacer une référence par une autre se fait d'un bloc : jamais deux
+/// références, et rien ne change si la nouvelle mesure est inconnue.
+#[test]
+fn une_reference_se_remplace_d_un_bloc() {
+    let (_dossier, biblio, a, b) = deux_mesures();
+    biblio.designer_reference(a, Some(2.0)).unwrap();
+
+    assert_eq!(
+        biblio.remplacer_reference(a, IdMesure(99)),
+        Err(ErreurBibliotheque::MesureInconnue(IdMesure(99)))
+    );
+    assert_eq!(
+        biblio.references().unwrap(),
+        vec![ReferenceCouleur {
+            mesure: a,
+            seuil: Some(2.0)
+        }]
+    );
+
+    biblio.remplacer_reference(a, b).unwrap();
+    assert_eq!(
+        biblio.references().unwrap(),
+        vec![ReferenceCouleur {
+            mesure: b,
+            seuil: None
+        }]
+    );
 }
 
 /// Base d'organisation 1 avec une condition et une bande.
@@ -700,7 +848,7 @@ fn une_bibliotheque_d_organisation_1_se_relit_sans_perte_apres_mise_a_niveau() {
         .unwrap()
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 3);
+    assert_eq!(version, 4);
 }
 
 /// Fichier CGATS fictif d'un autre logiciel : Lab seuls, en M1 par la
@@ -864,7 +1012,7 @@ fn une_bibliotheque_d_organisation_2_garde_ses_noms_apres_mise_a_niveau() {
         .unwrap()
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 3);
+    assert_eq!(version, 4);
 }
 
 #[test]
@@ -1032,4 +1180,149 @@ fn une_sauvegarde_dont_une_mesure_ne_se_relit_plus_est_refusee() {
         Err(ErreurBibliotheque::SauvegardeInvalide(_))
     ));
     assert_eq!(contenu(&biblio), attendu);
+}
+
+// ---- Organisation 4 : couleurs de référence par-dessus les mesures importées ----
+
+/// Organisation 3 (ticket #9), telle qu'elle met à niveau les bibliothèques
+/// réelles : figée ici, même si le code évolue.
+const ORGANISATION_3: &str = "
+CREATE TABLE mesures_3 (
+    id INTEGER PRIMARY KEY,
+    condition INTEGER NOT NULL REFERENCES conditions (id),
+    origine TEXT NOT NULL DEFAULT 'pont' CHECK (origine IN ('pont', 'importee')),
+    instrument INTEGER REFERENCES instruments (id),
+    horodatage TEXT,
+    geometrie TEXT,
+    plages INTEGER NOT NULL,
+    fichier TEXT,
+    contenu TEXT NOT NULL,
+    nom TEXT,
+    CHECK (origine = 'importee' OR (instrument IS NOT NULL AND horodatage IS NOT NULL
+                                    AND geometrie IS NOT NULL)),
+    CHECK (origine = 'pont' OR fichier IS NOT NULL)
+);
+INSERT INTO mesures_3 (id, condition, origine, instrument, horodatage, geometrie, plages, contenu, nom)
+    SELECT id, condition, 'pont', instrument, horodatage, geometrie, plages, contenu, nom FROM mesures;
+DROP TABLE mesures;
+ALTER TABLE mesures_3 RENAME TO mesures;
+CREATE INDEX mesures_par_condition ON mesures (condition);
+PRAGMA user_version = 3;
+";
+
+/// Base d'organisation 3 : celle de l'organisation 2, plus une mesure
+/// importée (n° 7).
+fn base_organisation_3(chemin: &std::path::Path) -> (Mesure, Mesure) {
+    let mesures = base_organisation_2(chemin);
+    let base = rusqlite::Connection::open(chemin).unwrap();
+    base.execute_batch(ORGANISATION_3).unwrap();
+    base.execute(
+        "INSERT INTO mesures (id, condition, origine, plages, fichier, contenu)
+         VALUES (7, 7, 'importee', 1, 'lab.txt', ?1)",
+        [cgats_lab_seul()],
+    )
+    .unwrap();
+    mesures
+}
+
+fn organisation(chemin: &std::path::Path) -> i32 {
+    rusqlite::Connection::open(chemin)
+        .unwrap()
+        .pragma_query_value(None, "user_version", |l| l.get(0))
+        .unwrap()
+}
+
+/// La table des références pointe vers la table des mesures refaite par
+/// l'organisation 3 : aucun lien rompu, et une référence vers une mesure
+/// absente est refusée par la base elle-même.
+fn verifier_cle_etrangere(chemin: &std::path::Path) {
+    let base = rusqlite::Connection::open(chemin).unwrap();
+    base.pragma_update(None, "foreign_keys", true).unwrap();
+    let rompus = base
+        .prepare("PRAGMA foreign_key_check")
+        .unwrap()
+        .exists([])
+        .unwrap();
+    assert!(!rompus, "liens rompus");
+    let cible: String = base
+        .query_row(
+            "SELECT \"table\" FROM pragma_foreign_key_list('references_couleur')",
+            [],
+            |l| l.get(0),
+        )
+        .unwrap();
+    assert_eq!(cible, "mesures");
+    assert!(base
+        .execute(
+            "INSERT INTO references_couleur (mesure, seuil) VALUES (999, NULL)",
+            []
+        )
+        .is_err());
+}
+
+#[test]
+fn une_bibliotheque_d_organisation_3_passe_a_l_organisation_4_sans_perte() {
+    let dossier = tempfile::tempdir().unwrap();
+    let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
+    let (bande, ponctuelle) = base_organisation_3(&chemin);
+
+    let biblio = Bibliotheque::ouvrir(dossier.path()).unwrap();
+
+    assert_eq!(biblio.mesure(IdMesure(5)).unwrap().mesure, bande);
+    assert_eq!(biblio.mesure(IdMesure(6)).unwrap().mesure, ponctuelle);
+    assert_eq!(
+        biblio.mesure_importee(IdMesure(7)).unwrap().fichier,
+        "lab.txt"
+    );
+    assert_eq!(biblio.references().unwrap(), vec![]);
+    biblio.designer_reference(IdMesure(6), Some(2.0)).unwrap();
+    // Une mesure importée n'est pas une mesure d'un pont : pas de référence.
+    assert_eq!(
+        biblio.designer_reference(IdMesure(7), None),
+        Err(ErreurBibliotheque::MesureInconnue(IdMesure(7)))
+    );
+    drop(biblio);
+    assert_eq!(organisation(&chemin), 4);
+    verifier_cle_etrangere(&chemin);
+}
+
+#[test]
+fn une_bibliotheque_d_organisation_2_passe_a_l_organisation_4_pas_a_pas() {
+    let dossier = tempfile::tempdir().unwrap();
+    let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
+    let (bande, _) = base_organisation_2(&chemin);
+
+    let biblio = Bibliotheque::ouvrir(dossier.path()).unwrap();
+
+    let relue = biblio.mesure(IdMesure(5)).unwrap();
+    assert_eq!(
+        (relue.mesure, relue.nom.as_deref()),
+        (bande, Some("Bande du matin"))
+    );
+    biblio.designer_reference(IdMesure(5), None).unwrap();
+    drop(biblio);
+    assert_eq!(organisation(&chemin), 4);
+    verifier_cle_etrangere(&chemin);
+}
+
+/// Une bibliothèque passée à l'organisation 4 porte ce numéro : une version
+/// d'avant les références, qui attend l'organisation 3 au plus, la refuse
+/// sans la toucher au lieu de perdre les références.
+#[test]
+fn une_bibliotheque_d_organisation_4_est_refusee_par_l_ancienne_regle() {
+    let dossier = tempfile::tempdir().unwrap();
+    let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
+    drop(Bibliotheque::ouvrir(dossier.path()).unwrap());
+
+    let organisation = organisation(&chemin);
+    let ancienne_regle = |v: i32| v <= 3;
+    assert!(!ancienne_regle(organisation), "organisation {organisation}");
+    // La règle d'aujourd'hui refuse de même une organisation plus récente.
+    rusqlite::Connection::open(&chemin)
+        .unwrap()
+        .pragma_update(None, "user_version", 5)
+        .unwrap();
+    let refus = Bibliotheque::ouvrir(dossier.path()).err().unwrap();
+    assert_eq!(refus, ErreurBibliotheque::VersionBase(5));
+    assert!(refus.to_string().contains("attendu 4 au plus"), "{refus}");
 }

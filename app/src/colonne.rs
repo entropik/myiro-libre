@@ -334,6 +334,26 @@ pub struct DetailImportee {
     pub contenu: ContenuImport,
 }
 
+/// La couleur de référence de Mesurer est conservée dans la bibliothèque
+/// ouverte (ticket #8).
+impl crate::mesurer::ReferencesConservees for BibliothequeOuverte {
+    fn designer(&self, id: IdMesure, seuil: Option<f64>) -> Result<(), String> {
+        self.avec(|b| b.designer_reference(id, seuil))
+    }
+
+    fn remplacer(&self, ancienne: IdMesure, nouvelle: IdMesure) -> Result<(), String> {
+        self.avec(|b| b.remplacer_reference(ancienne, nouvelle))
+    }
+
+    fn retirer(&self, id: IdMesure) -> Result<(), String> {
+        self.avec(|b| b.retirer_reference(id))
+    }
+
+    fn reference_conservee(&self) -> Result<Option<crate::mesurer::ReferenceReprise>, String> {
+        self.avec(crate::mesurer::reference_conservee)
+    }
+}
+
 /// Clé du catalogue qui explique une erreur à l'utilisateur. Le détail
 /// technique part dans la console, pas à l'écran.
 pub fn cle_erreur(erreur: &ErreurBibliotheque) -> &'static str {
@@ -503,7 +523,9 @@ pub fn bibliotheque_sauvegarder(
 pub fn bibliotheque_restaurer(
     app: tauri::AppHandle,
     ouverte: tauri::State<'_, BibliothequeOuverte>,
+    seance: tauri::State<'_, crate::SeanceMesures>,
     filtre: String,
+    langue: &str,
 ) -> Result<Option<String>, String> {
     let Some(fichier) = choisi(
         app.dialog()
@@ -514,6 +536,14 @@ pub fn bibliotheque_restaurer(
         return Ok(None);
     };
     ouverte.restaurer(&fichier)?;
+    // La référence de Mesurer désignait une mesure de l'ancienne base : la
+    // séance reprend celle de la base restaurée (ticket #8).
+    let langue =
+        crate::textes::Langue::depuis_code(langue).unwrap_or(crate::textes::Langue::Francais);
+    let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
+    seance
+        .suivre_restauration(&*ouverte, langue)
+        .map_err(str::to_string)?;
     Ok(Some(nom_de(&fichier)))
 }
 

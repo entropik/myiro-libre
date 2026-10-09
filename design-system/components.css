@@ -4,6 +4,8 @@
 /* ---- Base ---- */
 html { font-optical-sizing: auto; -webkit-text-size-adjust: 100%; }
 *, *::before, *::after { box-sizing: border-box; }
+/* Barres de défilement fines partout, jamais l'ascenseur épais du système. */
+* { scrollbar-width: thin; scrollbar-color: var(--color-hair) transparent; }
 body {
   margin: 0; background: var(--color-paper); color: var(--color-ink);
   font-family: var(--font-body); font-size: var(--text-base); line-height: var(--leading-normal);
@@ -29,6 +31,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .page { max-width: var(--grid-max); margin: 0 auto; padding: 0 var(--grid-margin); }
 .grid { display: grid; grid-template-columns: repeat(var(--grid-columns), 1fr); column-gap: var(--grid-gutter); }
 .c-1-2 { grid-column: 1 / span 2; }
+.c-1-3 { grid-column: 1 / span 3; }
+.c-4-9 { grid-column: 4 / span 6; }
 .c-3-9 { grid-column: 3 / span 7; }
 .c-10-12 { grid-column: 10 / span 3; }
 .c-3-7 { grid-column: 3 / span 5; }
@@ -59,6 +63,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   letter-spacing: var(--tracking-tight); margin-top: var(--space-2);
 }
 .verdict__word--l { font-size: var(--text-5xl); }
+/* Zone de droite (3 colonnes) : « Hors tolérance » tient sans couper le mot. */
+.verdict__word--m { font-size: var(--text-3xl); }
 .verdict--ok .verdict__word { color: var(--color-ok); }
 .verdict--warn .verdict__word { color: var(--color-warn); }
 .verdict--bad .verdict__word { color: var(--color-bad); }
@@ -75,6 +81,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .state--ok { color: var(--color-ok); }
 .state--warn { color: var(--color-warn); } .state--warn i { background: var(--color-warn); }
 .state--bad { color: var(--color-bad); } .state--bad i { background: var(--color-bad); }
+.state--none { color: var(--color-muted); } .state--none i { background: transparent; box-shadow: inset 0 0 0 var(--rule-strong) var(--color-muted); }
 
 /* ---- Choix de l'instrument : l'état de la barre est un bouton, la liste remplace la feuille ---- */
 button.state:hover:not([disabled]), button.state[aria-expanded="true"] { text-decoration: underline; text-decoration-thickness: var(--rule-strong); text-underline-offset: var(--space-1); }
@@ -118,8 +125,8 @@ tr.hl td { background: var(--color-hair); }
 .cartouche__title { background: var(--color-ink); color: var(--text-inverse); padding: var(--space-3) var(--space-4); }
 .cartouche__title .label { color: inherit; }
 .cartouche__title strong { display: block; font-size: var(--text-lg); letter-spacing: var(--tracking-snug); margin-top: var(--space-1); }
-.cells { display: grid; grid-template-columns: 1fr 1fr; }
-.cell { padding: var(--space-2) var(--space-3) var(--space-3); border-top: var(--rule) solid var(--color-rule); }
+.cells { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cell { padding: var(--space-2) var(--space-3) var(--space-3); border-top: var(--rule) solid var(--color-rule); overflow-wrap: break-word; }
 .cell--wide { grid-column: 1 / -1; }
 .cell:nth-child(even):not(.cell--wide) { border-left: var(--rule) solid var(--color-rule); }
 .cell .label { display: block; margin-bottom: var(--space-1); }
@@ -164,8 +171,9 @@ tr.hl td { background: var(--color-hair); }
 .seg button + button { border-left: var(--rule-strong) solid var(--color-ink); }
 .seg button[aria-pressed="true"] { background: var(--color-ink); color: var(--text-inverse); }
 .field .label { display: block; margin-bottom: var(--space-2); }
+.field + .field { margin-top: var(--space-6); }
 .field p { font-size: var(--text-sm); color: var(--color-muted); margin-top: var(--space-2); max-width: var(--measure); }
-.input { width: 100%; padding: var(--space-2) 0; border: 0; border-bottom: var(--rule-strong) solid var(--color-rule); background: transparent; color: var(--color-ink); font: inherit; border-radius: var(--radius); }
+.input { width: 100%; text-overflow: ellipsis; padding: var(--space-2) 0; border: 0; border-bottom: var(--rule-strong) solid var(--color-rule); background: transparent; color: var(--color-ink); font: inherit; border-radius: var(--radius); }
 .input--error { border-bottom-color: var(--color-bad); }
 select.input option { background: var(--color-paper); color: var(--color-ink); }
 .checkrow { display: grid; grid-template-columns: var(--space-6) 1fr; column-gap: var(--space-3); padding: var(--space-3) 0; border-top: var(--rule) solid var(--color-hair); max-width: var(--measure); }
@@ -175,6 +183,8 @@ select.input option { background: var(--color-paper); color: var(--color-ink); }
 .swatch { box-shadow: inset 0 0 0 var(--rule) var(--color-hair); display: inline-block; width: var(--space-4); height: var(--space-4); background: var(--c); vertical-align: middle; }
 /* Aperçu d'une couleur mesurée : grand carré plein, simple filet, ni ombre ni arrondi. */
 .apercu { display: block; width: calc(var(--space-24) * 1.5); aspect-ratio: 1; background: var(--c); border: var(--rule) solid var(--color-rule); margin-bottom: var(--space-2); }
+/* Couleur de référence (en haut) et mesure (en bas) dans le même carré : à bords francs, pas un dégradé. */
+.apercu--comparaison { background: linear-gradient(var(--ref) 50%, var(--mes) 50%); }
 .rows { display: grid; row-gap: var(--space-1); }
 .prow { display: grid; grid-template-columns: var(--space-8) repeat(12, 1fr); column-gap: var(--space-1); align-items: stretch; padding: var(--space-1) 0; }
 .prow > b { display: grid; place-items: center; font-size: var(--text-sm); }
@@ -186,12 +196,16 @@ select.input option { background: var(--color-paper); color: var(--color-ink); }
 
 /* ---- Index de la bibliothèque, numéroté comme une nomenclature ---- */
 .index ol { list-style: none; margin: 0; padding: 0; }
-.index li { display: grid; grid-template-columns: var(--space-8) minmax(0, 1fr) auto; overflow-wrap: anywhere; column-gap: var(--space-2); padding: var(--space-2) 0; border-top: var(--rule) solid var(--color-hair); font-size: var(--text-sm); }
+.index li { display: grid; grid-template-columns: var(--space-8) minmax(0, 1fr) auto; overflow-wrap: break-word; column-gap: var(--space-2); padding: var(--space-2) 0; border-top: var(--rule) solid var(--color-hair); font-size: var(--text-sm); }
 .index li.l1 { border-top-color: var(--color-rule); font-weight: 700; margin-top: var(--space-4); }
 .index li.l1:first-child { margin-top: 0; }
 .index li.sel { background: var(--color-ink); color: var(--text-inverse); }
 .index li.sel * { color: inherit; }
 .index li[tabindex] { cursor: pointer; }
+/* Entrée d'une mesure : le nom, puis la date courte et la lecture ; deux lignes au plus, aucun mot coupé. */
+.index__nom, .index__meta { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.index__meta { color: var(--color-muted); font-size: var(--text-xs); }
+.index li.sel .index__meta { color: inherit; }
 .index > .field { margin: var(--space-4) 0; }
 
 /* ---- Bandeau et section ---- */
@@ -218,7 +232,10 @@ select.input option { background: var(--color-paper); color: var(--color-ink); }
 .app > .masthead { flex: none; }
 .app > .frame { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; padding-bottom: 0; }
 .app > .frame > .grid { flex: 1; min-height: 0; align-items: stretch; }
-.app > .frame > .grid > * { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--color-hair) transparent; scrollbar-gutter: stable; padding-bottom: var(--space-12); }
+.app > .frame > .grid > * { min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--color-hair) transparent; scrollbar-gutter: stable; padding-bottom: var(--space-12); }
+/* L'application occupe toute la largeur de la fenêtre ; les pages de documentation gardent leur mesure. */
+.app .page { max-width: none; padding-left: var(--space-4); padding-right: var(--space-4); }
+.app .grid { column-gap: var(--space-4); }
 
 /* ---- Feuille à barre d'actions : les actions restent en vue, seul le tableau défile ---- */
 .barre { display: flex; flex-wrap: wrap; gap: var(--space-2); }
@@ -259,7 +276,7 @@ select.input option { background: var(--color-paper); color: var(--color-ink); }
 
 /* Strictement sous 64 rem : à 1024 px, largeur minimale de la fenêtre, le plein cadre reste. */
 @media (max-width: 63.99rem) {
-  .c-1-2, .c-3-9, .c-10-12, .c-3-7, .c-8-12, .c-1-6, .c-7-12, .c-1-4, .c-5-8, .c-9-12, .c-5-12 { grid-column: 1 / -1; }
+  .c-1-2, .c-1-3, .c-4-9, .c-3-9, .c-10-12, .c-3-7, .c-8-12, .c-1-6, .c-7-12, .c-1-4, .c-5-8, .c-9-12, .c-5-12 { grid-column: 1 / -1; }
   .nav { gap: var(--space-4); flex-wrap: wrap; }
   table { display: block; overflow-x: auto; }
   .steps { grid-template-columns: repeat(2, 1fr); row-gap: var(--space-2); }

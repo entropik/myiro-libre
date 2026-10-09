@@ -191,3 +191,121 @@ fn cgats_lab_seul() -> String {
     texte.push_str("END_DATA\r\n");
     texte
 }
+
+// ---- Séance de démonstration de la tâche Mesurer (ticket #8) ----
+
+/// Magenta du bon à tirer, puis trois tirages qui s'en écartent de plus en
+/// plus : creux d'absorption décalé ou moins profond.
+const MAGENTA_TIRAGES: [Couleur; 3] = [
+    Couleur {
+        fond: 0.85,
+        creux: &[(541.0, 45.0, 0.775)],
+        azurant: 0.03,
+    },
+    Couleur {
+        fond: 0.85,
+        creux: &[(545.0, 46.0, 0.76)],
+        azurant: 0.03,
+    },
+    Couleur {
+        fond: 0.86,
+        creux: &[(550.0, 48.0, 0.72)],
+        azurant: 0.03,
+    },
+];
+
+/// Mesure ponctuelle dont le pont ne fait que supposer les conditions de
+/// mesure : l'écran avertit que l'écart est à prendre avec prudence.
+fn ponctuelle_supposee(couleur: &Couleur, horodatage: &str, etalonnage: &str) -> Mesure {
+    let mut provenance = provenance(horodatage, etalonnage, Geometrie::Ponctuelle {});
+    if let Info::Confirmee(demande) = provenance.calcul.demande {
+        provenance.calcul.demande = Info::Supposee(demande);
+    }
+    Mesure::new(vec![plage(couleur)], provenance).unwrap()
+}
+
+/// Séance de Mesurer garnie de mesures fictives rangées dans la bibliothèque
+/// de démonstration (condition « Offset ») : le magenta du bon à tirer est la
+/// couleur de référence, avec un seuil de 2,00 ; les trois tirages donnent
+/// les trois verdicts, et une dernière mesure l'avertissement sur la
+/// condition de mesure.
+pub fn seance(ouverte: &crate::colonne::BibliothequeOuverte) -> crate::mesurer::Seance {
+    use crate::mesurer::Seance;
+    use crate::textes::Langue;
+    let mut seance = Seance::default();
+    let Some(offset) = ouverte
+        .conditions()
+        .ok()
+        .and_then(|c| c.into_iter().find(|c| c.nom.starts_with("Offset")))
+    else {
+        return seance;
+    };
+    let etalonnage = "2026-10-09T08:40:00+02:00";
+    let mut mesures = vec![(
+        "Magenta du BAT",
+        ponctuelle(&MAGENTA, "2026-10-09T08:45:12+02:00", etalonnage),
+    )];
+    for (i, (nom, couleur)) in ["Tirage 1", "Tirage 2", "Tirage 3"]
+        .into_iter()
+        .zip(&MAGENTA_TIRAGES)
+        .enumerate()
+    {
+        let heure = format!("2026-10-09T09:{:02}:30+02:00", 10 + 5 * i);
+        mesures.push((nom, ponctuelle(couleur, &heure, etalonnage)));
+    }
+    mesures.push((
+        "Tirage 4, autre réglage",
+        ponctuelle_supposee(&MAGENTA_TIRAGES[0], "2026-10-09T09:40:05+02:00", etalonnage),
+    ));
+    for (nom, mesure) in mesures {
+        let numero = seance.ajouter(
+            mesure,
+            &offset,
+            |m, n| ouverte.enregistrer_mesure_nommee(offset.id, m, n),
+            Langue::Francais,
+        );
+        let _ = seance.renommer(numero, nom, |id, n| ouverte.renommer_mesure(id, n));
+    }
+    let _ = seance.designer_reference(1, ouverte);
+    let _ = seance.regler_seuil("2", ouverte);
+    seance
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::mesurer::{Comparaison, VerdictEcart};
+    use crate::textes::Langue;
+
+    /// La démonstration montre les trois verdicts et l'avertissement, pour
+    /// la validation de l'écran.
+    #[test]
+    fn la_seance_de_demonstration_montre_chaque_verdict() {
+        let dossier = tempfile::tempdir().unwrap();
+        let ouverte = crate::colonne::BibliothequeOuverte::demonstration(dossier.path());
+        let seance = super::seance(&ouverte);
+
+        let reference = seance.reference(Langue::Francais).unwrap();
+        assert_eq!(
+            (reference.numero, reference.seuil.as_deref()),
+            (1, Some("2,00"))
+        );
+        // Spectre M1 (deuxième), de la plus récente à la plus ancienne.
+        let ecarts: Vec<_> = seance
+            .fiches(Langue::Francais)
+            .into_iter()
+            .filter_map(|f| f.spectres[1].ecart.clone())
+            .map(|e| (e.verdict, e.comparaison, e.delta_e00.unwrap()))
+            .collect();
+        let verdicts: Vec<_> = ecarts.iter().map(|e| (e.0, e.1)).collect();
+        assert_eq!(
+            verdicts,
+            [
+                (VerdictEcart::Conforme, Comparaison::NonConfirmee),
+                (VerdictEcart::HorsTolerance, Comparaison::MemeCondition),
+                (VerdictEcart::ProcheDeLaLimite, Comparaison::MemeCondition),
+                (VerdictEcart::Conforme, Comparaison::MemeCondition),
+            ],
+            "{ecarts:?}"
+        );
+    }
+}

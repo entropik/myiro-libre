@@ -21,7 +21,7 @@ use instrument::parefeu::{AutorisationPareFeu, PareFeuWindows};
 use instrument::{emplacements_a_essayer, fd9, Accord, Geste, Gestes};
 use mesurer::{
     choisir_condition, ecrire_declenchement, lire_declenchement, retenir_declenchement,
-    FicheMesure, RefusMesure, Seance,
+    FicheMesure, FicheReference, RefusMesure, Seance,
 };
 use pont::Panne;
 use pont::{chercher_ponts, chercher_ponts_nommes, PontProcessus};
@@ -270,14 +270,24 @@ fn choisir_instrument(
     Ok(vue_retenue(&app, selection))
 }
 
-/// Ouvre la bibliothèque du poste, ou celle de démonstration avec `--demo`.
+/// Ouvre la bibliothèque du poste, ou celle de démonstration avec `--demo`,
+/// dont la séance de Mesurer est alors garnie de mesures fictives.
 fn ouvrir_bibliotheque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let ouverte = if std::env::args().any(|a| a == "--demo") {
-        colonne::BibliothequeOuverte::demonstration(&demonstration::dossier())
+    let (ouverte, seance) = if std::env::args().any(|a| a == "--demo") {
+        let ouverte = colonne::BibliothequeOuverte::demonstration(&demonstration::dossier());
+        let seance = demonstration::seance(&ouverte);
+        (ouverte, seance)
     } else {
-        colonne::BibliothequeOuverte::ouvrir(&colonne::emplacement(&app.path().app_data_dir()?))
+        let dossier = colonne::emplacement(&app.path().app_data_dir()?);
+        let ouverte = colonne::BibliothequeOuverte::ouvrir(&dossier);
+        // La couleur de référence conservée revient dans Mesurer (ticket #8).
+        let mut seance = Seance::default();
+        let langue = self::langue(langue_demandee().unwrap_or("fr"));
+        let _ = seance.reprendre_reference(&ouverte, langue);
+        (ouverte, seance)
     };
     app.manage(ouverte);
+    app.manage(SeanceMesures(Mutex::new(seance)));
     Ok(())
 }
 
@@ -344,16 +354,26 @@ fn etalonner(
 }
 
 /// Mesures ponctuelles faites depuis le lancement (tâche Mesurer).
-#[derive(Default)]
-struct SeanceMesures(Mutex<Seance>);
+pub struct SeanceMesures(pub(crate) Mutex<Seance>);
 
 /// Ce que la feuille Mesurer reçoit : l'état de l'instrument, s'il a pu
-/// changer (avec la liste des instruments du poste), et les mesures de la
-/// séance, la plus récente d'abord.
+/// changer (avec la liste des instruments du poste), les mesures de la
+/// séance, la plus récente d'abord, et la couleur de référence.
 #[derive(serde::Serialize)]
 struct EcranMesurer {
     instrument: Option<VueSelection>,
     mesures: Vec<FicheMesure>,
+    reference: Option<FicheReference>,
+}
+
+impl EcranMesurer {
+    fn de(seance: &Seance, langue: Langue, instrument: Option<VueSelection>) -> EcranMesurer {
+        EcranMesurer {
+            instrument,
+            mesures: seance.fiches(langue),
+            reference: seance.reference(langue),
+        }
+    }
 }
 
 fn langue(code: &str) -> Langue {
@@ -463,10 +483,7 @@ fn mesurer(
         |mesure, nom| bibliotheque.enregistrer_mesure_nommee(condition.id, mesure, nom),
         langue,
     );
-    Ok(EcranMesurer {
-        instrument: Some(selection.vue()),
-        mesures: seance.fiches(langue),
-    })
+    Ok(EcranMesurer::de(&seance, langue, Some(selection.vue())))
 }
 
 /// Range à nouveau les mesures que la bibliothèque avait refusées.
@@ -480,20 +497,14 @@ fn ranger_a_nouveau(
     seance.ranger_a_nouveau(|condition, mesure, nom| {
         bibliotheque.enregistrer_mesure_nommee(condition.id, mesure, nom)
     });
-    EcranMesurer {
-        instrument: None,
-        mesures: seance.fiches(self::langue(langue)),
-    }
+    EcranMesurer::de(&seance, self::langue(langue), None)
 }
 
 /// Mesures de la séance, dans la langue de l'écran.
 #[tauri::command]
 fn mesures_seance(seance: State<'_, SeanceMesures>, langue: &str) -> EcranMesurer {
     let seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
-    EcranMesurer {
-        instrument: None,
-        mesures: seance.fiches(self::langue(langue)),
-    }
+    EcranMesurer::de(&seance, self::langue(langue), None)
 }
 
 /// Renomme une mesure de la séance, et dans la bibliothèque si elle y est rangée.
@@ -507,10 +518,45 @@ fn renommer_mesure(
 ) -> Result<EcranMesurer, &'static str> {
     let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
     seance.renommer(numero, nom, |id, nom| bibliotheque.renommer_mesure(id, nom))?;
-    Ok(EcranMesurer {
-        instrument: None,
-        mesures: seance.fiches(self::langue(langue)),
-    })
+    Ok(EcranMesurer::de(&seance, self::langue(langue), None))
+}
+
+/// Désigne la mesure n° `numero` de la séance couleur de référence.
+#[tauri::command]
+fn designer_reference(
+    seance: State<'_, SeanceMesures>,
+    bibliotheque: State<'_, colonne::BibliothequeOuverte>,
+    numero: usize,
+    langue: &str,
+) -> Result<EcranMesurer, &'static str> {
+    let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
+    seance.designer_reference(numero, &*bibliotheque)?;
+    Ok(EcranMesurer::de(&seance, self::langue(langue), None))
+}
+
+/// La séance n'a plus de couleur de référence.
+#[tauri::command]
+fn retirer_reference(
+    seance: State<'_, SeanceMesures>,
+    bibliotheque: State<'_, colonne::BibliothequeOuverte>,
+    langue: &str,
+) -> Result<EcranMesurer, &'static str> {
+    let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
+    seance.retirer_reference(&*bibliotheque)?;
+    Ok(EcranMesurer::de(&seance, self::langue(langue), None))
+}
+
+/// Seuil de la couleur de référence, tel que l'utilisateur l'a écrit.
+#[tauri::command]
+fn regler_seuil(
+    seance: State<'_, SeanceMesures>,
+    bibliotheque: State<'_, colonne::BibliothequeOuverte>,
+    seuil: &str,
+    langue: &str,
+) -> Result<EcranMesurer, &'static str> {
+    let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
+    seance.regler_seuil(seuil, &*bibliotheque)?;
+    Ok(EcranMesurer::de(&seance, self::langue(langue), None))
 }
 
 /// Réponse de l'opérateur au geste en attente : fait, ou annulé. Sans geste
@@ -531,7 +577,6 @@ pub fn lancer() {
         .manage(PareFeuFd9::default())
         .setup(ouvrir_bibliotheque)
         .manage(GesteEnAttente::default())
-        .manage(SeanceMesures::default())
         .invoke_handler(tauri::generate_handler![
             mesurer,
             mode_mesure,
@@ -539,6 +584,9 @@ pub fn lancer() {
             mesures_seance,
             renommer_mesure,
             ranger_a_nouveau,
+            designer_reference,
+            retirer_reference,
+            regler_seuil,
             catalogue,
             langue_demandee,
             ouvrir_instrument,
