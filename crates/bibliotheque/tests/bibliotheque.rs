@@ -877,6 +877,29 @@ fn une_sauvegarde_d_organisation_2_se_restaure_puis_se_met_a_niveau() {
     verifier_organisation_2(&biblio, &bande, &ponctuelle);
 }
 
+#[test]
+fn une_restauration_qui_echoue_en_route_remet_la_bibliotheque_d_avant() {
+    let (dossier, mut biblio) = bibliotheque_garnie();
+    let attendu = contenu(&biblio);
+    // Sauvegarde d'organisation 1 qui passe l'examen, mais dont la mise à
+    // niveau échoue : une table du même nom que celle qu'elle doit créer.
+    let piegee = dossier.path().join("piegee.sqlite");
+    base_organisation_1(&piegee);
+    rusqlite::Connection::open(&piegee)
+        .unwrap()
+        .execute_batch("CREATE TABLE mesures_3 (x)")
+        .unwrap();
+
+    assert!(biblio.restaurer(&piegee).is_err());
+    assert_eq!(contenu(&biblio), attendu);
+    // La copie de secours reste dans le dossier de la bibliothèque.
+    assert!(dossier
+        .path()
+        .join("bibliotheque.sqlite.avant-restauration")
+        .is_file());
+    biblio.creer_condition("Après l'échec").unwrap();
+}
+
 /// Tout ce que la bibliothèque montre : arborescence, instruments, mesures.
 fn contenu(biblio: &Bibliotheque) -> (Vec<Branche>, Vec<Instrument>, Vec<Mesure>) {
     let branches = biblio.arborescence("").unwrap();

@@ -16,6 +16,10 @@ use serde::Serialize;
 /// Nom du fichier de la base, dans le dossier de la bibliothèque.
 pub const FICHIER_BASE: &str = "bibliotheque.sqlite";
 
+/// Copie de la bibliothèque faite juste avant une restauration, dans son
+/// dossier : remise en place si la restauration échoue, et gardée ensuite.
+pub const FICHIER_SECOURS: &str = "bibliotheque.sqlite.avant-restauration";
+
 /// Version de l'organisation de la base ; une base plus récente est refusée.
 const VERSION_BASE: i32 = 3;
 
@@ -168,6 +172,8 @@ pub struct Branche {
 /// La bibliothèque ouverte : une base dans un dossier du poste.
 pub struct Bibliotheque {
     base: Connection,
+    /// Dossier de la bibliothèque, où va la copie de secours d'une restauration.
+    dossier: std::path::PathBuf,
 }
 
 impl Bibliotheque {
@@ -179,7 +185,10 @@ impl Bibliotheque {
         let mut base = Connection::open(dossier.join(FICHIER_BASE))?;
         base.pragma_update(None, "foreign_keys", true)?;
         migrer(&mut base)?;
-        Ok(Bibliotheque { base })
+        Ok(Bibliotheque {
+            base,
+            dossier: dossier.to_path_buf(),
+        })
     }
 
     /// Crée une condition d'impression ; le nom est débarrassé de ses espaces
@@ -570,6 +579,20 @@ impl Bibliotheque {
     /// touché ([`ErreurBibliotheque::SauvegardeInvalide`]).
     pub fn restaurer(&mut self, fichier: &Path) -> Resultat<()> {
         examiner_sauvegarde(fichier).map_err(ErreurBibliotheque::SauvegardeInvalide)?;
+        // Copie de secours d'abord : si la suite échoue (mise à niveau
+        // impossible, disque plein…), la bibliothèque d'avant est remise.
+        let secours = self.dossier.join(FICHIER_SECOURS);
+        self.sauvegarder(&secours)?;
+        let restauree = self.remplacer_par(fichier);
+        if restauree.is_err() {
+            self.remplacer_par(&secours)?;
+        }
+        restauree
+    }
+
+    /// Remplace tout le contenu de la base par celui du fichier, puis le met
+    /// à niveau.
+    fn remplacer_par(&mut self, fichier: &Path) -> Resultat<()> {
         self.base
             .restore(MAIN_DB, fichier, None::<fn(rusqlite::backup::Progress)>)?;
         self.base.pragma_update(None, "foreign_keys", true)?;
