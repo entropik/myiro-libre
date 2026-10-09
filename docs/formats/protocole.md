@@ -65,7 +65,39 @@ Si la DLL ou l'instrument refuse le déclenchement, le pont désarme et répond 
 
 -9986 : l'instrument n'attendait pas de mesure ; -9793 à -9789 : refus rapporté par l'instrument (supposé). L'étalonnage reste valable : la mesure au bouton reste possible.
 
+## Annuler une mesure en attente : `annuler` (ticket #26)
+
+```json
+{"cmd": "annuler"}
+```
+
+Le pont lit ses requêtes pendant qu'une mesure attend : `annuler` est vue tout de suite, sans attendre la fin de la mesure. Les appels à la DLL restent faits un par un, et **chaque requête reçoit une seule réponse, dans l'ordre d'arrivée** : d'abord celle de la mesure, puis celle de `annuler`.
+
+- `annuler` vise la mesure active ; sans mesure active, la dernière requête acceptée qui la précède (hors autre `annuler`). Jamais la suivante : un `version`, `detecter` ou `fermer` reçu pendant la mesure ne la détourne pas.
+- **Une seule mesure active.** De sa lecture jusqu'à sa réponse, toute requête qui toucherait l'instrument (`connecter`, `etalonner`, `mesurer_ponctuelle`, `mesurer_bande`) est refusée sans appel à la DLL, à son rang dans l'ordre des réponses :
+
+  ```json
+  {"rep": "erreur", "erreur": {"type": "etat_incompatible"}}
+  ```
+
+  Les autres (`version`, `detecter`, `fermer`) attendent leur tour. L'application n'envoie une requête qu'après la réponse de la précédente ; ce refus protège d'un dialogue décalé.
+- Elle n'a d'effet que tant que la mesure attend l'appui sur le bouton (ou, en automatique, l'attente de mesure avant le déclenchement). Le pont désarme alors par la politique habituelle et la mesure répond :
+
+  ```json
+  {"rep": "erreur", "erreur": {"type": "mesure_annulee", "remise_au_repos": {"etat": "au_repos"}}}
+  ```
+
+  Rien n'a été lu. Un repos non prouvé bloque la mesure suivante (`repos_incertain`), comme après toute mesure.
+- Une mesure déjà partie (événement 2) ou terminée va à son terme : sa réponse est la mesure, avec sa provenance. Aucun abandon n'est annoncé sans être fait. En automatique, les 2 s d'attente après un déclenchement refusé (-9986) ne s'annulent pas non plus.
+- Puis `annuler` reçoit `{"rep": "annulation", "effet": "appliquee"}` si la mesure a été interrompue, `{"rep": "annulation", "effet": "sans_effet"}` sinon (rien à interrompre).
+
+La fin de l'entrée (application fermée ou perdue), ou une erreur de lecture de l'entrée, interrompt de même une mesure qui attend l'opérateur, puis le pont se ferme. Le pont FD-9, qui ne mesure pas, répond toujours `sans_effet`.
+
+Côté application, après l'envoi de `annuler`, chaque réponse est attendue au plus le délai ordinaire (30 s) ; au-delà, le pont est arrêté de force et l'instrument est dit dans un état incertain.
+
 ## Compatibilité
+
+La commande `annuler`, la réponse `annulation` et l'erreur `mesure_annulee` (ticket #26) sont refusées par un lecteur antérieur : l'application et les ponts se mettent à jour ensemble. Aucune ligne existante ne change.
 
 Le champ `declenchement` est absent des lignes manuelles : un pont antérieur au ticket #51 les lit comme avant. Mais il refuse une requête automatique (champ inconnu), et une application antérieure refuse l'erreur `declenchement_refuse` : l'application et les ponts se mettent à jour ensemble.
 

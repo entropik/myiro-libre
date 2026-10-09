@@ -23,15 +23,59 @@ fn dialoguer_brut(
     requetes: &[&str],
 ) -> (Vec<String>, Session<SdkSimule>) {
     let mut session = Session::new(sdk, plafond);
-    let entree = requetes.join("\n");
-    let mut sortie = Vec::new();
-    servir(&mut session, entree.as_bytes(), &mut sortie).unwrap();
-    let lignes = String::from_utf8(sortie)
-        .unwrap()
-        .lines()
-        .map(String::from)
-        .collect();
-    (lignes, session)
+    // Comme l'application : une requête, puis sa réponse, avant la suivante.
+    // Une fois le pont fermé, les lignes restantes partent sans attente.
+    let (lecture, mut ecriture) = std::io::pipe().unwrap();
+    let sortie = SortiePartagee::default();
+    let vue = sortie.clone();
+    let requetes: Vec<String> = requetes.iter().map(|r| r.to_string()).collect();
+    let ecrivain = std::thread::spawn(move || {
+        for (n, requete) in requetes.iter().enumerate() {
+            std::io::Write::write_all(&mut ecriture, format!("{requete}\n").as_bytes()).unwrap();
+            let debut = std::time::Instant::now();
+            loop {
+                let lignes = vue.lignes();
+                let ferme = lignes.last().is_some_and(|l| {
+                    l.contains(r#""rep":"ferme""#) || l.contains("fermeture_incertaine")
+                });
+                if lignes.len() > n || ferme {
+                    break;
+                }
+                assert!(
+                    debut.elapsed().as_secs() < 5,
+                    "aucune réponse en 5 s à {requete}"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+    });
+    let mut ecrite = sortie.clone();
+    servir(&mut session, std::io::BufReader::new(lecture), &mut ecrite).unwrap();
+    ecrivain.join().unwrap();
+    (sortie.lignes(), session)
+}
+
+/// Sortie du pont lisible pendant le dialogue.
+#[derive(Clone, Default)]
+struct SortiePartagee(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for SortiePartagee {
+    fn write(&mut self, octets: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().write(octets)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl SortiePartagee {
+    fn lignes(&self) -> Vec<String> {
+        String::from_utf8(self.0.lock().unwrap().clone())
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect()
+    }
 }
 
 const JUSQU_A_LA_CONNEXION: [&str; 3] = [
@@ -343,7 +387,7 @@ fn une_fermeture_reprise_apres_echec_finit_par_la_deconnexion() {
     let mut sortie = Vec::new();
     servir(
         &mut session,
-        sequence(&[r#"{"cmd":"fermer"}"#]).join("\n").as_bytes(),
+        std::io::Cursor::new(sequence(&[r#"{"cmd":"fermer"}"#]).join("\n")),
         &mut sortie,
     )
     .unwrap();
@@ -351,7 +395,7 @@ fn une_fermeture_reprise_apres_echec_finit_par_la_deconnexion() {
     let mut sortie = Vec::new();
     servir(
         &mut session,
-        &b"{\"cmd\":\"fermer\"}\n{\"cmd\":\"version\"}"[..],
+        &b"{\"cmd\":\"fermer\"}\n{\"cmd\":\"version\"}"[..], // 'static
         &mut sortie,
     )
     .unwrap();

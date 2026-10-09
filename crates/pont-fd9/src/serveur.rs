@@ -5,8 +5,8 @@
 use crate::{SdkFd9, Session};
 use fd9_sys::Liaison;
 use pont_protocole::{
-    ecrire_reponse, lire_requete, Empreinte, Info, InstrumentFd9, LiaisonFd9, Palier, Reponse,
-    Requete,
+    ecrire_reponse, lire_requete, EffetAnnulation, Empreinte, Info, InstrumentFd9, LiaisonFd9,
+    Palier, Reponse, Requete,
 };
 use std::io::{self, BufRead, Write};
 
@@ -79,6 +79,10 @@ fn traiter<S: SdkFd9>(session: &mut Session<S>, requete: Requete) -> (Reponse, b
             session.fermer();
             return (Reponse::Ferme {}, true);
         }
+        // Le FD-9 ne mesure pas encore : il n'y a jamais rien à interrompre.
+        Requete::Annuler {} => Ok(Reponse::Annulation {
+            effet: EffetAnnulation::SansEffet,
+        }),
     };
     (
         reponse.unwrap_or_else(|erreur| Reponse::Erreur { erreur }),
