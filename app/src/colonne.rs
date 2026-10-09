@@ -22,6 +22,8 @@ pub struct BibliothequeOuverte {
     demonstration: bool,
     /// Fichier CGATS lu, montré en aperçu, en attente de l'accord pour être rangé.
     apercu: Mutex<Option<Apercu>>,
+    /// Numéro du dernier aperçu donné.
+    numero_apercu: std::sync::atomic::AtomicU64,
 }
 
 /// Emplacement de la bibliothèque sur le poste : un seul, dans le dossier de
@@ -37,6 +39,7 @@ impl BibliothequeOuverte {
             bibliotheque: Bibliotheque::ouvrir(dossier).map(Mutex::new),
             demonstration: false,
             apercu: Mutex::new(None),
+            numero_apercu: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -54,6 +57,7 @@ impl BibliothequeOuverte {
             bibliotheque: ouverte.map(Mutex::new),
             demonstration: true,
             apercu: Mutex::new(None),
+            numero_apercu: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -150,8 +154,12 @@ impl BibliothequeOuverte {
         })
     }
 
-    /// Remplace toute la bibliothèque par une sauvegarde.
+    /// Remplace toute la bibliothèque par une sauvegarde. L'aperçu d'import en
+    /// cours est abandonné d'abord : il visait l'ancienne bibliothèque, et ne
+    /// doit jamais être rangé dans la restaurée.
     pub fn restaurer(&self, fichier: &Path) -> Result<(), String> {
+        // Pris et rendu avant le verrou de la bibliothèque, comme partout.
+        self.annuler_apercu();
         let bibliotheque = self.bibliotheque.as_ref().map_err(|e| {
             eprintln!("{e}");
             "bibliotheque.erreur.ouverture".to_string()
@@ -165,7 +173,7 @@ impl BibliothequeOuverte {
     /// Lit un fichier CGATS et le garde en aperçu, sans rien ranger : la
     /// mesure n'entre dans la bibliothèque qu'avec [`Self::ranger_apercu`].
     /// Un fichier de plus de [`TAILLE_MAX_CGATS`] est refusé avant d'être lu.
-    pub fn apercu_cgats(&self, fichier: &Path) -> Result<ContenuImport, String> {
+    pub fn apercu_cgats(&self, fichier: &Path) -> Result<ApercuImport, String> {
         let illisible = |e: std::io::Error| {
             eprintln!("{} : {e}", fichier.display());
             "bibliotheque.erreur.cgats_illisible".to_string()
@@ -196,19 +204,28 @@ impl BibliothequeOuverte {
         })?;
         let nom = nom_de(fichier);
         let contenu = ContenuImport::de(mesure, nom.clone());
-        *self.apercu.lock().unwrap_or_else(|e| e.into_inner()) = Some(Apercu {
+        // Chaque aperçu a son numéro : « Ranger » doit le citer, un aperçu
+        // remplacé ou abandonné ne range jamais rien.
+        let mut apercu = self.apercu.lock().unwrap_or_else(|e| e.into_inner());
+        let numero = self
+            .numero_apercu
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
+        *apercu = Some(Apercu {
+            numero,
             fichier: nom,
             texte,
         });
-        Ok(contenu)
+        Ok(ApercuImport { numero, contenu })
     }
 
-    /// Range dans la condition d'impression la mesure en aperçu. Un refus
-    /// garde l'aperçu, pour réessayer avec une autre condition ; une fois
-    /// rangée, l'aperçu est consommé.
-    pub fn ranger_apercu(&self, condition: IdCondition) -> Result<IdMesure, String> {
+    /// Range dans la condition d'impression la mesure de l'aperçu `numero`.
+    /// Un aperçu remplacé, abandonné ou d'avant une restauration est refusé.
+    /// Un refus de la bibliothèque garde l'aperçu, pour réessayer avec une
+    /// autre condition ; une fois rangée, l'aperçu est consommé.
+    pub fn ranger_apercu(&self, numero: u64, condition: IdCondition) -> Result<IdMesure, String> {
         let mut apercu = self.apercu.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(a) = apercu.as_ref() else {
+        let Some(a) = apercu.as_ref().filter(|a| a.numero == numero) else {
             return Err("bibliotheque.erreur.apercu_absent".to_string());
         };
         let id = self.avec(|b| b.importer_mesure(condition, &a.fichier, &a.texte))?;
@@ -242,6 +259,7 @@ impl BibliothequeOuverte {
 
 /// Fichier CGATS lu et montré en aperçu, pas encore rangé.
 struct Apercu {
+    numero: u64,
     fichier: String,
     texte: String,
 }
@@ -296,6 +314,14 @@ impl ContenuImport {
             lab,
         }
     }
+}
+
+/// Aperçu d'un fichier CGATS lu, pas encore rangé, avec son numéro.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ApercuImport {
+    pub numero: u64,
+    #[serde(flatten)]
+    pub contenu: ContenuImport,
 }
 
 /// Une mesure importée rangée dans la bibliothèque.
@@ -498,7 +524,7 @@ pub fn bibliotheque_apercu_cgats(
     app: tauri::AppHandle,
     ouverte: tauri::State<'_, BibliothequeOuverte>,
     filtre: String,
-) -> Result<Option<ContenuImport>, String> {
+) -> Result<Option<ApercuImport>, String> {
     let Some(fichier) = choisi(
         app.dialog()
             .file()
@@ -515,9 +541,10 @@ pub fn bibliotheque_apercu_cgats(
 #[tauri::command]
 pub fn bibliotheque_ranger_import(
     ouverte: tauri::State<'_, BibliothequeOuverte>,
+    numero: u64,
     condition: i64,
 ) -> Result<IdMesure, String> {
-    ouverte.ranger_apercu(IdCondition(condition))
+    ouverte.ranger_apercu(numero, IdCondition(condition))
 }
 
 /// Abandonne l'aperçu (bouton « Annuler ») : rien n'est rangé.
@@ -759,15 +786,12 @@ mod tests {
 
     /// Import en deux temps, comme à l'écran : aperçu, puis rangement.
     fn importer(ouverte: &BibliothequeOuverte, condition: IdCondition, fichier: &Path) -> IdMesure {
-        ouverte.apercu_cgats(fichier).unwrap();
-        ouverte.ranger_apercu(condition).unwrap()
+        let apercu = ouverte.apercu_cgats(fichier).unwrap();
+        ouverte.ranger_apercu(apercu.numero, condition).unwrap()
     }
 
-    #[test]
-    fn un_apercu_ne_range_rien_avant_l_accord() {
-        let (dossier, ouverte) = demonstration();
-        let offset = ouverte.arborescence("").unwrap()[1].condition.id;
-        let fichier = dossier.path().join("lab.txt");
+    fn fichier_lab(dossier: &Path) -> PathBuf {
+        let fichier = dossier.join("lab.txt");
         std::fs::write(
             &fichier,
             "CGATS.17\nMEASUREMENT_SOURCE\t\"D50\"\nBEGIN_DATA_FORMAT\n\
@@ -775,26 +799,57 @@ mod tests {
              1\t50.0\t1.0\t-2.0\nEND_DATA\n",
         )
         .unwrap();
+        fichier
+    }
+
+    #[test]
+    fn un_apercu_ne_range_rien_avant_l_accord() {
+        let (dossier, ouverte) = demonstration();
+        let offset = ouverte.arborescence("").unwrap()[1].condition.id;
+        let fichier = fichier_lab(dossier.path());
         let importees = |o: &BibliothequeOuverte| o.arborescence("").unwrap()[1].importees.len();
 
         let apercu = ouverte.apercu_cgats(&fichier).unwrap();
-        assert_eq!(apercu.fichier, "lab.txt");
-        assert_eq!(apercu.plages, 1);
+        assert_eq!(apercu.contenu.fichier, "lab.txt");
+        assert_eq!(apercu.contenu.plages, 1);
         assert_eq!(importees(&ouverte), 0, "un aperçu ne range rien");
 
         ouverte.annuler_apercu();
         let absent = Err("bibliotheque.erreur.apercu_absent".to_string());
-        assert_eq!(ouverte.ranger_apercu(offset), absent);
+        assert_eq!(ouverte.ranger_apercu(apercu.numero, offset), absent);
         assert_eq!(importees(&ouverte), 0);
 
-        ouverte.apercu_cgats(&fichier).unwrap();
+        let apercu = ouverte.apercu_cgats(&fichier).unwrap();
         // Un refus garde l'aperçu : l'opérateur peut choisir une autre condition.
-        assert!(ouverte.ranger_apercu(IdCondition(999)).is_err());
-        let id = ouverte.ranger_apercu(offset).unwrap();
+        assert!(ouverte
+            .ranger_apercu(apercu.numero, IdCondition(999))
+            .is_err());
+        let id = ouverte.ranger_apercu(apercu.numero, offset).unwrap();
         assert_eq!(ouverte.arborescence("").unwrap()[1].importees[0].id, id);
         // Rangé une fois : l'aperçu est consommé.
-        assert_eq!(ouverte.ranger_apercu(offset), absent);
+        assert_eq!(ouverte.ranger_apercu(apercu.numero, offset), absent);
         assert_eq!(importees(&ouverte), 1);
+    }
+
+    #[test]
+    fn un_apercu_perime_ou_d_avant_une_restauration_est_refuse() {
+        let (dossier, ouverte) = demonstration();
+        let offset = ouverte.arborescence("").unwrap()[1].condition.id;
+        let fichier = fichier_lab(dossier.path());
+        let absent = Err("bibliotheque.erreur.apercu_absent".to_string());
+
+        // Un nouvel aperçu remplace l'ancien : l'ancien numéro ne range rien.
+        let ancien = ouverte.apercu_cgats(&fichier).unwrap();
+        let nouveau = ouverte.apercu_cgats(&fichier).unwrap();
+        assert_ne!(ancien.numero, nouveau.numero);
+        assert_eq!(ouverte.ranger_apercu(ancien.numero, offset), absent);
+
+        // Une restauration abandonne l'aperçu en cours.
+        let sauvegarde = dossier.path().join("sauvegarde.sqlite");
+        ouverte.sauvegarder(&sauvegarde).unwrap();
+        ouverte.restaurer(&sauvegarde).unwrap();
+        assert_eq!(ouverte.ranger_apercu(nouveau.numero, offset), absent);
+        assert!(ouverte.arborescence("").unwrap()[1].importees.is_empty());
     }
 
     #[test]
@@ -897,6 +952,7 @@ mod tests {
         for cle in [
             "bibliotheque.erreur.cgats_trop_gros",
             "bibliotheque.erreur.apercu_absent",
+            "import.abandonne",
             "bibliotheque.erreur.sauvegarde_invalide",
             "bibliotheque.erreur.cgats_illisible",
             "bibliotheque.erreur.export",

@@ -397,7 +397,7 @@
     const ranger = el("button", "btn btn--primary",
       choisie ? t("import.ranger").replace("{}", choisie.condition.nom) : t("import.ranger.attente"));
     ranger.disabled = !choisie;
-    ranger.addEventListener("click", rangerApercu);
+    ranger.addEventListener("click", () => rangerApercu(ranger));
     const annuler = el("button", "btn", t("import.annuler"));
     annuler.addEventListener("click", annulerApercu);
     const actions = el("div", "actions actions--serrees");
@@ -427,16 +427,19 @@
     montrerCentre(enTete(apercu.fichier, [...v.contexte, t("import.apercu")].join(" · ")), actions, section, v.tableau());
   }
 
-  async function rangerApercu() {
+  // Le bouton est inactif pendant l'appel : un double clic ne range pas deux fois.
+  async function rangerApercu(bouton) {
     const choisie = brancheDe(destination);
+    bouton.disabled = true;
     try {
-      const id = await invoke("bibliotheque_ranger_import", { condition: destination });
+      const id = await invoke("bibliotheque_ranger_import", { numero: apercu.numero, condition: destination });
       apercu = null;
       choix = { type: "importee", id };
       await chargerArbre();
       afficherChoix();
       annoncer(t("import.rangee").replace("{}", choisie ? choisie.condition.nom : ""));
     } catch (cle) {
+      bouton.disabled = false;
       annoncer(t(cle));
     }
   }
@@ -494,7 +497,8 @@
     try {
       const contenu = await invoke("bibliotheque_apercu_cgats", { filtre: t("export.filtre.cgats") });
       if (!contenu) return;
-      avantApercu = choix && choix.type !== "apercu" ? choix : avantApercu;
+      // Sans sélection, « Annuler » revient à la feuille vide, pas à un ancien choix.
+      avantApercu = choix && choix.type === "apercu" ? avantApercu : choix;
       destination = conditionChoisie();
       apercu = contenu;
       recherche.value = "";
@@ -542,6 +546,7 @@
     if (apercu) {
       apercu = null;
       invoke("bibliotheque_annuler_import").catch(() => {});
+      annoncer(t("import.abandonne"));
     }
     choix = { type: li.dataset.type, id: Number(li.dataset.id) };
     afficherTache("bibliotheque"); // app.js : la feuille du centre montre le choix
