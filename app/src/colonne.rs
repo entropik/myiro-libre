@@ -708,11 +708,8 @@ mod tests {
         assert_eq!(bande.plages.len(), 4);
         assert!(bande.plages[0].conditions.iter().all(Option::is_some));
         // L'azurant du papier se voit : M1 au-dessus de M2 vers 440 nm.
-        let [_, m1, m2] = &ouverte
-            .spectres(branches[0].mesures[1].id)
-            .unwrap()
-            .plages[0]
-            .conditions;
+        let [_, m1, m2] =
+            &ouverte.spectres(branches[0].mesures[1].id).unwrap().plages[0].conditions;
         assert!(m1.as_ref().unwrap().valeurs[6] > m2.as_ref().unwrap().valeurs[6] + 0.03);
 
         // Le relevé de la démonstration n'a que son spectre M1 : M0 et M2 ne

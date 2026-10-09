@@ -503,9 +503,7 @@ fn spectres_seance(
     numero: usize,
 ) -> Result<bibliotheque::SpectresMesure, &'static str> {
     let seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
-    seance
-        .spectres(numero)
-        .ok_or("bibliotheque.erreur.autre")
+    seance.spectres(numero).ok_or("bibliotheque.erreur.autre")
 }
 
 /// Renomme une mesure de la séance, et dans la bibliothèque si elle y est rangée.

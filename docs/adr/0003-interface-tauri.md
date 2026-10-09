@@ -48,7 +48,7 @@ Après un premier essai refusé par l'utilisateur (un champ où coller le chemin
 Demandé par le mainteneur à la première revue de la bibliothèque à l'écran :
 
 - L'application remplit exactement la fenêtre : le bandeau reste en place, la page ne défile jamais, et seule une zone trop longue défile à l'intérieur d'elle-même (classe `app` du système graphique). Sous 64 rem de large, les zones s'empilent et la page défile de nouveau.
-- La feuille du centre montre ce qui est choisi : pour une mesure, son en-tête (date, lecture, condition d'impression) puis le tableau des valeurs Lab par plage avec la bascule de condition de mesure, en grand ; l'emplacement de la courbe de spectre est réservé. Sans choix, un état vide juste (« Choisissez une mesure dans la bibliothèque. »), ou l'invitation à ajouter une première condition d'impression, avec une action active, jamais un bouton inactif en double.
+- La feuille du centre montre ce qui est choisi : pour une mesure, son en-tête (date, lecture, condition d'impression) puis le tableau des valeurs Lab par plage avec la bascule de condition de mesure, en grand ; l'emplacement de la courbe de spectre est réservé (rempli par le ticket #10, plus bas). Sans choix, un état vide juste (« Choisissez une mesure dans la bibliothèque. »), ou l'invitation à ajouter une première condition d'impression, avec une action active, jamais un bouton inactif en double.
 - Les détails, à droite, ne gardent que le cartouche de provenance.
 
 ## Bandeau et étalonnage (7 octobre 2026, ticket #4)
@@ -56,3 +56,9 @@ Demandé par le mainteneur à la première revue de la bibliothèque à l'écran
 - Les tâches occupent cinq colonnes du bandeau (`c-3-7`) et l'instrument avec les réglages les cinq suivantes (`c-8-12`) : le bouton « Étalonner » tient à côté de l'état sans faire grandir le bandeau. Il n'apparaît que lorsque l'état est « étalonnage requis ».
 - L'étalonnage guidé occupe la feuille du centre, sans fenêtre par-dessus : trois étapes (poser sur le blanc, étalonnage, mesure), un schéma au trait maison (composant `schema`), une seule action principale à la fois. Après un échec, l'avis remplace l'explication et la consigne, pour que tout tienne sans défilement.
 - Le passage aux zones empilées se fait strictement sous 64 rem : à 1024 px, largeur minimale de la fenêtre, l'application garde le plein cadre à trois zones. Vérifié par captures sans affichage à 1024×768, 1280×800 et 1440×900.
+
+## Courbe de spectre (9 octobre 2026, ticket #10)
+
+- La courbe est dessinée en SVG par un module de la page (`app/interface/spectre.js`), sans bibliothèque de graphiques : filets et couleurs viennent des jetons, la condition de mesure se lit au trait (M0 plein, M1 tirets, M2 points), jamais à la seule couleur. Elle s'ouvre sous le tableau de la mesure choisie dans la bibliothèque (un clic sur une plage montre la sienne) et au-dessus de la liste de Mesurer. « Garder pour comparer » superpose jusqu'à trois autres mesures, repérées par leur numéro ; la mesure choisie est à l'encre, les gardées en gris.
+- Rust range les spectres par condition (`bibliotheque::SpectresMesure`) : la page ne devine rien, une condition absente arrive absente et s'écrit « non disponible ».
+- Les modules de la page qui calculent sont testés par leurs données avec le lanceur de tests intégré à Node (`node --test`, aucun paquet npm) : fichiers `app/tests/interface/*.test.js`, lancés par `cargo test -p app --test page`. Sans Node sur le poste, ce contrôle est sauté et annoncé.

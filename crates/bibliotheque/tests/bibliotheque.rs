@@ -1082,7 +1082,10 @@ fn les_spectres_d_une_mesure_importee_suivent_ce_que_le_fichier_declare() {
     let id = biblio.importer_mesure(jet.id, "m1.txt", m1_seul).unwrap();
 
     let spectres = biblio.spectres(id).unwrap();
-    assert_eq!(spectres.longueurs_onde, Info::Confirmee(vec![380, 390, 400]));
+    assert_eq!(
+        spectres.longueurs_onde,
+        Info::Confirmee(vec![380, 390, 400])
+    );
     assert_eq!(spectres.plages.len(), 1);
     assert_eq!(spectres.plages[0].identifiant, "A1");
     let [m0, m1, m2] = &spectres.plages[0].conditions;

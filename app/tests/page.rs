@@ -35,6 +35,38 @@ fn classes_qui_fixent_display(css: &str) -> BTreeSet<String> {
     classes
 }
 
+/// Les modules de la page testés par leurs données (`tests/interface/*.test.js`),
+/// avec le lanceur de tests de Node, sans npm ni dépendance. Sans Node sur le
+/// poste, le contrôle est sauté et annoncé.
+#[test]
+fn les_modules_de_la_page_passent_leurs_tests() {
+    let dossier = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/interface");
+    let mut fichiers: Vec<_> = std::fs::read_dir(&dossier)
+        .unwrap()
+        .map(|f| f.unwrap().path())
+        .filter(|f| f.to_string_lossy().ends_with(".test.js"))
+        .collect();
+    fichiers.sort();
+    assert!(!fichiers.is_empty());
+    let sortie = match std::process::Command::new("node")
+        .arg("--test")
+        .args(&fichiers)
+        .output()
+    {
+        Ok(sortie) => sortie,
+        Err(e) => {
+            eprintln!("Node absent ({e}) : tests des modules de la page sautés.");
+            return;
+        }
+    };
+    assert!(
+        sortie.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&sortie.stdout),
+        String::from_utf8_lossy(&sortie.stderr)
+    );
+}
+
 /// Un élément caché par l'attribut `hidden` doit vraiment l'être : une classe
 /// qui fixe `display` (`.actions`, `.seg`…) l'emporte sur `hidden` dans le
 /// navigateur, et l'élément resterait visible. On cache alors un enveloppant

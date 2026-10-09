@@ -84,7 +84,11 @@ fn ranger(
 pub fn spectres_mesure(mesure: &Mesure) -> SpectresMesure {
     let demande = &mesure.provenance().calcul.demande;
     let (conditions, echantillonnage, supposee) = match demande {
-        Info::Confirmee(c) => (c.conditions_spectres.clone(), c.longueurs_onde.clone(), false),
+        Info::Confirmee(c) => (
+            c.conditions_spectres.clone(),
+            c.longueurs_onde.clone(),
+            false,
+        ),
         Info::Supposee(ConditionsCalcul {
             conditions_spectres,
             longueurs_onde,

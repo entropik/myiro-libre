@@ -248,6 +248,34 @@
     if (choisie === null && fiches.length > 0) choisie = fiches[0].numero;
     dessinerListe();
     dessinerDetail();
+    dessinerCourbe();
+  }
+
+  // ---- Courbe de spectre de la mesure choisie (spectre.js), refaite seulement si la
+  // mesure, son nom ou la langue changent : la lecture au survol n'est pas perdue. ----
+  const zoneCourbe = feuille.querySelector("[data-mesurer-spectre]");
+  let courbeMontree = null;
+  async function dessinerCourbe() {
+    const f = fiches.find((m) => m.numero === choisie);
+    const cle = f ? `${f.numero}|${f.nom}|${langue()}` : null;
+    if (cle === courbeMontree) return;
+    courbeMontree = cle;
+    if (!f) {
+      zoneCourbe.replaceChildren();
+      return;
+    }
+    let donnees;
+    try {
+      donnees = await invoke("spectres_seance", { numero: f.numero });
+    } catch (e) {
+      console.error("spectres_seance", e);
+      zoneCourbe.replaceChildren();
+      return;
+    }
+    if (courbeMontree !== cle) return; // autre mesure choisie entre-temps
+    const nombre = (v) => new Intl.NumberFormat(langue(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+    zoneCourbe.replaceChildren(CourbeSpectre.section(
+      { cle: `seance:${f.numero}:0`, titre: f.nom, donnees, plage: 0 }, t, nombre));
   }
 
   // ---- Conditions d'impression : celle choisie est retenue d'une fois sur l'autre ----

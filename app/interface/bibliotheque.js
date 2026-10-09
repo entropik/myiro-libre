@@ -27,6 +27,7 @@
   let version = ""; // version de l'application, pour le pied du cartouche
   let choix = null; // { type: "condition" | "mesure" | "importee" | "apercu", id }
   let spectreChoisi = 0; // spectre 1, 2 ou 3 de chaque plage dans le tableau
+  let plageChoisie = 0; // plage dont la courbe de spectre est montrée
 
   // ---- Petits outils ----
   function el(nom, classe, texte) {
@@ -240,7 +241,11 @@
     thead.append(entete);
     const corps = el("tbody");
     lab.forEach((plage, i) => {
-      const tr = el("tr");
+      // Plusieurs plages : un clic montre la courbe de spectre de la plage.
+      const tr = el("tr", lab.length > 1 && i === plageChoisie ? "hl" : "");
+      if (lab.length > 1) {
+        tr.addEventListener("click", () => { plageChoisie = i; afficherChoix(); });
+      }
       tr.append(el("td", "id num", String(i + 1)));
       const valeurs = plage[spectreChoisi];
       if (valeurs) for (const v of valeurs) tr.append(el("td", "r num", nombre(v)));
@@ -254,13 +259,33 @@
     return section;
   }
 
-  // Emplacement réservé à la courbe de spectre, construite plus tard.
-  function emplacementSpectre() {
-    const section = el("div", "section");
-    const tete = el("div", "section__head");
-    tete.append(el("span", "label label--ink", t("details.spectre")));
-    section.append(tete, el("p", "why", t("raison.bientot")));
-    return section;
+  // Courbe de spectre de la plage choisie (spectre.js) ; `cle` distingue chaque mesure
+  // et chaque plage gardées pour comparer. Sans spectres lisibles, pas de courbe.
+  function courbe(type, id, titre, spectres) {
+    if (!spectres) return null;
+    const plage = Math.min(plageChoisie, spectres.plages.length - 1);
+    return CourbeSpectre.section({ cle: `${type}:${id}:${plage}`, titre, donnees: spectres, plage }, t, nombre);
+  }
+
+  // Spectres d'une mesure de la bibliothèque, ou null si la commande les refuse.
+  async function spectresDe(id) {
+    try {
+      return await invoke("bibliotheque_spectres", { id });
+    } catch (cle) {
+      console.error("bibliotheque_spectres", cle);
+      return null;
+    }
+  }
+
+  // Nom de la mesure dans la colonne de gauche : son nom, sinon sa date ; le fichier d'une importée.
+  function titreMesure(id) {
+    for (const b of branches) {
+      const m = b.mesures.find((x) => x.id === id);
+      if (m) return m.nom || date(m.horodatage);
+      const i = b.importees.find((x) => x.id === id);
+      if (i) return i.fichier;
+    }
+    return String(id);
   }
 
   function choisirCondition(b) {
@@ -312,8 +337,9 @@
 
   async function choisirMesure(id) {
     let d;
+    let spectres;
     try {
-      d = await invoke("bibliotheque_detail_mesure", { id });
+      [d, spectres] = await Promise.all([invoke("bibliotheque_detail_mesure", { id }), spectresDe(id)]);
     } catch (cle) {
       cacherCartouche();
       montrerCentre(el("p", "why", t(cle)));
@@ -335,7 +361,7 @@
     montrerCentre(
       enTete(date(d.horodatage), [lu, nomCondition].filter(Boolean).join(" · ")),
       tableauLab([0, 1, 2].map((i) => ({ libelle: libelleBascule(conditionSpectre(d, i), i, connue(i)), index: i })), d.lab),
-      emplacementSpectre(),
+      ...[courbe("mesure", id, titreMesure(id), spectres)].filter(Boolean),
     );
   }
 
@@ -370,8 +396,9 @@
   // Une mesure importée et rangée : son cartouche dit « Importée » et le fichier d'origine.
   async function choisirImportee(id) {
     let d;
+    let spectres;
     try {
-      d = await invoke("bibliotheque_detail_importee", { id });
+      [d, spectres] = await Promise.all([invoke("bibliotheque_detail_importee", { id }), spectresDe(id)]);
     } catch (cle) {
       cacherCartouche();
       montrerCentre(el("p", "why", t(cle)));
@@ -380,7 +407,10 @@
     if (!choix || choix.type !== "importee" || choix.id !== id) return; // choix changé entre-temps
     const v = vueImport(d);
     montrerCartouche("import.titre", d.fichier, [...v.cellules, cellule("details.condition", d.nom_condition, true)]);
-    montrerCentre(enTete(d.fichier, [...v.contexte, d.nom_condition].join(" · ")), v.tableau());
+    // Un fichier sans aucun spectre n'a pas de courbe : le cartouche le dit déjà.
+    const avecCourbe = d.spectres.some(Boolean) ? courbe("importee", id, d.fichier, spectres) : null;
+    montrerCentre(enTete(d.fichier, [...v.contexte, d.nom_condition].join(" · ")), v.tableau(),
+      ...[avecCourbe].filter(Boolean));
   }
 
   // ---- Import en deux temps : aperçu du fichier lu, puis rangement sur accord ----
@@ -435,6 +465,7 @@
       const id = await invoke("bibliotheque_ranger_import", { numero: apercu.numero, condition: destination });
       apercu = null;
       choix = { type: "importee", id };
+      plageChoisie = 0;
       await chargerArbre();
       afficherChoix();
       annoncer(t("import.rangee").replace("{}", choisie ? choisie.condition.nom : ""));
@@ -505,6 +536,7 @@
       await chargerArbre();
       if (destination !== null && !brancheDe(destination)) destination = null;
       choix = { type: "apercu", id: 0 };
+      plageChoisie = 0;
       afficherTache("bibliotheque"); // app.js : la feuille du centre montre l'aperçu
       afficherChoix();
     } catch (cle) {
@@ -548,7 +580,9 @@
       invoke("bibliotheque_annuler_import").catch(() => {});
       annoncer(t("import.abandonne"));
     }
-    choix = { type: li.dataset.type, id: Number(li.dataset.id) };
+    const nouveau = { type: li.dataset.type, id: Number(li.dataset.id) };
+    if (!choix || choix.type !== nouveau.type || choix.id !== nouveau.id) plageChoisie = 0;
+    choix = nouveau;
     afficherTache("bibliotheque"); // app.js : la feuille du centre montre le choix
     afficherChoix();
   }

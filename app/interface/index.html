@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="systeme/tokens.css">
 <link rel="stylesheet" href="systeme/components.css">
 <script src="app.js" defer></script>
+<script src="spectre.js" defer></script>
 <script src="bibliotheque.js" defer></script>
 <script src="mesurer.js" defer></script>
 </head>
@@ -164,6 +165,8 @@
       <p class="prose" role="status" data-mesurer-en-cours data-t="mesurer.en_cours.automatique" hidden></p>
       <details class="replie" data-mesurer-details-techniques hidden><summary data-t="ecran.details"></summary><pre data-details-texte></pre></details>
       <h2 class="empty__text" data-mesurer-vide data-t="vide.mesurer.phrase"></h2>
+      <!-- Courbe de spectre de la mesure choisie dans la liste (spectre.js). -->
+      <div data-mesurer-spectre></div>
       <div class="section" data-mesurer-liste hidden>
         <div class="section__head"><span class="label label--ink" data-t="mesurer.liste"></span></div>
         <table>

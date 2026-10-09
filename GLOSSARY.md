@@ -165,6 +165,10 @@ _Éviter_ : delta E sans précision, différence de couleur
 Angle de la couleur dans le plan a*b*, en degrés (0 à 360). Un gris parfait (chroma nulle) n'a pas de teinte : elle est inconnue, pas nulle.
 _Éviter_ : hue, nuance
 
+**Courbe de spectre** :
+Réflectance d'une plage (en %) selon la longueur d'onde (en nm), une courbe par condition de mesure superposée (M0, M1, M2) ; l'écart entre M0 et M1 montre les azurants du papier. Une condition que la mesure n'a pas est « non disponible », jamais tracée à zéro. Plusieurs mesures se comparent sur la même courbe.
+_Éviter_ : graphe, spectrogramme
+
 ### Impression
 
 **Condition d'impression** :
