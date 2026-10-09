@@ -25,7 +25,7 @@
   let bibliothequeVide = false; // aucune condition d'impression, recherche à part
   let erreurBibliotheque = null; // clé du catalogue si la bibliothèque ne répond pas
   let version = ""; // version de l'application, pour le pied du cartouche
-  let choix = null; // { type: "condition" | "mesure", id }
+  let choix = null; // { type: "condition" | "mesure" | "importee" | "apercu", id }
   let spectreChoisi = 0; // spectre 1, 2 ou 3 de chaque plage dans le tableau
 
   // ---- Petits outils ----
@@ -203,24 +203,37 @@
     return tete;
   }
 
-  // Tableau des Lab : `libelles` nomme les trois spectres de chaque plage,
-  // `lab[plage][spectre]` vaut trois nombres, ou `null` si la valeur est inconnue.
-  function tableauLab(libelles, lab) {
-    const section = el("div", "section");
+  // Nom d'un spectre dans la bascule : sa condition de mesure si elle est connue,
+  // sinon son rang, dit en clair (jamais « 2 · Inconnue » comme choix).
+  function libelleBascule(libelle, i, connue) {
+    return connue ? libelle : t("details.spectre_sans_condition").replace("{}", String(i + 1));
+  }
+
+  // Tableau des Lab, compact ; lui seul défile, l'en-tête de la feuille reste en vue.
+  // `spectres` : les spectres présents dans la mesure, [{ libelle, index }] ;
+  // `lab[plage][index]` vaut trois nombres, ou `null` si la valeur est inconnue.
+  function tableauLab(spectres, lab) {
+    if (spectres.length && !spectres.some((s) => s.index === spectreChoisi)) spectreChoisi = spectres[0].index;
+    const section = el("div", "section section--defile");
     const tete = el("div", "section__head");
     tete.append(el("span", "label label--ink", t("details.valeurs")));
-    const seg = el("div", "seg");
-    seg.setAttribute("role", "group");
-    seg.setAttribute("aria-label", t("details.valeurs.libelle"));
-    [0, 1, 2].forEach((i) => {
-      const b = el("button", "", libelles[i]);
-      b.setAttribute("aria-pressed", String(i === spectreChoisi));
-      b.addEventListener("click", () => { spectreChoisi = i; afficherChoix(); });
-      seg.append(b);
-    });
-    tete.append(seg);
+    if (spectres.length > 1) {
+      const seg = el("div", "seg");
+      seg.setAttribute("role", "group");
+      seg.setAttribute("aria-label", t("details.valeurs.libelle"));
+      for (const s of spectres) {
+        const b = el("button", "", s.libelle);
+        b.setAttribute("aria-pressed", String(s.index === spectreChoisi));
+        b.addEventListener("click", () => { spectreChoisi = s.index; afficherChoix(); });
+        seg.append(b);
+      }
+      tete.append(seg);
+    } else if (spectres.length === 1) {
+      // Une seule condition dans la mesure : son nom, sans bascule.
+      tete.append(el("span", "label", spectres[0].libelle));
+    }
 
-    const table = el("table", "table--l");
+    const table = el("table", "table--compact");
     const entete = el("tr");
     entete.append(el("th", "", t("details.plage")), el("th", "r lc", "L*"), el("th", "r lc", "a*"), el("th", "r lc", "b*"));
     const thead = el("thead");
@@ -235,7 +248,9 @@
       corps.append(tr);
     });
     table.append(thead, corps);
-    section.append(tete, table);
+    const defile = el("div", "defile");
+    defile.append(table);
+    section.append(tete, defile);
     return section;
   }
 
@@ -315,34 +330,23 @@
       cellule("details.condition", nomCondition, true),
       cellule("details.lecture", lu, true),
     ]);
+    // Une mesure du pont a toujours ses trois spectres ; seule leur condition peut être inconnue.
+    const connue = (i) => d.conditions_mesure.statut !== "inconnue" && d.conditions_mesure.valeur[i].statut !== "inconnue";
     montrerCentre(
       enTete(date(d.horodatage), [lu, nomCondition].filter(Boolean).join(" · ")),
-      tableauLab([0, 1, 2].map((i) => conditionSpectre(d, i)), d.lab),
+      tableauLab([0, 1, 2].map((i) => ({ libelle: libelleBascule(conditionSpectre(d, i), i, connue(i)), index: i })), d.lab),
       emplacementSpectre(),
     );
   }
 
-  // Condition de l'emplacement de spectre n° e d'une mesure importée, telle que
-  // le fichier la donne : déduite, elle est « à confirmer » ; absente, inconnue.
-  function conditionImportee(c, e) {
-    if (c.statut === "inconnue") return `${e + 1} · ${t("cartouche.inconnue")}`;
-    return qualifiee(c, (v) => v, "cartouche.inconnue");
-  }
-
-  // Une mesure importée : son cartouche dit « importée » et le fichier d'origine.
-  async function choisirImportee(id) {
-    let d;
-    try {
-      d = await invoke("bibliotheque_detail_importee", { id });
-    } catch (cle) {
-      cacherCartouche();
-      montrerCentre(el("p", "why", t(cle)));
-      return;
-    }
-    if (!choix || choix.type !== "importee" || choix.id !== id) return; // choix changé entre-temps
+  // Ce que montre une mesure importée, en aperçu ou rangée : les spectres
+  // présents dans le fichier, les cellules du cartouche et les Lab.
+  function vueImport(d) {
     const presents = [0, 1, 2].filter((e) => d.spectres[e] || d.lab.some((p) => p[e].statut !== "inconnue"));
+    const nommer = (e) => libelleBascule(qualifiee(d.conditions[e], (v) => v, "cartouche.inconnue"), e,
+      d.conditions[e].statut !== "inconnue");
     const contenus = presents.map((e) =>
-      `${conditionImportee(d.conditions[e], e)} (${t(d.spectres[e] ? "import.spectre_et_lab" : "import.lab_seul")})`);
+      `${nommer(e)} (${t(d.spectres[e] ? "import.spectre_et_lab" : "import.lab_seul")})`);
     const instrumentLu = qualifiee(d.instrument, (i) =>
       d.numero_serie.statut === "inconnue" ? i : `${i} ${t("details.numero")} ${d.numero_serie.valeur}`,
     "cartouche.inconnu");
@@ -355,41 +359,107 @@
       cellule("cartouche.condition_mesure", contenus.join(", ") || t("cartouche.inconnue"), true),
     ];
     if (!d.spectres.some(Boolean)) cellules.push(cellule("import.spectres", t("import.aucun_spectre"), true));
-    cellules.push(cellule("details.condition", d.nom_condition, true));
-    montrerCartouche("import.titre", d.fichier, cellules);
-    const lab = d.lab.map((p) => p.map((v) => (v.statut === "inconnue" ? null : v.valeur)));
-    montrerCentre(
-      enTete(d.fichier, [t("import.importee"), `${d.plages} ${t(d.plages > 1 ? "lecture.plages" : "lecture.plage")}`, d.nom_condition].join(" · ")),
-      tableauLab([0, 1, 2].map((e) => conditionImportee(d.conditions[e], e)), lab),
-    );
+    return {
+      cellules,
+      contexte: [t("import.importee"), `${d.plages} ${t(d.plages > 1 ? "lecture.plages" : "lecture.plage")}`],
+      tableau: () => tableauLab(presents.map((e) => ({ libelle: nommer(e), index: e })),
+        d.lab.map((p) => p.map((v) => (v.statut === "inconnue" ? null : v.valeur)))),
+    };
   }
 
-  // ---- Export et sauvegarde, sous la feuille ----
+  // Une mesure importée et rangée : son cartouche dit « Importée » et le fichier d'origine.
+  async function choisirImportee(id) {
+    let d;
+    try {
+      d = await invoke("bibliotheque_detail_importee", { id });
+    } catch (cle) {
+      cacherCartouche();
+      montrerCentre(el("p", "why", t(cle)));
+      return;
+    }
+    if (!choix || choix.type !== "importee" || choix.id !== id) return; // choix changé entre-temps
+    const v = vueImport(d);
+    montrerCartouche("import.titre", d.fichier, [...v.cellules, cellule("details.condition", d.nom_condition, true)]);
+    montrerCentre(enTete(d.fichier, [...v.contexte, d.nom_condition].join(" · ")), v.tableau());
+  }
+
+  // ---- Import en deux temps : aperçu du fichier lu, puis rangement sur accord ----
+  let apercu = null; // contenu du fichier lu, pas encore rangé
+  let destination = null; // condition d'impression qui recevra la mesure
+  let avantApercu = null; // choix à retrouver si l'opérateur annule
+
+  function montrerApercu() {
+    const v = vueImport(apercu);
+    montrerCartouche("import.apercu", apercu.fichier, v.cellules);
+
+    // L'action d'abord, toujours en vue : un seul bouton principal.
+    const choisie = destination === null ? null : brancheDe(destination);
+    const ranger = el("button", "btn btn--primary",
+      choisie ? t("import.ranger").replace("{}", choisie.condition.nom) : t("import.ranger.attente"));
+    ranger.disabled = !choisie;
+    ranger.addEventListener("click", rangerApercu);
+    const annuler = el("button", "btn", t("import.annuler"));
+    annuler.addEventListener("click", annulerApercu);
+    const actions = el("div", "actions actions--serrees");
+    actions.append(ranger, annuler);
+
+    // Puis la condition d'impression qui recevra la mesure, au choix.
+    const section = el("div", "section section--serree");
+    const tete = el("div", "section__head");
+    tete.append(el("span", "label label--ink", t("import.destination")));
+    section.append(tete);
+    if (branches.length === 0) section.append(el("p", "why", t("import.aucune_condition")));
+    else if (!choisie) section.append(el("p", "why", t("import.ranger.raison")));
+    const liste = el("div", "choix-liste");
+    for (const b of branches) {
+      const rang = el("label", "choix-liste__rang");
+      const radio = el("input");
+      radio.type = "radio";
+      radio.name = "destination";
+      radio.id = `destination-${b.condition.id}`;
+      radio.checked = b.condition.id === destination;
+      radio.addEventListener("change", () => { destination = b.condition.id; afficherChoix(); });
+      rang.append(radio, el("span", "", b.condition.nom));
+      liste.append(rang);
+    }
+    section.append(liste);
+
+    montrerCentre(enTete(apercu.fichier, [...v.contexte, t("import.apercu")].join(" · ")), actions, section, v.tableau());
+  }
+
+  async function rangerApercu() {
+    const choisie = brancheDe(destination);
+    try {
+      const id = await invoke("bibliotheque_ranger_import", { condition: destination });
+      apercu = null;
+      choix = { type: "importee", id };
+      await chargerArbre();
+      afficherChoix();
+      annoncer(t("import.rangee").replace("{}", choisie ? choisie.condition.nom : ""));
+    } catch (cle) {
+      annoncer(t(cle));
+    }
+  }
+
+  async function annulerApercu() {
+    apercu = null;
+    choix = avantApercu;
+    try { await invoke("bibliotheque_annuler_import"); } catch (_) { /* rien n'était rangé */ }
+    afficherChoix();
+  }
+
+  // ---- Barre d'actions de la feuille : toujours en vue, au-dessus du tableau ----
   const exportZone = document.querySelector("[data-export]");
-  const exportPourquoi = exportZone.querySelector("[data-export-pourquoi]");
-  const exportDetails = exportZone.querySelector("[data-export-details]");
   const exporterBouton = exportZone.querySelector("[data-exporter]");
   const exportRaison = exportZone.querySelector("[data-export-raison]");
   const exportMessage = exportZone.querySelector("[data-export-message]");
   const restaurerAvis = exportZone.querySelector("[data-restaurer-avis]");
-  const importerBouton = exportZone.querySelector("[data-importer]");
-  const importRaison = exportZone.querySelector("[data-import-raison]");
-  let format = "cgats"; // usage choisi dans le menu d'export
 
   function dessinerExport() {
-    for (const b of exportZone.querySelectorAll("[data-format]")) {
-      b.setAttribute("aria-pressed", String(b.dataset.format === format));
-    }
-    exportPourquoi.textContent = t("export.pourquoi." + format);
-    exportDetails.textContent = t("export.details." + format);
-    // Le glossaire réserve « exporter » au CGATS : la sauvegarde se dit « Sauvegarder… ».
-    exporterBouton.textContent = t(format === "cgats" ? "export.exporter" : "export.sauvegarder");
-    const sansMesure = format === "cgats" && !(choix && choix.type === "mesure");
+    // Un seul export : le CGATS de la mesure choisie.
+    const sansMesure = !(choix && choix.type === "mesure");
     exporterBouton.disabled = sansMesure;
     exportRaison.hidden = !sansMesure;
-    const sansCondition = conditionChoisie() === null;
-    importerBouton.disabled = sansCondition;
-    importRaison.hidden = !sansCondition;
   }
 
   function annoncer(texte) {
@@ -401,28 +471,38 @@
   async function exporter() {
     exportMessage.hidden = true;
     try {
-      const nom = format === "cgats"
-        ? await invoke("bibliotheque_exporter_cgats", { id: choix.id, filtre: t("export.filtre.cgats") })
-        : await invoke("bibliotheque_sauvegarder", { filtre: t("export.filtre.sauvegarde") });
+      const nom = await invoke("bibliotheque_exporter_cgats", { id: choix.id, filtre: t("export.filtre.cgats") });
       if (nom) annoncer(`${t("export.fait")} ${nom}`);
     } catch (cle) {
       annoncer(t(cle));
     }
   }
 
-  // La mesure importée est rangée dans la condition d'impression choisie, puis montrée.
+  async function sauvegarder() {
+    exportMessage.hidden = true;
+    try {
+      const nom = await invoke("bibliotheque_sauvegarder", { filtre: t("export.filtre.sauvegarde") });
+      if (nom) annoncer(`${t("export.fait")} ${nom}`);
+    } catch (cle) {
+      annoncer(t(cle));
+    }
+  }
+
+  // Lit le fichier et le montre en aperçu : rien n'est rangé avant « Ranger dans … ».
   async function importer() {
     exportMessage.hidden = true;
-    const condition = conditionChoisie();
-    if (condition === null) return;
     try {
-      const id = await invoke("bibliotheque_importer_cgats", { condition, filtre: t("export.filtre.cgats") });
-      if (id === null) return;
+      const contenu = await invoke("bibliotheque_apercu_cgats", { filtre: t("export.filtre.cgats") });
+      if (!contenu) return;
+      avantApercu = choix && choix.type !== "apercu" ? choix : avantApercu;
+      destination = conditionChoisie();
+      apercu = contenu;
       recherche.value = "";
-      choix = { type: "importee", id };
       await chargerArbre();
+      if (destination !== null && !brancheDe(destination)) destination = null;
+      choix = { type: "apercu", id: 0 };
+      afficherTache("bibliotheque"); // app.js : la feuille du centre montre l'aperçu
       afficherChoix();
-      annoncer(t("import.rangee"));
     } catch (cle) {
       annoncer(t(cle));
     }
@@ -435,6 +515,7 @@
       const nom = await invoke("bibliotheque_restaurer", { filtre: t("export.filtre.sauvegarde") });
       if (!nom) return;
       choix = null;
+      apercu = null;
       recherche.value = "";
       await chargerArbre();
       afficherChoix();
@@ -447,6 +528,7 @@
   function afficherChoix() {
     dessinerArbre();
     dessinerExport();
+    if (choix && choix.type === "apercu" && apercu) return montrerApercu();
     const b = choix && choix.type === "condition" ? brancheDe(choix.id) : null;
     if (b) return choisirCondition(b);
     if (choix && choix.type === "mesure") return choisirMesure(choix.id);
@@ -456,6 +538,11 @@
   }
 
   function choisir(li) {
+    // Choisir ailleurs abandonne l'aperçu : rien n'avait été rangé.
+    if (apercu) {
+      apercu = null;
+      invoke("bibliotheque_annuler_import").catch(() => {});
+    }
     choix = { type: li.dataset.type, id: Number(li.dataset.id) };
     afficherTache("bibliotheque"); // app.js : la feuille du centre montre le choix
     afficherChoix();
@@ -469,7 +556,9 @@
       nouvelle.classList.remove("input--error");
       nouvelleErreur.hidden = true;
       recherche.value = "";
-      choix = { type: "condition", id: c.id };
+      // Pendant un aperçu, la nouvelle condition devient sa destination.
+      if (apercu) destination = c.id;
+      else choix = { type: "condition", id: c.id };
       await chargerArbre();
       afficherChoix();
     } catch (cle) {
@@ -507,11 +596,9 @@
     else nouvelle.focus();
   });
 
-  for (const b of exportZone.querySelectorAll("[data-format]")) {
-    b.addEventListener("click", () => { format = b.dataset.format; exportMessage.hidden = true; dessinerExport(); });
-  }
   exporterBouton.addEventListener("click", exporter);
-  importerBouton.addEventListener("click", importer);
+  exportZone.querySelector("[data-sauvegarder]").addEventListener("click", sauvegarder);
+  exportZone.querySelector("[data-importer]").addEventListener("click", importer);
   // Restaurer remplace toute la bibliothèque : l'accord de l'opérateur est demandé d'abord.
   exportZone.querySelector("[data-restaurer]").addEventListener("click", () => {
     exportMessage.hidden = true;

@@ -9,8 +9,9 @@ use std::sync::Mutex;
 
 use bibliotheque::{
     Bibliotheque, Branche, ConditionImpression, ErreurBibliotheque, IdCondition, IdMesure,
-    Instrument, MesureEnregistree, MesureImporteeEnregistree,
+    Instrument, MesureEnregistree,
 };
+use cgats::MesureImportee;
 use pont_protocole::{ConditionMesure, Geometrie, Horodatage, Info};
 use serde::Serialize;
 use tauri_plugin_dialog::DialogExt;
@@ -19,6 +20,8 @@ use tauri_plugin_dialog::DialogExt;
 pub struct BibliothequeOuverte {
     bibliotheque: Result<Mutex<Bibliotheque>, ErreurBibliotheque>,
     demonstration: bool,
+    /// Fichier CGATS lu, montré en aperçu, en attente de l'accord pour être rangé.
+    apercu: Mutex<Option<Apercu>>,
 }
 
 /// Emplacement de la bibliothèque sur le poste : un seul, dans le dossier de
@@ -33,6 +36,7 @@ impl BibliothequeOuverte {
         BibliothequeOuverte {
             bibliotheque: Bibliotheque::ouvrir(dossier).map(Mutex::new),
             demonstration: false,
+            apercu: Mutex::new(None),
         }
     }
 
@@ -49,6 +53,7 @@ impl BibliothequeOuverte {
         BibliothequeOuverte {
             bibliotheque: ouverte.map(Mutex::new),
             demonstration: true,
+            apercu: Mutex::new(None),
         }
     }
 
@@ -157,14 +162,10 @@ impl BibliothequeOuverte {
             .map_err(|e| cle_erreur(&e).to_string())
     }
 
-    /// Lit un fichier CGATS et range la mesure importée dans la condition
-    /// d'impression. Un fichier de plus de [`TAILLE_MAX_CGATS`] est refusé
-    /// avant d'être lu.
-    pub fn importer_cgats(
-        &self,
-        condition: IdCondition,
-        fichier: &Path,
-    ) -> Result<IdMesure, String> {
+    /// Lit un fichier CGATS et le garde en aperçu, sans rien ranger : la
+    /// mesure n'entre dans la bibliothèque qu'avec [`Self::ranger_apercu`].
+    /// Un fichier de plus de [`TAILLE_MAX_CGATS`] est refusé avant d'être lu.
+    pub fn apercu_cgats(&self, fichier: &Path) -> Result<ContenuImport, String> {
         let illisible = |e: std::io::Error| {
             eprintln!("{} : {e}", fichier.display());
             "bibliotheque.erreur.cgats_illisible".to_string()
@@ -189,7 +190,35 @@ impl BibliothequeOuverte {
         }
         // UTF-8, ou Latin-1 de Windows sans abîmer les accents.
         let texte = cgats::decoder(&octets);
-        self.avec(|b| b.importer_mesure(condition, &nom_de(fichier), &texte))
+        let mesure = cgats::lire(&texte).map_err(|e| {
+            eprintln!("{} : {e}", fichier.display());
+            "bibliotheque.erreur.cgats_illisible".to_string()
+        })?;
+        let nom = nom_de(fichier);
+        let contenu = ContenuImport::de(mesure, nom.clone());
+        *self.apercu.lock().unwrap_or_else(|e| e.into_inner()) = Some(Apercu {
+            fichier: nom,
+            texte,
+        });
+        Ok(contenu)
+    }
+
+    /// Range dans la condition d'impression la mesure en aperçu. Un refus
+    /// garde l'aperçu, pour réessayer avec une autre condition ; une fois
+    /// rangée, l'aperçu est consommé.
+    pub fn ranger_apercu(&self, condition: IdCondition) -> Result<IdMesure, String> {
+        let mut apercu = self.apercu.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(a) = apercu.as_ref() else {
+            return Err("bibliotheque.erreur.apercu_absent".to_string());
+        };
+        let id = self.avec(|b| b.importer_mesure(condition, &a.fichier, &a.texte))?;
+        *apercu = None;
+        Ok(id)
+    }
+
+    /// Abandonne la mesure en aperçu : rien n'est rangé.
+    pub fn annuler_apercu(&self) {
+        *self.apercu.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 
     pub fn detail_importee(&self, id: IdMesure) -> Result<DetailImportee, String> {
@@ -201,22 +230,30 @@ impl BibliothequeOuverte {
                 .find(|c| c.id == enregistree.condition)
                 .map(|c| c.nom)
                 .unwrap_or_default();
-            Ok(DetailImportee::de(enregistree, nom))
+            Ok(DetailImportee {
+                id: enregistree.id,
+                condition: enregistree.condition,
+                nom_condition: nom,
+                contenu: ContenuImport::de(enregistree.mesure, enregistree.fichier),
+            })
         })
     }
+}
+
+/// Fichier CGATS lu et montré en aperçu, pas encore rangé.
+struct Apercu {
+    fichier: String,
+    texte: String,
 }
 
 /// Taille au-delà de laquelle un fichier CGATS n'est pas lu : 16 Mio, bien
 /// plus qu'une mire de plusieurs milliers de plages avec leurs spectres.
 pub const TAILLE_MAX_CGATS: u64 = 16 * 1024 * 1024;
 
-/// Ce que la feuille et le cartouche montrent d'une mesure importée : ce que
+/// Ce que l'écran montre d'une mesure importée, en aperçu ou rangée : ce que
 /// le fichier contient, et ce qui y reste inconnu.
 #[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct DetailImportee {
-    pub id: IdMesure,
-    pub condition: IdCondition,
-    pub nom_condition: String,
+pub struct ContenuImport {
     /// Nom du fichier d'origine, sans le dossier.
     pub fichier: String,
     pub plages: usize,
@@ -233,9 +270,8 @@ pub struct DetailImportee {
     pub lab: Vec<[Info<[f32; 3]>; 3]>,
 }
 
-impl DetailImportee {
-    fn de(enregistree: MesureImporteeEnregistree, nom_condition: String) -> DetailImportee {
-        let m = enregistree.mesure;
+impl ContenuImport {
+    fn de(m: MesureImportee, fichier: String) -> ContenuImport {
         let spectres = [0, 1, 2].map(|e| m.plages.iter().any(|p| p.spectres[e] != Info::Inconnue));
         let lab = m
             .plages
@@ -248,11 +284,8 @@ impl DetailImportee {
                 })
             })
             .collect();
-        DetailImportee {
-            id: enregistree.id,
-            condition: enregistree.condition,
-            nom_condition,
-            fichier: enregistree.fichier,
+        ContenuImport {
+            fichier,
             plages: m.plages.len(),
             myiro_libre: m.provenance != Info::Inconnue,
             instrument: m.instrument,
@@ -263,6 +296,16 @@ impl DetailImportee {
             lab,
         }
     }
+}
+
+/// Une mesure importée rangée dans la bibliothèque.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct DetailImportee {
+    pub id: IdMesure,
+    pub condition: IdCondition,
+    pub nom_condition: String,
+    #[serde(flatten)]
+    pub contenu: ContenuImport,
 }
 
 /// Clé du catalogue qui explique une erreur à l'utilisateur. Le détail
@@ -448,15 +491,14 @@ pub fn bibliotheque_restaurer(
     Ok(Some(nom_de(&fichier)))
 }
 
-/// Range dans la condition d'impression la mesure du fichier CGATS choisi
-/// dans le sélecteur. Rend son numéro, ou `None` si l'opérateur a annulé.
+/// Ouvre le fichier CGATS choisi dans le sélecteur et le montre en aperçu,
+/// sans rien ranger. `None` si l'opérateur a annulé.
 #[tauri::command(async)]
-pub fn bibliotheque_importer_cgats(
+pub fn bibliotheque_apercu_cgats(
     app: tauri::AppHandle,
     ouverte: tauri::State<'_, BibliothequeOuverte>,
-    condition: i64,
     filtre: String,
-) -> Result<Option<IdMesure>, String> {
+) -> Result<Option<ContenuImport>, String> {
     let Some(fichier) = choisi(
         app.dialog()
             .file()
@@ -465,9 +507,23 @@ pub fn bibliotheque_importer_cgats(
     ) else {
         return Ok(None);
     };
-    ouverte
-        .importer_cgats(IdCondition(condition), &fichier)
-        .map(Some)
+    ouverte.apercu_cgats(&fichier).map(Some)
+}
+
+/// Range la mesure en aperçu dans la condition d'impression, à la demande
+/// de l'opérateur (bouton « Ranger dans … »).
+#[tauri::command]
+pub fn bibliotheque_ranger_import(
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+    condition: i64,
+) -> Result<IdMesure, String> {
+    ouverte.ranger_apercu(IdCondition(condition))
+}
+
+/// Abandonne l'aperçu (bouton « Annuler ») : rien n'est rangé.
+#[tauri::command]
+pub fn bibliotheque_annuler_import(ouverte: tauri::State<'_, BibliothequeOuverte>) {
+    ouverte.annuler_apercu();
 }
 
 #[tauri::command]
@@ -594,6 +650,8 @@ mod tests {
             })
             .collect();
         assert_eq!(fichiers, [vec!["releve-lab.txt"], vec![], vec![]]);
+        // Assez de plages pour voir le tableau défiler seul (ticket #9).
+        assert_eq!(branches[0].importees[0].plages, 36);
     }
 
     #[test]
@@ -699,6 +757,46 @@ mod tests {
         assert_eq!(ouverte.arborescence("").unwrap(), avant);
     }
 
+    /// Import en deux temps, comme à l'écran : aperçu, puis rangement.
+    fn importer(ouverte: &BibliothequeOuverte, condition: IdCondition, fichier: &Path) -> IdMesure {
+        ouverte.apercu_cgats(fichier).unwrap();
+        ouverte.ranger_apercu(condition).unwrap()
+    }
+
+    #[test]
+    fn un_apercu_ne_range_rien_avant_l_accord() {
+        let (dossier, ouverte) = demonstration();
+        let offset = ouverte.arborescence("").unwrap()[1].condition.id;
+        let fichier = dossier.path().join("lab.txt");
+        std::fs::write(
+            &fichier,
+            "CGATS.17\nMEASUREMENT_SOURCE\t\"D50\"\nBEGIN_DATA_FORMAT\n\
+             SAMPLE_ID\tLAB_L\tLAB_A\tLAB_B\nEND_DATA_FORMAT\nBEGIN_DATA\n\
+             1\t50.0\t1.0\t-2.0\nEND_DATA\n",
+        )
+        .unwrap();
+        let importees = |o: &BibliothequeOuverte| o.arborescence("").unwrap()[1].importees.len();
+
+        let apercu = ouverte.apercu_cgats(&fichier).unwrap();
+        assert_eq!(apercu.fichier, "lab.txt");
+        assert_eq!(apercu.plages, 1);
+        assert_eq!(importees(&ouverte), 0, "un aperçu ne range rien");
+
+        ouverte.annuler_apercu();
+        let absent = Err("bibliotheque.erreur.apercu_absent".to_string());
+        assert_eq!(ouverte.ranger_apercu(offset), absent);
+        assert_eq!(importees(&ouverte), 0);
+
+        ouverte.apercu_cgats(&fichier).unwrap();
+        // Un refus garde l'aperçu : l'opérateur peut choisir une autre condition.
+        assert!(ouverte.ranger_apercu(IdCondition(999)).is_err());
+        let id = ouverte.ranger_apercu(offset).unwrap();
+        assert_eq!(ouverte.arborescence("").unwrap()[1].importees[0].id, id);
+        // Rangé une fois : l'aperçu est consommé.
+        assert_eq!(ouverte.ranger_apercu(offset), absent);
+        assert_eq!(importees(&ouverte), 1);
+    }
+
     #[test]
     fn un_fichier_cgats_importe_est_range_dans_sa_condition_sans_rien_deviner() {
         let (dossier, ouverte) = demonstration();
@@ -708,21 +806,21 @@ mod tests {
         let fichier = dossier.path().join("export.txt");
         ouverte.exporter_cgats(bande, &fichier).unwrap();
 
-        let id = ouverte.importer_cgats(offset, &fichier).unwrap();
+        let id = importer(&ouverte, offset, &fichier);
         let rangee = &ouverte.arborescence("").unwrap()[1];
         assert_eq!(rangee.importees.len(), 1);
         assert_eq!(rangee.importees[0].id, id);
         assert_eq!(rangee.importees[0].fichier, "export.txt");
 
         let detail = ouverte.detail_importee(id).unwrap();
-        assert_eq!(detail.fichier, "export.txt");
+        assert_eq!(detail.contenu.fichier, "export.txt");
         assert_eq!(detail.nom_condition, "Offset, couché mat 150\u{202f}g");
-        assert_eq!(detail.plages, 4);
-        assert!(detail.myiro_libre);
-        assert_eq!(detail.instrument, Info::Confirmee("MYIRO-1".into()));
-        assert_eq!(detail.spectres, [true, true, true]);
+        assert_eq!(detail.contenu.plages, 4);
+        assert!(detail.contenu.myiro_libre);
+        assert_eq!(detail.contenu.instrument, Info::Confirmee("MYIRO-1".into()));
+        assert_eq!(detail.contenu.spectres, [true, true, true]);
         assert_eq!(
-            detail.conditions,
+            detail.contenu.conditions,
             [
                 Info::Confirmee(ConditionMesure::M0),
                 Info::Confirmee(ConditionMesure::M1),
@@ -730,7 +828,7 @@ mod tests {
             ]
         );
         let origine = ouverte.detail_mesure(bande).unwrap();
-        assert_eq!(detail.lab[3][1], Info::Confirmee(origine.lab[3][1]));
+        assert_eq!(detail.contenu.lab[3][1], Info::Confirmee(origine.lab[3][1]));
 
         // Un fichier sans spectre : les spectres restent inconnus.
         let sans_spectre = dossier.path().join("lab.txt");
@@ -741,25 +839,25 @@ mod tests {
              1\t50.0\t1.0\t-2.0\nEND_DATA\n",
         )
         .unwrap();
-        let id = ouverte.importer_cgats(offset, &sans_spectre).unwrap();
+        let id = importer(&ouverte, offset, &sans_spectre);
         let detail = ouverte.detail_importee(id).unwrap();
-        assert!(!detail.myiro_libre);
-        assert_eq!(detail.spectres, [false, false, false]);
+        assert!(!detail.contenu.myiro_libre);
+        assert_eq!(detail.contenu.spectres, [false, false, false]);
         assert_eq!(
-            detail.lab[0],
+            detail.contenu.lab[0],
             [
                 Info::Inconnue,
                 Info::Confirmee([50.0, 1.0, -2.0]),
                 Info::Inconnue
             ]
         );
-        assert_eq!(detail.instrument, Info::Inconnue);
-        assert_eq!(detail.date, Info::Inconnue);
+        assert_eq!(detail.contenu.instrument, Info::Inconnue);
+        assert_eq!(detail.contenu.date, Info::Inconnue);
 
         let illisible = dossier.path().join("illisible.txt");
         std::fs::write(&illisible, "rien de CGATS").unwrap();
         assert_eq!(
-            ouverte.importer_cgats(offset, &illisible),
+            ouverte.apercu_cgats(&illisible).map(|_| ()),
             Err("bibliotheque.erreur.cgats_illisible".to_string())
         );
         assert_eq!(ouverte.arborescence("").unwrap()[1].importees.len(), 2);
@@ -775,7 +873,7 @@ mod tests {
             .set_len(16 * 1024 * 1024 + 1)
             .unwrap();
         assert_eq!(
-            ouverte.importer_cgats(offset, &gros),
+            ouverte.apercu_cgats(&gros).map(|_| ()),
             Err("bibliotheque.erreur.cgats_trop_gros".to_string())
         );
 
@@ -787,9 +885,9 @@ mod tests {
               BEGIN_DATA\n1\t50.0\t1.0\t-2.0\nEND_DATA\n",
         )
         .unwrap();
-        let id = ouverte.importer_cgats(offset, &latin).unwrap();
+        let id = importer(&ouverte, offset, &latin);
         assert_eq!(
-            ouverte.detail_importee(id).unwrap().instrument,
+            ouverte.detail_importee(id).unwrap().contenu.instrument,
             Info::Confirmee("Relevé fictif".into())
         );
     }
@@ -798,6 +896,7 @@ mod tests {
     fn les_textes_de_l_export_existent_au_catalogue() {
         for cle in [
             "bibliotheque.erreur.cgats_trop_gros",
+            "bibliotheque.erreur.apercu_absent",
             "bibliotheque.erreur.sauvegarde_invalide",
             "bibliotheque.erreur.cgats_illisible",
             "bibliotheque.erreur.export",

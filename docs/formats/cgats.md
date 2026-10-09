@@ -81,7 +81,7 @@ Plusieurs tableaux doivent porter les mêmes plages, dans le même ordre. Un fic
 
 Écrire une mesure puis la relire rend exactement ses spectres, ses Lab et sa provenance (test de la crate).
 
-À l'écran, « Importer un fichier CGATS… » range la mesure importée dans la condition d'impression choisie à gauche. La bibliothèque conserve le texte du fichier tel quel, avec le seul nom du fichier (pas son dossier), et le relit à chaque affichage : la colonne de gauche et le cartouche disent « Importée » et le fichier d'origine, et une valeur absente du fichier s'affiche « inconnue ».
+À l'écran, « Importer un fichier… » lit le fichier et montre la mesure en aperçu, sans rien ranger ; elle n'entre dans la bibliothèque qu'avec « Ranger dans « … » », dans la condition d'impression choisie. La bibliothèque conserve le texte du fichier tel quel, avec le seul nom du fichier (pas son dossier), et le relit à chaque affichage : la colonne de gauche et le cartouche disent « Importée » et le fichier d'origine, et une valeur absente du fichier s'affiche « inconnue ».
 
 ## Comparaison avec l'export CGATS de référence du fabricant
 

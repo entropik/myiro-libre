@@ -218,7 +218,35 @@ select.input option { background: var(--color-paper); color: var(--color-ink); }
 .app > .masthead { flex: none; }
 .app > .frame { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; padding-bottom: 0; }
 .app > .frame > .grid { flex: 1; min-height: 0; align-items: stretch; }
-.app > .frame > .grid > * { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-gutter: stable; padding-bottom: var(--space-12); }
+.app > .frame > .grid > * { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--color-hair) transparent; scrollbar-gutter: stable; padding-bottom: var(--space-12); }
+
+/* ---- Feuille à barre d'actions : les actions restent en vue, seul le tableau défile ---- */
+.barre { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.barre .btn { padding: var(--space-2) var(--space-4); }
+.actions--serrees { margin: var(--space-4) 0 0; }
+.section--serree { margin-top: var(--space-6); }
+/* Choix d'un élément parmi une liste ouverte (conditions d'impression) : pastilles qui passent à la ligne. */
+.choix-liste { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.choix-liste__rang { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: var(--rule) solid var(--color-hair); font-size: var(--text-sm); cursor: pointer; }
+.choix-liste__rang input { width: var(--space-4); height: var(--space-4); margin: 0; accent-color: var(--color-ink); }
+.choix-liste__rang:has(input:checked) { border: var(--rule-strong) solid var(--color-ink); font-weight: 600; }
+.feuille__actions { padding-bottom: var(--space-3); margin-bottom: var(--space-6); border-bottom: var(--rule) solid var(--color-hair); }
+.feuille__actions > .why { margin-top: var(--space-2); }
+.feuille__actions > .notice { margin: var(--space-3) 0 0; }
+.feuille__actions > .replie { margin-top: var(--space-3); }
+.feuille__actions > .replie p + p { margin-top: var(--space-2); }
+.section--defile { margin-top: var(--space-6); }
+.defile { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--color-hair) transparent; }
+.defile thead th { position: sticky; top: 0; background: var(--color-paper); }
+.table--compact td { padding-top: var(--space-1); padding-bottom: var(--space-1); font-size: var(--text-base); line-height: var(--leading-snug); }
+/* En plein cadre, la feuille remplit sa zone : la barre reste en haut, le tableau prend le reste. */
+.app > .frame > .grid > :has(> .feuille:not([hidden])) { display: flex; flex-direction: column; overflow: hidden; padding-bottom: var(--space-4); }
+.app .feuille:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.app .feuille > .feuille__actions { flex: none; }
+.app .feuille__corps:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--color-hair) transparent; }
+.app .feuille__corps > * { flex: none; }
+.app .feuille__corps > .section--defile { flex: 1 1 auto; min-height: calc(var(--space-16) * 2); display: flex; flex-direction: column; }
+.app .feuille__corps > .section--defile > .defile { flex: 1; min-height: 0; }
 
 /* ---- Feuille d'un résultat : titre en grand corps, ligne de contexte, tableau lisible ---- */
 .sheet-title { font-size: var(--text-3xl); font-weight: 600; letter-spacing: var(--tracking-snug); line-height: var(--leading-snug); }
@@ -240,4 +268,6 @@ select.input option { background: var(--color-paper); color: var(--color-ink); }
   /* Zones empilées : la page défile de nouveau, les zones ne défilent plus seules. */
   .app:not([hidden]) { display: block; height: auto; overflow: visible; }
   .app > .frame > .grid > * { overflow-y: visible; }
+  .app > .frame > .grid > :has(> .feuille:not([hidden])) { display: block; overflow: visible; }
+  .app .feuille__corps:not([hidden]), .defile { overflow: visible; }
 }

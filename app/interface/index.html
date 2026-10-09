@@ -177,32 +177,18 @@
       <div class="actions"><button class="btn btn--primary" disabled data-t="vide.profiler.action"></button></div>
       <p class="why" data-t="raison.instrument"></p>
     </section>
-    <!-- Feuille de la bibliothèque : la mesure ou la condition choisie à gauche (bibliotheque.js). -->
-    <section data-vue="bibliotheque" hidden>
-      <div class="empty" data-centre-vide>
-        <h2 class="empty__text" data-centre-phrase></h2>
-        <div class="actions"><button class="btn btn--primary" data-centre-ajout hidden data-t="vide.bibliotheque.action"></button></div>
-      </div>
-      <div data-centre-choix hidden></div>
-      <!-- Export et sauvegarde : un seul menu d'export, formats nommés par usage (ticket #9). -->
-      <div class="section" data-export>
-        <div class="section__head"><span class="label label--ink" data-t="export.titre"></span></div>
-        <div class="field">
-          <span class="label" data-t="export.usage"></span>
-          <div class="seg" role="group" data-t-aria="export.usage.libelle">
-            <button data-format="cgats" aria-pressed="true" data-t="export.format.cgats"></button><button data-format="sauvegarde" aria-pressed="false" data-t="export.format.sauvegarde"></button>
-          </div>
-          <p data-export-pourquoi></p>
-        </div>
-        <details class="replie"><summary data-t="export.details.titre"></summary><p class="prose" data-export-details></p></details>
-        <div class="actions"><button class="btn" data-exporter></button></div>
-        <p class="why" data-export-raison data-t="export.raison.mesure" hidden></p>
-        <div class="field"><span class="label" data-t="export.importer.titre"></span></div>
-        <div class="actions">
+    <!-- Feuille de la bibliothèque (bibliotheque.js) : barre d'actions toujours en vue (import,
+         un seul export, sauvegarde, restauration ; ticket #9), puis la mesure ou la condition
+         choisie à gauche, dont seul le tableau défile. -->
+    <section class="feuille" data-vue="bibliotheque" hidden>
+      <div class="feuille__actions" data-export>
+        <div class="barre" role="toolbar" data-t-aria="export.titre">
           <button class="btn" data-importer data-t="export.importer"></button>
+          <button class="btn" data-exporter data-t="export.exporter"></button>
+          <button class="btn" data-sauvegarder data-t="export.sauvegarder"></button>
           <button class="btn" data-restaurer data-t="export.restaurer"></button>
         </div>
-        <p class="why" data-import-raison data-t="export.raison.condition" hidden></p>
+        <p class="why" data-export-raison data-t="export.raison.mesure" hidden></p>
         <div class="notice notice--warn" data-restaurer-avis hidden>
           <p data-t="export.restaurer.avertissement"></p>
           <div class="actions">
@@ -211,7 +197,20 @@
           </div>
         </div>
         <p class="why" role="status" data-export-message hidden></p>
+        <details class="replie">
+          <summary data-t="export.details.titre"></summary>
+          <p class="prose" data-t="export.pourquoi.import"></p>
+          <p class="prose" data-t="export.pourquoi.cgats"></p>
+          <p class="prose small mute" data-t="export.details.cgats"></p>
+          <p class="prose" data-t="export.pourquoi.sauvegarde"></p>
+          <p class="prose small mute" data-t="export.details.sauvegarde"></p>
+        </details>
       </div>
+      <div class="empty" data-centre-vide>
+        <h2 class="empty__text" data-centre-phrase></h2>
+        <div class="actions"><button class="btn btn--primary" data-centre-ajout hidden data-t="vide.bibliotheque.action"></button></div>
+      </div>
+      <div class="feuille__corps" data-centre-choix hidden></div>
     </section>
   </div>
 
