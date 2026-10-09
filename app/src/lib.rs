@@ -354,7 +354,7 @@ fn etalonner(
 }
 
 /// Mesures ponctuelles faites depuis le lancement (tâche Mesurer).
-struct SeanceMesures(Mutex<Seance>);
+pub struct SeanceMesures(pub(crate) Mutex<Seance>);
 
 /// Ce que la feuille Mesurer reçoit : l'état de l'instrument, s'il a pu
 /// changer (avec la liste des instruments du poste), les mesures de la

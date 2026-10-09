@@ -128,8 +128,8 @@ pub trait ReferencesConservees {
     /// Remplace une référence par une autre, sans seuil, d'un bloc.
     fn remplacer(&self, ancienne: IdMesure, nouvelle: IdMesure) -> Result<(), String>;
     fn retirer(&self, id: IdMesure) -> Result<(), String>;
-    /// La couleur de référence conservée la plus récente, pour la reprendre
-    /// au lancement.
+    /// La couleur de référence conservée au plus grand numéro de mesure,
+    /// pour la reprendre au lancement ou après une restauration.
     fn reference_conservee(&self) -> Result<Option<ReferenceReprise>, String>;
 }
 
@@ -164,7 +164,7 @@ impl ReferencesConservees for Bibliotheque {
     }
 }
 
-/// La couleur de référence la plus récemment rangée de la bibliothèque.
+/// La couleur de référence de la bibliothèque au plus grand numéro de mesure.
 pub fn reference_conservee(
     biblio: &Bibliotheque,
 ) -> Result<Option<ReferenceReprise>, bibliotheque::ErreurBibliotheque> {
@@ -514,6 +514,28 @@ impl Seance {
         if !self.mesures.is_empty() {
             return Ok(());
         }
+        self.charger_reference(conserver, langue)
+    }
+
+    /// Après une restauration de la bibliothèque : la séance oublie sa
+    /// référence, qui désignait une mesure de l'ancienne base, et reprend
+    /// celle de la base restaurée s'il y en a une. Une mesure de la séance
+    /// identique à la référence restaurée, au même numéro, est reprise telle
+    /// quelle plutôt qu'ajoutée une seconde fois.
+    pub fn suivre_restauration(
+        &mut self,
+        conserver: &impl ReferencesConservees,
+        langue: Langue,
+    ) -> Result<(), &'static str> {
+        self.reference = None;
+        self.charger_reference(conserver, langue)
+    }
+
+    fn charger_reference(
+        &mut self,
+        conserver: &impl ReferencesConservees,
+        langue: Langue,
+    ) -> Result<(), &'static str> {
         let reprise = conserver.reference_conservee().map_err(|detail| {
             eprintln!("reprise de la référence : {detail}");
             "bibliotheque.erreur.autre"
@@ -521,15 +543,26 @@ impl Seance {
         let Some(reprise) = reprise else {
             return Ok(());
         };
-        let numero = self.ajouter(
-            reprise.mesure,
-            &reprise.condition,
-            |_, _| Ok(reprise.id),
-            langue,
-        );
-        if let Some(nom) = reprise.nom {
-            let _ = self.renommer(numero, &nom, |_, _| Ok(()));
-        }
+        let deja = self
+            .mesures
+            .iter()
+            .find(|m| m.rangee == Some(reprise.id) && m.mesure == reprise.mesure)
+            .map(|m| m.numero);
+        let numero = match deja {
+            Some(numero) => numero,
+            None => {
+                let numero = self.ajouter(
+                    reprise.mesure,
+                    &reprise.condition,
+                    |_, _| Ok(reprise.id),
+                    langue,
+                );
+                if let Some(nom) = reprise.nom {
+                    let _ = self.renommer(numero, &nom, |_, _| Ok(()));
+                }
+                numero
+            }
+        };
         self.reference = Some(ReferenceDeSeance {
             numero,
             seuil: reprise.seuil.and_then(Seuil::new),

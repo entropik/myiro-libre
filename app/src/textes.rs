@@ -576,6 +576,9 @@ const FRANCAIS: Catalogue = &[
     ("mesurer.reference.designer", "Prendre comme référence"),
     ("mesurer.reference.retirer", "Retirer la référence"),
     ("mesurer.reference.marque", "Référence"),
+    ("mesurer.reference.actuelle", "Couleur de référence actuelle\u{202f}: «\u{202f}{nom}\u{202f}»."),
+    ("mesurer.conditions.a_confirmer", "Conditions de mesure à confirmer."),
+    ("mesurer.conditions.inconnues", "Conditions de mesure inconnues."),
     (
         "mesurer.reference.est",
         "Cette mesure est la couleur de référence. Les autres mesures affichent leur écart à elle.",
@@ -1221,6 +1224,9 @@ const ANGLAIS: Catalogue = &[
     ("mesurer.reference.designer", "Use as reference"),
     ("mesurer.reference.retirer", "Remove reference"),
     ("mesurer.reference.marque", "Reference"),
+    ("mesurer.reference.actuelle", "Current reference colour: “{nom}”."),
+    ("mesurer.conditions.a_confirmer", "Measurement conditions to be confirmed."),
+    ("mesurer.conditions.inconnues", "Measurement conditions unknown."),
     (
         "mesurer.reference.est",
         "This measurement is the reference colour. The other measurements show their difference from it.",

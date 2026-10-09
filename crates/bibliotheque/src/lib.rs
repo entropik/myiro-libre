@@ -516,8 +516,8 @@ impl Bibliotheque {
     }
 
     /// Désigne une mesure d'un pont couleur de référence, ou change son seuil
-    /// si elle l'est déjà (une mesure importée ne peut pas l'être). Un seuil doit être un nombre fini strictement positif ;
-    /// `None` : pas de seuil.
+    /// si elle l'est déjà (une mesure importée ne peut pas l'être). Un seuil
+    /// doit être un nombre fini strictement positif ; `None` : pas de seuil.
     pub fn designer_reference(&self, id: IdMesure, seuil: Option<f64>) -> Resultat<()> {
         if seuil.is_some_and(|s| !(s.is_finite() && s > 0.0)) {
             return Err(ErreurBibliotheque::SeuilInvalide);
@@ -929,16 +929,6 @@ fn migrer(base: &mut Connection) -> Resultat<()> {
 /// enregistrées restent sans nom ; rien n'est réécrit ni effacé.
 const ORGANISATION_2: &str = "ALTER TABLE mesures ADD COLUMN nom TEXT;";
 
-/// Organisation 4 (ticket #8), par-dessus l'organisation 3 : les couleurs
-/// de référence et leur seuil ΔE00. Un seuil absent est `NULL`, jamais une
-/// valeur sentinelle. Rien n'est réécrit ni effacé.
-const ORGANISATION_4: &str = "
-CREATE TABLE references_couleur (
-    mesure INTEGER PRIMARY KEY REFERENCES mesures (id),
-    seuil REAL CHECK (seuil IS NULL OR seuil > 0)
-);
-";
-
 /// Nom de mesure débarrassé de ses espaces de début et de fin, jamais vide.
 fn nom_de_mesure(nom: &str) -> Resultat<&str> {
     let nom = nom.trim();
@@ -1003,6 +993,16 @@ INSERT INTO mesures_3 (id, condition, origine, instrument, horodatage, geometrie
 DROP TABLE mesures;
 ALTER TABLE mesures_3 RENAME TO mesures;
 CREATE INDEX mesures_par_condition ON mesures (condition);
+";
+
+/// Organisation 4 (ticket #8), par-dessus l'organisation 3 : les couleurs
+/// de référence et leur seuil ΔE00. Un seuil absent est `NULL`, jamais une
+/// valeur sentinelle. Rien n'est réécrit ni effacé.
+const ORGANISATION_4: &str = "
+CREATE TABLE references_couleur (
+    mesure INTEGER PRIMARY KEY REFERENCES mesures (id),
+    seuil REAL CHECK (seuil IS NULL OR seuil > 0)
+);
 ";
 
 #[cfg(test)]

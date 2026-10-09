@@ -523,7 +523,9 @@ pub fn bibliotheque_sauvegarder(
 pub fn bibliotheque_restaurer(
     app: tauri::AppHandle,
     ouverte: tauri::State<'_, BibliothequeOuverte>,
+    seance: tauri::State<'_, crate::SeanceMesures>,
     filtre: String,
+    langue: &str,
 ) -> Result<Option<String>, String> {
     let Some(fichier) = choisi(
         app.dialog()
@@ -534,6 +536,14 @@ pub fn bibliotheque_restaurer(
         return Ok(None);
     };
     ouverte.restaurer(&fichier)?;
+    // La référence de Mesurer désignait une mesure de l'ancienne base : la
+    // séance reprend celle de la base restaurée (ticket #8).
+    let langue =
+        crate::textes::Langue::depuis_code(langue).unwrap_or(crate::textes::Langue::Francais);
+    let mut seance = seance.0.lock().unwrap_or_else(|e| e.into_inner());
+    seance
+        .suivre_restauration(&*ouverte, langue)
+        .map_err(str::to_string)?;
     Ok(Some(nom_de(&fichier)))
 }
 

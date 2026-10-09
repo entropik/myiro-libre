@@ -63,3 +63,12 @@ Demandé par le mainteneur à la première revue de la bibliothèque à l'écran
 - La liste ajoute ΔE00 et un petit verdict (carré et mot) à chaque mesure ; la référence porte le libellé « Référence ». Sans écart accepté : « Seuil non fixé », carré vide, aucun verdict.
 - L'écart compare les spectres de même condition de mesure (M0 avec M0…), quelle que soit leur place ; si elles ne sont pas confirmées, un avis le dit au-dessus des chiffres ; si elles diffèrent, l'avis remplace l'écart et le verdict.
 - `cargo run -p app -- --demo` garnit aussi la séance de Mesurer de mesures fictives, avec une couleur de référence et ses quatre cas (trois verdicts, un avis).
+
+## Écran lisible en plein cadre (9 octobre 2026, refus de l'écran Mesurer)
+
+Après le refus de l'écran (« illisible », fenêtre d'environ 1900 × 1080) :
+
+- L'application prend toute la largeur de la fenêtre (`.app .page`, sans largeur maximale, marges et gouttières de 1 rem) ; les pages de documentation du système graphique gardent leur mesure.
+- La colonne de la bibliothèque, commune à toutes les tâches, passe de deux à trois colonnes de la grille ; la feuille en prend six, les détails trois (au lieu de 2 + 7 + 3). Une entrée de mesure tient sur deux lignes : le nom, puis la date courte et la lecture ; aucun mot n'est coupé, et une fin trop longue est remplacée par des points, le texte entier restant au survol.
+- Aucune zone ne défile en largeur ; toutes les barres de défilement sont fines ; deux champs qui se suivent sont espacés.
+- Dans Mesurer, les boutons de spectre portent « M0 », « M1 », « M2 » et « à confirmer » est dit une seule fois dessous. Les détails montrent d'abord l'écart, compact et titré, puis la couleur, les valeurs et la provenance ; les actions sur la couleur de référence viennent en dernier.

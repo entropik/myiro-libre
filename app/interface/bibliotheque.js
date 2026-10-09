@@ -48,6 +48,16 @@
     }).format(d);
   }
 
+  // Date courte pour la colonne de gauche : jour, mois et heure (« 9 oct., 09:15 »).
+  function dateCourte(horodatage) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(horodatage);
+    if (!m) return horodatage;
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
+    return new Intl.DateTimeFormat(document.documentElement.lang, {
+      day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC",
+    }).format(d);
+  }
+
   function nombre(v) {
     return new Intl.NumberFormat(document.documentElement.lang, {
       minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: "negative",
@@ -106,10 +116,23 @@
   }
 
   // ---- Arborescence, à gauche ----
+  // `texte` : une chaîne, ou [nom, détail] pour une mesure, sur deux lignes au plus.
   function ligne(numero, texte, droite, choixLigne, niveau1) {
     const li = el("li", niveau1 ? "l1" : "");
     li.tabIndex = 0;
-    li.append(el("span", "num mute", numero), el("span", "", texte), el("span", "num", droite));
+    let corps;
+    if (Array.isArray(texte)) {
+      const [nom, detail] = texte;
+      corps = el("span");
+      const n = el("span", "index__nom", nom);
+      const d = el("span", "index__meta", detail);
+      n.title = nom; // le texte entier au survol, si la colonne est trop étroite
+      d.title = detail;
+      corps.append(n, d);
+    } else {
+      corps = el("span", "", texte);
+    }
+    li.append(el("span", "num mute", numero), corps, el("span", "num", droite));
     li.dataset.type = choixLigne.type;
     li.dataset.id = choixLigne.id;
     if (choix && choix.type === choixLigne.type && choix.id === choixLigne.id) {
@@ -125,14 +148,15 @@
       arbre.append(ligne(String(i + 1), b.condition.nom, String(nombreMesures(b)),
         { type: "condition", id: b.condition.id }, true));
       b.mesures.forEach((m, j) => {
-        // Le nom donné à la mesure (tâche Mesurer) passe devant la date ; sans nom, la date seule.
-        const quand = `${date(m.horodatage)} · ${lecture(m.geometrie, m.plages)} · ${m.instrument.modele}`;
-        arbre.append(ligne(`${i + 1}.${j + 1}`, m.nom ? `${m.nom} · ${quand}` : quand, "",
+        // Ligne 1 : le nom donné à la mesure (tâche Mesurer), ou la date ; ligne 2 : date courte · lecture.
+        const nom = m.nom || date(m.horodatage);
+        const detail = `${dateCourte(m.horodatage)} · ${lecture(m.geometrie, m.plages)}`;
+        arbre.append(ligne(`${i + 1}.${j + 1}`, [nom, detail], "",
           { type: "mesure", id: m.id }, false));
       });
       // Les mesures importées suivent, marquées comme telles avec le nom de leur fichier.
       b.importees.forEach((m, j) => {
-        arbre.append(ligne(`${i + 1}.${b.mesures.length + j + 1}`, `${t("import.importee")} · ${m.fichier}`, "",
+        arbre.append(ligne(`${i + 1}.${b.mesures.length + j + 1}`, [m.fichier, t("import.importee")], "",
           { type: "importee", id: m.id }, false));
       });
     });
@@ -516,7 +540,7 @@
     restaurerAvis.hidden = true;
     exportMessage.hidden = true;
     try {
-      const nom = await invoke("bibliotheque_restaurer", { filtre: t("export.filtre.sauvegarde") });
+      const nom = await invoke("bibliotheque_restaurer", { filtre: t("export.filtre.sauvegarde"), langue: document.documentElement.lang || "fr" });
       if (!nom) return;
       choix = null;
       apercu = null;
@@ -524,6 +548,7 @@
       await chargerArbre();
       afficherChoix();
       annoncer(`${t("export.restaure")} ${nom}`);
+      document.dispatchEvent(new CustomEvent("bibliotheque-restauree")); // mesurer.js : la référence suit
     } catch (cle) {
       annoncer(t(cle));
     }

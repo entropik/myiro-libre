@@ -529,3 +529,54 @@ fn la_reference_conservee_revient_au_lancement_suivant() {
         Err("bibliotheque.erreur.autre")
     );
 }
+
+/// Après une restauration, la séance suit la base restaurée : sans
+/// référence si elle n'en a pas, sinon la sienne, avec son seuil. Aucun
+/// réglage n'écrit plus sur un numéro de l'ancienne base.
+#[test]
+fn apres_une_restauration_la_seance_suit_la_base_restauree() {
+    let (dossier, mut biblio, mut seance, [a, b, _]) = trois_gris();
+    let sans_reference = dossier.path().join("sans-reference.sqlite");
+    biblio.sauvegarder(&sans_reference).unwrap();
+    seance.designer_reference(b, &biblio).unwrap();
+    seance.regler_seuil("1", &biblio).unwrap();
+    let avec_b = dossier.path().join("avec-b.sqlite");
+    biblio.sauvegarder(&avec_b).unwrap();
+    seance.designer_reference(a, &biblio).unwrap();
+    seance.regler_seuil("2", &biblio).unwrap();
+
+    biblio.restaurer(&sans_reference).unwrap();
+    seance
+        .suivre_restauration(&biblio, Langue::Francais)
+        .unwrap();
+    assert_eq!(seance.reference(Langue::Francais), None);
+    assert_eq!(
+        seance.regler_seuil("3", &biblio),
+        Err("mesurer.reference.aucune")
+    );
+    assert_eq!(biblio.references().unwrap(), vec![]);
+
+    biblio.restaurer(&avec_b).unwrap();
+    seance
+        .suivre_restauration(&biblio, Langue::Francais)
+        .unwrap();
+    let reference = seance.reference(Langue::Francais).unwrap();
+    assert_eq!(
+        (
+            reference.numero,
+            reference.nom.as_str(),
+            reference.seuil.as_deref()
+        ),
+        (b, "Couleur 2", Some("1,00"))
+    );
+    // La mesure de la séance est reprise, pas ajoutée une seconde fois.
+    assert_eq!(seance.fiches(Langue::Francais).len(), 3);
+    seance.regler_seuil("1,5", &biblio).unwrap();
+    let references = biblio.references().unwrap();
+    assert_eq!(references.len(), 1);
+    assert_eq!(references[0].seuil, Some(1.5));
+    assert_eq!(
+        biblio.mesure(references[0].mesure).unwrap().nom.as_deref(),
+        Some("Couleur 2")
+    );
+}
