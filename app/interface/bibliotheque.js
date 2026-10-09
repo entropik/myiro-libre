@@ -27,6 +27,10 @@
   let version = ""; // version de l'application, pour le pied du cartouche
   let choix = null; // { type: "condition" | "mesure" | "importee" | "apercu", id }
   let spectreChoisi = 0; // spectre 1, 2 ou 3 de chaque plage dans le tableau
+  // Densités d'une mesure rangée (ticket #31) : statut E ou T, retenu comme dans Mesurer ;
+  // absolues, ou au papier avec le rang de la plage du papier. Calculées par le module Rust.
+  let statutDensite = memoire("statut-densite") === "T" ? "T" : "E";
+  let plagePapier = null; // rang (depuis 0) de la plage prise comme blanc papier ; null : absolues
 
   // ---- Petits outils ----
   function el(nom, classe, texte) {
@@ -279,6 +283,93 @@
     return section;
   }
 
+  // ---- Densités de chaque plage, depuis le spectre M0 (commande `bibliotheque_densites`) ----
+  function segmentDensite(libelle, choixPossibles, actif, choisir) {
+    const champ = el("div", "field");
+    const titre = el("span", "label", t(`densite.${libelle}`));
+    titre.id = `bibliotheque-densite-${libelle}`;
+    const seg = el("div", "seg");
+    seg.setAttribute("role", "group");
+    seg.setAttribute("aria-labelledby", titre.id);
+    for (const [valeur, texte, aide] of choixPossibles) {
+      const b = el("button", "", texte);
+      if (aide) b.title = aide;
+      b.setAttribute("aria-pressed", String(valeur === actif));
+      b.addEventListener("click", () => { choisir(valeur); afficherChoix(); });
+      seg.append(b);
+    }
+    champ.append(titre, seg);
+    return champ;
+  }
+
+  function sectionDensites(id, nombrePlages) {
+    const section = el("div", "section section--serree");
+    const tete = el("div", "section__head");
+    tete.append(el("span", "label label--ink", t("densite.titre")));
+    section.append(tete);
+    if (plagePapier !== null && plagePapier >= nombrePlages) plagePapier = null;
+    section.append(segmentDensite("statut", [["E", "E", t("densite.statut.E")], ["T", "T", t("densite.statut.T")]],
+      statutDensite, (v) => { statutDensite = v; memoire("statut-densite", v); }));
+    section.append(segmentDensite("mode", [[false, t("densite.absolue")], [true, t("densite.relative")]],
+      plagePapier !== null, (relative) => { plagePapier = relative ? 0 : null; }));
+    if (plagePapier !== null) {
+      const champ = el("div", "field");
+      const etiquette = el("label", "label", t("densite.papier"));
+      etiquette.htmlFor = "bibliotheque-densite-papier";
+      const liste = el("select", "input");
+      liste.id = etiquette.htmlFor;
+      for (let i = 0; i < nombrePlages; i++) {
+        const o = el("option", "", `${t("details.plage")} ${i + 1}`);
+        o.value = String(i);
+        liste.append(o);
+      }
+      liste.value = String(plagePapier);
+      liste.addEventListener("change", () => { plagePapier = Number(liste.value); afficherChoix(); });
+      champ.append(etiquette, liste);
+      section.append(champ);
+    }
+    const resultat = el("div");
+    section.append(resultat);
+    remplirDensites(resultat, id);
+    return section;
+  }
+
+  // Densités inconnues : « inconnu » et la raison, jamais un zéro.
+  function afficherDensites(resultat, fiches) {
+    const canaux = ["cyan", "magenta", "jaune", "visuel"];
+    const table = el("table", "table--compact");
+    const entete = el("tr");
+    entete.append(el("th", "", t("details.plage")), ...canaux.map((c) => el("th", "r", t(`densite.${c}`))));
+    const thead = el("thead");
+    thead.append(entete);
+    const corps = el("tbody");
+    fiches.forEach((f, i) => {
+      const tr = el("tr");
+      tr.append(el("td", "id num", String(i + 1)));
+      for (const c of canaux) {
+        tr.append(f.valeurs ? el("td", "r num", f.valeurs[c]) : el("td", "r mute", t("cartouche.inconnu")));
+      }
+      corps.append(tr);
+    });
+    table.append(thead, corps);
+    const defile = el("div", "defile");
+    defile.append(table);
+    const raisons = [...new Set(fiches.map((f) => f.raison).filter(Boolean))];
+    resultat.replaceChildren(defile, ...raisons.map((r) => el("p", "why", t(r))));
+    if (!raisons.length) resultat.append(el("p", "why", t("densite.calcul")));
+    resultat.append(el("p", "why", t("densite.limite")));
+  }
+
+  async function remplirDensites(resultat, id) {
+    const demande = { id, statut: statutDensite, papier: plagePapier, langue: document.documentElement.lang || "fr" };
+    try {
+      const fiches = await invoke("bibliotheque_densites", demande);
+      if (resultat.isConnected) afficherDensites(resultat, fiches);
+    } catch (cle) {
+      if (resultat.isConnected) resultat.replaceChildren(el("p", "why", t(cle)));
+    }
+  }
+
   // Emplacement réservé à la courbe de spectre, construite plus tard.
   function emplacementSpectre() {
     const section = el("div", "section");
@@ -360,6 +451,7 @@
     montrerCentre(
       enTete(date(d.horodatage), [lu, nomCondition].filter(Boolean).join(" · ")),
       tableauLab([0, 1, 2].map((i) => ({ libelle: libelleBascule(conditionSpectre(d, i), i, connue(i)), index: i })), d.lab),
+      sectionDensites(id, d.lab.length),
       emplacementSpectre(),
     );
   }

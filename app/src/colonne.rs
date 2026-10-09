@@ -12,7 +12,11 @@ use bibliotheque::{
     Instrument, MesureEnregistree,
 };
 use cgats::MesureImportee;
+use colorimetrie::StatutDensite;
 use pont_protocole::{ConditionMesure, Geometrie, Horodatage, Info};
+
+use crate::mesurer::{densites_plage, lire_statut, FicheDensites};
+use crate::textes::Langue;
 use serde::Serialize;
 use tauri_plugin_dialog::DialogExt;
 
@@ -88,6 +92,34 @@ impl BibliothequeOuverte {
                 .unwrap_or_default();
             Ok(DetailMesure::de(&mesure, nom))
         })
+    }
+
+    /// Densités de chaque plage d'une mesure rangée (ponctuelle ou bande,
+    /// ticket #31), absolues, ou relatives à sa plage n° `papier` (comptée
+    /// depuis 0) prise comme blanc papier. Une plage de papier qui n'existe
+    /// pas rend les densités relatives inconnues.
+    pub fn densites(
+        &self,
+        id: IdMesure,
+        statut: StatutDensite,
+        papier: Option<usize>,
+        langue: Langue,
+    ) -> Result<Vec<FicheDensites>, String> {
+        let enregistree = self.avec(|b| b.mesure(id))?;
+        let mesure = &enregistree.mesure;
+        let nombre = mesure.plages().len();
+        Ok((0..nombre)
+            .map(|plage| match papier {
+                Some(p) if p >= nombre => {
+                    let mut fiche = densites_plage(mesure, plage, statut, None, langue);
+                    fiche.relative = true;
+                    fiche.valeurs = None;
+                    fiche.raison = fiche.raison.or(Some("densite.inconnue.papier"));
+                    fiche
+                }
+                _ => densites_plage(mesure, plage, statut, papier.map(|p| (mesure, p)), langue),
+            })
+            .collect())
     }
 
     pub fn creer_condition(&self, nom: &str) -> Result<ConditionImpression, String> {
@@ -449,6 +481,22 @@ pub fn bibliotheque_detail_mesure(
     ouverte.detail_mesure(IdMesure(id))
 }
 
+/// Densités de chaque plage d'une mesure rangée : statut `E` ou `T`, `papier`
+/// = rang de la plage prise comme blanc papier (depuis 0) pour des densités
+/// relatives.
+#[tauri::command]
+pub fn bibliotheque_densites(
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+    id: i64,
+    statut: &str,
+    papier: Option<usize>,
+    langue: &str,
+) -> Result<Vec<FicheDensites>, String> {
+    let statut = lire_statut(statut).ok_or("bibliotheque.erreur.autre")?;
+    let langue = Langue::depuis_code(langue).unwrap_or(Langue::Francais);
+    ouverte.densites(IdMesure(id), statut, papier, langue)
+}
+
 #[tauri::command]
 pub fn bibliotheque_creer_condition(
     ouverte: tauri::State<'_, BibliothequeOuverte>,
@@ -742,6 +790,46 @@ mod tests {
             detail.etalonnage,
             Info::Confirmee(Horodatage::new("2026-10-06T09:12:00+02:00").unwrap())
         );
+    }
+
+    /// Densités de chaque plage d'une bande (ticket #31), depuis le spectre M0.
+    #[test]
+    fn une_bande_donne_les_densites_de_chaque_plage() {
+        use colorimetrie::StatutDensite;
+        let (_dossier, ouverte) = demonstration();
+        let bande = ouverte.arborescence("").unwrap()[0].mesures[0].id;
+
+        let absolues = ouverte
+            .densites(bande, StatutDensite::T, None, Langue::Francais)
+            .unwrap();
+        assert_eq!(absolues.len(), 4);
+        // Le noir de démonstration renvoie 5 % partout : −log10(0,05) = 1,30.
+        let noir = absolues[3].valeurs.as_ref().expect("densités du noir");
+        assert_eq!(
+            [&noir.cyan, &noir.magenta, &noir.jaune, &noir.visuel].map(String::as_str),
+            ["1,30"; 4]
+        );
+        assert!(!absolues[3].relative);
+        // La plage cyane est plus dense derrière le filtre rouge que derrière le bleu.
+        let cyan = absolues[0].valeurs.as_ref().unwrap();
+        let nombre = |t: &str| t.replace(',', ".").parse::<f64>().unwrap();
+        assert!(nombre(&cyan.cyan) > nombre(&cyan.jaune), "{cyan:?}");
+
+        // Une plage de la bande prise comme papier : elle-même est à zéro.
+        let relatives = ouverte
+            .densites(bande, StatutDensite::E, Some(3), Langue::Anglais)
+            .unwrap();
+        let zero = relatives[3].valeurs.as_ref().unwrap();
+        assert_eq!(zero.visuel, "0.00");
+        assert!(relatives.iter().all(|f| f.relative && f.statut == "E"));
+
+        // Une plage de papier qui n'existe pas : densités relatives inconnues.
+        let sans_papier = ouverte
+            .densites(bande, StatutDensite::E, Some(9), Langue::Francais)
+            .unwrap();
+        assert!(sans_papier
+            .iter()
+            .all(|f| f.valeurs.is_none() && f.raison == Some("densite.inconnue.papier")));
     }
 
     #[test]
