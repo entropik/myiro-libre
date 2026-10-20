@@ -3,7 +3,9 @@
 //! - spectre de réflexion (380 à 730 nm par 10 nm) vers XYZ puis Lab, pour
 //!   l'illuminant D50 et l'observateur 2° ;
 //! - Lab vers LCH ;
-//! - écarts ΔE00 (CIEDE2000), ΔC et ΔH (CIELAB).
+//! - écarts ΔE00 (CIEDE2000), ΔC et ΔH (CIELAB) ;
+//! - verdict d'un écart au regard d'un seuil (conforme, proche de la limite,
+//!   hors tolérance).
 //!
 //! Une valeur impossible à calculer est **inconnue** (voir `GLOSSARY.md`) :
 //! les fonctions rendent alors `Err(Inconnu)`, jamais zéro.
@@ -196,6 +198,55 @@ pub fn delta_h(lab1: Lab, lab2: Lab) -> Result<f64, Inconnu> {
     fini(2.0 * (c1 * c2).sqrt() * (dh / 2.0).to_radians().sin())
 }
 
+// ---- Verdict d'un écart ----
+
+/// Part du seuil à partir de laquelle un écart est dit proche de la limite.
+/// Choix du projet (ADR 0004, complément du 9 octobre 2026), pas d'une norme.
+pub const PART_PROCHE_DE_LA_LIMITE: f64 = 0.8;
+
+/// Écart ΔE00 accepté, choisi par l'utilisateur : un nombre fini strictement
+/// positif. Il n'existe pas de seuil « vide » : l'absence de seuil se dit
+/// `Option::None` chez l'appelant, jamais par une valeur sentinelle.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Seuil(f64);
+
+/// Verdict d'un écart au regard d'un seuil.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verdict {
+    /// Écart sous [`PART_PROCHE_DE_LA_LIMITE`] du seuil.
+    Conforme,
+    /// Écart entre cette part du seuil et le seuil, inclus.
+    ProcheDeLaLimite,
+    /// Écart au-delà du seuil.
+    HorsTolerance,
+}
+
+impl Seuil {
+    /// Seuil, si `valeur` est un nombre fini strictement positif.
+    pub fn new(valeur: f64) -> Option<Seuil> {
+        (valeur.is_finite() && valeur > 0.0).then_some(Seuil(valeur))
+    }
+
+    pub fn valeur(self) -> f64 {
+        self.0
+    }
+
+    /// Verdict de l'écart `ecart` : un écart égal au seuil reste dans la
+    /// tolérance. Un écart non fini est inconnu.
+    pub fn verdict(self, ecart: f64) -> Result<Verdict, Inconnu> {
+        if !ecart.is_finite() {
+            return Err(Inconnu::ValeurNonFinie);
+        }
+        Ok(if ecart > self.0 {
+            Verdict::HorsTolerance
+        } else if ecart >= PART_PROCHE_DE_LA_LIMITE * self.0 {
+            Verdict::ProcheDeLaLimite
+        } else {
+            Verdict::Conforme
+        })
+    }
+}
+
 /// Facteur de réflexion de la longueur d'onde de rang `i` des tables
 /// (380 à 780 nm). Au-delà de 730 nm, le spectre mesuré s'arrête : on
 /// prolonge sa dernière valeur, comme le recommande l'ASTM E308.
@@ -275,4 +326,114 @@ pub fn xyz_vers_lab(xyz: Xyz, blanc: Xyz) -> Result<Lab, Inconnu> {
 /// Spectre de réflexion vers Lab, D50 et 2°.
 pub fn spectre_vers_lab(spectre: &[f64]) -> Result<Lab, Inconnu> {
     xyz_vers_lab(spectre_vers_xyz(spectre)?, blanc_d50())
+}
+
+// ---- Couleur à l'écran (sRGB) ----
+
+/// Couleur sRGB 8 bits, pour montrer une mesure à l'écran. `ramenee` dit
+/// qu'elle était hors du gamut sRGB et a été ramenée dedans : l'écran n'en
+/// montre qu'une approximation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Srgb {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub ramenee: bool,
+}
+
+impl Srgb {
+    /// Écriture `#rrggbb`, pour une page web.
+    pub fn hexadecimal(&self) -> String {
+        format!("#{:02x}{:02x}{:02x}", self.r, self.g, self.b)
+    }
+}
+
+/// Blanc D50 pour lequel la matrice de Bradford ci-dessous est établie
+/// (Lindbloom, « Chromatic Adaptation »), Y = 100.
+const BLANC_D50_BRADFORD: Xyz = Xyz {
+    x: 96.422,
+    y: 100.0,
+    z: 82.521,
+};
+
+/// Adaptation chromatique de Bradford, D50 vers D65 (Lindbloom).
+const BRADFORD_D50_D65: [[f64; 3]; 3] = [
+    [0.955_576_6, -0.023_039_3, 0.063_163_6],
+    [-0.028_289_5, 1.009_941_6, 0.021_007_7],
+    [0.012_298_2, -0.020_483_0, 1.329_909_8],
+];
+
+/// XYZ (D65, Y = 1) vers sRGB linéaire (IEC 61966-2-1, matrice de Lindbloom).
+const XYZ_D65_VERS_SRGB: [[f64; 3]; 3] = [
+    [3.240_454_2, -1.537_138_5, -0.498_531_4],
+    [-0.969_266_0, 1.876_010_8, 0.041_556_0],
+    [0.055_643_4, -0.204_025_9, 1.057_225_2],
+];
+
+fn produit(m: &[[f64; 3]; 3], v: [f64; 3]) -> [f64; 3] {
+    m.map(|ligne| ligne[0] * v[0] + ligne[1] * v[1] + ligne[2] * v[2])
+}
+
+/// Courbe de transfert sRGB (IEC 61966-2-1), prolongée symétriquement sous 0.
+fn encoder_srgb(lineaire: f64) -> f64 {
+    let v = lineaire.abs();
+    let e = if v <= 0.003_130_8 {
+        12.92 * v
+    } else {
+        1.055 * v.powf(1.0 / 2.4) - 0.055
+    };
+    e.copysign(lineaire)
+}
+
+/// XYZ relatif au blanc D50 (Y = 100) vers sRGB 8 bits : adaptation de
+/// Bradford D50 → D65, matrice sRGB, courbe de transfert. Une composante
+/// hors de [0, 1] est ramenée à la borne, canal par canal ; la couleur est
+/// alors dite ramenée, sauf si l'écart tient dans un demi-pas de 8 bits.
+pub fn xyz_d50_vers_srgb(xyz: Xyz) -> Result<Srgb, Inconnu> {
+    if [xyz.x, xyz.y, xyz.z].iter().any(|v| !v.is_finite()) {
+        return Err(Inconnu::ValeurNonFinie);
+    }
+    let d65 = produit(
+        &BRADFORD_D50_D65,
+        [xyz.x / 100.0, xyz.y / 100.0, xyz.z / 100.0],
+    );
+    let lineaire = produit(&XYZ_D65_VERS_SRGB, d65);
+    if lineaire.iter().any(|v| !v.is_finite()) {
+        return Err(Inconnu::ResultatNonFini);
+    }
+    let encode = lineaire.map(encoder_srgb);
+    const DEMI_PAS: f64 = 0.5 / 255.0;
+    let ramenee = encode
+        .iter()
+        .any(|&e| !(-DEMI_PAS..=1.0 + DEMI_PAS).contains(&e));
+    let octet = |e: f64| (e.clamp(0.0, 1.0) * 255.0).round() as u8;
+    Ok(Srgb {
+        r: octet(encode[0]),
+        g: octet(encode[1]),
+        b: octet(encode[2]),
+        ramenee,
+    })
+}
+
+/// Lab D50 vers sRGB 8 bits, pour l'écran. Le Lab est rapporté au blanc D50
+/// de l'adaptation de Bradford : un blanc parfait devient le blanc de
+/// l'écran. Voir [`xyz_d50_vers_srgb`] pour les couleurs hors gamut.
+pub fn lab_vers_srgb(lab: Lab) -> Result<Srgb, Inconnu> {
+    verifier_lab(&lab)?;
+    const EPSILON: f64 = 6.0 / 29.0;
+    let inverse = |t: f64| {
+        if t > EPSILON {
+            t * t * t
+        } else {
+            3.0 * EPSILON * EPSILON * (t - 4.0 / 29.0)
+        }
+    };
+    let fy = (lab.l + 16.0) / 116.0;
+    let (fx, fz) = (fy + lab.a / 500.0, fy - lab.b / 200.0);
+    let blanc = BLANC_D50_BRADFORD;
+    xyz_d50_vers_srgb(Xyz {
+        x: blanc.x * inverse(fx),
+        y: blanc.y * inverse(fy),
+        z: blanc.z * inverse(fz),
+    })
 }

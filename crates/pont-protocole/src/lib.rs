@@ -30,8 +30,13 @@ pub enum Requete {
     },
     /// Étalonnage sur le blanc : l'instrument est posé sur son capuchon.
     Etalonner {},
-    /// L'instrument attend l'appui sur son bouton, posé sur une plage.
-    MesurerPonctuelle {},
+    /// Mesure d'une plage, l'instrument posé dessus. En `manuel` (défaut, et
+    /// seule forme écrite avant le ticket #51), l'instrument attend l'appui
+    /// sur son bouton ; en `automatique`, le pont déclenche lui-même la mesure.
+    MesurerPonctuelle {
+        #[serde(default, skip_serializing_if = "Declenchement::est_manuel")]
+        declenchement: Declenchement,
+    },
     /// L'instrument attend un passage le long d'une rangée ; avec
     /// `plages_attendues`, une lecture qui n'en compte pas autant est refusée.
     MesurerBande {
@@ -42,6 +47,42 @@ pub enum Requete {
     /// et termine le pont. Si la déconnexion échoue, le pont répond par une
     /// erreur et reste à l'écoute : seul un nouveau `fermer` touche la DLL.
     Fermer {},
+    /// Interrompt la mesure qui précède, si elle attend encore l'appui ou le
+    /// déclenchement (ticket #26). Lue par le pont pendant la mesure, sans
+    /// attendre sa fin. Les réponses restent dans l'ordre des requêtes : la
+    /// mesure reçoit d'abord son résultat unique (`mesure`, si elle était déjà
+    /// acquise, ou l'erreur `mesure_annulee`), puis `annuler` reçoit
+    /// `annulation`.
+    Annuler {},
+}
+
+/// Ce qu'une demande `annuler` a produit sur la requête qui la précède.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EffetAnnulation {
+    /// La mesure a été interrompue : sa réponse est l'erreur `mesure_annulee`.
+    Appliquee,
+    /// Rien à interrompre : la requête précédente s'était déjà terminée, ou
+    /// sa mesure était déjà partie. Son résultat (mesure comprise) vaut.
+    SansEffet,
+}
+
+/// Qui déclenche une mesure ponctuelle armée (fiche
+/// `docs/abi/FDX_StartMeasurement.md`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Declenchement {
+    /// L'opérateur appuie sur le bouton de l'instrument.
+    #[default]
+    Manuel,
+    /// Le pont déclenche la mesure par `FDX_StartMeasurement`, sans le bouton.
+    Automatique,
+}
+
+impl Declenchement {
+    pub fn est_manuel(&self) -> bool {
+        *self == Declenchement::Manuel
+    }
 }
 
 /// Lit une requête ; rejette les commandes inconnues, les champs en trop et
@@ -104,6 +145,10 @@ pub enum Reponse {
     },
     Erreur {
         erreur: ErreurPont,
+    },
+    /// Réponse à `annuler`, écrite après celle de la mesure visée.
+    Annulation {
+        effet: EffetAnnulation,
     },
     /// La ligne reçue n'est pas une requête valable ; rien n'a été fait.
     RequeteInvalide {
@@ -295,6 +340,16 @@ pub enum ErreurPont {
     SessionInexploitable {},
     /// L'instrument a signalé l'échec de la mesure (événement 4).
     MesureEchouee { erreur: i32 },
+    /// Mesure automatique : la DLL ou l'instrument a refusé de déclencher la
+    /// mesure armée (code brut de `FDX_StartMeasurement` : -9986 hors attente
+    /// de mesure, -9793 à -9789 refus de l'instrument, supposé). La mesure
+    /// reste possible en manuel, au bouton.
+    DeclenchementRefuse { code: i32 },
+    /// La mesure a été annulée avant de partir (ticket #26) : rien n'a été lu.
+    /// `remise_au_repos` est le résultat du désarmement qui a suivi, selon la
+    /// politique unique ; un repos non prouvé bloque la mesure suivante comme
+    /// après toute autre mesure.
+    MesureAnnulee { remise_au_repos: RemiseAuRepos },
     /// La DLL a rendu une réponse de forme imprévue (nombre ou taille de résultats).
     ReponseInattendue { detail: String },
     /// L'instrument n'a pas répondu dans le délai prévu.

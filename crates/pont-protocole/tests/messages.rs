@@ -1,6 +1,6 @@
 //! Le dialogue application ↔ pont : une ligne JSON par message, rien de deviné.
 
-use pont_protocole::{lire_requete, Requete};
+use pont_protocole::{lire_requete, Declenchement, Requete};
 
 #[test]
 fn une_requete_connue_est_lue() {
@@ -56,7 +56,9 @@ fn les_requetes_de_mesure_sont_lues() {
     );
     assert_eq!(
         lire_requete(r#"{"cmd":"mesurer_ponctuelle"}"#),
-        Ok(Requete::MesurerPonctuelle {})
+        Ok(Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Manuel
+        })
     );
     assert_eq!(
         lire_requete(r#"{"cmd":"mesurer_bande","plages_attendues":12}"#),
@@ -264,4 +266,89 @@ fn les_lignes_du_myiro1_restent_lues_et_ecrites_comme_avant() {
         serde_json::to_string(&Requete::Connecter { instrument: 0 }).unwrap(),
         r#"{"cmd":"connecter","instrument":0}"#
     );
+}
+
+/// Ticket #51 : la mesure ponctuelle dit qui la déclenche. Sans le champ, c'est
+/// le bouton de l'instrument, comme avant : la ligne manuelle ne change pas.
+#[test]
+fn la_mesure_ponctuelle_porte_son_declenchement() {
+    assert_eq!(
+        lire_requete(r#"{"cmd":"mesurer_ponctuelle","declenchement":"automatique"}"#),
+        Ok(Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Automatique
+        })
+    );
+    assert_eq!(
+        lire_requete(r#"{"cmd":"mesurer_ponctuelle","declenchement":"manuel"}"#),
+        Ok(Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Manuel
+        })
+    );
+    assert!(lire_requete(r#"{"cmd":"mesurer_ponctuelle","declenchement":"bouton"}"#).is_err());
+    assert_eq!(
+        serde_json::to_string(&Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Manuel
+        })
+        .unwrap(),
+        r#"{"cmd":"mesurer_ponctuelle"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&Requete::MesurerPonctuelle {
+            declenchement: Declenchement::Automatique
+        })
+        .unwrap(),
+        r#"{"cmd":"mesurer_ponctuelle","declenchement":"automatique"}"#
+    );
+}
+
+#[test]
+fn un_declenchement_refuse_porte_le_code_de_la_dll() {
+    use pont_protocole::{ecrire_reponse, lire_reponse, ErreurPont, Reponse};
+    let reponse = Reponse::Erreur {
+        erreur: ErreurPont::DeclenchementRefuse { code: -9986 },
+    };
+    let ligne = r#"{"rep":"erreur","erreur":{"type":"declenchement_refuse","code":-9986}}"#;
+    assert_eq!(ecrire_reponse(&reponse), ligne);
+    assert_eq!(lire_reponse(ligne), Ok(reponse));
+}
+
+/// Ticket #26 : `annuler` interrompt la mesure en attente qui la précède.
+/// Chaque requête reçoit une seule réponse, dans l'ordre : celle de la mesure
+/// (`mesure` si elle était déjà acquise, sinon `mesure_annulee` avec la remise
+/// au repos vérifiée), puis celle de `annuler`, qui dit si elle a servi.
+#[test]
+fn l_annulation_s_ecrit_et_se_relit_en_clair() {
+    use pont_protocole::{
+        ecrire_reponse, lire_reponse, EffetAnnulation, ErreurPont, RemiseAuRepos, Reponse,
+    };
+    assert_eq!(
+        lire_requete(r#"{"cmd":"annuler"}"#),
+        Ok(Requete::Annuler {})
+    );
+    assert!(lire_requete(r#"{"cmd":"annuler","mesure":1}"#).is_err());
+
+    let annulee = Reponse::Erreur {
+        erreur: ErreurPont::MesureAnnulee {
+            remise_au_repos: RemiseAuRepos::AuRepos {},
+        },
+    };
+    let texte = r#"{"rep":"erreur","erreur":{"type":"mesure_annulee","remise_au_repos":{"etat":"au_repos"}}}"#;
+    assert_eq!(ecrire_reponse(&annulee), texte);
+    assert_eq!(lire_reponse(texte), Ok(annulee));
+
+    for (effet, texte) in [
+        (
+            EffetAnnulation::Appliquee,
+            r#"{"rep":"annulation","effet":"appliquee"}"#,
+        ),
+        (
+            EffetAnnulation::SansEffet,
+            r#"{"rep":"annulation","effet":"sans_effet"}"#,
+        ),
+    ] {
+        let reponse = Reponse::Annulation { effet };
+        assert_eq!(ecrire_reponse(&reponse), texte);
+        assert_eq!(lire_reponse(texte), Ok(reponse));
+    }
+    assert!(lire_reponse(r#"{"rep":"annulation","effet":"peut_etre"}"#).is_err());
 }
