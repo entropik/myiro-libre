@@ -8,8 +8,8 @@ use rusqlite::{params, OptionalExtension};
 use serde::Serialize;
 
 use crate::{
-    replier, Bibliotheque, ConditionImpression, ErreurBibliotheque, IdCondition, Resultat,
-    ResumeProfil,
+    profil_ancien, replier, Bibliotheque, ConditionImpression, ErreurBibliotheque, IdCondition,
+    Resultat, ResumeProfil,
 };
 
 /// Numéro d'une imprimante dans la bibliothèque.
@@ -325,9 +325,13 @@ impl Bibliotheque {
     /// Profil actif d'une condition rangée et s'il a plus d'un an.
     fn profil_du_reglage(
         &self,
-        _condition: IdCondition,
-        _maintenant: SystemTime,
+        condition: IdCondition,
+        maintenant: SystemTime,
     ) -> Resultat<(Option<ResumeProfil>, bool)> {
-        Ok((None, false))
+        let profil = self.profil_actif(condition)?;
+        let ancien = profil
+            .as_ref()
+            .is_some_and(|p| profil_ancien(&p.horodatage, maintenant));
+        Ok((profil, ancien))
     }
 }
