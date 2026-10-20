@@ -184,8 +184,24 @@ _Éviter_ : hue, nuance
 ### Impression
 
 **Condition d'impression** :
-Combinaison caractérisée d'une machine, d'un papier, d'encres et de réglages ; elle porte les tirages, les profils et les références de contrôle.
+Combinaison caractérisée d'une machine, d'un papier, d'encres et de réglages ; elle porte les tirages, les profils et les références de contrôle. Dans la bibliothèque, c'est la feuille de l'arbre imprimante → papier → résolution d'impression ; une condition créée avant ce rangement, sans papier, est dite « non classée ».
 _Éviter_ : setup, configuration, preset
+
+**Imprimante** :
+Une machine du parc de l'atelier, premier niveau de la bibliothèque ; chaque imprimante a ses propres papiers.
+_Éviter_ : périphérique, device, traceur
+
+**Papier** :
+Un support utilisé sur une imprimante donnée ; le même papier sur deux imprimantes fait deux papiers, car il s'imprime différemment.
+_Éviter_ : média, media, substrat
+
+**Résolution d'impression** :
+Réglage de qualité du pilote pour un papier (par exemple « 1200 ppp ») ; chaque résolution d'un papier est une condition d'impression et peut avoir son propre profil.
+_Éviter_ : DPI, qualité, mode
+
+**Profil actif** :
+Le profil ICC en service pour une condition d'impression : un seul à la fois. Un nouveau profil le remplace, et l'ancien reste dans l'historique avec son fichier intact. Un profil actif de plus d'un an est signalé comme ancien.
+_Éviter_ : profil courant, profil par défaut
 
 **Linéarisation** :
 Courbes par canal ramenant la réponse de chaque encre à une progression visuellement régulière, avant le profilage.
