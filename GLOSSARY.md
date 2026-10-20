@@ -27,7 +27,7 @@ Mesure d'une seule plage ou couleur, hors mire.
 _Éviter_ : spot, mesure spot
 
 **Couleur de référence** :
-Couleur nommée, saisie ou mesurée par l'utilisateur, à laquelle on compare une mesure ponctuelle.
+Couleur nommée, saisie ou mesurée par l'utilisateur, à laquelle on compare une mesure ponctuelle. Dans Mesurer, une mesure rangée de la séance est désignée couleur de référence ; elle est conservée dans la bibliothèque avec son écart accepté.
 _Éviter_ : ton direct, spot color, nuancier
 
 **Feuille** :
@@ -50,7 +50,7 @@ Pièce qui se fixe sous le MYIRO-1 et contient son blanc de référence, une tui
 _Éviter_ : socle, support, tuile (la tuile n'en est qu'une partie)
 
 **Geste** :
-Action que seul l'opérateur peut faire, demandée par le module `instrument` à travers l'écran : poser le MYIRO-1 sur son capuchon (plus tard, passer la bande). L'opérateur le fait ou y renonce ; s'il renonce, rien n'est envoyé à l'instrument.
+Action que seul l'opérateur peut faire, demandée par le module `instrument` à travers l'écran : poser le MYIRO-1 sur son capuchon, le poser sur la couleur à mesurer (plus tard, passer la bande). L'opérateur le fait ou y renonce ; s'il renonce, rien n'est envoyé à l'instrument.
 _Éviter_ : action manuelle, interaction
 
 **Condition de mesure** :
@@ -79,6 +79,14 @@ _Éviter_ : DLL fournies, DLL livrées
 Ce que la barre du haut dit de l'instrument, en un mot : non détecté, détecté (vu par la détection mais pas connecté, comme le FD-9 tant que son pont s'arrête à ce palier), connecté, étalonnage requis ou étalonné. Il est établi par le module `instrument`, jamais par un écran.
 _Éviter_ : statut, mode
 
+**Instrument actif** :
+L'instrument du poste dont le pont est ouvert, montré dans la barre ; un seul à la fois. Le choisir dans la liste des instruments du poste ferme d'abord le pont de l'autre. Le dernier choix est retenu d'un lancement à l'autre.
+_Éviter_ : instrument sélectionné, instrument par défaut, appareil courant
+
+**Mesure automatique** :
+Mesure ponctuelle du MYIRO-1 que l'application fait partir elle-même : l'opérateur pose l'instrument sur la couleur puis clique sur « Mesurer », sans appuyer sur son bouton. Le pont arme l'instrument puis le déclenche par `FDX_StartMeasurement`. Que le MYIRO-1 accepte ce déclenchement est supposé jusqu'à l'essai réel. Son contraire est la **mesure manuelle**, qui part à l'appui sur le bouton. Choix « Mesure : automatique / manuelle » de la feuille Mesurer, automatique par défaut. Le FD-9 ne mesure pas encore.
+_Éviter_ : mode déclenché, trigger, mesure logicielle (à l'écran)
+
 **Plafond** :
 Dernier palier qu'un pont a le droit d'atteindre, fixé à son lancement ; toute demande au-delà est refusée sans toucher à l'instrument.
 _Éviter_ : limite, niveau maximal
@@ -99,6 +107,10 @@ _Éviter_ : autorité, authority, verrou
 Paramètre de connexion propre au FD-9 : son adresse IP (par exemple 192.0.2.40) ou son nom sur le réseau, 23 caractères au plus. Saisie, elle dispense de la détection.
 _Éviter_ : IP (à l'écran), hôte, port
 
+**Autorisation du pare-feu** :
+Règle du pare-feu de Windows que myiro-libre ajoute pour laisser passer la réponse du FD-9 à la détection : entrante, UDP, port local 49152, réseau local, pour le seul programme pont du FD-9. Nom fixe « myiro-libre - FD-9 - detection (UDP 49152) ». Demandée une fois, par la fenêtre de contrôle de compte de Windows, à la première détection qui ne trouve rien.
+_Éviter_ : ouvrir les ports, exception, désactiver le pare-feu
+
 **Armement** :
 Mise en attente de l'instrument pour une mesure ponctuelle ou une bande : il attend l'appui sur son bouton. Ne règle rien de permanent dans l'instrument.
 _Éviter_ : réglage, condition (au sens de `SetMeasureCondition`)
@@ -110,6 +122,14 @@ _Éviter_ : nettoyage réussi, arrêt (au sens du résultat)
 **Fermeture** :
 Fin volontaire de la session avec l'instrument : désarmement, puis déconnexion. Elle est confirmée seulement si les deux sont faits et le repos prouvé ; sinon elle est incertaine (déconnecté, repos supposé ou non prouvé) ou en échec (déconnexion refusée, à redemander).
 _Éviter_ : arrêt, sortie, déconnexion (qui n'en est qu'une étape)
+
+**Annulation** :
+Demande de l'opérateur d'interrompre la mesure en cours tant qu'elle attend (le bouton, ou en automatique le déclenchement). Elle ne vise que cette mesure, jamais la suivante. Le pont désarme l'instrument et rapporte la remise au repos ; une mesure déjà partie ou terminée est gardée. L'issue d'une mesure est unique : acquise, annulée, abandonnée (rien envoyé), refusée ou échouée.
+_Éviter_ : arrêt, abandon (pour une mesure déjà envoyée), interruption forcée
+
+**Interruption forcée** :
+Arrêt du programme pont par l'application, quand il ne répond plus dans le délai. L'état de l'instrument devient incertain et une récupération est demandée (débrancher, rebrancher, réessayer) : un pont arrêté ne prouve jamais que l'instrument est au repos.
+_Éviter_ : annulation, fermeture
 
 **Données brutes** :
 Valeurs rendues par l'instrument avant tout calcul de spectre (152 par plage pour le MYIRO-1), conservées avec chaque mesure pour valider le pilote libre (ADR 0006).
@@ -131,6 +151,10 @@ _Éviter_ : métadonnées, contexte
 Forme écrite d'une mesure, identique dans le protocole et dans la bibliothèque, désignée par un nom versionné (`myiro-libre/mesure/1`). Une version non prise en charge est refusée en clair. Le **format initial** est celui du pont 0.1.0, sans numéro : il se relit sans réécrire les archives, ses faits non démontrables restant inconnus. Description : `docs/formats/mesure.md`.
 _Éviter_ : schéma, export (réservé à CGATS)
 
+**Mesure importée** :
+Mesure lue dans un fichier CGATS.17 (écrit par myiro-libre ou par un autre logiciel), et non produite par un pont : ce qu'elle dit vient du fichier, pas d'une provenance attestée. Elle est rangée dans une condition d'impression, marquée « Importée » avec le nom de son fichier. Ce que le fichier ne donne pas, spectre compris, reste inconnu. Description : `docs/formats/cgats.md`.
+_Éviter_ : mesure externe, mesure chargée
+
 **Conditions demandées / observées** :
 Les conditions de calcul que le pont a demandées à la DLL, et celles relues sur l'instrument par un appel vérifié. Les deux sont conservées séparément ; tant que rien n'est relu, les conditions observées sont inconnues.
 _Éviter_ : conditions réelles, paramètres
@@ -145,6 +169,14 @@ _Éviter_ : null, vide, zéro, par défaut
 Différence chiffrée entre deux couleurs Lab. ΔE00 (CIEDE2000) par défaut ; ΔC (écart de chroma) et ΔH (écart de teinte) sont des critères distincts, signés, qu'on ne confond pas avec ΔE00. On dit toujours quelle formule est employée.
 _Éviter_ : delta E sans précision, différence de couleur
 
+**Écart accepté** :
+Écart ΔE00 au-delà duquel une mesure est hors tolérance par rapport à une couleur de référence ; choisi par l'utilisateur et conservé avec la référence. Tant qu'il n'est pas fixé, il n'y a pas de verdict (« seuil non fixé ») et aucune valeur par défaut ne le remplace.
+_Éviter_ : tolérance par défaut, seuil 0
+
+**Verdict d'écart** :
+Jugement d'un écart au regard de l'écart accepté, à trois niveaux : conforme (sous 80 % de l'écart accepté), proche de la limite (de 80 % à l'écart accepté inclus), hors tolérance (au-delà). Les 80 % sont un choix du projet, pas une valeur de norme. Entre deux mesures de conditions de mesure différentes, il n'y a ni écart ni verdict. Il porte sur l'écart tel qu'il est écrit, à deux décimales. Toujours un mot et un carré, jamais la couleur seule ; le rouge est réservé au hors tolérance.
+_Éviter_ : OK/KO, bon/mauvais, pass/fail
+
 **Teinte** :
 Angle de la couleur dans le plan a*b*, en degrés (0 à 360). Un gris parfait (chroma nulle) n'a pas de teinte : elle est inconnue, pas nulle.
 _Éviter_ : hue, nuance
@@ -152,8 +184,24 @@ _Éviter_ : hue, nuance
 ### Impression
 
 **Condition d'impression** :
-Combinaison caractérisée d'une machine, d'un papier, d'encres et de réglages ; elle porte les tirages, les profils et les références de contrôle.
+Combinaison caractérisée d'une machine, d'un papier, d'encres et de réglages ; elle porte les tirages, les profils et les références de contrôle. Dans la bibliothèque, c'est la feuille de l'arbre imprimante → papier → résolution d'impression ; une condition créée avant ce rangement, sans papier, est dite « non classée ».
 _Éviter_ : setup, configuration, preset
+
+**Imprimante** :
+Une machine du parc de l'atelier, premier niveau de la bibliothèque ; chaque imprimante a ses propres papiers.
+_Éviter_ : périphérique, device, traceur
+
+**Papier** :
+Un support utilisé sur une imprimante donnée ; le même papier sur deux imprimantes fait deux papiers, car il s'imprime différemment.
+_Éviter_ : média, media, substrat
+
+**Résolution d'impression** :
+Réglage de qualité du pilote pour un papier (par exemple « 1200 ppp ») ; chaque résolution d'un papier est une condition d'impression et peut avoir son propre profil.
+_Éviter_ : DPI, qualité, mode
+
+**Profil actif** :
+Le profil ICC en service pour une condition d'impression : un seul à la fois. Un nouveau profil le remplace, et l'ancien reste dans l'historique avec son fichier intact. Un profil actif de plus d'un an est signalé comme ancien.
+_Éviter_ : profil courant, profil par défaut
 
 **Linéarisation** :
 Courbes par canal ramenant la réponse de chaque encre à une progression visuellement régulière, avant le profilage.
@@ -190,6 +238,10 @@ _Éviter_ : onglet, module, mode
 **Bibliothèque** :
 Base unique sur le poste, pour un utilisateur, où sont rangées les conditions d'impression et leurs mesures, chacune rattachée à l'instrument qui l'a produite (ADR 0001). Elle conserve les mesures telles que le pont les a données, sans rien recalculer. La colonne de gauche de l'application en montre l'arborescence.
 _Éviter_ : base de données (au sens technique), dossier de mesures, catalogue
+
+**Sauvegarde** :
+Copie complète de la bibliothèque en un seul fichier, à garder en lieu sûr ou à restaurer sur un autre poste. La restaurer remplace toute la bibliothèque, après accord de l'opérateur.
+_Éviter_ : backup, archive (réservé à `Archivage/`), export (réservé à CGATS)
 
 **État vide** :
 Ce qu'affiche une tâche qui n'a encore rien à montrer : une phrase et une seule action (« Aucune mesure. Mesurer une couleur »).

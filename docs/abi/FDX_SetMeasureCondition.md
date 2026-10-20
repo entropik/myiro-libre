@@ -47,6 +47,10 @@ Le 7 octobre 2026 (MYIRO-1 en USB, DLL 1.0.1.0 x64) : l'armement rend 0, puis l'
 
 **Bande** (type 1, option 0), même jour : même enchaînement d'événements ; le bouton est tenu enfoncé pendant le glissement le long de la règle. Une rangée sur trois a donné une plage de trop (le blanc du départ). **Nombre de plages attendu, vérifié le même jour** : avec `option` = 12, trois passages sur la même rangée de 12 plages. Les deux passages partis de 2 à 3 cm avant la première plage sont **refusés** : événement 4, erreur **-9897** (« nombre de plages ≠ nombre attendu »), voyant rouge. Le passage parti à 1 cm est accepté avec exactement 12 plages, bien placées. `option` est donc **confirmé** comme nombre de plages attendu, et un départ trop éloigné explique la plage de trop. L'application doit transmettre ce nombre quand la mire est connue, et conseiller un départ à 1 cm environ.
 
+### Complément du 9 octobre 2026 : commande envoyée à l'armement
+
+La phrase « commande `0x02` puis démarrage (`0x11`) » plus haut est inexacte pour la DLL 1.0.1 x86. L'armement envoie seulement la commande `0x02` (conditions de mesure, `CInstrument::SetMeasureCondition` à `0x10025e60`). La commande `0x11` n'est fabriquée qu'à deux endroits de la DLL : avec le paramètre 1 (démarrer) par `FDX_StartMeasurement`, et avec le paramètre 2 (arrêter) par `FDX_StopMeasurement`. C'est donc le bouton de l'instrument, ou `FDX_StartMeasurement`, qui fait partir la mesure (fiche [FDX_StartMeasurement](FDX_StartMeasurement.md)). La phrase d'origine reste pour l'historique.
+
 ## Reste à vérifier
 
 - Le refus -9983 si l'on arme sans étalonnage.

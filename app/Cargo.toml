@@ -22,6 +22,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 bibliotheque = { path = "../crates/bibliotheque" }
+cgats = { path = "../crates/cgats" }
 colorimetrie = { path = "../crates/colorimetrie" }
 pont-protocole = { path = "../crates/pont-protocole" }
 serde = { version = "1", features = ["derive"] }

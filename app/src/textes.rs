@@ -75,6 +75,85 @@ const FRANCAIS: Catalogue = &[
         "bibliotheque.erreur.ouverture",
         "La bibliothèque n’a pas pu s’ouvrir.",
     ),
+    (
+        "bibliotheque.erreur.sauvegarde_invalide",
+        "Ce fichier n’est pas une sauvegarde utilisable. La bibliothèque n’a pas changé.",
+    ),
+    (
+        "bibliotheque.erreur.cgats_illisible",
+        "Ce fichier n’a pas pu être lu comme un CGATS, ou il ne dit pas sa condition de mesure. Rien n’a été deviné.",
+    ),
+    (
+        "bibliotheque.erreur.cgats_trop_gros",
+        "Ce fichier est trop gros pour un fichier de mesures (plus de 16\u{202f}Mio). Rien n’a été importé.",
+    ),
+    ("bibliotheque.erreur.export", "Le fichier n’a pas pu être écrit."),
+    ("bibliotheque.erreur.apercu_absent", "Aucun fichier en attente. Choisissez d’abord un fichier à importer."),
+    // Bibliothèque, section Export et sauvegarde
+    ("export.titre", "Export et sauvegarde"),
+    ("export.pourquoi.cgats", "«\u{202f}Exporter pour le profilage…\u{202f}» écrit la mesure choisie dans un fichier que lisent les logiciels de profilage."),
+    ("export.pourquoi.sauvegarde", "«\u{202f}Sauvegarder…\u{202f}» copie toute la bibliothèque dans un seul fichier, à garder en lieu sûr\u{202f}; «\u{202f}Restaurer…\u{202f}» la remet depuis une telle copie, sur ce poste ou sur un autre."),
+    ("export.pourquoi.import", "«\u{202f}Importer un fichier…\u{202f}» lit un fichier de mesures CGATS et le montre avant de le ranger."),
+    ("export.details.titre", "Que font ces boutons\u{202f}?"),
+    (
+        "export.details.cgats",
+        "Format CGATS.17, un tableau par condition de mesure (M0, M1, M2) avec le spectre et les Lab de chaque plage, spectre présenté comme l’attend ArgyllCMS (SPEC_380…, en pourcentage). L’en-tête dit d’où vient la mesure (instrument, date, étalonnage), et ce qui n’est pas connu y est écrit «\u{202f}inconnue\u{202f}».",
+    ),
+    (
+        "export.details.sauvegarde",
+        "Une copie de la base de la bibliothèque (fichier SQLite), avec toutes les mesures complètes.",
+    ),
+    ("export.exporter", "Exporter pour le profilage…"),
+    ("export.sauvegarder", "Sauvegarder…"),
+    ("export.filtre.cgats", "Fichier de mesures"),
+    ("export.filtre.sauvegarde", "Sauvegarde de la bibliothèque"),
+    (
+        "export.raison.mesure",
+        "Choisissez d’abord une mesure dans la colonne de gauche.",
+    ),
+    ("export.fait", "Fichier écrit\u{202f}:"),
+    ("export.importer", "Importer un fichier…"),
+    ("export.restaurer", "Restaurer…"),
+    (
+        "export.restaurer.avertissement",
+        "Toute la bibliothèque actuelle sera remplacée par la sauvegarde choisie. Une copie de secours datée de la bibliothèque actuelle est d’abord faite automatiquement dans son dossier.",
+    ),
+    (
+        "export.restaurer.confirmer",
+        "Choisir la sauvegarde et remplacer",
+    ),
+    ("export.restaurer.annuler", "Annuler"),
+    ("export.restaure", "Bibliothèque restaurée depuis\u{202f}:"),
+    ("import.titre", "Mesure importée"),
+    ("import.apercu", "Aperçu, pas encore rangé"),
+    ("import.destination", "Condition d’impression qui recevra la mesure"),
+    ("import.ranger", "Ranger dans «\u{202f}{}\u{202f}»"),
+    ("import.ranger.attente", "Ranger"),
+    ("import.ranger.raison", "Choisissez d’abord la condition d’impression."),
+    ("import.annuler", "Annuler"),
+    ("import.abandonne", "Aperçu abandonné\u{202f}: rien n’a été rangé."),
+    ("import.aucune_condition", "Aucune condition d’impression. Ajoutez-en une dans la colonne de gauche."),
+    ("import.importee", "Importée"),
+    ("import.origine", "Origine"),
+    ("import.fichier", "Fichier d’origine"),
+    ("import.provenance", "Provenance"),
+    (
+        "import.provenance.myiro",
+        "myiro-libre, provenance complète",
+    ),
+    (
+        "import.provenance.autre",
+        "Autre logiciel, provenance inconnue",
+    ),
+    ("import.date", "Date"),
+    ("import.spectre_et_lab", "spectre et Lab"),
+    ("import.lab_seul", "Lab seulement"),
+    ("import.spectres", "Spectres"),
+    (
+        "import.aucun_spectre",
+        "Aucun spectre dans ce fichier\u{202f}: ce qui exige un spectre reste inconnu.",
+    ),
+    ("import.rangee", "Mesure rangée dans «\u{202f}{}\u{202f}»."),
     ("lecture.ponctuelle", "Couleur"),
     ("lecture.bande", "Bande"),
     ("lecture.feuille", "Feuille"),
@@ -137,6 +216,7 @@ const FRANCAIS: Catalogue = &[
         "Puis cliquez sur «\u{202f}Réessayer\u{202f}».",
     ),
     ("ecran.reessayer", "Réessayer"),
+    ("ecran.autoriser_pare_feu", "Autoriser le FD-9 dans le pare-feu"),
     (
         "ecran.choix.titre.logiciel_absent",
         "Le logiciel du fabricant du MYIRO-1 n’est pas installé sur ce poste.",
@@ -210,11 +290,19 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "probleme.aucun_fd9.cause",
-        "Aucun FD-9 n’a répondu sur le réseau. Le pare-feu de Windows bloque peut-être sa réponse.",
+        "Aucun FD-9 n’a répondu sur le réseau, alors que le pare-feu de Windows laisse passer sa réponse.",
     ),
     (
         "probleme.aucun_fd9.action",
-        "Vérifiez que le FD-9 est allumé et sur le même réseau, et que FD-S2w est fermé, puis réessayez. Si rien ne change, faites autoriser myiro-libre dans le pare-feu (voir le détail).",
+        "Vérifiez que le FD-9 est allumé et sur le même réseau, et que FD-S2w est fermé, puis réessayez.",
+    ),
+    (
+        "probleme.pare_feu_ferme.cause",
+        "Le pare-feu de Windows bloque la réponse du FD-9\u{202f}: myiro-libre n’a pas reçu l’autorisation de l’écouter.",
+    ),
+    (
+        "probleme.pare_feu_ferme.action",
+        "Cliquez sur «\u{202f}Autoriser le FD-9 dans le pare-feu\u{202f}», puis répondez «\u{202f}Oui\u{202f}» à la fenêtre de Windows.",
     ),
     (
         "probleme.connexion_impossible.cause",
@@ -237,6 +325,7 @@ const FRANCAIS: Catalogue = &[
     ("details.nom", "Nom"),
     ("details.renommer", "Renommer"),
     ("details.spectre", "Spectre"),
+    ("details.spectre_sans_condition", "Spectre {} (condition inconnue)"),
     ("compte.mesure", "mesure"),
     ("compte.mesures", "mesures"),
     (
@@ -266,6 +355,108 @@ const FRANCAIS: Catalogue = &[
     (
         "probleme.instrument_perdu.action",
         "Vérifiez le câble, puis cliquez sur «\u{202f}Réessayer\u{202f}» pour le reconnecter.",
+    ),
+    // Choix de l’instrument (ticket #49)
+    ("choix.libelle", "Changer d’instrument"),
+    ("choix.titre", "Instruments du poste"),
+    (
+        "choix.aide",
+        "Un seul instrument sert à la fois. En choisir un autre ferme d’abord celui qui est en service.",
+    ),
+    ("choix.ligne", "{modele} ({liaison}), {etat}"),
+    ("choix.liaison.usb", "USB"),
+    ("choix.liaison.reseau", "réseau"),
+    ("choix.etat.non_detecte", "non trouvé"),
+    ("choix.etat.detecte", "détecté"),
+    ("choix.etat.connecte", "connecté"),
+    ("choix.etat.etalonnage_requis", "étalonnage requis"),
+    ("choix.etat.etalonne", "étalonné"),
+    ("choix.etat.en_attente", "en attente"),
+    ("choix.etat.non_trouve", "non trouvé la dernière fois"),
+    ("choix.en_service", "En service"),
+    ("choix.utiliser", "Utiliser"),
+    ("choix.fermer", "Fermer la liste"),
+    (
+        "choix.annonce.sans_choix",
+        "Aucun instrument n’avait été choisi\u{202f}: le {modele}, trouvé sur ce poste, est en service. Choisissez ici celui que vous voulez utiliser.",
+    ),
+    (
+        "choix.annonce.remplace",
+        "Le {modele}, choisi la dernière fois, n’a pas été trouvé\u{202f}: le {autre} est en service à sa place.",
+    ),
+    ("choix.annonce.ferme", "Le {modele} a été fermé."),
+    (
+        "choix.annonce.ferme_repos_suppose",
+        "Le {modele} a été fermé. Aucune mesure n’était en cours\u{202f}: il devrait être au repos.",
+    ),
+    (
+        "choix.annonce.ferme_incertain",
+        "Le {modele} a été fermé, mais il n’a pas confirmé son retour au repos. S’il clignote ou ne répond plus, débranchez-le puis rebranchez-le.",
+    ),
+    (
+        "choix.annonce.ferme_echec",
+        "Le {modele} n’a pas pu être fermé normalement. Débranchez-le puis rebranchez-le avant de vous en servir de nouveau.",
+    ),
+    (
+        "refus.occupe.recherche",
+        "Recherche de l’instrument en cours\u{202f}: attendez qu’elle se termine.",
+    ),
+    (
+        "refus.occupe.etalonnage",
+        "Un étalonnage est en cours\u{202f}: attendez qu’il se termine.",
+    ),
+    (
+        "refus.occupe.mesure",
+        "Une mesure est en cours\u{202f}: attendez qu’elle se termine.",
+    ),
+    (
+        "refus.occupe.changement",
+        "Changement d’instrument en cours\u{202f}: attendez qu’il se termine.",
+    ),
+    (
+        "refus.absent",
+        "Le logiciel du fabricant de cet instrument n’est pas trouvé sur ce poste.",
+    ),
+    (
+        "choix.annonce.choix_non_retenu",
+        "Le {modele} reste en service, mais ce choix n’a pas pu être gardé pour le prochain lancement.",
+    ),
+    ("choix.compris", "Compris"),
+    (
+        "choix.detail.repos_suppose",
+        "Aucune mesure n’avait été lancée\u{202f}: l’instrument n’avait rien à confirmer.",
+    ),
+    (
+        "choix.detail.repos_non_signale",
+        "L’instrument n’a pas signalé à temps son retour au repos.",
+    ),
+    (
+        "choix.detail.arret_refuse",
+        "L’instrument a refusé de s’arrêter (code {code}).",
+    ),
+    (
+        "choix.detail.liaison_perdue",
+        "La liaison avec l’instrument a été perdue avant qu’il confirme son retour au repos.",
+    ),
+    (
+        "choix.detail.deconnexion_refusee",
+        "L’instrument a refusé la déconnexion (code {code})\u{202f}; la liaison a été coupée quand même.",
+    ),
+    (
+        "choix.detail.fermeture_refusee",
+        "L’instrument a refusé la fermeture\u{202f}; la liaison a été coupée quand même.",
+    ),
+    (
+        "choix.detail.pont_muet",
+        "L’instrument n’a pas répondu à la demande de fermeture\u{202f}; la liaison a été coupée quand même.",
+    ),
+    (
+        "choix.detail.reponse_inattendue",
+        "La réponse à la demande de fermeture n’était pas celle attendue\u{202f}; la liaison a été coupée quand même.",
+    ),
+    (
+        "refus.autre",
+        "Cette demande n’a pas pu aboutir. Réessayez dans un instant.",
     ),
     // Étalonnage guidé
     ("instrument.etalonner", "Étalonner"),
@@ -305,6 +496,206 @@ const FRANCAIS: Catalogue = &[
     ("ecran.etalonnage.schema.instrument", "MYIRO-1"),
     ("ecran.etalonnage.schema.capuchon", "Capuchon"),
     ("ecran.etalonnage.schema.blanc", "Blanc de référence"),
+    // Mesure ponctuelle : feuille Mesurer ({n} est remplacé)
+    ("mesurer.nom_defaut", "Couleur {n}"),
+    ("mesurer.declenchement", "Mesure"),
+    ("mesurer.declenchement.automatique", "Automatique"),
+    ("mesurer.declenchement.manuel", "Manuelle"),
+    (
+        "mesurer.declenchement.non_retenu",
+        "Ce choix vaut pour cette séance\u{202f}: il n’a pas pu être enregistré pour la prochaine fois.",
+    ),
+    (
+        "mesurer.consigne.automatique",
+        "Posez le MYIRO-1 sur la couleur, puis cliquez sur «\u{202f}Mesurer\u{202f}».",
+    ),
+    (
+        "mesurer.consigne.manuel",
+        "Posez le MYIRO-1 bien à plat sur la couleur, cliquez sur «\u{202f}Mesurer\u{202f}», puis appuyez sur le bouton de l’instrument.",
+    ),
+    ("mesurer.action", "Mesurer"),
+    (
+        "mesurer.en_cours.automatique",
+        "Mesure en cours. Gardez le MYIRO-1 immobile sur la couleur.",
+    ),
+    (
+        "mesurer.en_cours.manuel",
+        "Appuyez sur le bouton du MYIRO-1 et gardez-le immobile jusqu’à la fin de la mesure.",
+    ),
+    ("mesurer.liste", "Dernières mesures"),
+    ("mesurer.non_rangee", "Pas rangée"),
+    (
+        "mesurer.raison.aucune_condition",
+        "Disponible quand une condition d’impression existe. Ajoutez-en une à gauche.",
+    ),
+    (
+        "mesurer.raison.repos",
+        "Disponible une fois l’instrument reconnecté.",
+    ),
+    ("mesurer.valeurs", "Valeurs"),
+    (
+        "mesurer.calcul",
+        "Calculées par myiro-libre à partir du spectre, avec ses propres tables\u{202f}: illuminant D50, observateur 2°.",
+    ),
+    ("mesurer.ranger", "Ranger à nouveau"),
+    ("mesurer.couleur", "Couleur à l’écran"),
+    ("mesurer.approchee", "Couleur approchée à l’écran"),
+    (
+        "mesurer.erreur.sans_instrument.cause",
+        "Aucun instrument n’est prêt à mesurer.",
+    ),
+    (
+        "mesurer.erreur.sans_instrument.action",
+        "Branchez le MYIRO-1 et attendez qu’il apparaisse en haut de la fenêtre.",
+    ),
+    (
+        "mesurer.erreur.condition_absente.cause",
+        "Cette condition d’impression n’existe plus dans la bibliothèque. Rien n’a été mesuré.",
+    ),
+    (
+        "mesurer.erreur.condition_absente.action",
+        "Choisissez-en une autre dans la liste, puis mesurez de nouveau.",
+    ),
+    (
+        "mesurer.erreur.bibliotheque_fermee.cause",
+        "La bibliothèque n’a pas pu s’ouvrir. Rien n’a été mesuré.",
+    ),
+    (
+        "mesurer.erreur.bibliotheque_fermee.action",
+        "Fermez puis relancez myiro-libre.",
+    ),
+    ("mesurer.lab", "L*, a*, b*"),
+    ("mesurer.lch", "L*, C*, h°"),
+    ("mesurer.xyz", "X, Y, Z"),
+    // Couleur de référence et écart (ticket #8)
+    ("mesurer.reference.titre", "Couleur de référence"),
+    (
+        "mesurer.reference.aucune_texte",
+        "Aucune couleur de référence. Prenez une mesure comme référence pour voir l’écart des autres à elle.",
+    ),
+    ("mesurer.reference.designer", "Prendre comme référence"),
+    ("mesurer.reference.retirer", "Retirer la référence"),
+    ("mesurer.reference.marque", "Référence"),
+    ("mesurer.reference.actuelle", "Couleur de référence actuelle\u{202f}: «\u{202f}{nom}\u{202f}»."),
+    ("mesurer.conditions.a_confirmer", "Conditions de mesure à confirmer."),
+    ("mesurer.conditions.inconnues", "Conditions de mesure inconnues."),
+    (
+        "mesurer.reference.est",
+        "Cette mesure est la couleur de référence. Les autres mesures affichent leur écart à elle.",
+    ),
+    ("mesurer.reference.seuil", "Écart accepté (ΔE00)"),
+    (
+        "mesurer.reference.seuil_aide",
+        "Laissez vide pour ne pas juger l’écart. Il est conservé avec la couleur de référence.",
+    ),
+    ("mesurer.reference.seuil_non_fixe", "Seuil non fixé"),
+    (
+        "mesurer.reference.seuil_non_fixe_texte",
+        "Seuil non fixé\u{202f}: pas de verdict. Fixez l’écart accepté sur la couleur de référence.",
+    ),
+    (
+        "mesurer.reference.non_rangee",
+        "Cette mesure n’est pas rangée dans la bibliothèque, où la référence est conservée. Cliquez d’abord sur «\u{202f}Ranger à nouveau\u{202f}».",
+    ),
+    (
+        "mesurer.reference.aucune",
+        "Choisissez d’abord une couleur de référence.",
+    ),
+    (
+        "mesurer.reference.seuil_invalide",
+        "L’écart accepté doit être un nombre plus grand que zéro, par exemple 2,5.",
+    ),
+    ("mesurer.ecart.titre", "Écart à la référence"),
+    ("mesurer.ecart.de00", "ΔE00 (CIEDE2000)"),
+    ("mesurer.ecart.dc", "ΔC (saturation)"),
+    ("mesurer.ecart.dh", "ΔH (teinte)"),
+    ("mesurer.ecart.accepte", "Écart accepté"),
+    ("mesurer.ecart.comparaison", "En haut la couleur de référence, en bas cette mesure"),
+    ("mesurer.liste.ecart", "ΔE00 (CIEDE2000)"),
+    ("mesurer.liste.verdict", "Verdict"),
+    ("verdict.conforme", "Conforme"),
+    ("verdict.proche_de_la_limite", "Proche de la limite"),
+    ("verdict.hors_tolerance", "Hors tolérance"),
+    ("verdict.inconnu", "Écart inconnu"),
+    ("verdict.non_comparable", "Conditions différentes"),
+    ("mesurer.verdict.conforme", "L’écart reste dans la limite fixée."),
+    (
+        "mesurer.verdict.proche_de_la_limite",
+        "L’écart reste dans la limite fixée, mais s’en approche.",
+    ),
+    ("mesurer.verdict.hors_tolerance", "L’écart dépasse la limite fixée."),
+    (
+        "mesurer.verdict.inconnu",
+        "L’écart ne peut pas être calculé\u{202f}: les valeurs d’une des deux mesures sont inconnues.",
+    ),
+    (
+        "mesurer.ecart.condition_differente",
+        "Cette mesure et la couleur de référence n’ont pas la même condition de mesure\u{202f}: elles ne se comparent pas, ni écart ni verdict.",
+    ),
+    (
+        "mesurer.ecart.non_confirmee",
+        "La condition de mesure n’est pas confirmée pour les deux mesures\u{202f}: cet écart est à prendre avec prudence.",
+    ),
+    ("mesurer.ecart.calcul_titre", "Comment l’écart est calculé"),
+    (
+        "mesurer.ecart.calcul",
+        "ΔE00\u{202f}: formule CIEDE2000, facteurs k_L = k_C = k_H = 1.\nΔC et ΔH\u{202f}: écarts de chroma et de teinte CIELAB, signés (positifs\u{202f}: mesure plus saturée, teinte tournée dans le sens direct).\nLab D50, observateur 2°, calculés par myiro-libre à partir des spectres de même condition de mesure.\nProche de la limite\u{202f}: à partir de 80\u{202f}% de l’écart accepté, un choix de myiro-libre et non d’une norme. Le verdict porte sur l’écart tel qu’il est écrit, à deux décimales.\nConditions de mesure différentes\u{202f}: ni écart ni verdict.",
+    ),
+    ("cartouche.micrologiciel", "Micrologiciel"),
+    ("cartouche.date", "Date"),
+    (
+        "mesurer.erreur.rangement",
+        "La bibliothèque n’a pas pu ranger cette mesure. Elle reste affichée ici jusqu’à la fermeture de myiro-libre.",
+    ),
+    // Mesure ponctuelle : problèmes
+    (
+        "probleme.mesure_echouee.cause",
+        "La mesure n’a pas réussi. Le MYIRO-1 n’était peut-être pas bien à plat sur la couleur.",
+    ),
+    (
+        "probleme.mesure_echouee.action",
+        "Posez-le bien à plat, cliquez sur «\u{202f}Mesurer\u{202f}», puis appuyez sur son bouton.",
+    ),
+    (
+        "probleme.mesure_delai.cause",
+        "Le bouton du MYIRO-1 n’a pas été appuyé à temps.",
+    ),
+    (
+        "probleme.mesure_delai.action",
+        "Cliquez de nouveau sur «\u{202f}Mesurer\u{202f}», puis appuyez sur le bouton de l’instrument dans les deux minutes.",
+    ),
+    (
+        "probleme.mesure_delai_automatique.cause",
+        "Le MYIRO-1 n’a pas terminé la mesure à temps.",
+    ),
+    (
+        "probleme.mesure_delai_automatique.action",
+        "Vérifiez qu’il est bien posé à plat sur la couleur, puis cliquez de nouveau sur «\u{202f}Mesurer\u{202f}».",
+    ),
+    (
+        "probleme.declenchement_refuse.cause",
+        "Le MYIRO-1 n’a pas accepté de mesurer sans qu’on appuie sur son bouton.",
+    ),
+    (
+        "probleme.declenchement_refuse.action",
+        "Choisissez «\u{202f}Mesure\u{202f}: manuelle\u{202f}», cliquez sur «\u{202f}Mesurer\u{202f}», puis appuyez sur le bouton de l’instrument.",
+    ),
+    (
+        "probleme.etalonnage_a_refaire.cause",
+        "Le MYIRO-1 demande un nouvel étalonnage.",
+    ),
+    (
+        "probleme.etalonnage_a_refaire.action",
+        "Cliquez sur «\u{202f}Étalonner\u{202f}», en haut, puis mesurez de nouveau.",
+    ),
+    (
+        "probleme.repos_incertain.cause",
+        "Le MYIRO-1 n’a pas confirmé la fin de la mesure. La mesure est gardée.",
+    ),
+    (
+        "probleme.repos_incertain.action",
+        "Pour mesurer de nouveau, cliquez sur «\u{202f}Réessayer\u{202f}»\u{202f}: l’instrument sera reconnecté, puis à étalonner.",
+    ),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -345,6 +736,78 @@ const ANGLAIS: Catalogue = &[
         "bibliotheque.erreur.ouverture",
         "The library could not open.",
     ),
+    (
+        "bibliotheque.erreur.sauvegarde_invalide",
+        "This file is not a usable backup. The library has not changed.",
+    ),
+    (
+        "bibliotheque.erreur.cgats_illisible",
+        "This file could not be read as CGATS, or it does not state its measurement condition. Nothing was guessed.",
+    ),
+    (
+        "bibliotheque.erreur.cgats_trop_gros",
+        "This file is too large for a measurement file (over 16 MiB). Nothing was imported.",
+    ),
+    ("bibliotheque.erreur.export", "The file could not be written."),
+    ("bibliotheque.erreur.apercu_absent", "No file waiting. First choose a file to import."),
+    ("export.titre", "Export and backup"),
+    ("export.pourquoi.cgats", "“Export for profiling…” writes the chosen measurement to a file that profiling software reads."),
+    ("export.pourquoi.sauvegarde", "“Back up…” copies the whole library to a single file to keep somewhere safe; “Restore…” brings it back from such a copy, on this computer or another."),
+    ("export.pourquoi.import", "“Import a file…” reads a CGATS measurement file and shows it before storing it."),
+    ("export.details.titre", "What do these buttons do?"),
+    (
+        "export.details.cgats",
+        "CGATS.17 format, one table per measurement condition (M0, M1, M2) with the spectrum and Lab values of each patch, spectrum laid out as ArgyllCMS expects (SPEC_380…, in percent). The header says where the measurement comes from (instrument, date, calibration), and anything unknown is written “inconnue”.",
+    ),
+    (
+        "export.details.sauvegarde",
+        "A copy of the library database (SQLite file), with every measurement in full.",
+    ),
+    ("export.exporter", "Export for profiling…"),
+    ("export.sauvegarder", "Back up…"),
+    ("export.filtre.cgats", "Measurement file"),
+    ("export.filtre.sauvegarde", "Library backup"),
+    (
+        "export.raison.mesure",
+        "First choose a measurement in the left column.",
+    ),
+    ("export.fait", "File written:"),
+    ("export.importer", "Import a file…"),
+    ("export.restaurer", "Restore…"),
+    (
+        "export.restaurer.avertissement",
+        "The whole current library will be replaced by the chosen backup. A dated safety copy of the current library is made automatically in its folder.",
+    ),
+    (
+        "export.restaurer.confirmer",
+        "Choose the backup and replace",
+    ),
+    ("export.restaurer.annuler", "Cancel"),
+    ("export.restaure", "Library restored from:"),
+    ("import.titre", "Imported measurement"),
+    ("import.apercu", "Preview, not stored yet"),
+    ("import.destination", "Printing condition that will receive the measurement"),
+    ("import.ranger", "Store in “{}”"),
+    ("import.ranger.attente", "Store"),
+    ("import.ranger.raison", "First choose the printing condition."),
+    ("import.annuler", "Cancel"),
+    ("import.abandonne", "Preview abandoned: nothing was stored."),
+    ("import.aucune_condition", "No printing condition yet. Add one in the left column."),
+    ("import.importee", "Imported"),
+    ("import.origine", "Origin"),
+    ("import.fichier", "Original file"),
+    ("import.provenance", "Provenance"),
+    ("import.provenance.myiro", "myiro-libre, full provenance"),
+    ("import.provenance.autre", "Other software, provenance unknown"),
+    ("import.date", "Date"),
+    ("import.spectre_et_lab", "spectrum and Lab"),
+    ("import.lab_seul", "Lab only"),
+    ("import.spectres", "Spectra"),
+    (
+        "import.aucun_spectre",
+        "No spectrum in this file: anything that needs a spectrum stays unknown.",
+    ),
+    ("import.rangee", "Measurement stored in “{}”."),
     ("lecture.ponctuelle", "Colour"),
     ("lecture.bande", "Strip"),
     ("lecture.feuille", "Sheet"),
@@ -401,6 +864,7 @@ const ANGLAIS: Catalogue = &[
     ),
     ("ecran.non_detecte.etape3", "Then click “Try again”."),
     ("ecran.reessayer", "Try again"),
+    ("ecran.autoriser_pare_feu", "Allow the FD-9 in the firewall"),
     (
         "ecran.choix.titre.logiciel_absent",
         "The MYIRO-1 manufacturer’s software is not installed on this computer.",
@@ -474,11 +938,19 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "probleme.aucun_fd9.cause",
-        "No FD-9 answered on the network. The Windows firewall may be blocking its reply.",
+        "No FD-9 answered on the network, although the Windows firewall lets its reply through.",
     ),
     (
         "probleme.aucun_fd9.action",
-        "Check that the FD-9 is on and on the same network, and that FD-S2w is closed, then try again. If nothing changes, have myiro-libre allowed in the firewall (see the details).",
+        "Check that the FD-9 is on and on the same network, and that FD-S2w is closed, then try again.",
+    ),
+    (
+        "probleme.pare_feu_ferme.cause",
+        "The Windows firewall blocks the FD-9 reply: myiro-libre was not allowed to listen for it.",
+    ),
+    (
+        "probleme.pare_feu_ferme.action",
+        "Click “Allow the FD-9 in the firewall”, then answer “Yes” in the Windows window.",
     ),
     (
         "probleme.connexion_impossible.cause",
@@ -504,6 +976,7 @@ const ANGLAIS: Catalogue = &[
     ("details.nom", "Name"),
     ("details.renommer", "Rename"),
     ("details.spectre", "Spectrum"),
+    ("details.spectre_sans_condition", "Spectrum {} (unknown condition)"),
     ("compte.mesure", "measurement"),
     ("compte.mesures", "measurements"),
     ("centre.choisir", "Choose a measurement in the library."),
@@ -530,6 +1003,108 @@ const ANGLAIS: Catalogue = &[
     (
         "probleme.instrument_perdu.action",
         "Check the cable, then click “Try again” to reconnect it.",
+    ),
+    // Instrument choice (ticket #49)
+    ("choix.libelle", "Change instrument"),
+    ("choix.titre", "Instruments on this computer"),
+    (
+        "choix.aide",
+        "Only one instrument works at a time. Choosing another first closes the one in use.",
+    ),
+    ("choix.ligne", "{modele} ({liaison}), {etat}"),
+    ("choix.liaison.usb", "USB"),
+    ("choix.liaison.reseau", "network"),
+    ("choix.etat.non_detecte", "not found"),
+    ("choix.etat.detecte", "detected"),
+    ("choix.etat.connecte", "connected"),
+    ("choix.etat.etalonnage_requis", "calibration required"),
+    ("choix.etat.etalonne", "calibrated"),
+    ("choix.etat.en_attente", "on standby"),
+    ("choix.etat.non_trouve", "not found last time"),
+    ("choix.en_service", "In use"),
+    ("choix.utiliser", "Use"),
+    ("choix.fermer", "Close the list"),
+    (
+        "choix.annonce.sans_choix",
+        "No instrument had been chosen: the {modele}, found on this computer, is in use. Choose here the one you want to use.",
+    ),
+    (
+        "choix.annonce.remplace",
+        "The {modele}, chosen last time, was not found: the {autre} is in use instead.",
+    ),
+    ("choix.annonce.ferme", "The {modele} has been closed."),
+    (
+        "choix.annonce.ferme_repos_suppose",
+        "The {modele} has been closed. No measurement was running: it should be at rest.",
+    ),
+    (
+        "choix.annonce.ferme_incertain",
+        "The {modele} has been closed, but it did not confirm it is back at rest. If it blinks or stops responding, unplug it and plug it back in.",
+    ),
+    (
+        "choix.annonce.ferme_echec",
+        "The {modele} could not be closed normally. Unplug it and plug it back in before using it again.",
+    ),
+    (
+        "refus.occupe.recherche",
+        "Looking for the instrument: wait until it is done.",
+    ),
+    (
+        "refus.occupe.etalonnage",
+        "A calibration is running: wait until it is done.",
+    ),
+    (
+        "refus.occupe.mesure",
+        "A measurement is running: wait until it is done.",
+    ),
+    (
+        "refus.occupe.changement",
+        "Changing instrument: wait until it is done.",
+    ),
+    (
+        "refus.absent",
+        "The manufacturer software for this instrument is not found on this computer.",
+    ),
+    (
+        "choix.annonce.choix_non_retenu",
+        "The {modele} stays in use, but this choice could not be kept for the next launch.",
+    ),
+    ("choix.compris", "Got it"),
+    (
+        "choix.detail.repos_suppose",
+        "No measurement had been started: the instrument had nothing to confirm.",
+    ),
+    (
+        "choix.detail.repos_non_signale",
+        "The instrument did not report in time that it was back at rest.",
+    ),
+    (
+        "choix.detail.arret_refuse",
+        "The instrument refused to stop (code {code}).",
+    ),
+    (
+        "choix.detail.liaison_perdue",
+        "The connection with the instrument was lost before it confirmed it was back at rest.",
+    ),
+    (
+        "choix.detail.deconnexion_refusee",
+        "The instrument refused to disconnect (code {code}); the connection was cut anyway.",
+    ),
+    (
+        "choix.detail.fermeture_refusee",
+        "The instrument refused to close; the connection was cut anyway.",
+    ),
+    (
+        "choix.detail.pont_muet",
+        "The instrument did not answer the request to close; the connection was cut anyway.",
+    ),
+    (
+        "choix.detail.reponse_inattendue",
+        "The answer to the request to close was not the expected one; the connection was cut anyway.",
+    ),
+    (
+        "refus.autre",
+        "This request could not be completed. Try again in a moment.",
     ),
     // Guided calibration
     ("instrument.etalonner", "Calibrate"),
@@ -569,6 +1144,206 @@ const ANGLAIS: Catalogue = &[
     ("ecran.etalonnage.schema.instrument", "MYIRO-1"),
     ("ecran.etalonnage.schema.capuchon", "Cap"),
     ("ecran.etalonnage.schema.blanc", "Reference white"),
+    // Spot measurement: Measure sheet ({n} is replaced)
+    ("mesurer.nom_defaut", "Colour {n}"),
+    ("mesurer.declenchement", "Measurement"),
+    ("mesurer.declenchement.automatique", "Automatic"),
+    ("mesurer.declenchement.manuel", "Manual"),
+    (
+        "mesurer.declenchement.non_retenu",
+        "This choice applies to this session: it could not be saved for next time.",
+    ),
+    (
+        "mesurer.consigne.automatique",
+        "Set the MYIRO-1 on the colour, then click “Measure”.",
+    ),
+    (
+        "mesurer.consigne.manuel",
+        "Set the MYIRO-1 flat on the colour, click “Measure”, then press the instrument’s button.",
+    ),
+    ("mesurer.action", "Measure"),
+    (
+        "mesurer.en_cours.automatique",
+        "Measuring. Keep the MYIRO-1 still on the colour.",
+    ),
+    (
+        "mesurer.en_cours.manuel",
+        "Press the MYIRO-1 button and keep it still until the measurement is over.",
+    ),
+    ("mesurer.liste", "Latest measurements"),
+    ("mesurer.non_rangee", "Not stored"),
+    (
+        "mesurer.raison.aucune_condition",
+        "Available once a printing condition exists. Add one on the left.",
+    ),
+    (
+        "mesurer.raison.repos",
+        "Available once the instrument is reconnected.",
+    ),
+    ("mesurer.valeurs", "Values"),
+    (
+        "mesurer.calcul",
+        "Computed by myiro-libre from the spectrum, with its own tables: illuminant D50, 2° observer.",
+    ),
+    ("mesurer.ranger", "Store again"),
+    ("mesurer.couleur", "Colour on screen"),
+    ("mesurer.approchee", "Approximate colour on screen"),
+    (
+        "mesurer.erreur.sans_instrument.cause",
+        "No instrument is ready to measure.",
+    ),
+    (
+        "mesurer.erreur.sans_instrument.action",
+        "Plug in the MYIRO-1 and wait for it to appear at the top of the window.",
+    ),
+    (
+        "mesurer.erreur.condition_absente.cause",
+        "This printing condition is no longer in the library. Nothing was measured.",
+    ),
+    (
+        "mesurer.erreur.condition_absente.action",
+        "Choose another one in the list, then measure again.",
+    ),
+    (
+        "mesurer.erreur.bibliotheque_fermee.cause",
+        "The library could not open. Nothing was measured.",
+    ),
+    (
+        "mesurer.erreur.bibliotheque_fermee.action",
+        "Close and restart myiro-libre.",
+    ),
+    ("mesurer.lab", "L*, a*, b*"),
+    ("mesurer.lch", "L*, C*, h°"),
+    ("mesurer.xyz", "X, Y, Z"),
+    // Reference colour and difference (ticket #8)
+    ("mesurer.reference.titre", "Reference colour"),
+    (
+        "mesurer.reference.aucune_texte",
+        "No reference colour. Use a measurement as reference to see how far the others are from it.",
+    ),
+    ("mesurer.reference.designer", "Use as reference"),
+    ("mesurer.reference.retirer", "Remove reference"),
+    ("mesurer.reference.marque", "Reference"),
+    ("mesurer.reference.actuelle", "Current reference colour: “{nom}”."),
+    ("mesurer.conditions.a_confirmer", "Measurement conditions to be confirmed."),
+    ("mesurer.conditions.inconnues", "Measurement conditions unknown."),
+    (
+        "mesurer.reference.est",
+        "This measurement is the reference colour. The other measurements show their difference from it.",
+    ),
+    ("mesurer.reference.seuil", "Accepted difference (ΔE00)"),
+    (
+        "mesurer.reference.seuil_aide",
+        "Leave empty not to judge the difference. It is kept with the reference colour.",
+    ),
+    ("mesurer.reference.seuil_non_fixe", "No limit set"),
+    (
+        "mesurer.reference.seuil_non_fixe_texte",
+        "No limit set: no verdict. Set the accepted difference on the reference colour.",
+    ),
+    (
+        "mesurer.reference.non_rangee",
+        "This measurement is not stored in the library, where the reference is kept. First click “Store again”.",
+    ),
+    (
+        "mesurer.reference.aucune",
+        "First choose a reference colour.",
+    ),
+    (
+        "mesurer.reference.seuil_invalide",
+        "The accepted difference must be a number greater than zero, for example 2.5.",
+    ),
+    ("mesurer.ecart.titre", "Difference from reference"),
+    ("mesurer.ecart.de00", "ΔE00 (CIEDE2000)"),
+    ("mesurer.ecart.dc", "ΔC (saturation)"),
+    ("mesurer.ecart.dh", "ΔH (hue)"),
+    ("mesurer.ecart.accepte", "Accepted difference"),
+    ("mesurer.ecart.comparaison", "Top: reference colour, bottom: this measurement"),
+    ("mesurer.liste.ecart", "ΔE00 (CIEDE2000)"),
+    ("mesurer.liste.verdict", "Verdict"),
+    ("verdict.conforme", "Within tolerance"),
+    ("verdict.proche_de_la_limite", "Close to the limit"),
+    ("verdict.hors_tolerance", "Out of tolerance"),
+    ("verdict.inconnu", "Unknown difference"),
+    ("verdict.non_comparable", "Different conditions"),
+    ("mesurer.verdict.conforme", "The difference stays within the limit set."),
+    (
+        "mesurer.verdict.proche_de_la_limite",
+        "The difference stays within the limit set, but is getting close to it.",
+    ),
+    ("mesurer.verdict.hors_tolerance", "The difference exceeds the limit set."),
+    (
+        "mesurer.verdict.inconnu",
+        "The difference cannot be computed: the values of one of the two measurements are unknown.",
+    ),
+    (
+        "mesurer.ecart.condition_differente",
+        "This measurement and the reference colour do not share the same measurement condition: they cannot be compared, no difference and no verdict.",
+    ),
+    (
+        "mesurer.ecart.non_confirmee",
+        "The measurement condition is not confirmed for both measurements: treat this difference with caution.",
+    ),
+    ("mesurer.ecart.calcul_titre", "How the difference is computed"),
+    (
+        "mesurer.ecart.calcul",
+        "ΔE00: CIEDE2000 formula, factors k_L = k_C = k_H = 1.\nΔC and ΔH: CIELAB chroma and hue differences, signed (positive: measurement more saturated, hue turned counter-clockwise).\nLab D50, 2° observer, computed by myiro-libre from spectra of the same measurement condition.\nClose to the limit: from 80% of the accepted difference, a choice made by myiro-libre, not by a standard. The verdict applies to the difference as written, to two decimals.\nDifferent measurement conditions: no difference and no verdict.",
+    ),
+    ("cartouche.micrologiciel", "Firmware"),
+    ("cartouche.date", "Date"),
+    (
+        "mesurer.erreur.rangement",
+        "The library could not store this measurement. It stays shown here until myiro-libre is closed.",
+    ),
+    // Spot measurement: problems
+    (
+        "probleme.mesure_echouee.cause",
+        "The measurement failed. The MYIRO-1 may not have been flat on the colour.",
+    ),
+    (
+        "probleme.mesure_echouee.action",
+        "Set it flat, click “Measure”, then press its button.",
+    ),
+    (
+        "probleme.mesure_delai.cause",
+        "The MYIRO-1 button was not pressed in time.",
+    ),
+    (
+        "probleme.mesure_delai.action",
+        "Click “Measure” again, then press the instrument’s button within two minutes.",
+    ),
+    (
+        "probleme.mesure_delai_automatique.cause",
+        "The MYIRO-1 did not finish the measurement in time.",
+    ),
+    (
+        "probleme.mesure_delai_automatique.action",
+        "Check that it sits flat on the colour, then click “Measure” again.",
+    ),
+    (
+        "probleme.declenchement_refuse.cause",
+        "The MYIRO-1 refused to start the measurement without its button being pressed.",
+    ),
+    (
+        "probleme.declenchement_refuse.action",
+        "Choose “Measurement: manual”, click “Measure”, then press the instrument’s button.",
+    ),
+    (
+        "probleme.etalonnage_a_refaire.cause",
+        "The MYIRO-1 needs to be calibrated again.",
+    ),
+    (
+        "probleme.etalonnage_a_refaire.action",
+        "Click “Calibrate” at the top, then measure again.",
+    ),
+    (
+        "probleme.repos_incertain.cause",
+        "The MYIRO-1 did not confirm the end of the measurement. The measurement is kept.",
+    ),
+    (
+        "probleme.repos_incertain.action",
+        "To measure again, click “Try again”: the instrument will be reconnected, then needs calibrating.",
+    ),
 ];
 
 fn catalogue(langue: Langue) -> Catalogue {
@@ -644,6 +1419,11 @@ mod tests {
                 "raison.etalonnage",
                 "ecran.choix.titre.logiciel_absent",
                 "ecran.choix.titre.logiciel_inutilisable",
+                "choix.ligne",
+                "choix.liaison.usb",
+                "choix.liaison.reseau",
+                "choix.en_service",
+                "choix.utiliser",
             ]
             .map(String::from),
         );
@@ -667,6 +1447,7 @@ mod tests {
     fn un_bouton_cite_est_entre_guillemets() {
         for bouton in [
             "ecran.reessayer",
+            "ecran.autoriser_pare_feu",
             "ecran.choix.action",
             "ecran.etalonnage.lancer",
         ] {
@@ -681,6 +1462,44 @@ mod tests {
                 fautes.is_empty(),
                 "« {libelle} » sans guillemets : {fautes:?}"
             );
+        }
+    }
+
+    /// Chaque texte demandé par la feuille Mesurer (`t("…")` dans
+    /// `mesurer.js`) existe au catalogue.
+    #[test]
+    fn la_feuille_mesurer_ne_demande_que_des_cles_du_catalogue() {
+        let script = include_str!("../interface/mesurer.js");
+        // `t("…")` seul, pas la fin d'un autre nom (`CustomEvent("…")`).
+        let demandees: Vec<&str> = script
+            .match_indices("t(\"")
+            .filter(|(i, _)| {
+                !script[..*i]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.')
+            })
+            .filter_map(|(i, _)| script[i + 3..].split('"').next())
+            .collect();
+        assert!(demandees.len() > 10, "clés lues : {demandees:?}");
+        let inconnues: Vec<_> = demandees
+            .iter()
+            .filter(|c| !cles().any(|k| k == **c))
+            .collect();
+        assert!(
+            inconnues.is_empty(),
+            "clés absentes du catalogue : {inconnues:?}"
+        );
+    }
+
+    /// L'illuminant et l'observateur affichés sont ceux de notre calcul, pas
+    /// une affirmation sur l'instrument : le texte le dit.
+    #[test]
+    fn l_observateur_affiche_est_celui_de_notre_calcul() {
+        for langue in [Langue::Francais, Langue::Anglais] {
+            let calcul = texte(langue, "mesurer.calcul");
+            assert!(calcul.contains("myiro-libre"), "{calcul}");
+            assert!(calcul.contains("D50") && calcul.contains("2°"), "{calcul}");
         }
     }
 

@@ -23,15 +23,59 @@ fn dialoguer_brut(
     requetes: &[&str],
 ) -> (Vec<String>, Session<SdkSimule>) {
     let mut session = Session::new(sdk, plafond);
-    let entree = requetes.join("\n");
-    let mut sortie = Vec::new();
-    servir(&mut session, entree.as_bytes(), &mut sortie).unwrap();
-    let lignes = String::from_utf8(sortie)
-        .unwrap()
-        .lines()
-        .map(String::from)
-        .collect();
-    (lignes, session)
+    // Comme l'application : une requête, puis sa réponse, avant la suivante.
+    // Une fois le pont fermé, les lignes restantes partent sans attente.
+    let (lecture, mut ecriture) = std::io::pipe().unwrap();
+    let sortie = SortiePartagee::default();
+    let vue = sortie.clone();
+    let requetes: Vec<String> = requetes.iter().map(|r| r.to_string()).collect();
+    let ecrivain = std::thread::spawn(move || {
+        for (n, requete) in requetes.iter().enumerate() {
+            std::io::Write::write_all(&mut ecriture, format!("{requete}\n").as_bytes()).unwrap();
+            let debut = std::time::Instant::now();
+            loop {
+                let lignes = vue.lignes();
+                let ferme = lignes.last().is_some_and(|l| {
+                    l.contains(r#""rep":"ferme""#) || l.contains("fermeture_incertaine")
+                });
+                if lignes.len() > n || ferme {
+                    break;
+                }
+                assert!(
+                    debut.elapsed().as_secs() < 5,
+                    "aucune réponse en 5 s à {requete}"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+    });
+    let mut ecrite = sortie.clone();
+    servir(&mut session, std::io::BufReader::new(lecture), &mut ecrite).unwrap();
+    ecrivain.join().unwrap();
+    (sortie.lignes(), session)
+}
+
+/// Sortie du pont lisible pendant le dialogue.
+#[derive(Clone, Default)]
+struct SortiePartagee(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for SortiePartagee {
+    fn write(&mut self, octets: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().write(octets)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl SortiePartagee {
+    fn lignes(&self) -> Vec<String> {
+        String::from_utf8(self.0.lock().unwrap().clone())
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect()
+    }
 }
 
 const JUSQU_A_LA_CONNEXION: [&str; 3] = [
@@ -71,6 +115,61 @@ fn la_connexion_par_adresse_du_fd9_est_refusee_sans_appel_a_la_dll() {
         "{:?}",
         session.sdk().appels
     );
+}
+
+#[test]
+fn la_mesure_automatique_est_declenchee_par_le_pont() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements.extend([7, 8].map(evenement));
+    sdk.salves.push_back([1].map(evenement).to_vec());
+    sdk.salves_declenchement
+        .push_back([2, 3, 0].map(evenement).to_vec());
+    let (lignes, session) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[
+            r#"{"cmd":"etalonner"}"#,
+            r#"{"cmd":"mesurer_ponctuelle","declenchement":"automatique"}"#,
+        ]),
+    );
+    assert!(matches!(
+        lire_reponse(&lignes[4]).unwrap(),
+        Reponse::Mesure { .. }
+    ));
+    assert!(session.sdk().appels.contains(&"declencher".to_string()));
+}
+
+#[test]
+fn un_declenchement_refuse_est_rapporte_avec_son_code() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements.extend([7, 8].map(evenement));
+    sdk.salves.push_back([1].map(evenement).to_vec());
+    sdk.code_declenchement = -9791;
+    let (lignes, _) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[
+            r#"{"cmd":"etalonner"}"#,
+            r#"{"cmd":"mesurer_ponctuelle","declenchement":"automatique"}"#,
+        ]),
+    );
+    assert_eq!(
+        lignes[4],
+        r#"{"rep":"erreur","erreur":{"type":"declenchement_refuse","code":-9791}}"#
+    );
+}
+
+#[test]
+fn la_mesure_manuelle_ne_declenche_jamais() {
+    let mut sdk = SdkSimule::avec_un_myiro1();
+    sdk.evenements.extend([7, 8].map(evenement));
+    sdk.salves.push_back([1, 2, 3].map(evenement).to_vec());
+    let (_, session) = dialoguer_brut(
+        sdk,
+        Palier::MesurePonctuelle,
+        &sequence(&[r#"{"cmd":"etalonner"}"#, r#"{"cmd":"mesurer_ponctuelle"}"#]),
+    );
+    assert!(!session.sdk().appels.contains(&"declencher".to_string()));
 }
 
 #[test]
@@ -288,7 +387,7 @@ fn une_fermeture_reprise_apres_echec_finit_par_la_deconnexion() {
     let mut sortie = Vec::new();
     servir(
         &mut session,
-        sequence(&[r#"{"cmd":"fermer"}"#]).join("\n").as_bytes(),
+        std::io::Cursor::new(sequence(&[r#"{"cmd":"fermer"}"#]).join("\n")),
         &mut sortie,
     )
     .unwrap();
@@ -296,7 +395,7 @@ fn une_fermeture_reprise_apres_echec_finit_par_la_deconnexion() {
     let mut sortie = Vec::new();
     servir(
         &mut session,
-        &b"{\"cmd\":\"fermer\"}\n{\"cmd\":\"version\"}"[..],
+        &b"{\"cmd\":\"fermer\"}\n{\"cmd\":\"version\"}"[..], // 'static
         &mut sortie,
     )
     .unwrap();

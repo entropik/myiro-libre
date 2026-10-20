@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/colorimetrie", "crates/fdx-sys", "crates/fd9-sys", "crates/pont-protocole", "crates/pont-myiro1", "crates/pont-fd9", "crates/jeu-validation", "crates/bibliotheque", "app"]
+members = ["crates/colorimetrie", "crates/fdx-sys", "crates/fd9-sys", "crates/pont-protocole", "crates/pont-myiro1", "crates/pont-fd9", "crates/jeu-validation", "crates/bibliotheque", "crates/cgats", "app"]
 
 [workspace.package]
 edition = "2021"

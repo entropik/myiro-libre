@@ -22,6 +22,9 @@ pub const EXPORTS_AUTORISES: &[&str] = &[
     "FDX_Calibration",
     // Arme la mesure, sans écriture persistante : docs/abi/FDX_SetMeasureCondition.md.
     "FDX_SetMeasureCondition",
+    // Déclenche la mesure armée, sans le bouton ; seconde exception nommée,
+    // accord du mainteneur du 9 octobre 2026 : docs/abi/FDX_StartMeasurement.md.
+    "FDX_StartMeasurement",
     "FDX_StopMeasurement",
     "FDX_GetMeasureData",
 ];

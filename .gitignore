@@ -53,3 +53,6 @@ docs/sources/
 
 # États de publication, manifestes et preuves de reprise propres au poste
 .local/
+
+# Maquettes et prototypes du compagnon visuel (locaux)
+.superpowers/

@@ -1,6 +1,6 @@
-# Protocole des ponts : lignes propres au FD-9
+# Protocole des ponts : lignes propres au FD-9 et mesure sans le bouton
 
-L'application parle à chaque pont par une ligne JSON par message, dans chaque sens (crate `pont-protocole`, ADR 0005). Les mesures et la remise au repos sont décrites dans [mesure.md](mesure.md). Cette page décrit les trois lignes ajoutées pour le FD-9 (ticket #13). Les règles sont les mêmes : un champ ou une valeur inconnus sont refusés, et une donnée incertaine est **qualifiée** (`confirmee`, `supposee` ou `inconnue`, voir [mesure.md](mesure.md#confirmé-supposé-inconnu)).
+L'application parle à chaque pont par une ligne JSON par message, dans chaque sens (crate `pont-protocole`, ADR 0005). Les mesures et la remise au repos sont décrites dans [mesure.md](mesure.md). Cette page décrit les trois lignes ajoutées pour le FD-9 (ticket #13) et le déclenchement de la mesure ponctuelle du MYIRO-1 (ticket #51). Les règles sont les mêmes : un champ ou une valeur inconnus sont refusés, et une donnée incertaine est **qualifiée** (`confirmee`, `supposee` ou `inconnue`, voir [mesure.md](mesure.md#confirmé-supposé-inconnu)).
 
 Les adresses et identifiants ci-dessous sont fictifs.
 
@@ -45,6 +45,60 @@ Réponse du pont FD-9 à `detecter`. Une liste vide veut dire « aucun FD-9 visi
 - `adresse` : adresse IP en réseau, `COMn` en USB.
 - `identifiant` : les 8 caractères rendus par la DLL, tels quels. Qu'ils désignent l'instrument (son n° de série) est **supposé** ; vides, ils sont `{"statut": "inconnue"}`.
 
+## Mesure sans le bouton : `declenchement` (MYIRO-1, ticket #51)
+
+Champ facultatif de la requête `mesurer_ponctuelle`. Il dit qui fait partir la mesure une fois l'instrument armé.
+
+```json
+{"cmd": "mesurer_ponctuelle", "declenchement": "automatique"}
+```
+
+- `manuel` (valeur par défaut) : l'instrument attend l'appui sur son bouton, comme avant. L'application écrit alors la ligne d'avant, sans le champ : `{"cmd": "mesurer_ponctuelle"}`.
+- `automatique` : le pont attend que l'instrument soit armé (événement 1, 5 s au plus), puis appelle `FDX_StartMeasurement` (fiche [FDX_StartMeasurement](../abi/FDX_StartMeasurement.md)) et attend la fin de la mesure (30 s au plus). Il ne l'appelle jamais sans cet événement. Si l'opérateur appuie quand même sur le bouton avant, la mesure faite est gardée ; après un refus -9986, le pont attend encore 2 s qu'une mesure partie au bouton se signale avant de désarmer (supposé : un appui juste avant le déclenchement le ferait refuser).
+- Toute autre valeur est refusée à la lecture (`requete_invalide`).
+
+Si la DLL ou l'instrument refuse le déclenchement, le pont désarme et répond une erreur avec le code brut :
+
+```json
+{"rep": "erreur", "erreur": {"type": "declenchement_refuse", "code": -9986}}
+```
+
+-9986 : l'instrument n'attendait pas de mesure ; -9793 à -9789 : refus rapporté par l'instrument (supposé). L'étalonnage reste valable : la mesure au bouton reste possible.
+
+## Annuler une mesure en attente : `annuler` (ticket #26)
+
+```json
+{"cmd": "annuler"}
+```
+
+Le pont lit ses requêtes pendant qu'une mesure attend : `annuler` est vue tout de suite, sans attendre la fin de la mesure. Les appels à la DLL restent faits un par un, et **chaque requête reçoit une seule réponse, dans l'ordre d'arrivée** : d'abord celle de la mesure, puis celle de `annuler`.
+
+- `annuler` vise la mesure active ; sans mesure active, la dernière requête acceptée qui la précède (hors autre `annuler`). Jamais la suivante : un `version`, `detecter` ou `fermer` reçu pendant la mesure ne la détourne pas.
+- **Une seule mesure active.** De sa lecture jusqu'à sa réponse, toute requête qui toucherait l'instrument (`connecter`, `etalonner`, `mesurer_ponctuelle`, `mesurer_bande`) est refusée sans appel à la DLL, à son rang dans l'ordre des réponses :
+
+  ```json
+  {"rep": "erreur", "erreur": {"type": "etat_incompatible"}}
+  ```
+
+  Les autres (`version`, `detecter`, `fermer`) attendent leur tour. L'application n'envoie une requête qu'après la réponse de la précédente ; ce refus protège d'un dialogue décalé.
+- Elle n'a d'effet que tant que la mesure attend l'appui sur le bouton (ou, en automatique, l'attente de mesure avant le déclenchement). Le pont désarme alors par la politique habituelle et la mesure répond :
+
+  ```json
+  {"rep": "erreur", "erreur": {"type": "mesure_annulee", "remise_au_repos": {"etat": "au_repos"}}}
+  ```
+
+  Rien n'a été lu. Un repos non prouvé bloque la mesure suivante (`repos_incertain`), comme après toute mesure.
+- Une mesure déjà partie (événement 2) ou terminée va à son terme : sa réponse est la mesure, avec sa provenance. Aucun abandon n'est annoncé sans être fait. En automatique, les 2 s d'attente après un déclenchement refusé (-9986) ne s'annulent pas non plus.
+- Puis `annuler` reçoit `{"rep": "annulation", "effet": "appliquee"}` si la mesure a été interrompue, `{"rep": "annulation", "effet": "sans_effet"}` sinon (rien à interrompre).
+
+La fin de l'entrée (application fermée ou perdue), ou une erreur de lecture de l'entrée, interrompt de même une mesure qui attend l'opérateur, puis le pont se ferme. Le pont FD-9, qui ne mesure pas, répond toujours `sans_effet`.
+
+Côté application, après l'envoi de `annuler`, chaque réponse est attendue au plus le délai ordinaire (30 s) ; au-delà, le pont est arrêté de force et l'instrument est dit dans un état incertain.
+
 ## Compatibilité
 
-Aucune ligne existante ne change : le MYIRO-1 écrit et lit toujours `version` et `instruments` comme avant. Mais un lecteur antérieur au ticket #13, qui refuse depuis le ticket #25 les commandes et réponses inconnues, rejettera `connecter_adresse`, `version_dll` et `instruments_fd9` : l'application et les ponts se mettent à jour ensemble.
+La commande `annuler`, la réponse `annulation` et l'erreur `mesure_annulee` (ticket #26) sont refusées par un lecteur antérieur : l'application et les ponts se mettent à jour ensemble. Aucune ligne existante ne change.
+
+Le champ `declenchement` est absent des lignes manuelles : un pont antérieur au ticket #51 les lit comme avant. Mais il refuse une requête automatique (champ inconnu), et une application antérieure refuse l'erreur `declenchement_refuse` : l'application et les ponts se mettent à jour ensemble.
+
+Pour le FD-9, aucune ligne existante ne change : le MYIRO-1 écrit et lit toujours `version` et `instruments` comme avant. Mais un lecteur antérieur au ticket #13, qui refuse depuis le ticket #25 les commandes et réponses inconnues, rejettera `connecter_adresse`, `version_dll` et `instruments_fd9` : l'application et les ponts se mettent à jour ensemble.
