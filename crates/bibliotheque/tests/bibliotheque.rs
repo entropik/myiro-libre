@@ -4,86 +4,11 @@
 use bibliotheque::{
     Bibliotheque, Branche, ErreurBibliotheque, IdCondition, IdMesure, Instrument, ReferenceCouleur,
 };
-use pont_protocole::{
-    Calcul, ConditionMesure, ConditionsCalcul, DonneesBrutes, Echantillonnage, Empreinte,
-    Geometrie, Horodatage, Illuminant, Info, InstrumentMesurant, Lab, Mesure, Observateur, Plage,
-    Provenance, Spectre,
-};
+use pont_protocole::{Geometrie, Info, Mesure};
 use tempfile::TempDir;
 
-/// Plage fictive : chaque valeur est distincte, pour voir la moindre perte.
-fn plage(graine: f32) -> Plage {
-    let spectre = |decalage: f32| {
-        Spectre::new(
-            (0..36)
-                .map(|i| graine + decalage + i as f32 * 0.013_7)
-                .collect(),
-        )
-        .unwrap()
-    };
-    Plage::new(
-        [spectre(0.0), spectre(0.001), spectre(-0.002)],
-        DonneesBrutes::new((0..152).map(|i| graine * 1000.0 + i as f32 * 3.5).collect()).unwrap(),
-        [
-            Lab::new([52.31, 1.07, -2.389]).unwrap(),
-            Lab::new([52.4, 1.9, -6.01]).unwrap(),
-            Lab::new([52.0, 1.1, -1.8]).unwrap(),
-        ],
-    )
-    .unwrap()
-}
-
-fn provenance(numero_serie: u32, horodatage: &str, geometrie: Geometrie) -> Provenance {
-    Provenance {
-        instrument: InstrumentMesurant {
-            modele: "MYIRO-1".into(),
-            numero_serie,
-            micrologiciel: "1.02.0005".into(),
-            code_produit: "9C1D".into(),
-        },
-        version_sdk: [1, 0, 1],
-        empreinte_dll: Info::Confirmee(Empreinte::new("ab".repeat(32)).unwrap()),
-        version_pont: "0.2.0".into(),
-        architecture: "x86".into(),
-        horodatage: Horodatage::new(horodatage).unwrap(),
-        // Étalonnage et conditions observées : inconnus, ils doivent le rester.
-        etalonnage: Info::Inconnue,
-        geometrie,
-        calcul: Calcul {
-            libelle: "spectres : M0/M1/M2 ; Lab : D50, 2°".into(),
-            demande: Info::Confirmee(ConditionsCalcul {
-                conditions_spectres: [
-                    Info::Confirmee(ConditionMesure::M0),
-                    Info::Supposee(ConditionMesure::M1),
-                    Info::Inconnue,
-                ],
-                longueurs_onde: Info::Confirmee(Echantillonnage {
-                    debut_nm: 380,
-                    pas_nm: 10,
-                }),
-                illuminant_lab: Info::Confirmee(Illuminant::D50),
-                observateur_lab: Info::Supposee(Observateur::DeuxDegres),
-            }),
-            observe: Info::Inconnue,
-        },
-    }
-}
-
-fn ponctuelle(numero_serie: u32, horodatage: &str) -> Mesure {
-    Mesure::new(
-        vec![plage(0.21)],
-        provenance(numero_serie, horodatage, Geometrie::Ponctuelle {}),
-    )
-    .unwrap()
-}
-
-fn bande(horodatage: &str) -> Mesure {
-    Mesure::new(
-        vec![plage(0.1), plage(0.4), plage(0.85)],
-        provenance(12345678, horodatage, Geometrie::Bande { sens: 2 }),
-    )
-    .unwrap()
-}
+mod commun;
+use commun::{bande, ponctuelle};
 
 fn bibliotheque_vide() -> (TempDir, Bibliotheque) {
     let dossier = tempfile::tempdir().unwrap();
@@ -652,7 +577,7 @@ fn une_bibliotheque_d_avant_les_noms_se_relit_sans_perte() {
         .unwrap()
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 4);
+    assert_eq!(version, 5);
 }
 
 // ---- Couleur de référence (ticket #8) ----
@@ -848,7 +773,7 @@ fn une_bibliotheque_d_organisation_1_se_relit_sans_perte_apres_mise_a_niveau() {
         .unwrap()
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 4);
+    assert_eq!(version, 5);
 }
 
 /// Fichier CGATS fictif d'un autre logiciel : Lab seuls, en M1 par la
@@ -1012,7 +937,7 @@ fn une_bibliotheque_d_organisation_2_garde_ses_noms_apres_mise_a_niveau() {
         .unwrap()
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 4);
+    assert_eq!(version, 5);
 }
 
 #[test]
@@ -1261,7 +1186,7 @@ fn verifier_cle_etrangere(chemin: &std::path::Path) {
 }
 
 #[test]
-fn une_bibliotheque_d_organisation_3_passe_a_l_organisation_4_sans_perte() {
+fn une_bibliotheque_d_organisation_3_passe_a_l_organisation_5_sans_perte() {
     let dossier = tempfile::tempdir().unwrap();
     let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
     let (bande, ponctuelle) = base_organisation_3(&chemin);
@@ -1282,12 +1207,12 @@ fn une_bibliotheque_d_organisation_3_passe_a_l_organisation_4_sans_perte() {
         Err(ErreurBibliotheque::MesureInconnue(IdMesure(7)))
     );
     drop(biblio);
-    assert_eq!(organisation(&chemin), 4);
+    assert_eq!(organisation(&chemin), 5);
     verifier_cle_etrangere(&chemin);
 }
 
 #[test]
-fn une_bibliotheque_d_organisation_2_passe_a_l_organisation_4_pas_a_pas() {
+fn une_bibliotheque_d_organisation_2_passe_a_l_organisation_5_pas_a_pas() {
     let dossier = tempfile::tempdir().unwrap();
     let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
     let (bande, _) = base_organisation_2(&chemin);
@@ -1301,7 +1226,7 @@ fn une_bibliotheque_d_organisation_2_passe_a_l_organisation_4_pas_a_pas() {
     );
     biblio.designer_reference(IdMesure(5), None).unwrap();
     drop(biblio);
-    assert_eq!(organisation(&chemin), 4);
+    assert_eq!(organisation(&chemin), 5);
     verifier_cle_etrangere(&chemin);
 }
 
@@ -1320,9 +1245,9 @@ fn une_bibliotheque_d_organisation_4_est_refusee_par_l_ancienne_regle() {
     // La règle d'aujourd'hui refuse de même une organisation plus récente.
     rusqlite::Connection::open(&chemin)
         .unwrap()
-        .pragma_update(None, "user_version", 5)
+        .pragma_update(None, "user_version", 6)
         .unwrap();
     let refus = Bibliotheque::ouvrir(dossier.path()).err().unwrap();
-    assert_eq!(refus, ErreurBibliotheque::VersionBase(5));
-    assert!(refus.to_string().contains("attendu 4 au plus"), "{refus}");
+    assert_eq!(refus, ErreurBibliotheque::VersionBase(6));
+    assert!(refus.to_string().contains("attendu 5 au plus"), "{refus}");
 }
