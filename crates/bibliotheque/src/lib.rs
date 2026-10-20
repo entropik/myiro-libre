@@ -73,7 +73,8 @@ const VERSION_BASE: i32 = 5;
 /// Ce qui peut empêcher une opération sur la bibliothèque.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErreurBibliotheque {
-    /// Le nom d'une condition d'impression est vide.
+    /// Un nom (condition d'impression, mesure, imprimante, papier,
+    /// résolution, profil) est vide.
     NomVide,
     /// Une autre condition d'impression porte déjà ce nom.
     NomDejaPris(String),
@@ -85,6 +86,9 @@ pub enum ErreurBibliotheque {
     /// Le fichier n'est pas un profil ICC RVB ou CMJN utilisable ; rien
     /// n'est enregistré.
     ProfilIllisible(String),
+    /// La date d'un profil n'est pas une date RFC 3339 valide (texte reçu) ;
+    /// rien n'est enregistré.
+    HorodatageInvalide(String),
     /// Le seuil d'une couleur de référence n'est pas un nombre fini
     /// strictement positif.
     SeuilInvalide,
@@ -107,7 +111,7 @@ pub enum ErreurBibliotheque {
 impl fmt::Display for ErreurBibliotheque {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NomVide => f.write_str("nom de condition d'impression vide"),
+            Self::NomVide => f.write_str("nom vide"),
             Self::NomDejaPris(nom) => {
                 write!(f, "une condition d'impression s'appelle déjà « {nom} »")
             }
@@ -119,6 +123,10 @@ impl fmt::Display for ErreurBibliotheque {
             Self::ProfilIllisible(detail) => write!(
                 f,
                 "ce fichier n'est pas un profil ICC RVB ou CMJN utilisable : {detail}"
+            ),
+            Self::HorodatageInvalide(texte) => write!(
+                f,
+                "date du profil illisible « {texte} » (attendu : 2026-10-20T09:00:00Z), rien n'a été enregistré"
             ),
             Self::SeuilInvalide => f.write_str("seuil d'écart impossible"),
             Self::VersionBase(v) => write!(

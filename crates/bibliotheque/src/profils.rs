@@ -4,6 +4,7 @@
 use std::fmt::Write as _;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use pont_protocole::Horodatage;
 use rusqlite::{params, OptionalExtension};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -187,6 +188,13 @@ impl Bibliotheque {
         let nom = profil.nom.trim();
         if nom.is_empty() {
             return Err(ErreurBibliotheque::NomVide);
+        }
+        // Une date illisible serait lue comme l'an 0 : profil faussement
+        // ancien, historique mal trié.
+        if Horodatage::new(profil.horodatage).is_err() {
+            return Err(ErreurBibliotheque::HorodatageInvalide(
+                profil.horodatage.to_string(),
+            ));
         }
         let espace = espace_icc(profil.icc).map_err(ErreurBibliotheque::ProfilIllisible)?;
         let mesures = serde_json::to_string(profil.mesures)

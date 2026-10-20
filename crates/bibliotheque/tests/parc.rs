@@ -168,6 +168,10 @@ fn les_doublons_sont_refuses_a_chaque_niveau() {
         b.creer_reglage(luster.id, " "),
         Err(ErreurBibliotheque::NomVide)
     );
+    // Le message sert à tous les niveaux : il ne parle pas de condition.
+    let message = b.creer_papier(canon.id, "").unwrap_err().to_string();
+    assert!(!message.contains("condition"), "{message}");
+    assert!(message.contains("vide"), "{message}");
     assert_eq!(
         b.creer_papier(IdImprimante(999), "Luster"),
         Err(ErreurBibliotheque::ImprimanteInconnue(IdImprimante(999)))

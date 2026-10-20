@@ -157,6 +157,26 @@ fn un_profil_sans_nom_ou_sans_condition_est_refuse() {
 }
 
 #[test]
+fn un_profil_a_la_date_illisible_est_refuse_sans_rien_ecrire() {
+    let (_d, b, c) = condition_rangee();
+    let p1 = b
+        .enregistrer_profil(&nouveau(c, "v1", &icc(b"RGB "), "2026-03-03T10:00:00Z"))
+        .unwrap();
+    for date in ["hier", "2026-13-45T00:00:00Z", "", "2026-10-20"] {
+        match b.enregistrer_profil(&nouveau(c, "v2", &icc(b"RGB "), date)) {
+            Err(ErreurBibliotheque::HorodatageInvalide(texte)) => {
+                assert_eq!(texte, date);
+                let message = ErreurBibliotheque::HorodatageInvalide(texte).to_string();
+                assert!(message.contains("date du profil"), "{message}");
+            }
+            autre => panic!("{autre:?} pour « {date} »"),
+        }
+    }
+    assert_eq!(b.profil_actif(c).unwrap().unwrap().id, p1);
+    assert_eq!(b.historique_profils(c).unwrap().len(), 1);
+}
+
+#[test]
 fn le_cmjn_est_reconnu() {
     assert_eq!(espace_icc(&icc(b"CMYK")), Ok(EspaceProfil::Cmjn));
     assert_eq!(espace_icc(&icc(b"RGB ")), Ok(EspaceProfil::Rvb));
