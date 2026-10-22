@@ -614,7 +614,9 @@ fn pendant_une_action_sur_le_profil_les_boutons_disent_pourquoi() {
 
     let script = lire("interface/reglage.js");
     assert!(
-        script.contains("const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil]\";"),
+        script.contains(
+            "const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil]\";"
+        ),
         "les trois boutons"
     );
     assert!(script.contains("occupe.hidden = !enCours;"));

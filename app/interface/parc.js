@@ -197,10 +197,11 @@
       formulaire = null;
       erreurAjout = null;
       recherche.value = "";
-      // Mesurer et l'import proposent aussi cette nouvelle condition d'impression.
-      document.dispatchEvent(new CustomEvent("bibliotheque-modifiee"));
       await charger();
       await choisirReglage(condition.id);
+      // Mesurer et l'import proposent aussi cette nouvelle condition d'impression ;
+      // marqué « parc » pour que ce script ne recharge pas une seconde fois.
+      document.dispatchEvent(new CustomEvent("bibliotheque-modifiee", { detail: "parc" }));
     } catch (cle) {
       erreurAjout = String(cle);
       dessinerAjout();
@@ -360,7 +361,11 @@
   document.addEventListener("tache-affichee", (e) => { if (e.detail === "bibliotheque") dessinerCentre(); });
   // Une mesure rangée (Mesurer), importée ou restaurée : l'arbre et la vue suivent.
   for (const evenement of ["bibliotheque-modifiee", "parc-modifie"]) {
-    document.addEventListener(evenement, async () => { await charger(); await rafraichir(); });
+    document.addEventListener(evenement, async (e) => {
+      if (e.detail === "parc") return; // déjà rechargé ici
+      await charger();
+      await rafraichir();
+    });
   }
 
   let premiereFois = true;

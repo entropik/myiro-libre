@@ -459,14 +459,6 @@ pub fn bibliotheque_detail_mesure(
 }
 
 #[tauri::command]
-pub fn bibliotheque_creer_condition(
-    ouverte: tauri::State<'_, BibliothequeOuverte>,
-    nom: &str,
-) -> Result<ConditionImpression, String> {
-    ouverte.creer_condition(nom)
-}
-
-#[tauri::command]
 pub fn bibliotheque_renommer_condition(
     ouverte: tauri::State<'_, BibliothequeOuverte>,
     id: i64,

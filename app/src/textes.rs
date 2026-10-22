@@ -50,15 +50,12 @@ const FRANCAIS: Catalogue = &[
     ("theme.sombre", "Sombre"),
     ("langue.libelle", "Langue"),
     // Bibliothèque, à gauche
-    ("bibliotheque.titre", "Conditions d’impression"),
     ("bibliotheque.recherche", "Rechercher"),
     ("bibliotheque.recherche_aide", "Imprimante, papier ou résolution"),
     (
         "bibliotheque.aucun_resultat",
         "Rien ne correspond à cette recherche.",
     ),
-    ("bibliotheque.nouvelle", "Nouvelle condition d’impression"),
-    ("bibliotheque.ajouter", "Ajouter"),
     (
         "bibliotheque.demonstration",
         "Démonstration, données fictives",
@@ -316,11 +313,6 @@ const FRANCAIS: Catalogue = &[
     (
         "prevu.imprimer.raison",
         "L’impression arrive à la troisième étape de la livraison, après la couleur et le CMJN.",
-    ),
-    ("vide.bibliotheque.phrase", "Aucune condition d’impression."),
-    (
-        "vide.bibliotheque.action",
-        "Ajouter une condition d’impression",
     ),
     (
         "raison.instrument",
@@ -864,15 +856,12 @@ const ANGLAIS: Catalogue = &[
     ("theme.sombre", "Dark"),
     ("langue.libelle", "Language"),
     // Library, left
-    ("bibliotheque.titre", "Printing conditions"),
     ("bibliotheque.recherche", "Search"),
     ("bibliotheque.recherche_aide", "Printer, paper or resolution"),
     (
         "bibliotheque.aucun_resultat",
         "Nothing matches this search.",
     ),
-    ("bibliotheque.nouvelle", "New printing condition"),
-    ("bibliotheque.ajouter", "Add"),
     ("bibliotheque.demonstration", "Demonstration, sample data"),
     ("bibliotheque.mesures", "Measurements"),
     ("bibliotheque.erreur.nom_vide", "Give it a name."),
@@ -1121,8 +1110,6 @@ const ANGLAIS: Catalogue = &[
         "prevu.imprimer.raison",
         "Printing arrives in the third step of the release, after colour and CMYK.",
     ),
-    ("vide.bibliotheque.phrase", "No printing condition yet."),
-    ("vide.bibliotheque.action", "Add a printing condition"),
     (
         "raison.instrument",
         "Available once an instrument is connected.",

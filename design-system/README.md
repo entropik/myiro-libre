@@ -1,6 +1,6 @@
 # Système graphique de myiro-libre
 
-Identité visuelle de l'application : thème bleu nuit (sombre par défaut, bascule vers le clair), cartes, accent bleu, verdicts vert, orange et rouge. Repris du prototype validé du poste unique (voir `docs/adr/0007-poste-unique.md` et `docs/adr/0003-interface-tauri.md`, section « Direction visuelle »). Il remplace, depuis le 22 octobre 2026, la grille suisse et le cartouche d'architecte.
+Identité visuelle de l'application : thème bleu nuit (sombre par défaut, bascule vers le clair), cartes, accent bleu, verdicts vert, orange et rouge. Repris du prototype validé du poste unique (voir `docs/adr/0007-poste-unique.md` et `docs/adr/0003-interface-tauri.md`, section « Direction visuelle »). Il remplace, depuis le 22 octobre 2026, la grille suisse ; le cartouche de provenance reste, restylé en carte.
 
 Ouvrir `index.html` dans un navigateur (double-clic, sans compilation).
 
