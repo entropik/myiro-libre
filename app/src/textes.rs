@@ -90,6 +90,36 @@ const FRANCAIS: Catalogue = &[
         "Ce fichier est trop gros pour un fichier de mesures (plus de 16\u{202f}Mio). Rien n’a été importé.",
     ),
     ("bibliotheque.erreur.export", "Le fichier n’a pas pu être écrit."),
+    // Parc : imprimantes, papiers, résolutions et profils
+    (
+        "parc.vide",
+        "Aucune imprimante. Ajoutez la première imprimante de l’atelier, puis ses papiers.",
+    ),
+    ("parc.ajouter_imprimante", "Ajouter une imprimante"),
+    (
+        "parc.erreur.imprimante_inconnue",
+        "Cette imprimante n’existe plus dans la bibliothèque.",
+    ),
+    (
+        "parc.erreur.papier_inconnu",
+        "Ce papier n’existe plus dans la bibliothèque.",
+    ),
+    (
+        "parc.erreur.reglage_inconnu",
+        "Cette résolution n’existe plus dans la bibliothèque.",
+    ),
+    (
+        "parc.erreur.profil_inconnu",
+        "Ce profil n’existe plus dans la bibliothèque.",
+    ),
+    (
+        "parc.erreur.profil_illisible",
+        "Ce fichier n’est pas un profil ICC RVB ou CMJN. Choisissez un fichier .icc ou .icm d’imprimante.",
+    ),
+    (
+        "parc.erreur.fichier_illisible",
+        "Le fichier n’a pas pu être lu. Vérifiez qu’il existe encore et qu’il n’est pas ouvert ailleurs.",
+    ),
     ("bibliotheque.erreur.apercu_absent", "Aucun fichier en attente. Choisissez d’abord un fichier à importer."),
     // Bibliothèque, section Export et sauvegarde
     ("export.titre", "Export et sauvegarde"),
@@ -777,6 +807,36 @@ const ANGLAIS: Catalogue = &[
         "This file is too large for a measurement file (over 16 MiB). Nothing was imported.",
     ),
     ("bibliotheque.erreur.export", "The file could not be written."),
+    // Fleet: printers, papers, resolutions and profiles
+    (
+        "parc.vide",
+        "No printer yet. Add the workshop’s first printer, then its papers.",
+    ),
+    ("parc.ajouter_imprimante", "Add a printer"),
+    (
+        "parc.erreur.imprimante_inconnue",
+        "This printer is no longer in the library.",
+    ),
+    (
+        "parc.erreur.papier_inconnu",
+        "This paper is no longer in the library.",
+    ),
+    (
+        "parc.erreur.reglage_inconnu",
+        "This resolution is no longer in the library.",
+    ),
+    (
+        "parc.erreur.profil_inconnu",
+        "This profile is no longer in the library.",
+    ),
+    (
+        "parc.erreur.profil_illisible",
+        "This file is not an RGB or CMYK ICC profile. Choose a printer .icc or .icm file.",
+    ),
+    (
+        "parc.erreur.fichier_illisible",
+        "The file could not be read. Check that it still exists and is not open elsewhere.",
+    ),
     ("bibliotheque.erreur.apercu_absent", "No file waiting. First choose a file to import."),
     ("export.titre", "Export and backup"),
     ("export.pourquoi.cgats", "“Export for profiling…” writes the chosen measurement to a file that profiling software reads."),

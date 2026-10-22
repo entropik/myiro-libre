@@ -9,6 +9,7 @@ pub mod colonne;
 pub mod demonstration;
 pub mod instrument;
 pub mod mesurer;
+pub mod parc;
 pub mod pont;
 pub mod textes;
 
@@ -606,6 +607,13 @@ pub fn lancer() {
             colonne::bibliotheque_ranger_import,
             colonne::bibliotheque_annuler_import,
             colonne::bibliotheque_detail_importee,
+            parc::parc,
+            parc::parc_ajouter_imprimante,
+            parc::parc_ajouter_papier,
+            parc::parc_ajouter_resolution,
+            parc::parc_detail_reglage,
+            parc::parc_ranger_profil,
+            parc::parc_exporter_profil,
             etalonner,
             repondre_geste
         ])

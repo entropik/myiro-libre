@@ -61,7 +61,9 @@ impl BibliothequeOuverte {
         }
     }
 
-    fn avec<T>(
+    /// Donne la bibliothèque ouverte à `f` ; une erreur devient une clé du
+    /// catalogue. Aussi utilisé par le module `parc`.
+    pub(crate) fn avec<T>(
         &self,
         f: impl FnOnce(&Bibliotheque) -> Result<T, ErreurBibliotheque>,
     ) -> Result<T, String> {
@@ -360,6 +362,13 @@ pub fn cle_erreur(erreur: &ErreurBibliotheque) -> &'static str {
     match erreur {
         ErreurBibliotheque::NomVide => "bibliotheque.erreur.nom_vide",
         ErreurBibliotheque::NomDejaPris(_) => "bibliotheque.erreur.nom_pris",
+        ErreurBibliotheque::ImprimanteInconnue(_) => "parc.erreur.imprimante_inconnue",
+        ErreurBibliotheque::PapierInconnu(_) => "parc.erreur.papier_inconnu",
+        ErreurBibliotheque::ProfilInconnu(_) => "parc.erreur.profil_inconnu",
+        ErreurBibliotheque::ProfilIllisible(detail) => {
+            eprintln!("{detail}");
+            "parc.erreur.profil_illisible"
+        }
         ErreurBibliotheque::ImportIllisible(detail) => {
             eprintln!("{detail}");
             "bibliotheque.erreur.cgats_illisible"
