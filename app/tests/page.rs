@@ -594,3 +594,52 @@ fn le_parc_ne_demande_que_des_cles_du_catalogue() {
         .collect();
     assert!(inconnues.is_empty(), "clés absentes : {inconnues:?}");
 }
+
+// ---- Relecture du ticket #68 ----
+
+/// Pendant une action sur le profil (ranger, exporter, installer), les trois
+/// boutons sont inactifs et une raison « en cours » est dite juste à côté.
+#[test]
+fn pendant_une_action_sur_le_profil_les_boutons_disent_pourquoi() {
+    let page = lire("interface/index.html");
+    let vue = element(&page, "data-vue-reglage");
+    let raison = vue
+        .split('<')
+        .find(|b| b.contains("data-reglage-occupe"))
+        .and_then(|b| b.split('>').next())
+        .expect("raison « en cours » absente");
+    assert!(raison.starts_with("p class=\"why\""), "{raison}");
+    assert!(raison.contains("data-t=\"parc.en_cours\""), "{raison}");
+    assert!(raison.split_whitespace().any(|a| a == "hidden"), "{raison}");
+
+    let script = lire("interface/reglage.js");
+    assert!(
+        script.contains("const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil]\";"),
+        "les trois boutons"
+    );
+    assert!(script.contains("occupe.hidden = !enCours;"));
+    assert!(app::textes::cles().any(|c| c == "parc.en_cours"));
+}
+
+/// La pastille dit « en mesure » pendant une mesure seulement, pas pendant
+/// l'étalonnage.
+#[test]
+fn la_pastille_n_est_en_mesure_que_pendant_une_mesure() {
+    let script = lire("interface/app.js");
+    assert!(
+        script.contains("if (operationEnCours === \"mesure\") return \"en-mesure\";"),
+        "pastille"
+    );
+    assert!(!script.contains("if (operationEnCours) return \"en-mesure\";"));
+}
+
+/// Un état de vérification inconnu de la page ne casse pas la vue : elle le
+/// montre comme « Profil non vérifié ».
+#[test]
+fn un_etat_de_verification_inconnu_est_montre_non_verifie() {
+    let script = lire("interface/reglage.js");
+    assert!(
+        script.contains("VERDICTS[actif.etat] || VERDICTS.non_verifie"),
+        "repli absent"
+    );
+}

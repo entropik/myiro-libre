@@ -139,6 +139,10 @@ const FRANCAIS: Catalogue = &[
     ),
     ("parc.range", "Profil rangé. Il devient le profil actuel."),
     (
+        "parc.en_cours",
+        "Action en cours sur ce profil. Les boutons reviennent dès qu’elle est finie.",
+    ),
+    (
         "parc.deja_installe",
         "Ce profil est déjà installé dans Windows, à l’identique.",
     ),
@@ -945,6 +949,10 @@ const ANGLAIS: Catalogue = &[
         "Profile computation arrives in a coming step.",
     ),
     ("parc.range", "Profile stored. It is now the current profile."),
+    (
+        "parc.en_cours",
+        "Action in progress on this profile. The buttons come back as soon as it is done.",
+    ),
     (
         "parc.deja_installe",
         "This profile is already installed in Windows, unchanged.",

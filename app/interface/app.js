@@ -251,7 +251,8 @@ function remplirEcran(section) {
 // Un instrument seulement détecté (FD-9) est présent : pastille « connecté », le texte dit « détecté ».
 const PASTILLES = { non_detecte: "non-detecte", etalonnage_requis: "etalonnage-requis", etalonne: "etalonne" };
 function etatPastille(vue) {
-  if (operationEnCours) return "en-mesure";
+  // L'étalonnage garde l'état de l'instrument (« étalonnage requis ») ; seule la mesure est « en mesure ».
+  if (operationEnCours === "mesure") return "en-mesure";
   if (!vue || !vue.modele) return "non-detecte";
   return PASTILLES[vue.etat] || "connecte";
 }
