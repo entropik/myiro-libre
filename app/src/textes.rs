@@ -41,6 +41,8 @@ const FRANCAIS: Catalogue = &[
     ("tache.controler", "Contrôler"),
     ("tache.profiler", "Profiler"),
     ("tache.bibliotheque", "Bibliothèque"),
+    ("tache.imprimer", "Imprimer"),
+    ("marque.sous_titre", "poste couleur et impression"),
     ("instrument.libelle", "Instrument"),
     ("instrument.aucun", "Aucun instrument"),
     ("theme.libelle", "Thème"),
@@ -160,13 +162,37 @@ const FRANCAIS: Catalogue = &[
     ("lecture.plages", "plages"),
     ("lecture.plage", "plage"),
     // Feuille de travail, au centre
-    ("feuille.numero", "Feuille 01"),
     ("vide.mesurer.phrase", "Aucune mesure."),
     ("vide.mesurer.action", "Mesurer une couleur"),
-    ("vide.controler.phrase", "Aucun contrôle d’impression."),
-    ("vide.controler.action", "Contrôler un tirage"),
-    ("vide.profiler.phrase", "Aucun profil."),
-    ("vide.profiler.action", "Créer un profil"),
+    // Tâches prévues : ce qu’elles feront et quand
+    ("prevu.libelle", "Prévu"),
+    (
+        "prevu.profiler.texte",
+        "Imprimer une mire, la mesurer, puis calculer le profil ICC du papier et le ranger dans la bibliothèque, en quatre étapes.",
+    ),
+    ("prevu.profiler.action", "Commencer un profil"),
+    (
+        "prevu.profiler.raison",
+        "Le calcul des profils arrive dans une prochaine étape de la livraison couleur.",
+    ),
+    (
+        "prevu.controler.texte",
+        "Mesurer un tirage et le comparer au profil de son papier, avec un verdict conforme, proche de la limite ou hors tolérance.",
+    ),
+    ("prevu.controler.action", "Contrôler un tirage"),
+    (
+        "prevu.controler.raison",
+        "Le contrôle des tirages arrive avec la vérification des profils, dans la livraison couleur.",
+    ),
+    (
+        "prevu.imprimer.texte",
+        "Choisir la machine et le support, ajouter les fichiers, les placer sur le rouleau ou la feuille, puis imprimer avec le profil de la bibliothèque.",
+    ),
+    ("prevu.imprimer.action", "Ajouter à la file"),
+    (
+        "prevu.imprimer.raison",
+        "L’impression arrive à la troisième étape de la livraison, après la couleur et le CMJN.",
+    ),
     ("vide.bibliotheque.phrase", "Aucune condition d’impression."),
     (
         "vide.bibliotheque.action",
@@ -705,6 +731,8 @@ const ANGLAIS: Catalogue = &[
     ("tache.controler", "Check"),
     ("tache.profiler", "Profile"),
     ("tache.bibliotheque", "Library"),
+    ("tache.imprimer", "Print"),
+    ("marque.sous_titre", "colour and print station"),
     ("instrument.libelle", "Instrument"),
     ("instrument.aucun", "No instrument"),
     ("theme.libelle", "Theme"),
@@ -814,13 +842,37 @@ const ANGLAIS: Catalogue = &[
     ("lecture.plages", "patches"),
     ("lecture.plage", "patch"),
     // Work sheet, centre
-    ("feuille.numero", "Sheet 01"),
     ("vide.mesurer.phrase", "No measurement yet."),
     ("vide.mesurer.action", "Measure a colour"),
-    ("vide.controler.phrase", "No print check yet."),
-    ("vide.controler.action", "Check a print"),
-    ("vide.profiler.phrase", "No profile yet."),
-    ("vide.profiler.action", "Create a profile"),
+    // Planned tasks: what they will do and when
+    ("prevu.libelle", "Planned"),
+    (
+        "prevu.profiler.texte",
+        "Print a chart, measure it, then compute the paper’s ICC profile and store it in the library, in four steps.",
+    ),
+    ("prevu.profiler.action", "Start a profile"),
+    (
+        "prevu.profiler.raison",
+        "Profile computation arrives in a coming step of the colour release.",
+    ),
+    (
+        "prevu.controler.texte",
+        "Measure a print and compare it with its paper’s profile, with a verdict: within tolerance, near the limit or out of tolerance.",
+    ),
+    ("prevu.controler.action", "Check a print"),
+    (
+        "prevu.controler.raison",
+        "Print checks arrive with profile verification, in the colour release.",
+    ),
+    (
+        "prevu.imprimer.texte",
+        "Choose the machine and media, add the files, place them on the roll or sheet, then print with the profile from the library.",
+    ),
+    ("prevu.imprimer.action", "Add to the queue"),
+    (
+        "prevu.imprimer.raison",
+        "Printing arrives in the third step of the release, after colour and CMYK.",
+    ),
     ("vide.bibliotheque.phrase", "No printing condition yet."),
     ("vide.bibliotheque.action", "Add a printing condition"),
     (

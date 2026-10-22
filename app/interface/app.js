@@ -32,11 +32,9 @@ async function appliquerLangue(code) {
   document.dispatchEvent(new CustomEvent("langue-appliquee"));
 }
 
-// ---- Thème : celui du système tant que l'utilisateur n'a pas choisi ----
-const sombreSysteme = window.matchMedia("(prefers-color-scheme: dark)");
-
+// ---- Thème : bleu nuit (sombre) tant que l'utilisateur n'a pas choisi le clair ----
 function themeEffectif() {
-  return racine.dataset.theme || (sombreSysteme.matches ? "dark" : "light");
+  return racine.dataset.theme || "dark";
 }
 
 function marquerTheme() {
@@ -47,14 +45,14 @@ function marquerTheme() {
 }
 
 function appliquerTheme(theme) {
-  if (theme) racine.dataset.theme = theme;
+  racine.dataset.theme = theme === "light" ? "light" : "dark";
   marquerTheme();
 }
 
-// ---- Tâches ----
+// ---- Tâches : l'application s'ouvre sur la Bibliothèque ----
 function tacheCourante() {
   const b = document.querySelector("[data-tache][aria-current='page']");
-  return b ? b.dataset.tache : "mesurer";
+  return b ? b.dataset.tache : "bibliotheque";
 }
 
 function afficherTache(tache) {
@@ -62,7 +60,10 @@ function afficherTache(tache) {
     if (b.dataset.tache === tache) b.setAttribute("aria-current", "page");
     else b.removeAttribute("aria-current");
   }
-  document.querySelector("[data-tache-courante]").textContent = textes["tache." + tache] || "";
+  // Fil d'Ariane : le nom de la tâche ; la bibliothèque le complète (parc.js).
+  const ariane = document.querySelector("[data-ariane]");
+  ariane.replaceChildren(textes["tache." + tache] || "");
+  ariane.title = ariane.textContent;
   afficherFeuille();
   document.dispatchEvent(new CustomEvent("tache-affichee", { detail: tache }));
 }
@@ -76,7 +77,8 @@ let occupe = true; // recherche de l'instrument en cours
 // Étalonnage ou mesure en cours (« etalonnage », « mesure ») : l'instrument attend
 // un geste, la liste des instruments ne doit pas cacher son écran.
 let operationEnCours = null;
-const TACHES_SANS_INSTRUMENT = ["bibliotheque"];
+// Seule Mesurer a besoin de l'instrument ; les tâches prévues montrent leur carte.
+const TACHES_SANS_INSTRUMENT = ["bibliotheque", "profiler", "controler", "imprimer"];
 
 // Reçoit la vue du module : l'instrument actif et la liste du poste.
 function recevoir(poste) {
@@ -245,6 +247,15 @@ function remplirEcran(section) {
   section.querySelector("[data-raison-recherche]").hidden = !occupe;
 }
 
+// Cinq états de la pastille : non détecté, connecté, étalonnage requis, étalonné, en mesure.
+// Un instrument seulement détecté (FD-9) est présent : pastille « connecté », le texte dit « détecté ».
+const PASTILLES = { non_detecte: "non-detecte", etalonnage_requis: "etalonnage-requis", etalonne: "etalonne" };
+function etatPastille(vue) {
+  if (operationEnCours) return "en-mesure";
+  if (!vue || !vue.modele) return "non-detecte";
+  return PASTILLES[vue.etat] || "connecte";
+}
+
 function afficherInstrument() {
   const barre = document.querySelector("[data-instrument]");
   const texte = barre.querySelector("[data-instrument-texte]");
@@ -258,10 +269,9 @@ function afficherInstrument() {
       .replace("{modele}", vue.modele)
       .replace("{etat}", textes["instrument.etat." + vue.etat]);
   }
-  // « Prêt » est décidé par le module `instrument`, jamais ici.
-  const pret = Boolean(vue && vue.pret);
-  barre.classList.toggle("state--ok", pret);
-  barre.classList.toggle("state--warn", !pret);
+  // Pastille : l'état décidé par le module `instrument`, jamais déduit ici ; le texte le dit aussi.
+  const pastille = barre.querySelector("[data-pastille]");
+  pastille.className = "pastille pastille--" + etatPastille(vue);
   // La liste s'ouvre dès qu'il y a un instrument à montrer ; jamais pendant une
   // recherche, un étalonnage ou une mesure : la raison est donnée au survol.
   const operation = operationEnCours || (occupe ? "recherche" : null);
@@ -419,10 +429,8 @@ document.addEventListener("click", (e) => {
     afficherInstrument();
   }
 });
-sombreSysteme.addEventListener("change", marquerTheme);
-
 (async () => {
-  appliquerTheme(memoire("theme"));
+  appliquerTheme(memoire("theme") || "dark");
   const demandee = await invoke("langue_demandee");
   await appliquerLangue(demandee || memoire("langue") || "fr");
   document.body.hidden = false;

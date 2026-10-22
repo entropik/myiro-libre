@@ -332,3 +332,125 @@ fn une_mesure_sans_nom_ne_montre_pas_sa_date_deux_fois() {
         "const detail = m.nom ? `${dateCourte(m.horodatage)} · ${lecture(m.geometrie, m.plages)}` : dateCourte(m.horodatage);"
     ));
 }
+
+// ---- Cadre à trois zones et cinq tâches (ticket #68) ----
+
+/// Valeur d'un attribut dans une balise (`<button … data-tache="x" …>`).
+fn attribut<'a>(balise: &'a str, nom: &str) -> Option<&'a str> {
+    let motif = format!(" {nom}=\"");
+    let (_, reste) = balise.split_once(&motif)?;
+    reste.split('"').next()
+}
+
+/// Balises ouvrantes de la page, dans l'ordre, avec leur position.
+fn balises(page: &str) -> Vec<(usize, &str)> {
+    page.match_indices('<')
+        .map(|(i, _)| (i, page[i..].split('>').next().unwrap_or_default()))
+        .collect()
+}
+
+/// La barre du haut a les cinq tâches, dans l'ordre du poste unique, chacune
+/// avec son icône et son libellé du catalogue ; l'application s'ouvre sur la
+/// Bibliothèque. Trois zones sous la barre.
+#[test]
+fn la_barre_a_cinq_taches_dans_l_ordre_avec_une_icone() {
+    let page = lire("interface/index.html");
+    let taches: Vec<(usize, &str)> = balises(&page)
+        .into_iter()
+        .filter(|(_, b)| b.starts_with("<button") && attribut(b, "data-tache").is_some())
+        .collect();
+    let noms: Vec<&str> = taches
+        .iter()
+        .filter_map(|(_, b)| attribut(b, "data-tache"))
+        .collect();
+    assert_eq!(
+        noms,
+        [
+            "bibliotheque",
+            "profiler",
+            "mesurer",
+            "controler",
+            "imprimer"
+        ]
+    );
+    for (debut, balise) in &taches {
+        let nom = attribut(balise, "data-tache").unwrap_or_default();
+        let bouton = page[*debut..].split("</button>").next().unwrap_or_default();
+        assert!(bouton.contains("<svg"), "{nom} sans icône");
+        assert!(
+            bouton.contains(&format!("data-t=\"tache.{nom}\"")),
+            "{nom} sans libellé"
+        );
+    }
+    assert!(
+        taches[0].1.contains("aria-current=\"page\""),
+        "ouverture sur Bibliothèque"
+    );
+    for zone in ["gauche", "centre", "droite"] {
+        assert!(
+            page.contains(&format!("data-zone=\"{zone}\"")),
+            "zone {zone}"
+        );
+    }
+    for tache in noms {
+        assert!(
+            page.contains(&format!("data-vue=\"{tache}\"")),
+            "vue {tache}"
+        );
+    }
+    assert!(page.contains("data-ariane"));
+}
+
+/// Tout bouton principal inactif dans la page est suivi, juste après et
+/// avant tout autre bouton, d'une raison (`<p class="why" data-t=…>`).
+#[test]
+fn chaque_bouton_principal_inactif_dit_pourquoi() {
+    let page = lire("interface/index.html");
+    let mut vus = 0;
+    for (debut, balise) in balises(&page) {
+        let principal = balise.starts_with("<button")
+            && attribut(balise, "class").is_some_and(|c| c.split(' ').any(|c| c == "btn--primary"));
+        if !principal || !balise.split_whitespace().any(|a| a == "disabled") {
+            continue;
+        }
+        vus += 1;
+        let apres = &page[debut + balise.len()..];
+        let Some(position) = apres.find("<p class=\"why\"") else {
+            panic!("sans raison : {balise}");
+        };
+        let entre = &apres[..position];
+        assert!(
+            !entre.contains("<button") && !entre.contains("<section"),
+            "raison trop loin : {balise}"
+        );
+        let raison = apres[position..].split('>').next().unwrap_or_default();
+        assert!(
+            raison.contains(" data-t=\""),
+            "raison sans texte : {raison}"
+        );
+    }
+    assert!(vus >= 4, "boutons principaux inactifs vus : {vus}");
+}
+
+/// La pastille de l'instrument a une règle pour chacun de ses cinq états.
+#[test]
+fn la_pastille_connait_les_cinq_etats() {
+    let css = composants();
+    for etat in [
+        "non-detecte",
+        "connecte",
+        "etalonnage-requis",
+        "etalonne",
+        "en-mesure",
+    ] {
+        let selecteur = format!(".pastille--{etat}");
+        assert!(
+            regle(&css, &selecteur)
+                .iter()
+                .any(|c| c.contains("background:")),
+            "{selecteur}"
+        );
+    }
+    let script = lire("interface/app.js");
+    assert!(script.contains("pastille--"), "app.js ne pose pas l'état");
+}

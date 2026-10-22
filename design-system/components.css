@@ -37,6 +37,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 }
 .marque { font-weight: 700; letter-spacing: var(--tracking-wide); margin-right: var(--space-4); white-space: nowrap; }
 .marque small { display: block; font-size: var(--text-xs); font-weight: 400; letter-spacing: var(--tracking-normal); color: var(--attenue); }
+.taches { display: flex; gap: var(--space-1); }
 /* Tâche : icône au-dessus du libellé. */
 .tache {
   display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
@@ -125,6 +126,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 
 /* ---- Arbre de la bibliothèque : imprimante, papier, résolution ---- */
 .recherche { margin: var(--space-4) var(--space-4) var(--space-2); }
+.recherche .label { display: block; margin-bottom: var(--space-1); }
 .arbre { list-style: none; margin: 0; padding: 0 var(--space-2) var(--space-2); }
 .noeud {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
