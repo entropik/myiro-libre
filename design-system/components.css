@@ -1,290 +1,317 @@
-/* Composants de myiro-libre. Dépend uniquement de tokens.css. Aucun style en ligne :
-   les seules valeurs dynamiques passent par des propriétés personnalisées (--w, --c, --ref, --mes, --n). */
+/* Composants de myiro-libre : thème bleu nuit, cartes, accent bleu. Dépend uniquement de tokens.css.
+   Aucun style en ligne : les seules valeurs dynamiques passent par des propriétés personnalisées
+   (--c, --ref, --mes, --n). Ni ombre, ni dégradé ; angles droits, sauf la pastille de l'instrument. */
 
 /* ---- Base ---- */
 html { font-optical-sizing: auto; -webkit-text-size-adjust: 100%; }
 *, *::before, *::after { box-sizing: border-box; }
 /* Barres de défilement fines partout, jamais l'ascenseur épais du système. */
-* { scrollbar-width: thin; scrollbar-color: var(--color-hair) transparent; }
+* { scrollbar-width: thin; scrollbar-color: var(--filet) transparent; }
 body {
-  margin: 0; background: var(--color-paper); color: var(--color-ink);
+  margin: 0; background: var(--fond); color: var(--encre);
   font-family: var(--font-body); font-size: var(--text-base); line-height: var(--leading-normal);
   text-align: left; font-kerning: normal; font-variant-ligatures: common-ligatures;
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
 }
 h1, h2, h3, p { margin: 0; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
-:focus-visible { outline: var(--rule-strong) solid var(--color-ink); outline-offset: var(--space-1); }
+:focus-visible { outline: var(--rule-strong) solid var(--accent); outline-offset: var(--rule-strong); }
 .num, table { font-variant-numeric: tabular-nums lining-nums; }
-.mute { color: var(--color-muted); }
+.mute { color: var(--attenue); }
 .small { font-size: var(--text-sm); }
 .prose { max-width: var(--measure); }
+.prose + .prose { margin-top: var(--space-2); }
 
-/* ---- Libellé de section : capitales, approche large ---- */
+/* ---- Libellé : capitales, approche large ---- */
 .label {
   font-size: var(--text-xs); font-weight: 600; text-transform: uppercase;
-  letter-spacing: var(--tracking-widest); color: var(--color-muted);
+  letter-spacing: var(--tracking-widest); color: var(--attenue);
 }
-.label--ink { color: var(--color-ink); }
+.label--ink { color: var(--encre); }
 
-/* ---- Grille : 12 colonnes ---- */
-.page { max-width: var(--grid-max); margin: 0 auto; padding: 0 var(--grid-margin); }
-.grid { display: grid; grid-template-columns: repeat(var(--grid-columns), 1fr); column-gap: var(--grid-gutter); }
-.c-1-2 { grid-column: 1 / span 2; }
-.c-1-3 { grid-column: 1 / span 3; }
-.c-4-9 { grid-column: 4 / span 6; }
-.c-3-9 { grid-column: 3 / span 7; }
-.c-10-12 { grid-column: 10 / span 3; }
-.c-3-7 { grid-column: 3 / span 5; }
-.c-8-12 { grid-column: 8 / span 5; }
-.c-1-6 { grid-column: 1 / span 6; }
-.c-7-12 { grid-column: 7 / span 6; }
-.c-1-4 { grid-column: 1 / span 4; }
-.c-5-8 { grid-column: 5 / span 4; }
-.c-9-12 { grid-column: 9 / span 4; }
-.c-5-12 { grid-column: 5 / span 8; }
-.c-1-12 { grid-column: 1 / -1; }
+/* ---- Cadre : barre du haut (64 px), puis trois zones ; seules les zones défilent ---- */
+.app:not([hidden]) { display: grid; grid-template-rows: 64px minmax(0, 1fr); height: 100vh; overflow: hidden; }
+.barre-haut {
+  display: flex; align-items: center; gap: var(--space-1); min-width: 0;
+  padding: 0 var(--space-4); background: var(--barre); border-bottom: var(--rule) solid var(--filet);
+}
+.marque { font-weight: 700; letter-spacing: var(--tracking-wide); margin-right: var(--space-4); white-space: nowrap; }
+.marque small { display: block; font-size: var(--text-xs); font-weight: 400; letter-spacing: var(--tracking-normal); color: var(--attenue); }
+/* Tâche : icône au-dessus du libellé. */
+.tache {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
+  padding: var(--space-1) var(--space-3); border: var(--rule) solid transparent;
+  color: var(--attenue); font-size: var(--text-sm); white-space: nowrap;
+}
+.tache svg { width: var(--icone); height: var(--icone); fill: none; stroke: currentColor; stroke-width: 1.6; }
+.tache:hover { color: var(--encre); }
+.tache[aria-current="page"] { color: var(--encre); border-color: var(--filet); background: var(--carte); }
+.tache[aria-current="page"] svg { stroke: var(--accent); }
+.barre-haut__outils { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+/* L'instrument actif : pastille d'état et texte ; un clic ouvre la liste des instruments. */
+.instrument-actif {
+  display: flex; align-items: center; gap: var(--space-2); min-width: 0;
+  padding: var(--space-2) var(--space-3); border: var(--rule) solid var(--filet); background: var(--carte);
+  font-size: var(--text-sm);
+}
+.instrument-actif > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.instrument-actif:hover:not([disabled]), .instrument-actif[aria-expanded="true"] { border-color: var(--accent); }
+.instrument-actif[disabled] { cursor: default; }
+/* Pastille : seul cercle du système. La couleur double le texte d'état, jamais seule. */
+.pastille { flex: none; width: var(--pastille); height: var(--pastille); border-radius: 50%; background: var(--attenue); border: var(--rule-strong) solid var(--attenue); }
+.pastille--non-detecte { background: transparent; border-color: var(--attenue); }
+.pastille--connecte { background: var(--accent); border-color: var(--accent); }
+.pastille--etalonnage-requis { background: var(--limite); border-color: var(--limite); }
+.pastille--etalonne { background: var(--conforme); border-color: var(--conforme); }
+.pastille--en-mesure { background: transparent; border-color: var(--accent); }
+
+.zones { display: grid; grid-template-columns: 270px minmax(0, 1fr) 300px; min-height: 0; }
+.zone-gauche, .zone-centre, .zone-droite { min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; }
+.zone-gauche { background: var(--panneau); border-right: var(--rule) solid var(--filet); padding-bottom: var(--space-6); }
+.zone-centre { padding: var(--space-6) var(--space-8); }
+.zone-droite { background: var(--panneau); border-left: var(--rule) solid var(--filet); padding-bottom: var(--space-6); }
+.zone__titre { display: block; padding: var(--space-2) var(--space-4); }
+.zone-droite__titre {
+  padding: var(--space-4); font-size: var(--text-lg); border-bottom: var(--rule) solid var(--filet);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.zone-droite > .cartouche, .zone-droite > [data-details-tache] > .cartouche { margin: var(--space-4); }
+.zone-droite > [data-details-tache] { padding: 0 var(--space-4); }
+
+/* ---- Fil d'Ariane et titre du centre ---- */
+.ariane {
+  font-size: var(--text-xs); letter-spacing: var(--tracking-widest); text-transform: uppercase;
+  color: var(--attenue); margin-bottom: var(--space-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ariane b { color: var(--accent); font-weight: 600; }
+.titre { font-size: var(--text-3xl); font-weight: 500; line-height: var(--leading-snug); margin-bottom: var(--space-4); overflow-wrap: break-word; }
+
+/* ---- Carte ---- */
+.carte { background: var(--carte); border: var(--rule) solid var(--filet); padding: var(--space-4) var(--space-5); margin-bottom: var(--space-4); }
+.carte > .label { display: block; margin-bottom: var(--space-2); }
+.carte__pied { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-4); }
+
+/* ---- Verdict : couleur, icône et mot, jamais la couleur seule ---- */
+.carte--verdict { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+.verdict__icone { flex: none; width: var(--space-8); height: var(--space-8); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: square; }
+.verdict__texte { flex: 1; min-width: 0; }
+.verdict__contexte { display: block; font-size: var(--text-xs); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--attenue); }
+.verdict__mot { font-size: var(--text-4xl); font-weight: 500; line-height: var(--leading-tight); }
+.verdict--conforme .verdict__mot, .verdict--conforme .verdict__icone { color: var(--conforme); }
+.verdict--limite .verdict__mot, .verdict--limite .verdict__icone { color: var(--limite); }
+.verdict--hors .verdict__mot, .verdict--hors .verdict__icone { color: var(--hors); }
+.verdict--aucun .verdict__mot, .verdict--aucun .verdict__icone { color: var(--attenue); }
+/* Verdict de la feuille Mesurer (mesurer.js) : mot et carré à symbole. */
+.verdict__word { font-size: var(--text-4xl); font-weight: 500; line-height: var(--leading-tight); margin-top: var(--space-2); }
+.verdict__word--l { font-size: var(--text-5xl); }
+/* Zone de droite (300 px) : « Hors tolérance » tient sans couper le mot. */
+.verdict__word--m { font-size: var(--text-2xl); margin-top: 0; }
+.verdict--ok .verdict__word { color: var(--conforme); }
+.verdict--warn .verdict__word { color: var(--limite); }
+.verdict--bad .verdict__word { color: var(--hors); }
+.verdict__word + p { margin-top: var(--space-3); }
+.verdict__row { display: flex; gap: var(--space-3); align-items: center; margin-top: var(--space-3); }
+.mark { flex: none; width: var(--space-8); height: var(--space-8); display: grid; place-items: center; color: var(--conforme); border: var(--rule-strong) solid currentColor; }
+.mark--warn { color: var(--limite); }
+.mark--bad { color: var(--hors); }
+.mark svg { width: var(--space-6); height: var(--space-6); fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: square; }
+
+/* ---- Critères : quatre cartes de chiffres ---- */
+.criteres { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+.critere { background: var(--carte); border: var(--rule) solid var(--filet); padding: var(--space-3) var(--space-4); min-width: 0; }
+.critere__nom { display: block; font-size: var(--text-xs); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--attenue); }
+.critere__valeur { display: block; font-size: var(--text-2xl); margin-top: var(--space-1); font-variant-numeric: tabular-nums; }
+
+/* ---- Arbre de la bibliothèque : imprimante, papier, résolution ---- */
+.recherche { margin: var(--space-4) var(--space-4) var(--space-2); }
+.arbre { list-style: none; margin: 0; padding: 0 var(--space-2) var(--space-2); }
+.noeud {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
+  min-width: 0; padding: var(--space-1) var(--space-2); cursor: pointer;
+}
+.noeud:hover { background: var(--carte); }
+.noeud[aria-selected="true"] { background: var(--selection); outline: var(--rule) solid var(--accent); outline-offset: calc(var(--rule) * -1); }
+.noeud--imprimante { font-weight: 600; }
+.noeud--papier { padding-left: var(--retrait-2); }
+.noeud--resolution { padding-left: var(--retrait-3); color: var(--attenue); font-size: var(--text-sm); }
+.noeud--resolution[aria-selected="true"] { color: var(--encre); }
+.noeud__corps { flex: 1; min-width: 0; }
+/* Un nom trop long finit par des points ; le nom entier se lit au survol (attribut title). */
+.noeud__nom { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.noeud__meta { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--attenue); font-size: var(--text-xs); }
+.noeud__compte { flex: none; font-size: var(--text-xs); color: var(--attenue); white-space: nowrap; }
+.noeud__repli { flex: none; width: var(--space-3); color: var(--attenue); }
+/* Âge du profil actif : récent, plus d'un an, aucun. */
+.age { flex: none; font-size: var(--text-xs); white-space: nowrap; }
+.age--recent { color: var(--conforme); }
+.age--ancien { color: var(--limite); }
+.age--aucun { color: var(--attenue); }
+/* Ajout en ligne, sans fenêtre. */
+.ajout { display: grid; row-gap: var(--space-2); padding: var(--space-2) var(--space-4); }
+.ajout .actions { margin: 0; }
+.zone-gauche > .actions { margin: var(--space-2) var(--space-4); }
+.zone-gauche > .why { padding: 0 var(--space-4); }
+
+/* ---- Étapes d'un parcours ---- */
+.etapes { display: flex; margin: var(--space-1) 0 var(--space-5); }
+.etape { flex: 1; min-width: 0; border: var(--rule) solid var(--filet); background: var(--carte); padding: var(--space-2) var(--space-3); }
+.etape__num { display: block; font-size: var(--text-xs); letter-spacing: var(--tracking-wide); color: var(--attenue); }
+.etape--faite .etape__num { color: var(--conforme); }
+.etape[aria-current="step"] { border-color: var(--accent); background: var(--selection); }
+/* Étalonnage guidé (app.js) : même dessin. */
+.steps { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); margin-bottom: var(--space-6); }
+.steps button {
+  display: flex; flex-direction: column; justify-content: flex-start; padding: var(--space-2) var(--space-3);
+  border: var(--rule) solid var(--filet); background: var(--carte); color: var(--attenue); font-size: var(--text-sm);
+}
+.steps button .label { display: block; margin-bottom: var(--space-1); }
+.steps button.done { color: var(--encre); }
+.steps button.done .label { color: var(--conforme); }
+.steps button[aria-current="step"] { border-color: var(--accent); background: var(--selection); color: var(--encre); font-weight: 600; }
+.steps button[disabled] { cursor: default; }
+
+/* ---- Puces : choix parmi quelques valeurs ---- */
+.puces { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.puces button { border: var(--rule) solid var(--filet); padding: var(--space-1) var(--space-3); }
+.puces button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); }
+
+/* ---- Détails à droite : sections repliables, clés et valeurs ---- */
+.section-repliable { border-bottom: var(--rule) solid var(--filet); }
+.section-repliable > summary { padding: var(--space-3) var(--space-4); font-weight: 600; cursor: pointer; }
+.section-repliable__corps { padding: 0 var(--space-4) var(--space-3); color: var(--attenue); font-size: var(--text-sm); }
+.cle-valeur { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); padding: var(--space-1) 0; }
+.cle-valeur > :last-child { color: var(--encre); font-weight: 500; text-align: right; min-width: 0; overflow-wrap: break-word; }
 
 /* ---- Boutons ---- */
-.btn {
-  padding: var(--space-3) var(--space-6); border: var(--rule-strong) solid var(--color-ink);
-  border-radius: var(--radius); font-weight: 600; font-size: var(--text-sm);
-}
-.btn--primary { background: var(--color-ink); color: var(--text-inverse); }
-.btn:hover { text-decoration: underline; text-underline-offset: var(--space-1); }
-.btn[disabled] { border-color: var(--color-muted); color: var(--color-muted); cursor: not-allowed; text-decoration: none; }
-.btn--primary[disabled] { background: transparent; }
-.why { font-size: var(--text-sm); color: var(--color-muted); margin-top: var(--space-2); }
-.actions { display: flex; gap: var(--space-3); flex-wrap: wrap; margin: var(--space-6) 0; }
-
-/* ---- Verdict : le mot est le composant ---- */
-.verdict__word {
-  font-size: var(--text-display); font-weight: 700; line-height: var(--leading-tight);
-  letter-spacing: var(--tracking-tight); margin-top: var(--space-2);
-}
-.verdict__word--l { font-size: var(--text-5xl); }
-/* Zone de droite (3 colonnes) : « Hors tolérance » tient sans couper le mot. */
-.verdict__word--m { font-size: var(--text-3xl); }
-.verdict--ok .verdict__word { color: var(--color-ok); }
-.verdict--warn .verdict__word { color: var(--color-warn); }
-.verdict--bad .verdict__word { color: var(--color-bad); }
-.verdict__word + p { margin-top: var(--space-3); }
-.verdict__row { display: flex; gap: var(--space-4); align-items: flex-start; margin-top: var(--space-4); }
-.mark { flex: none; width: var(--space-8); height: var(--space-8); display: grid; place-items: center; color: var(--text-inverse); background: var(--color-ok); }
-.mark--warn { background: var(--color-warn); }
-.mark--bad { background: var(--color-bad); }
-.mark svg { width: var(--space-6); height: var(--space-6); fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: square; }
+.btn { padding: var(--space-2) var(--space-4); border: var(--rule) solid var(--filet); background: transparent; font-weight: 500; white-space: nowrap; }
+.btn:hover:not([disabled]) { border-color: var(--accent); }
+.btn--primary { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); font-weight: 600; }
+.btn[disabled] { color: var(--attenue); cursor: not-allowed; }
+.btn--primary[disabled] { background: transparent; border-color: var(--filet); }
+.why { font-size: var(--text-sm); color: var(--attenue); margin-top: var(--space-2); }
+.actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin: var(--space-4) 0; }
 
 /* ---- État : carré de couleur et mot (jamais la couleur seule) ---- */
 .state { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: 600; white-space: nowrap; }
-.state i { display: inline-block; width: var(--space-3); height: var(--space-3); background: var(--color-ok); }
-.state--ok { color: var(--color-ok); }
-.state--warn { color: var(--color-warn); } .state--warn i { background: var(--color-warn); }
-.state--bad { color: var(--color-bad); } .state--bad i { background: var(--color-bad); }
-.state--none { color: var(--color-muted); } .state--none i { background: transparent; box-shadow: inset 0 0 0 var(--rule-strong) var(--color-muted); }
+.state i { display: inline-block; width: var(--space-3); height: var(--space-3); background: var(--conforme); }
+.state--ok { color: var(--conforme); }
+.state--warn { color: var(--limite); } .state--warn i { background: var(--limite); }
+.state--bad { color: var(--hors); } .state--bad i { background: var(--hors); }
+.state--none { color: var(--attenue); } .state--none i { background: transparent; border: var(--rule-strong) solid var(--attenue); }
 
-/* ---- Choix de l'instrument : l'état de la barre est un bouton, la liste remplace la feuille ---- */
-button.state:hover:not([disabled]), button.state[aria-expanded="true"] { text-decoration: underline; text-decoration-thickness: var(--rule-strong); text-underline-offset: var(--space-1); }
-button.state[disabled] { cursor: default; }
-.instruments { list-style: none; margin: var(--space-6) 0; padding: 0; max-width: var(--measure); border-bottom: var(--rule) solid var(--color-hair); }
-.instruments li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); min-height: var(--space-16); padding: var(--space-2) 0; border-top: var(--rule) solid var(--color-hair); }
-.instruments li.sel { border-top: var(--rule-heavy) solid var(--color-ink); }
+/* ---- Liste des instruments : elle remplace la vue du centre ---- */
+.instruments { list-style: none; margin: var(--space-6) 0; padding: 0; max-width: var(--measure); border-bottom: var(--rule) solid var(--filet); }
+.instruments li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); min-height: var(--space-16); padding: var(--space-2) var(--space-3); border-top: var(--rule) solid var(--filet); }
+.instruments li.sel { background: var(--selection); border-top-color: var(--accent); }
 .instruments .state { white-space: normal; }
-
-/* ---- Compteurs ---- */
-.kpis { display: grid; grid-template-columns: repeat(3, 1fr); border-top: var(--rule-strong) solid var(--color-rule); border-bottom: var(--rule) solid var(--color-rule); margin: var(--space-8) 0; }
-.kpis > div { padding: var(--space-3) var(--space-4) var(--space-4) 0; }
-.kpis > div + div { border-left: var(--rule) solid var(--color-hair); padding-left: var(--space-4); }
-.kpis .n { display: block; font-size: var(--text-5xl); font-weight: 600; line-height: var(--leading-tight); letter-spacing: var(--tracking-tight); }
-.kpis .ok { color: var(--color-ok); } .kpis .warn { color: var(--color-warn); } .kpis .bad { color: var(--color-bad); }
 
 /* ---- Tableau ---- */
 table { width: 100%; border-collapse: collapse; }
 th {
   font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: var(--tracking-wide);
-  color: var(--color-muted); text-align: left; padding: var(--space-2) var(--space-2) var(--space-2) 0;
-  border-bottom: var(--rule) solid var(--color-rule);
+  color: var(--attenue); text-align: left; padding: var(--space-2) var(--space-2) var(--space-2) 0;
+  border-bottom: var(--rule) solid var(--filet);
 }
-td { padding: var(--space-3) var(--space-2) var(--space-3) 0; border-bottom: var(--rule) solid var(--color-hair); font-size: var(--text-sm); vertical-align: middle; }
+td { padding: var(--space-2) var(--space-2) var(--space-2) 0; border-bottom: var(--rule) solid var(--filet); font-size: var(--text-sm); vertical-align: middle; }
 th.r, td.r { text-align: right; padding-right: var(--space-4); }
 th.lc { text-transform: none; letter-spacing: var(--tracking-normal); }
-td.id { color: var(--color-muted); width: var(--space-8); }
-tr.on td { background: var(--color-ink); color: var(--text-inverse); }
-tr.on td.id { color: inherit; }
-tr.hl td { background: var(--color-hair); }
+td.id { color: var(--attenue); width: var(--space-8); }
+tr.on td { background: var(--selection); }
+tr.hl td { background: var(--carte); }
 
-/* ---- Jauge : trait de limite à 80 % ---- */
-.gauge { position: relative; height: var(--space-2); background: var(--color-hair); min-width: var(--space-16); }
-.gauge::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--color-ok); }
-.gauge--warn::before { background: var(--color-warn); }
-.gauge--bad::before { background: var(--color-bad); }
-.gauge::after { content: ""; position: absolute; top: calc(var(--space-1) * -1); bottom: calc(var(--space-1) * -1); left: 80%; width: var(--rule-strong); background: var(--color-ink); }
-
-/* ---- Cartouche : la provenance comme sur un plan ---- */
-.cartouche { border: var(--rule-strong) solid var(--color-rule); }
-.cartouche__title { background: var(--color-ink); color: var(--text-inverse); padding: var(--space-3) var(--space-4); }
-.cartouche__title .label { color: inherit; }
-.cartouche__title strong { display: block; font-size: var(--text-lg); letter-spacing: var(--tracking-snug); margin-top: var(--space-1); }
+/* ---- Cartouche : la provenance d'une mesure ---- */
+.cartouche { border: var(--rule) solid var(--filet); background: var(--carte); }
+.cartouche__title { padding: var(--space-3) var(--space-4); border-bottom: var(--rule) solid var(--filet); }
+.cartouche__title strong { display: block; font-size: var(--text-lg); font-weight: 500; margin-top: var(--space-1); overflow-wrap: break-word; }
 .cells { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.cell { padding: var(--space-2) var(--space-3) var(--space-3); border-top: var(--rule) solid var(--color-rule); overflow-wrap: break-word; }
+.cell { padding: var(--space-2) var(--space-3) var(--space-3); border-top: var(--rule) solid var(--filet); overflow-wrap: break-word; font-size: var(--text-sm); }
+.cells > .cell:first-child, .cells > .cell:nth-child(2):not(.cell--wide) { border-top: 0; }
 .cell--wide { grid-column: 1 / -1; }
-.cell:nth-child(even):not(.cell--wide) { border-left: var(--rule) solid var(--color-rule); }
+.cell:nth-child(even):not(.cell--wide) { border-left: var(--rule) solid var(--filet); }
 .cell .label { display: block; margin-bottom: var(--space-1); }
-.cartouche__foot { display: flex; justify-content: space-between; border-top: var(--rule-strong) solid var(--color-rule); padding: var(--space-2) var(--space-3); font-size: var(--text-xs); }
+.cartouche__foot { display: flex; justify-content: space-between; border-top: var(--rule) solid var(--filet); padding: var(--space-2) var(--space-3); font-size: var(--text-xs); color: var(--attenue); }
 
 /* ---- Avis ---- */
-.notice { border: var(--rule-strong) solid var(--color-rule); padding: var(--space-4); margin-bottom: var(--space-8); }
-.notice--warn { border-color: var(--color-warn); }
-.notice--bad { border-color: var(--color-bad); }
+.notice { border: var(--rule) solid var(--filet); border-left: var(--rule-heavy) solid var(--accent); background: var(--carte); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); }
+.notice--warn { border-left-color: var(--limite); }
+.notice--bad { border-left-color: var(--hors); }
 .notice p + p { margin-top: var(--space-2); }
 
 /* ---- Détail replié : le détail technique sous une explication ---- */
-.replie { border-top: var(--rule) solid var(--color-hair); padding-top: var(--space-3); margin-top: var(--space-6); max-width: var(--measure); }
-.replie summary { cursor: pointer; font-size: var(--text-sm); color: var(--color-muted); }
+.replie { border-top: var(--rule) solid var(--filet); padding-top: var(--space-3); margin-top: var(--space-6); max-width: var(--measure); }
+.replie summary { cursor: pointer; font-size: var(--text-sm); color: var(--attenue); }
 .replie pre { margin: var(--space-2) 0 0; font: inherit; font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: pre-wrap; overflow-wrap: anywhere; }
 
-/* ---- Parcours numéroté ---- */
-.steps { display: grid; grid-template-columns: repeat(var(--n), 1fr); column-gap: var(--space-2); margin-bottom: var(--space-8); }
-.steps button {
-  display: flex; flex-direction: column; justify-content: flex-start; padding: var(--space-2) 0 var(--space-3);
-  border-top: var(--rule-heavy) solid var(--color-hair); color: var(--color-muted); font-size: var(--text-sm); font-weight: 500;
-}
-.steps button .label { display: block; margin-bottom: var(--space-1); }
-.steps button.done { border-top-color: var(--color-ink); color: var(--color-ink); }
-.steps button[aria-current="step"] { border-top-color: var(--color-ink); color: var(--color-ink); font-weight: 700; }
-
-/* ---- Schéma d’un geste : dessin au trait, repères numérotés, légende à côté ---- */
+/* ---- Schéma d'un geste : dessin au trait, repères numérotés, légende à côté ---- */
 .schema { display: grid; grid-template-columns: minmax(0, calc(var(--space-24) * 2.5)) 1fr; column-gap: var(--space-6); align-items: center; margin: var(--space-6) 0; max-width: var(--measure); }
 .schema svg { display: block; width: 100%; height: auto; }
-.schema__trait { fill: none; stroke: var(--color-ink); stroke-width: var(--rule-strong); }
-.schema__blanc { fill: var(--color-paper); stroke: var(--color-ink); stroke-width: var(--rule-heavy); }
-.schema__plein { fill: var(--color-ink); }
-.schema__sol { stroke: var(--color-hair); stroke-width: var(--rule-strong); }
-.schema__repere { stroke: var(--color-muted); stroke-width: var(--rule); }
-.schema text { fill: var(--color-ink); font-family: var(--font-body); font-size: var(--text-sm); font-weight: 700; }
+.schema__trait { fill: none; stroke: var(--encre); stroke-width: var(--rule-strong); }
+.schema__blanc { fill: var(--fond); stroke: var(--encre); stroke-width: var(--rule-heavy); }
+.schema__plein { fill: var(--encre); }
+.schema__sol { stroke: var(--filet); stroke-width: var(--rule-strong); }
+.schema__repere { stroke: var(--attenue); stroke-width: var(--rule); }
+.schema text { fill: var(--encre); font-family: var(--font-body); font-size: var(--text-sm); font-weight: 700; }
 .schema__legende { list-style: none; margin: 0; padding: 0; font-size: var(--text-sm); }
-.schema__legende li { display: grid; grid-template-columns: var(--space-6) 1fr; padding: var(--space-2) 0; border-top: var(--rule) solid var(--color-hair); }
+.schema__legende li { display: grid; grid-template-columns: var(--space-6) 1fr; padding: var(--space-2) 0; border-top: var(--rule) solid var(--filet); }
 
 /* ---- Contrôle segmenté, champs ---- */
-.seg { display: inline-flex; border: var(--rule-strong) solid var(--color-ink); }
-.seg button { padding: var(--space-2) var(--space-4); font-size: var(--text-sm); font-weight: 600; }
-.seg button + button { border-left: var(--rule-strong) solid var(--color-ink); }
-.seg button[aria-pressed="true"] { background: var(--color-ink); color: var(--text-inverse); }
+.seg { display: inline-flex; border: var(--rule) solid var(--filet); }
+.seg button { padding: var(--space-1) var(--space-3); font-size: var(--text-sm); font-weight: 500; }
+.seg button + button { border-left: var(--rule) solid var(--filet); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--sur-accent); }
 .field .label { display: block; margin-bottom: var(--space-2); }
-.field + .field { margin-top: var(--space-6); }
-.field p { font-size: var(--text-sm); color: var(--color-muted); margin-top: var(--space-2); max-width: var(--measure); }
-.input { width: 100%; text-overflow: ellipsis; padding: var(--space-2) 0; border: 0; border-bottom: var(--rule-strong) solid var(--color-rule); background: transparent; color: var(--color-ink); font: inherit; border-radius: var(--radius); }
-.input--error { border-bottom-color: var(--color-bad); }
-select.input option { background: var(--color-paper); color: var(--color-ink); }
-.checkrow { display: grid; grid-template-columns: var(--space-6) 1fr; column-gap: var(--space-3); padding: var(--space-3) 0; border-top: var(--rule) solid var(--color-hair); max-width: var(--measure); }
-.checkrow input { width: var(--space-4); height: var(--space-4); accent-color: var(--color-ink); margin-top: var(--space-1); }
+.field + .field { margin-top: var(--space-4); }
+.field p { font-size: var(--text-sm); color: var(--attenue); margin-top: var(--space-2); max-width: var(--measure); }
+.input { width: 100%; text-overflow: ellipsis; padding: var(--space-2) var(--space-3); border: var(--rule) solid var(--filet); background: var(--fond); color: var(--encre); font: inherit; }
+.input:focus { border-color: var(--accent); }
+.input--error { border-color: var(--hors); }
+select.input option { background: var(--panneau); color: var(--encre); }
 
-/* ---- Pastille de couleur, plages ---- */
-.swatch { box-shadow: inset 0 0 0 var(--rule) var(--color-hair); display: inline-block; width: var(--space-4); height: var(--space-4); background: var(--c); vertical-align: middle; }
-/* Aperçu d'une couleur mesurée : grand carré plein, simple filet, ni ombre ni arrondi. */
-.apercu { display: block; width: calc(var(--space-24) * 1.5); aspect-ratio: 1; background: var(--c); border: var(--rule) solid var(--color-rule); margin-bottom: var(--space-2); }
-/* Couleur de référence (en haut) et mesure (en bas) dans le même carré : à bords francs, pas un dégradé. */
-.apercu--comparaison { background: linear-gradient(var(--ref) 50%, var(--mes) 50%); }
-.rows { display: grid; row-gap: var(--space-1); }
-.prow { display: grid; grid-template-columns: var(--space-8) repeat(12, 1fr); column-gap: var(--space-1); align-items: stretch; padding: var(--space-1) 0; }
-.prow > b { display: grid; place-items: center; font-size: var(--text-sm); }
-.prow--cur { outline: var(--rule-heavy) solid var(--color-ink); }
-.prow--cur > b { background: var(--color-ink); color: var(--text-inverse); }
-.p { aspect-ratio: 1; background: repeating-linear-gradient(135deg, var(--color-hair) 0 var(--space-1), var(--color-paper) var(--space-1) var(--space-2)); }
-.p--read { background: linear-gradient(var(--ref) 50%, var(--mes) 50%); }
-.p--miss { background: var(--color-paper); outline: var(--rule-strong) solid var(--color-bad); outline-offset: calc(var(--rule-strong) * -1); }
+/* ---- Couleur mesurée ---- */
+.swatch { display: inline-block; width: var(--space-4); height: var(--space-4); background: var(--c); border: var(--rule) solid var(--filet); vertical-align: middle; }
+/* Aperçu d'une couleur mesurée : grand carré plein, simple filet. */
+.apercu { position: relative; display: block; width: calc(var(--space-24) * 1.5); aspect-ratio: 1; background: var(--c); border: var(--rule) solid var(--filet); margin-bottom: var(--space-2); }
+/* Couleur de référence (en haut) et mesure (en bas) dans le même carré, à bords francs. */
+.apercu--comparaison { background: var(--mes); }
+.apercu--comparaison::before { content: ""; position: absolute; inset: 0 0 50% 0; background: var(--ref); }
 
-/* ---- Index de la bibliothèque, numéroté comme une nomenclature ---- */
-.index ol { list-style: none; margin: 0; padding: 0; }
-.index li { display: grid; grid-template-columns: var(--space-8) minmax(0, 1fr) auto; overflow-wrap: break-word; column-gap: var(--space-2); padding: var(--space-2) 0; border-top: var(--rule) solid var(--color-hair); font-size: var(--text-sm); }
-.index li.l1 { border-top-color: var(--color-rule); font-weight: 700; margin-top: var(--space-4); }
-.index li.l1:first-child { margin-top: 0; }
-.index li.sel { background: var(--color-ink); color: var(--text-inverse); }
-.index li.sel * { color: inherit; }
-.index li[tabindex] { cursor: pointer; }
-/* Entrée d'une mesure : le nom, puis la date courte et la lecture ; deux lignes au plus, aucun mot coupé. */
-.index__nom, .index__meta { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.index__meta { color: var(--color-muted); font-size: var(--text-xs); }
-.index li.sel .index__meta { color: inherit; }
-.index > .field { margin: var(--space-4) 0; }
-
-/* ---- Bandeau et section ---- */
-.masthead { border-bottom: var(--rule-strong) solid var(--color-rule); background: var(--color-paper); }
-.masthead .grid { align-items: end; padding: var(--space-4) 0; }
-.brand { font-size: var(--text-lg); font-weight: 700; letter-spacing: var(--tracking-snug); }
-.nav { display: flex; gap: var(--space-8); }
-.nav button { padding: var(--space-1) 0; border-bottom: var(--rule-heavy) solid transparent; font-weight: 500; }
-.nav button .label { display: block; margin-bottom: var(--space-1); }
-.nav button[aria-current="page"] { border-bottom-color: var(--color-ink); font-weight: 700; }
-.sheet-head { display: flex; justify-content: space-between; align-items: baseline; border-top: var(--rule-heavy) solid var(--color-rule); padding-top: var(--space-2); margin-bottom: var(--space-6); }
-.masthead__tools { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-4); }
-.section { margin-top: var(--space-12); }
-.section__head { display: flex; justify-content: space-between; align-items: baseline; border-top: var(--rule-strong) solid var(--color-rule); padding-top: var(--space-2); margin-bottom: var(--space-3); }
-.section__title { font-size: var(--text-xl); font-weight: 600; letter-spacing: var(--tracking-snug); line-height: var(--leading-snug); }
-
-/* ---- Cadre de l'application : trois zones sous le bandeau ---- */
-.frame { padding-top: var(--space-8); padding-bottom: var(--space-12); }
-.frame > .grid { align-items: start; }
-.zone__title { display: block; margin-bottom: var(--space-3); }
-
-/* ---- Application plein cadre : la fenêtre ne défile jamais ; une zone trop longue défile seule ---- */
-.app:not([hidden]) { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-.app > .masthead { flex: none; }
-.app > .frame { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; padding-bottom: 0; }
-.app > .frame > .grid { flex: 1; min-height: 0; align-items: stretch; }
-.app > .frame > .grid > * { min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--color-hair) transparent; scrollbar-gutter: stable; padding-bottom: var(--space-12); }
-/* L'application occupe toute la largeur de la fenêtre ; les pages de documentation gardent leur mesure. */
-.app .page { max-width: none; padding-left: var(--space-4); padding-right: var(--space-4); }
-.app .grid { column-gap: var(--space-4); }
+/* ---- Section ---- */
+.section { margin-top: var(--space-8); }
+.section__head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); border-top: var(--rule) solid var(--filet); padding-top: var(--space-2); margin-bottom: var(--space-3); }
+.section__title { font-size: var(--text-xl); font-weight: 500; line-height: var(--leading-snug); }
+.section--serree { margin-top: var(--space-4); }
+.section--defile { margin-top: var(--space-4); }
 
 /* ---- Feuille à barre d'actions : les actions restent en vue, seul le tableau défile ---- */
 .barre { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.barre .btn { padding: var(--space-2) var(--space-4); }
 .actions--serrees { margin: var(--space-4) 0 0; }
-.section--serree { margin-top: var(--space-6); }
-/* Choix d'un élément parmi une liste ouverte (conditions d'impression) : pastilles qui passent à la ligne. */
+/* Choix d'un élément parmi une liste ouverte (conditions d'impression) : cases qui passent à la ligne. */
 .choix-liste { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.choix-liste__rang { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: var(--rule) solid var(--color-hair); font-size: var(--text-sm); cursor: pointer; }
-.choix-liste__rang input { width: var(--space-4); height: var(--space-4); margin: 0; accent-color: var(--color-ink); }
-.choix-liste__rang:has(input:checked) { border: var(--rule-strong) solid var(--color-ink); font-weight: 600; }
-.feuille__actions { padding-bottom: var(--space-3); margin-bottom: var(--space-6); border-bottom: var(--rule) solid var(--color-hair); }
+.choix-liste__rang { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: var(--rule) solid var(--filet); font-size: var(--text-sm); cursor: pointer; }
+.choix-liste__rang input { width: var(--space-4); height: var(--space-4); margin: 0; accent-color: var(--accent); }
+.choix-liste__rang:has(input:checked) { border-color: var(--accent); background: var(--selection); font-weight: 600; }
+.feuille__actions { padding-bottom: var(--space-3); margin-bottom: var(--space-4); border-bottom: var(--rule) solid var(--filet); }
 .feuille__actions > .why { margin-top: var(--space-2); }
 .feuille__actions > .notice { margin: var(--space-3) 0 0; }
 .feuille__actions > .replie { margin-top: var(--space-3); }
 .feuille__actions > .replie p + p { margin-top: var(--space-2); }
-.section--defile { margin-top: var(--space-6); }
-.defile { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--color-hair) transparent; }
-.defile thead th { position: sticky; top: 0; background: var(--color-paper); }
+.defile { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--filet) transparent; }
+.defile thead th { position: sticky; top: 0; background: var(--fond); }
 .table--compact td { padding-top: var(--space-1); padding-bottom: var(--space-1); font-size: var(--text-base); line-height: var(--leading-snug); }
-/* En plein cadre, la feuille remplit sa zone : la barre reste en haut, le tableau prend le reste. */
-.app > .frame > .grid > :has(> .feuille:not([hidden])) { display: flex; flex-direction: column; overflow: hidden; padding-bottom: var(--space-4); }
-.app .feuille:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.app .feuille > .feuille__actions { flex: none; }
-.app .feuille__corps:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--color-hair) transparent; }
-.app .feuille__corps > * { flex: none; }
-.app .feuille__corps > .section--defile { flex: 1 1 auto; min-height: calc(var(--space-16) * 2); display: flex; flex-direction: column; }
-.app .feuille__corps > .section--defile > .defile { flex: 1; min-height: 0; }
+/* La feuille remplit le centre : la barre reste en haut, le tableau prend le reste. */
+.zone-centre:has(> .feuille:not([hidden])) { display: flex; flex-direction: column; overflow: hidden; }
+.feuille:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.feuille > .feuille__actions { flex: none; }
+.feuille__corps:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+.feuille__corps > * { flex: none; }
+.feuille__corps > .section--defile { flex: 1 1 auto; min-height: calc(var(--space-16) * 2); display: flex; flex-direction: column; }
+.feuille__corps > .section--defile > .defile { flex: 1; min-height: 0; }
 
-/* ---- Feuille d'un résultat : titre en grand corps, ligne de contexte, tableau lisible ---- */
-.sheet-title { font-size: var(--text-3xl); font-weight: 600; letter-spacing: var(--tracking-snug); line-height: var(--leading-snug); }
+/* ---- Feuille d'un résultat : titre, ligne de contexte, tableau lisible ---- */
+.sheet-title { font-size: var(--text-3xl); font-weight: 500; line-height: var(--leading-snug); overflow-wrap: break-word; }
 .sheet-title + .why { margin-top: var(--space-2); font-size: var(--text-base); }
-.table--l td { font-size: var(--text-lg); }
 
 /* ---- État vide : une phrase en grand corps, une action ---- */
-.empty__text { font-size: var(--text-3xl); font-weight: 600; letter-spacing: var(--tracking-snug); line-height: var(--leading-snug); max-width: var(--measure); }
+.empty__text { font-size: var(--text-3xl); font-weight: 500; line-height: var(--leading-snug); max-width: var(--measure); }
 .empty__text + p { margin-top: var(--space-3); }
-
-/* Strictement sous 64 rem : à 1024 px, largeur minimale de la fenêtre, le plein cadre reste. */
-@media (max-width: 63.99rem) {
-  .c-1-2, .c-1-3, .c-4-9, .c-3-9, .c-10-12, .c-3-7, .c-8-12, .c-1-6, .c-7-12, .c-1-4, .c-5-8, .c-9-12, .c-5-12 { grid-column: 1 / -1; }
-  .nav { gap: var(--space-4); flex-wrap: wrap; }
-  table { display: block; overflow-x: auto; }
-  .steps { grid-template-columns: repeat(2, 1fr); row-gap: var(--space-2); }
-  .schema { grid-template-columns: minmax(0, calc(var(--space-24) * 2)) 1fr; }
-  .kpis .n { font-size: var(--text-4xl); }
-  /* Zones empilées : la page défile de nouveau, les zones ne défilent plus seules. */
-  .app:not([hidden]) { display: block; height: auto; overflow: visible; }
-  .app > .frame > .grid > * { overflow-y: visible; }
-  .app > .frame > .grid > :has(> .feuille:not([hidden])) { display: block; overflow: visible; }
-  .app .feuille__corps:not([hidden]), .defile { overflow: visible; }
-}

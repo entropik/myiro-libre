@@ -99,18 +99,16 @@ fn composants() -> Vec<(String, String)> {
     regles(&lire("../design-system/components.css"))
 }
 
-/// Dans l'application, la page prend toute la largeur de la fenêtre : pas
-/// de grandes marges vides autour de colonnes serrées.
+/// L'application occupe toute la fenêtre : la barre du haut (64 px), puis
+/// les trois zones ; la fenêtre elle-même ne défile jamais.
 #[test]
 fn l_application_occupe_toute_la_largeur_de_la_fenetre() {
     let css = composants();
-    assert!(
-        regle(&css, ".app .page")
-            .iter()
-            .any(|c| c.contains("max-width:none")),
-        "{:?}",
-        regle(&css, ".app .page")
-    );
+    let app = regle(&css, ".app:not([hidden])").join(";");
+    for attendu in ["height:100vh", "overflow:hidden", "grid-template-rows:64px"] {
+        assert!(app.contains(attendu), "{attendu} : {app}");
+    }
+    assert!(!app.contains("max-width"), "{app}");
 }
 
 /// Aucune zone ne défile en largeur ; une zone trop longue défile seule en
@@ -118,9 +116,11 @@ fn l_application_occupe_toute_la_largeur_de_la_fenetre() {
 #[test]
 fn aucune_zone_ne_defile_en_largeur() {
     let css = composants();
-    let zone = regle(&css, ".app > .frame > .grid > *").join(";");
-    for attendu in ["overflow-y:auto", "overflow-x:hidden", "min-width:0"] {
-        assert!(zone.contains(attendu), "{attendu} : {zone}");
+    for zone in [".zone-gauche", ".zone-centre", ".zone-droite"] {
+        let corps = regle(&css, zone).join(";");
+        for attendu in ["overflow-y:auto", "overflow-x:hidden", "min-width:0"] {
+            assert!(corps.contains(attendu), "{zone} : {attendu} : {corps}");
+        }
     }
     // Les cases du cartouche se partagent la largeur, même avec un long texte.
     assert!(
@@ -130,6 +130,98 @@ fn aucune_zone_ne_defile_en_largeur() {
         "{:?}",
         regle(&css, ".cells")
     );
+}
+
+/// Les trois zones : bibliothèque à gauche (270 px), centre souple, détails
+/// à droite (300 px).
+#[test]
+fn les_trois_zones_ont_leurs_largeurs() {
+    let css = composants();
+    let corps = regle(&css, ".zones").join(";");
+    let colonnes = corps
+        .split(';')
+        .find_map(|d| d.strip_prefix("grid-template-columns:"))
+        .unwrap_or_default();
+    assert!(colonnes.starts_with("270px"), "{corps}");
+    assert!(colonnes.ends_with("300px"), "{corps}");
+}
+
+/// Les jetons du thème sombre, par défaut, et du thème clair sont ceux du
+/// prototype validé.
+#[test]
+fn les_jetons_sombres_sont_ceux_du_prototype() {
+    let jetons = lire("../design-system/tokens.css");
+    for valeur in [
+        "#141a26", "#1b2333", "#1e2738", "#222c3f", "#2e3a50", "#e8ecf3", "#8d99ad", "#3d8bff",
+        "#2fbf71", "#e8a23a", "#ff5d64", "#173b6b",
+    ] {
+        assert!(jetons.contains(valeur), "{valeur}");
+    }
+    for valeur in [
+        "#eef1f6", "#ffffff", "#f6f8fb", "#d6dce6", "#5d6879", "#1f6fe5", "#13864b", "#a8650a",
+        "#cc1f29", "#dbe8fb",
+    ] {
+        assert!(jetons.contains(valeur), "clair : {valeur}");
+    }
+    assert!(jetons.contains(":root[data-theme=\"light\"]"));
+}
+
+/// Aucune couleur écrite en dur dans les composants : tout passe par les
+/// jetons.
+#[test]
+fn aucune_couleur_hors_des_jetons() {
+    let css = composants();
+    let fautes: Vec<_> = css
+        .iter()
+        .filter(|(_, c)| {
+            c.contains("rgb(")
+                || c.contains("rgba(")
+                || c.contains("hsl(")
+                || c.match_indices('#').any(|(i, _)| {
+                    c[i + 1..]
+                        .chars()
+                        .take_while(char::is_ascii_hexdigit)
+                        .count()
+                        >= 3
+                })
+        })
+        .collect();
+    assert!(fautes.is_empty(), "{fautes:?}");
+}
+
+/// Ni ombre, ni dégradé ; des angles droits, sauf la pastille de
+/// l'instrument (un cercle).
+#[test]
+fn aucune_ombre_ni_degrade_ni_arrondi_hors_pastille() {
+    let css = composants();
+    for (selecteurs, corps) in &css {
+        assert!(!corps.contains("box-shadow"), "{selecteurs}");
+        assert!(!corps.contains("gradient("), "{selecteurs}");
+        if corps.contains("border-radius") {
+            assert!(
+                selecteurs
+                    .split(',')
+                    .all(|s| s.trim().starts_with(".pastille")),
+                "arrondi hors pastille : {selecteurs}"
+            );
+        }
+    }
+}
+
+/// Un nom long de l'arbre (« Hahnemühle Photo Rag 308 ») finit par des
+/// points sans déborder ; le nom entier se lit au survol.
+#[test]
+fn un_nom_long_de_l_arbre_se_lit_au_survol() {
+    let css = composants();
+    let corps = regle(&css, ".noeud__nom").join(";");
+    for attendu in [
+        "overflow:hidden",
+        "text-overflow:ellipsis",
+        "white-space:nowrap",
+        "min-width:0",
+    ] {
+        assert!(corps.contains(attendu), "{attendu} : {corps}");
+    }
 }
 
 /// Toutes les barres de défilement sont fines, partout.
@@ -145,24 +237,22 @@ fn toutes_les_barres_de_defilement_sont_fines() {
     assert!(css.iter().all(|(_, c)| !c.contains("scrollbar-width:auto")));
 }
 
-/// Une entrée de la bibliothèque tient sur deux lignes (nom, puis date et
-/// lecture), sans couper les mots.
+/// Un nœud de l'arbre de la bibliothèque tient sur deux lignes au plus (nom,
+/// puis date et lecture), sans couper les mots.
 #[test]
 fn une_entree_de_la_bibliotheque_ne_coupe_pas_les_mots() {
     let css = composants();
     assert!(
         css.iter()
-            .filter(|(s, _)| s.contains(".index"))
+            .filter(|(s, _)| s.contains(".noeud"))
             .all(|(_, c)| !c.contains("overflow-wrap:anywhere")
                 && !c.contains("word-break:break-all"))
     );
-    for ligne in [".index__nom", ".index__meta"] {
+    for ligne in [".noeud__nom", ".noeud__meta"] {
         let corps = regle(&css, ligne).join(";");
         assert!(corps.contains("display:block"), "{ligne} : {corps}");
         assert!(corps.contains("white-space:nowrap"), "{ligne} : {corps}");
     }
-    let script = lire("interface/bibliotheque.js");
-    assert!(script.contains("\"index__nom\"") && script.contains("\"index__meta\""));
 }
 
 /// Deux champs qui se suivent (condition d'impression, mesure automatique
@@ -204,48 +294,17 @@ fn les_details_de_mesurer_gardent_l_essentiel_en_haut() {
     );
 }
 
-/// La colonne de la bibliothèque, commune à toutes les tâches, a trois
-/// colonnes de la grille sur douze (et non deux) : ses entrées tiennent
-/// sur deux lignes même à 1280 pixels. La feuille en prend six, les
-/// détails trois. Les marges latérales de l'application sont réduites.
-#[test]
-fn la_colonne_de_la_bibliotheque_est_assez_large() {
-    let page = lire("interface/index.html");
-    assert!(page.contains("<aside class=\"c-1-3 index\" data-bibliotheque>"));
-    assert!(page.contains("<div class=\"c-4-9\">"));
-    assert!(page.contains("<aside class=\"c-10-12\">"));
-    let css = composants();
-    assert!(regle(&css, ".c-1-3")
-        .iter()
-        .any(|c| c.contains("grid-column:1/span3")));
-    assert!(regle(&css, ".c-4-9")
-        .iter()
-        .any(|c| c.contains("grid-column:4/span6")));
-    let page_app = regle(&css, ".app .page").join(";");
-    assert!(
-        page_app.contains("padding-left:var(--space-4)")
-            && page_app.contains("padding-right:var(--space-4)"),
-        "marges : {page_app}"
-    );
-}
-
-/// Le haut des trois zones garde l'espace sous le bandeau : la marge
-/// latérale de l'application ne remet pas à zéro l'espace du haut du cadre
-/// (`.page frame`).
+/// Le centre garde son espace sous la barre du haut et sur les côtés : rien
+/// ne le remet à zéro.
 #[test]
 fn le_haut_des_zones_garde_son_espace_sous_le_bandeau() {
     let css = composants();
-    assert!(regle(&css, ".frame")
-        .iter()
-        .any(|c| c.contains("padding-top:var(--space-8)")));
-    for selecteur in [".app .page", ".app > .frame"] {
-        for corps in regle(&css, selecteur) {
-            assert!(
-                !corps.contains("padding:") && !corps.contains("padding-top:"),
-                "{selecteur} écrase l'espace du haut : {corps}"
-            );
-        }
-    }
+    let centre = regle(&css, ".zone-centre");
+    assert!(
+        centre.iter().any(|c| c.contains("padding:var(--space-6)")),
+        "{centre:?}"
+    );
+    assert!(centre.iter().all(|c| !c.contains("padding-top:0")));
 }
 
 /// Un nom trop long dans la liste des mesures finit par des points, et le
