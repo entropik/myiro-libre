@@ -80,6 +80,52 @@ fn un_refus_de_windows_est_rendu_tel_quel() {
     assert!(!systeme.dossier.join(NOM).exists());
 }
 
+/// Un nom qui n'est pas un simple nom de fichier `.icc` ou `.icm` est refusé
+/// avant toute écriture : rien hors du dossier temporaire, rien dans le
+/// dossier des couleurs.
+#[test]
+fn un_nom_de_profil_douteux_est_refuse_sans_rien_ecrire() {
+    let (racine, systeme, temporaire) = systeme(false);
+    for nom in [
+        "..\\..\\x.icc",
+        "../x.icc",
+        "sous/x.icc",
+        "x.pdf",
+        "x",
+        "",
+        "C:\\x.icc",
+    ] {
+        assert_eq!(
+            installer_profil(&systeme, nom, &icc(1), &temporaire),
+            Err(ErreurInstallation::NomInvalide),
+            "{nom}"
+        );
+        assert!(!est_installe(&systeme, nom, &icc(1)), "{nom}");
+    }
+    // Rien n'a été écrit, nulle part sous la racine.
+    let mut fichiers = Vec::new();
+    let mut a_voir = vec![racine.path().to_path_buf()];
+    while let Some(dossier) = a_voir.pop() {
+        for entree in std::fs::read_dir(&dossier).unwrap() {
+            let chemin = entree.unwrap().path();
+            if chemin.is_dir() {
+                a_voir.push(chemin);
+            } else {
+                fichiers.push(chemin);
+            }
+        }
+    }
+    assert!(fichiers.is_empty(), "{fichiers:?}");
+    assert!(!racine.path().parent().unwrap().join("x.icc").exists());
+
+    // Majuscules acceptées pour l'extension.
+    assert_eq!(
+        installer_profil(&systeme, "Profil.ICM", &icc(1), &temporaire),
+        Ok(EtatInstallation::Installe)
+    );
+    assert!(app::textes::cles().any(|c| c == "installation.nom_invalide"));
+}
+
 /// Ce que la page reçoit : l'état d'installation du profil actif, et des
 /// clés du catalogue pour chaque refus.
 #[test]

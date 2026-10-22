@@ -195,6 +195,10 @@ const FRANCAIS: Catalogue = &[
     // Installation dans Windows
     ("installation.installe", "Installé dans Windows"),
     (
+        "installation.nom_invalide",
+        "Le nom de ce profil ne convient pas à Windows. Il doit être un simple nom de fichier finissant par .icc ou .icm.",
+    ),
+    (
         "installation.deja_present",
         "Un autre profil du même nom est déjà installé dans Windows\u{202f}: renommez ce profil ou retirez l’autre.",
     ),
@@ -997,6 +1001,10 @@ const ANGLAIS: Catalogue = &[
     ),
     // Installing in Windows
     ("installation.installe", "Installed in Windows"),
+    (
+        "installation.nom_invalide",
+        "This profile’s name does not suit Windows. It must be a plain file name ending in .icc or .icm.",
+    ),
     (
         "installation.deja_present",
         "Another profile with the same name is already installed in Windows: rename this profile or remove the other one.",

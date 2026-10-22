@@ -15,6 +15,8 @@ pub enum ErreurInstallation {
     DejaPresentDifferent,
     /// Windows a refusé (accès refusé : droits d'administrateur sans doute).
     Refusee,
+    /// Le nom n'est pas un simple nom de fichier `.icc` ou `.icm`.
+    NomInvalide,
     /// Autre échec, avec son détail technique (console seulement).
     Systeme(String),
 }
@@ -37,13 +39,27 @@ pub trait InstallationProfils {
     fn installer(&self, fichier: &Path) -> Result<(), ErreurInstallation>;
 }
 
+/// Un nom de profil installable : un simple nom de fichier (ni dossier, ni
+/// lecteur, ni `..`), qui finit par `.icc` ou `.icm` sans tenir compte des
+/// majuscules. Le nom vient de la bibliothèque, mais rien n'est écrit sur
+/// le disque avec un nom qui sortirait de son dossier.
+fn nom_valide(nom: &str) -> bool {
+    let simple = Path::new(nom).file_name() == Some(std::ffi::OsStr::new(nom))
+        && !nom.contains(['/', '\\', ':']);
+    let extension = nom.rsplit_once('.').is_some_and(|(base, ext)| {
+        !base.is_empty() && (ext.eq_ignore_ascii_case("icc") || ext.eq_ignore_ascii_case("icm"))
+    });
+    simple && extension
+}
+
 /// Le profil `nom` est-il installé avec exactement ce contenu ?
 pub fn est_installe(systeme: &dyn InstallationProfils, nom: &str, icc: &[u8]) -> bool {
-    systeme
-        .dossier()
-        .ok()
-        .and_then(|d| std::fs::read(d.join(nom)).ok())
-        .is_some_and(|present| present == icc)
+    nom_valide(nom)
+        && systeme
+            .dossier()
+            .ok()
+            .and_then(|d| std::fs::read(d.join(nom)).ok())
+            .is_some_and(|present| present == icc)
 }
 
 /// Installe le profil `icc` sous le nom `nom`. Déjà présent à l'identique :
@@ -55,6 +71,9 @@ pub fn installer_profil(
     icc: &[u8],
     temporaire: &Path,
 ) -> Result<EtatInstallation, ErreurInstallation> {
+    if !nom_valide(nom) {
+        return Err(ErreurInstallation::NomInvalide);
+    }
     let installe = systeme.dossier()?.join(nom);
     match std::fs::read(&installe) {
         Ok(present) if present == icc => return Ok(EtatInstallation::DejaInstalle),
@@ -67,6 +86,10 @@ pub fn installer_profil(
             )))
         }
     }
+    // Entre cette vérification et `InstallColorProfileW`, un autre programme
+    // pourrait poser un profil du même nom, que l'installation remplacerait
+    // peut-être (comportement de Windows non établi). L'instant est court :
+    // on l'accepte plutôt que de verrouiller le dossier des couleurs.
     let fichier = temporaire.join(nom);
     std::fs::write(&fichier, icc)
         .map_err(|e| ErreurInstallation::Systeme(format!("{} : {e}", fichier.display())))?;
@@ -81,6 +104,7 @@ pub fn cle_erreur(erreur: &ErreurInstallation) -> &'static str {
     match erreur {
         ErreurInstallation::DejaPresentDifferent => "installation.deja_present",
         ErreurInstallation::Refusee => "installation.refusee",
+        ErreurInstallation::NomInvalide => "installation.nom_invalide",
         ErreurInstallation::Systeme(detail) => {
             eprintln!("installation du profil : {detail}");
             "installation.echec"
