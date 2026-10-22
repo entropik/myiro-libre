@@ -55,7 +55,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   padding: var(--space-2) var(--space-3); border: var(--rule) solid var(--filet); background: var(--carte);
   font-size: var(--text-sm);
 }
-.instrument-actif > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.instrument-actif > span:last-child { min-width: var(--space-16); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.taches, .marque { flex-shrink: 0; }
 .instrument-actif:hover:not([disabled]), .instrument-actif[aria-expanded="true"] { border-color: var(--accent); }
 .instrument-actif[disabled] { cursor: default; }
 /* Pastille : seul cercle du système. La couleur double le texte d'état, jamais seule. */
@@ -76,8 +77,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   padding: var(--space-4); font-size: var(--text-lg); border-bottom: var(--rule) solid var(--filet);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.zone-droite > .cartouche, .zone-droite > [data-details-tache] > .cartouche { margin: var(--space-4); }
-.zone-droite > [data-details-tache] { padding: 0 var(--space-4); }
+/* Corps des détails (cartouche, valeurs d'une mesure) : marges de la zone. */
+.details-corps { padding: var(--space-4); }
 
 /* ---- Fil d'Ariane et titre du centre ---- */
 .ariane {
@@ -302,7 +303,11 @@ select.input option { background: var(--panneau); color: var(--encre); }
 .defile thead th { position: sticky; top: 0; background: var(--fond); }
 .table--compact td { padding-top: var(--space-1); padding-bottom: var(--space-1); font-size: var(--text-base); line-height: var(--leading-snug); }
 /* La feuille remplit le centre : la barre reste en haut, le tableau prend le reste. */
-.zone-centre:has(> .feuille:not([hidden])) { display: flex; flex-direction: column; overflow: hidden; }
+.zone-centre:has(> .vue-pleine:not([hidden]) > .feuille:not([hidden])) { display: flex; flex-direction: column; overflow: hidden; }
+.zone-centre > .ariane { flex: none; }
+.vue-pleine:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ariane button { color: inherit; text-transform: inherit; letter-spacing: inherit; }
+.ariane button:hover { color: var(--encre); }
 .feuille:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .feuille > .feuille__actions { flex: none; }
 .feuille__corps:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }

@@ -109,6 +109,8 @@ fn ranger_un_profil_existant_le_rend_actif_avec_le_nom_propose() {
     assert_eq!(actif.espace, EspaceProfil::Rvb);
     assert_eq!(detail.historique.len(), 1);
     assert!(!detail.ancien);
+    // Provenance : un profil rangé tel quel, sans calcul ni mesure.
+    assert_eq!(detail.origine, Some("profil_existant"));
     assert!(detail.mesures.is_empty() && detail.importees.is_empty());
 }
 
@@ -128,7 +130,8 @@ fn ranger_un_fichier_qui_n_est_pas_un_profil_donne_une_cle_de_texte() {
         assert_eq!(cle, "parc.erreur.profil_illisible");
         assert!(est_au_catalogue(&cle));
     }
-    assert_eq!(ouverte.detail_reglage(condition).unwrap().actif, None);
+    let detail = ouverte.detail_reglage(condition).unwrap();
+    assert_eq!((detail.actif, detail.origine), (None, None));
 
     // Un fichier introuvable aussi, sans rien changer.
     let absent = dossier.path().join("absent.icc");

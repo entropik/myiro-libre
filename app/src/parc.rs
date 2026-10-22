@@ -40,6 +40,9 @@ pub struct DetailReglage {
     pub historique: Vec<ResumeProfil>,
     /// Le profil actif a plus d'un an.
     pub ancien: bool,
+    /// D'où vient le profil actif : `profil_existant` (rangé tel quel) ou
+    /// `calcul` ; rien sans profil.
+    pub origine: Option<&'static str>,
     pub mesures: Vec<ResumeMesure>,
     pub importees: Vec<ResumeImportee>,
     /// Le profil actif est installé dans Windows, à l'identique. Faux tant
@@ -158,7 +161,15 @@ impl BibliothequeOuverte {
                 .find(|br| br.condition.id == condition);
             let (mesures, importees) =
                 branche.map_or_else(Default::default, |br| (br.mesures, br.importees));
+            let origine = match &r.profil {
+                Some(p) if b.parametres_profil(p.id)? == ORIGINE_PROFIL_EXISTANT => {
+                    Some("profil_existant")
+                }
+                Some(_) => Some("calcul"),
+                None => None,
+            };
             Ok(Some(DetailReglage {
+                origine,
                 condition: r.condition.clone(),
                 imprimante: i.imprimante.nom.clone(),
                 papier: p.papier.nom.clone(),

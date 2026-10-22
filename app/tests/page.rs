@@ -255,6 +255,15 @@ fn une_entree_de_la_bibliotheque_ne_coupe_pas_les_mots() {
     }
 }
 
+/// L'arbre pose ses noms et ses lignes de détail avec ces classes, et le
+/// nom entier au survol.
+#[test]
+fn l_arbre_utilise_les_lignes_qui_ne_debordent_pas() {
+    let script = lire("interface/arbre.js");
+    assert!(script.contains("\"noeud__nom\"") && script.contains("\"noeud__meta\""));
+    assert!(script.contains(".title = "), "pas de nom au survol");
+}
+
 /// Deux champs qui se suivent (condition d'impression, mesure automatique
 /// ou manuelle) ne se touchent pas.
 #[test]
@@ -326,7 +335,8 @@ fn un_nom_de_mesure_trop_long_se_lit_au_survol() {
 /// seule en ligne 2 (jamais la date deux fois).
 #[test]
 fn une_mesure_sans_nom_ne_montre_pas_sa_date_deux_fois() {
-    let script = lire("interface/bibliotheque.js");
+    // Les lignes de l'arbre de la bibliothèque viennent d'arbre.js (ticket #68).
+    let script = lire("interface/arbre.js");
     assert!(script.contains("const nom = m.nom || lecture(m.geometrie, m.plages);"));
     assert!(script.contains(
         "const detail = m.nom ? `${dateCourte(m.horodatage)} · ${lecture(m.geometrie, m.plages)}` : dateCourte(m.horodatage);"
@@ -453,4 +463,134 @@ fn la_pastille_connait_les_cinq_etats() {
     }
     let script = lire("interface/app.js");
     assert!(script.contains("pastille--"), "app.js ne pose pas l'état");
+}
+
+// ---- Bibliothèque en arbre et vue d'une résolution (ticket #68) ----
+
+/// L'élément entier (balise ouvrante comprise) qui porte `attribut`, en
+/// comptant les éléments de même nom imbriqués.
+fn element<'a>(page: &'a str, attribut: &str) -> &'a str {
+    let Some(position) = page.find(attribut) else {
+        panic!("{attribut} absent de la page");
+    };
+    let debut = page[..position].rfind('<').unwrap_or(0);
+    let nom: String = page[debut + 1..]
+        .chars()
+        .take_while(char::is_ascii_alphanumeric)
+        .collect();
+    let (ouvrante, fermante) = (format!("<{nom}"), format!("</{nom}>"));
+    let mut profondeur = 0usize;
+    let mut i = debut;
+    while i < page.len() {
+        let reste = &page[i..];
+        if reste.starts_with(&fermante) {
+            profondeur -= 1;
+            if profondeur == 0 {
+                return &page[debut..i + fermante.len()];
+            }
+            i += fermante.len();
+        } else if reste.starts_with(&ouvrante) && reste[ouvrante.len()..].starts_with([' ', '>']) {
+            profondeur += 1;
+            i += ouvrante.len();
+        } else {
+            i += reste.chars().next().map_or(1, char::len_utf8);
+        }
+    }
+    panic!("{attribut} : élément non fermé");
+}
+
+#[test]
+fn parc_js_est_charge_apres_app_js() {
+    let page = lire("interface/index.html");
+    let app = page.find("<script src=\"app.js\" defer>");
+    let parc = page.find("<script src=\"parc.js\" defer>");
+    assert!(app.is_some() && parc.is_some(), "scripts absents");
+    assert!(app < parc, "parc.js avant app.js");
+}
+
+#[test]
+fn la_zone_gauche_a_recherche_arbre_et_ajout_d_imprimante() {
+    let page = lire("interface/index.html");
+    let gauche = element(&page, "data-zone=\"gauche\"");
+    for crochet in ["data-recherche", "data-arbre", "data-ajouter-imprimante"] {
+        assert!(
+            gauche.contains(crochet),
+            "{crochet} absent de la zone gauche"
+        );
+    }
+    assert!(gauche.contains("<input") && gauche.contains("type=\"search\""));
+    let bouton = gauche
+        .split('<')
+        .find(|b| b.contains("data-ajouter-imprimante"))
+        .unwrap_or_default();
+    assert!(bouton.starts_with("button"), "{bouton}");
+}
+
+#[test]
+fn la_vue_d_une_resolution_a_un_seul_bouton_principal() {
+    let page = lire("interface/index.html");
+    let vue = element(&page, "data-vue-reglage");
+    assert_eq!(vue.matches("btn--primary").count(), 1, "{vue}");
+    let principal = vue
+        .split('<')
+        .find(|b| b.contains("btn--primary"))
+        .unwrap_or_default();
+    assert!(principal.contains("data-installer"), "{principal}");
+
+    let refaire = vue
+        .split('<')
+        .find(|b| b.contains("data-refaire"))
+        .and_then(|b| b.split('>').next())
+        .unwrap_or_default();
+    assert!(
+        refaire.split_whitespace().any(|a| a == "disabled"),
+        "« Refaire le profil » doit être inactif : {refaire}"
+    );
+    let apres = &vue[vue.find("data-refaire").unwrap_or(0)..];
+    let raison = apres
+        .find("<p class=\"why\"")
+        .expect("raison de « Refaire »");
+    assert!(!apres[..raison].contains("<button "), "raison trop loin");
+    assert!(apres[raison..]
+        .split('>')
+        .next()
+        .is_some_and(|p| p.contains("data-t=\"parc.refaire.raison\"")));
+}
+
+/// Chaque texte demandé par l'arbre et la vue d'une résolution (`t("…")`
+/// dans parc.js, arbre.js et reglage.js) existe au catalogue.
+#[test]
+fn le_parc_ne_demande_que_des_cles_du_catalogue() {
+    let script = [
+        "interface/parc.js",
+        "interface/arbre.js",
+        "interface/reglage.js",
+    ]
+    .map(lire)
+    .join("\n");
+    let demandees: Vec<&str> = script
+        .match_indices("t(\"")
+        .filter(|(i, _)| {
+            !script[..*i]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.')
+        })
+        .filter_map(|(i, _)| script[i + 3..].split('"').next())
+        .collect();
+    assert!(demandees.len() > 10, "clés lues : {demandees:?}");
+    // `t("parc.etat." + p.etat)` : un début de clé, complété à l'écran.
+    let inconnues: Vec<_> = demandees
+        .iter()
+        .filter(|c| {
+            !app::textes::cles().any(|k| {
+                if c.ends_with('.') {
+                    k.starts_with(**c)
+                } else {
+                    k == **c
+                }
+            })
+        })
+        .collect();
+    assert!(inconnues.is_empty(), "clés absentes : {inconnues:?}");
 }
