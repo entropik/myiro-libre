@@ -120,6 +120,20 @@ const FRANCAIS: Catalogue = &[
         "parc.erreur.fichier_illisible",
         "Le fichier n’a pas pu être lu. Vérifiez qu’il existe encore et qu’il n’est pas ouvert ailleurs.",
     ),
+    // Installation dans Windows
+    ("installation.installe", "Installé dans Windows"),
+    (
+        "installation.deja_present",
+        "Un autre profil du même nom est déjà installé dans Windows\u{202f}: renommez ce profil ou retirez l’autre.",
+    ),
+    (
+        "installation.refusee",
+        "Windows a refusé l’installation\u{202f}: il demande peut-être des droits d’administrateur. Exportez le profil et installez-le depuis l’Explorateur (clic droit, Installer le profil).",
+    ),
+    (
+        "installation.echec",
+        "Le profil n’a pas pu être installé dans Windows. Exportez-le et installez-le depuis l’Explorateur (clic droit, Installer le profil).",
+    ),
     ("bibliotheque.erreur.apercu_absent", "Aucun fichier en attente. Choisissez d’abord un fichier à importer."),
     // Bibliothèque, section Export et sauvegarde
     ("export.titre", "Export et sauvegarde"),
@@ -836,6 +850,20 @@ const ANGLAIS: Catalogue = &[
     (
         "parc.erreur.fichier_illisible",
         "The file could not be read. Check that it still exists and is not open elsewhere.",
+    ),
+    // Installing in Windows
+    ("installation.installe", "Installed in Windows"),
+    (
+        "installation.deja_present",
+        "Another profile with the same name is already installed in Windows: rename this profile or remove the other one.",
+    ),
+    (
+        "installation.refusee",
+        "Windows refused the installation: it may require administrator rights. Export the profile and install it from File Explorer (right-click, Install Profile).",
+    ),
+    (
+        "installation.echec",
+        "The profile could not be installed in Windows. Export it and install it from File Explorer (right-click, Install Profile).",
     ),
     ("bibliotheque.erreur.apercu_absent", "No file waiting. First choose a file to import."),
     ("export.titre", "Export and backup"),

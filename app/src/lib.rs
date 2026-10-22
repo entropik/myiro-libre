@@ -7,6 +7,7 @@
 
 pub mod colonne;
 pub mod demonstration;
+pub mod installation;
 pub mod instrument;
 pub mod mesurer;
 pub mod parc;
@@ -614,6 +615,7 @@ pub fn lancer() {
             parc::parc_detail_reglage,
             parc::parc_ranger_profil,
             parc::parc_exporter_profil,
+            parc::parc_installer_profil,
             etalonner,
             repondre_geste
         ])

@@ -16,6 +16,9 @@ use serde::Serialize;
 use tauri_plugin_dialog::DialogExt;
 
 use crate::colonne::BibliothequeOuverte;
+use crate::installation::{
+    self, est_installe, EtatInstallation, InstallationProfils, InstallationWindows,
+};
 
 /// Taille au-delà de laquelle un fichier n'est pas lu comme un profil :
 /// 64 Mio, bien plus qu'un profil d'imprimante.
@@ -39,6 +42,9 @@ pub struct DetailReglage {
     pub ancien: bool,
     pub mesures: Vec<ResumeMesure>,
     pub importees: Vec<ResumeImportee>,
+    /// Le profil actif est installé dans Windows, à l'identique. Faux tant
+    /// que le système n'a pas été regardé ([`BibliothequeOuverte::detail_reglage_installe`]).
+    pub installe: bool,
 }
 
 /// Après une fenêtre de choix de fichier : rien si l'opérateur a annulé
@@ -162,9 +168,40 @@ impl BibliothequeOuverte {
                 ancien: r.profil_ancien,
                 mesures,
                 importees,
+                installe: false,
             }))
         })?;
         detail.ok_or_else(|| "parc.erreur.reglage_inconnu".to_string())
+    }
+
+    /// Comme [`Self::detail_reglage`], en regardant aussi si le profil actif
+    /// est installé dans `systeme` à l'identique.
+    pub fn detail_reglage_installe(
+        &self,
+        condition: IdCondition,
+        systeme: &dyn InstallationProfils,
+    ) -> Result<DetailReglage, String> {
+        let mut detail = self.detail_reglage(condition)?;
+        if let Some(actif) = &detail.actif {
+            let icc = self.avec(|b| b.fichier_profil(actif.id))?;
+            detail.installe = est_installe(systeme, &actif.nom, &icc);
+        }
+        Ok(detail)
+    }
+
+    /// Installe un profil dans `systeme`, sous son nom, sans jamais écraser
+    /// un autre profil du même nom. `temporaire` : dossier où le fichier est
+    /// écrit le temps de l'installation.
+    pub fn installer_profil(
+        &self,
+        profil: IdProfil,
+        systeme: &dyn InstallationProfils,
+        temporaire: &Path,
+    ) -> Result<EtatInstallation, String> {
+        let nom = self.profil(profil)?.nom;
+        let icc = self.avec(|b| b.fichier_profil(profil))?;
+        installation::installer_profil(systeme, &nom, &icc, temporaire)
+            .map_err(|e| installation::cle_erreur(&e).to_string())
     }
 
     /// Range un profil ICC existant dans une résolution : il devient le
@@ -275,7 +312,21 @@ pub fn parc_detail_reglage(
     ouverte: tauri::State<'_, BibliothequeOuverte>,
     condition: i64,
 ) -> Result<DetailReglage, String> {
-    ouverte.detail_reglage(IdCondition(condition))
+    ouverte.detail_reglage_installe(IdCondition(condition), &InstallationWindows)
+}
+
+/// Installe le profil dans le dossier des couleurs de Windows.
+#[tauri::command(async)]
+pub fn parc_installer_profil(
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+    profil: i64,
+) -> Result<EtatInstallation, String> {
+    let temporaire = std::env::temp_dir().join("myiro-libre-profils");
+    std::fs::create_dir_all(&temporaire).map_err(|e| {
+        eprintln!("{} : {e}", temporaire.display());
+        "installation.echec".to_string()
+    })?;
+    ouverte.installer_profil(IdProfil(profil), &InstallationWindows, &temporaire)
 }
 
 /// Range le profil choisi dans la fenêtre de Windows (`.icc`, `.icm`).
