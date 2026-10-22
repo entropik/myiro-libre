@@ -87,6 +87,21 @@ fn un_nouveau_profil_devient_actif_et_l_ancien_passe_a_l_historique() {
     );
 }
 
+/// Les paramètres qui ont produit un profil se relisent tels quels : ils
+/// disent sa provenance (calcul, ou profil existant rangé).
+#[test]
+fn les_parametres_d_un_profil_se_relisent_tels_quels() {
+    let (_d, b, c) = condition_rangee();
+    let p = b
+        .enregistrer_profil(&nouveau(c, "v1", &icc(b"RGB "), "2026-10-20T09:00:00Z"))
+        .unwrap();
+    assert_eq!(b.parametres_profil(p).unwrap(), "colprof -v -qm -aX profil");
+    assert_eq!(
+        b.parametres_profil(IdProfil(999)),
+        Err(ErreurBibliotheque::ProfilInconnu(IdProfil(999)))
+    );
+}
+
 #[test]
 fn un_profil_se_retrouve_a_la_reouverture() {
     let dossier = tempfile::tempdir().unwrap();

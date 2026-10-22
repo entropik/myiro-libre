@@ -10,21 +10,26 @@
 <link rel="stylesheet" href="systeme/components.css">
 <script src="app.js" defer></script>
 <script src="bibliotheque.js" defer></script>
+<script src="arbre.js" defer></script>
+<script src="reglage.js" defer></script>
+<script src="parc.js" defer></script>
 <script src="mesurer.js" defer></script>
 </head>
 <!-- Les textes viennent du catalogue Rust (data-t) : la page reste masquée tant qu'il n'est pas appliqué. -->
 <body class="app" hidden>
-<header class="masthead"><div class="page"><div class="grid">
-  <div class="c-1-2 brand">myiro-libre</div>
-  <nav class="c-3-7 nav" data-t-aria="nav.libelle">
-    <button data-tache="mesurer" aria-current="page"><span class="label num">01</span><span data-t="tache.mesurer"></span></button>
-    <button data-tache="controler"><span class="label num">02</span><span data-t="tache.controler"></span></button>
-    <button data-tache="profiler"><span class="label num">03</span><span data-t="tache.profiler"></span></button>
-    <button data-tache="bibliotheque"><span class="label num">04</span><span data-t="tache.bibliotheque"></span></button>
+<!-- Barre du haut : marque, cinq tâches à icône, instrument (pastille et état), thème, langue. -->
+<header class="barre-haut">
+  <div class="marque">myiro-libre<small data-t="marque.sous_titre"></small></div>
+  <nav class="taches" data-t-aria="nav.libelle">
+    <button class="tache" data-tache="bibliotheque" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/></svg><span data-t="tache.bibliotheque"></span></button>
+    <button class="tache" data-tache="profiler"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16"/></svg><span data-t="tache.profiler"></span></button>
+    <button class="tache" data-tache="mesurer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 3 5-8 4 5"/></svg><span data-t="tache.mesurer"></span></button>
+    <button class="tache" data-tache="controler"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg><span data-t="tache.controler"></span></button>
+    <button class="tache" data-tache="imprimer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V3h10v5M5 8h14v8H5zM7 14h10v7H7z"/></svg><span data-t="tache.imprimer"></span></button>
   </nav>
-  <div class="c-8-12 masthead__tools">
-    <!-- L’instrument actif et son état ; un clic ouvre la liste des instruments du poste (ticket #49). -->
-    <button class="state state--warn" data-instrument data-t-aria="choix.libelle" aria-expanded="false" aria-controls="liste-instruments" disabled><i></i><span data-instrument-texte role="status"></span></button>
+  <div class="barre-haut__outils">
+    <!-- L’instrument actif : pastille d’état et texte ; un clic ouvre la liste des instruments du poste (ticket #49). -->
+    <button class="instrument-actif" data-instrument data-t-aria="choix.libelle" aria-expanded="false" aria-controls="liste-instruments" disabled><span class="pastille pastille--non-detecte" data-pastille></span><span data-instrument-texte role="status"></span></button>
     <button class="btn" data-etalonner data-t="instrument.etalonner" hidden></button>
     <div class="seg" role="group" data-t-aria="theme.libelle">
       <button data-theme-choix="light" data-t="theme.clair"></button><button data-theme-choix="dark" data-t="theme.sombre"></button>
@@ -33,29 +38,33 @@
       <button data-langue-choix="fr" lang="fr">FR</button><button data-langue-choix="en" lang="en">EN</button>
     </div>
   </div>
-</div></div></header>
+</header>
 
-<main class="page frame"><div class="grid">
-  <!-- Bibliothèque : arborescence condition d'impression → mesures, remplie par bibliotheque.js. -->
-  <aside class="c-1-3 index" data-bibliotheque>
-    <span class="label zone__title" data-t="bibliotheque.titre"></span>
-    <div class="field">
+<div class="zones">
+  <!-- Zone gauche : la bibliothèque en arbre imprimante → papier → résolution (parc.js),
+       commune à toutes les tâches ; ajout en ligne, sans fenêtre. -->
+  <aside class="zone-gauche" data-zone="gauche" data-bibliotheque>
+    <div class="recherche">
       <label class="label" for="recherche" data-t="bibliotheque.recherche"></label>
       <input class="input" id="recherche" type="search" autocomplete="off" data-recherche>
     </div>
-    <ol data-arbre></ol>
+    <span class="label zone__titre" data-t="parc.titre"></span>
+    <ul class="arbre" role="tree" data-t-aria="parc.titre" data-arbre></ul>
     <p class="why" data-arbre-message hidden></p>
-    <div class="field">
-      <label class="label" for="nouvelle-condition" data-t="bibliotheque.nouvelle"></label>
-      <input class="input" id="nouvelle-condition" autocomplete="off" data-nouvelle-condition>
-      <p class="why" data-nouvelle-erreur hidden></p>
+    <!-- Formulaire d’ajout en ligne (imprimante, papier, résolution), dessiné par parc.js. -->
+    <div data-ajout></div>
+    <div class="actions" data-ajout-actions><button class="btn" data-ajouter-imprimante data-t="parc.ajouter_imprimante"></button></div>
+    <!-- Conditions d’avant le parc, avec leurs mesures, sans action de classement. -->
+    <div data-non-classees-bloc hidden>
+      <span class="label zone__titre" data-t="parc.non_classees"></span>
+      <ul class="arbre" role="tree" data-t-aria="parc.non_classees" data-non-classees></ul>
     </div>
-    <div class="actions"><button class="btn" data-creer-condition data-t="bibliotheque.ajouter"></button></div>
     <p class="why" data-t="bibliotheque.demonstration" data-demonstration hidden></p>
   </aside>
 
-  <div class="c-4-9">
-    <div class="sheet-head"><span class="label label--ink" data-tache-courante></span><span class="label num" data-t="feuille.numero"></span></div>
+  <!-- Zone centre : la vue de la tâche, ou l’écran de l’instrument qui la remplace. -->
+  <main class="zone-centre" data-zone="centre">
+    <p class="ariane" data-ariane></p>
     <!-- Annonce du module `instrument` pas encore vue (instrument pris, fermé, choix non gardé). -->
     <div class="notice" data-annonce-feuille role="status" hidden><div data-annonce-textes></div><p><button class="btn" data-annonce-compris data-t="choix.compris"></button></p></div>
     <!-- Liste des instruments du poste : elle remplace la feuille, sans fenêtre empilée. Lignes, annonce et refus viennent du module `instrument`. -->
@@ -156,11 +165,10 @@
       <!-- Consigne et texte « en cours » suivent le choix « Mesure » (mesurer.js). -->
       <p class="prose" data-mesurer-consigne data-t="mesurer.consigne.automatique"></p>
       <div class="notice notice--warn" data-mesurer-avis hidden><p><b data-avis-cause></b> <span data-avis-action></span></p></div>
-      <div class="actions">
-        <button class="btn btn--primary" data-mesurer data-t="mesurer.action" disabled></button>
-        <button class="btn" data-action="reessayer" data-mesurer-reessayer data-t="ecran.reessayer" hidden></button>
-      </div>
-      <p class="why" data-mesurer-raison></p>
+      <div class="actions"><button class="btn btn--primary" data-mesurer data-t="mesurer.action" disabled></button></div>
+      <!-- Raison du bouton inactif, juste à côté ; mesurer.js la remplace dès l’état connu. -->
+      <p class="why" data-mesurer-raison data-t="raison.recherche"></p>
+      <div><button class="btn" data-action="reessayer" data-mesurer-reessayer data-t="ecran.reessayer" hidden></button></div>
       <p class="prose" role="status" data-mesurer-en-cours data-t="mesurer.en_cours.automatique" hidden></p>
       <details class="replie" data-mesurer-details-techniques hidden><summary data-t="ecran.details"></summary><pre data-details-texte></pre></details>
       <h2 class="empty__text" data-mesurer-vide data-t="vide.mesurer.phrase"></h2>
@@ -176,20 +184,66 @@
         <div data-mesurer-ranger-actions hidden><div class="actions"><button class="btn" data-mesurer-ranger data-t="mesurer.ranger"></button></div></div>
       </div>
     </section>
-    <section class="empty" data-vue="controler" hidden>
-      <h2 class="empty__text" data-t="vide.controler.phrase"></h2>
-      <div class="actions"><button class="btn btn--primary" disabled data-t="vide.controler.action"></button></div>
-      <p class="why" data-t="raison.instrument"></p>
+    <!-- Tâches prévues : une carte dit ce que la tâche fera et quand ; bouton principal inactif, avec sa raison. -->
+    <section data-vue="profiler" hidden>
+      <h1 class="titre" data-t="tache.profiler"></h1>
+      <div class="carte">
+        <span class="label" data-t="prevu.libelle"></span>
+        <p class="prose" data-t="prevu.profiler.texte"></p>
+        <div class="actions"><button class="btn btn--primary" disabled data-t="prevu.profiler.action"></button></div>
+        <p class="why" data-t="prevu.profiler.raison"></p>
+      </div>
     </section>
-    <section class="empty" data-vue="profiler" hidden>
-      <h2 class="empty__text" data-t="vide.profiler.phrase"></h2>
-      <div class="actions"><button class="btn btn--primary" disabled data-t="vide.profiler.action"></button></div>
-      <p class="why" data-t="raison.instrument"></p>
+    <section data-vue="controler" hidden>
+      <h1 class="titre" data-t="tache.controler"></h1>
+      <div class="carte">
+        <span class="label" data-t="prevu.libelle"></span>
+        <p class="prose" data-t="prevu.controler.texte"></p>
+        <div class="actions"><button class="btn btn--primary" disabled data-t="prevu.controler.action"></button></div>
+        <p class="why" data-t="prevu.controler.raison"></p>
+      </div>
     </section>
-    <!-- Feuille de la bibliothèque (bibliotheque.js) : barre d'actions toujours en vue (import,
-         un seul export, sauvegarde, restauration ; ticket #9), puis la mesure ou la condition
-         choisie à gauche, dont seul le tableau défile. -->
-    <section class="feuille" data-vue="bibliotheque" hidden>
+    <section data-vue="imprimer" hidden>
+      <h1 class="titre" data-t="tache.imprimer"></h1>
+      <div class="carte">
+        <span class="label" data-t="prevu.libelle"></span>
+        <p class="prose" data-t="prevu.imprimer.texte"></p>
+        <div class="actions"><button class="btn btn--primary" disabled data-t="prevu.imprimer.action"></button></div>
+        <p class="why" data-t="prevu.imprimer.raison"></p>
+      </div>
+    </section>
+    <!-- Bibliothèque : la vue d’une résolution (parc.js), ou la feuille des mesures (bibliotheque.js). -->
+    <section class="vue-pleine" data-vue="bibliotheque" hidden>
+    <!-- Vue d’une résolution : profil actif, un seul bouton principal, historique, mesures. -->
+    <div data-vue-reglage hidden>
+      <h1 class="titre" data-reglage-titre></h1>
+      <div class="carte carte--verdict" data-reglage-verdict>
+        <svg class="verdict__icone" viewBox="0 0 24 24" aria-hidden="true"><path data-verdict-trace d=""/></svg>
+        <div class="verdict__texte"><span class="verdict__contexte" data-verdict-contexte></span><div class="verdict__mot" data-verdict-mot></div></div>
+      </div>
+      <div class="actions"><button class="btn btn--primary" data-installer data-t="parc.installer"></button></div>
+      <p class="why" data-installer-raison data-t="parc.installer.raison" hidden></p>
+      <p class="why" role="status" data-reglage-message hidden></p>
+      <div class="actions">
+        <button class="btn" data-exporter-profil data-t="parc.exporter"></button>
+        <button class="btn" data-ranger-profil data-t="parc.ranger"></button>
+        <button class="btn" data-refaire data-t="parc.refaire" disabled></button>
+      </div>
+      <p class="why" data-t="parc.refaire.raison"></p>
+      <p class="why" role="status" data-reglage-occupe data-t="parc.en_cours" hidden></p>
+      <div class="section">
+        <div class="section__head"><span class="label label--ink" data-t="parc.historique"></span></div>
+        <div data-historique></div>
+      </div>
+      <div class="section">
+        <div class="section__head"><span class="label label--ink" data-t="bibliotheque.mesures"></span></div>
+        <div data-reglage-mesures></div>
+      </div>
+    </div>
+    <!-- Feuille des mesures (bibliotheque.js) : barre d'actions toujours en vue (import,
+         un seul export, sauvegarde, restauration ; ticket #9), puis la mesure choisie,
+         dont seul le tableau défile. -->
+    <div class="feuille" data-feuille>
       <div class="feuille__actions" data-export>
         <div class="barre" role="toolbar" data-t-aria="export.titre">
           <button class="btn" data-importer data-t="export.importer"></button>
@@ -217,19 +271,23 @@
       </div>
       <div class="empty" data-centre-vide>
         <h2 class="empty__text" data-centre-phrase></h2>
-        <div class="actions"><button class="btn btn--primary" data-centre-ajout hidden data-t="vide.bibliotheque.action"></button></div>
+        <div class="actions"><button class="btn btn--primary" data-centre-ajout hidden data-t="parc.ajouter_imprimante"></button></div>
       </div>
       <div class="feuille__corps" data-centre-choix hidden></div>
+    </div>
     </section>
-  </div>
+  </main>
 
-  <aside class="c-10-12">
-    <span class="label zone__title" data-t="details.titre"></span>
+  <!-- Zone droite : les détails de ce qui est choisi. -->
+  <aside class="zone-droite" data-zone="droite">
+    <div class="zone-droite__titre" data-t="details.titre"></div>
     <!-- Détails de la tâche Mesurer (mesurer.js) : valeurs et provenance de la mesure choisie. -->
-    <div data-details-tache="mesurer" data-mesurer-detail hidden></div>
+    <div class="details-corps" data-details-tache="mesurer" data-mesurer-detail hidden></div>
     <div data-details-tache="autres">
-    <div data-details-choix hidden></div>
-    <div class="cartouche" data-details-vide>
+    <!-- Détails d’une résolution (reglage.js) : provenance du profil, fiche d’impression, Windows. -->
+    <div data-details-reglage hidden></div>
+    <div class="details-corps" data-details-choix hidden></div>
+    <div class="details-corps" data-details-vide><div class="cartouche">
       <div class="cartouche__title"><span class="label" data-t="cartouche.libelle"></span><strong data-t="cartouche.titre"></strong></div>
       <div class="cells">
         <div class="cell"><span class="label" data-t="cartouche.instrument"></span><span data-t="cartouche.aucun"></span></div>
@@ -238,9 +296,9 @@
         <div class="cell"><span class="label" data-t="cartouche.reference"></span><span data-t="cartouche.aucune"></span></div>
       </div>
       <div class="cartouche__foot"><span>myiro-libre</span><span class="num" data-version></span></div>
-    </div>
+    </div></div>
     </div>
   </aside>
-</div></main>
+</div>
 </body>
 </html>

@@ -1,93 +1,98 @@
-/* Jetons du système graphique de myiro-libre : grille suisse, cartouche, grand corps typographique.
-   Source unique des couleurs, de la typographie, des espacements, des filets et de la grille.
+/* Jetons du système graphique de myiro-libre : thème bleu nuit, cartes, accent bleu.
+   Source unique des couleurs, de la typographie, des espacements et des filets.
    Aucune valeur de couleur, de corps ou d'espacement ne doit apparaître hors de ce fichier.
-   Gabarit : 12 colonnes, base 4 px. Mode sombre : [data-theme="dark"] ou préférence du système. */
+   Thème sombre par défaut ; thème clair sur [data-theme="light"] (bascule de la barre du haut).
+   Valeurs reprises du prototype validé du poste unique (ADR 0007). */
+:root,
+:root[data-theme="dark"] {
+  /* Surfaces, du plus profond au plus proche. */
+  --fond:      #141a26;
+  --barre:     #1b2333;
+  --panneau:   #1e2738;
+  --carte:     #222c3f;
+  --filet:     #2e3a50;
+  /* Texte. */
+  --encre:     #e8ecf3;
+  --attenue:   #8d99ad;
+  /* Accent : choix, tâche courante, bouton principal. */
+  --accent:    #3d8bff;
+  --selection: #173b6b;
+  /* Texte posé sur l'accent (bouton principal) : 5,26 : 1 en sombre. */
+  --sur-accent: #141a26;
+  /* Verdicts : toujours avec une icône et un mot. Rouge réservé au danger et au hors tolérance. */
+  --conforme:  #2fbf71;
+  --limite:    #e8a23a;
+  --hors:      #ff5d64;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --fond:      #eef1f6;
+  --barre:     #ffffff;
+  --panneau:   #ffffff;
+  --carte:     #f6f8fb;
+  --filet:     #d6dce6;
+  --encre:     #141a26;
+  --attenue:   #5d6879;
+  --accent:    #1f6fe5;
+  --selection: #dbe8fb;
+  --sur-accent: #ffffff;
+  --conforme:  #13864b;
+  --limite:    #a8650a;
+  --hors:      #cc1f29;
+  color-scheme: light;
+}
+
 :root {
-  /* Palette : papier, encre, un seul gris, trois états de verdict. */
-  --color-paper:   #f4f3ef;
-  --color-ink:     #111111;
-  --color-muted:   #5c5a55;
-  --color-rule:    #111111;
-  --color-hair:    #c9c6bd;
-  --color-ok:      #0b6b3a;
-  --color-warn:    #94540a;
-  --color-bad:     #b3121d;
-  --color-grid:    rgba(179, 18, 29, 0.09);
-  --text-inverse:  var(--color-paper);
+  /* Fonte : une seule famille, lineale grotesque à corps optique. */
+  --font-body: "Inter", "Segoe UI", Arial, sans-serif;
+  --font-code: ui-monospace, Consolas, monospace;
 
-  /* Fontes : une seule famille, lineale grotesque à corps optique. */
-  --font-body: "Inter", "Helvetica Neue", Arial, sans-serif;
+  /* Corps : une application de bureau, des tailles fixes. Base 14 px. */
+  --text-xs:      0.6875rem;  /* 11 px : libellés en capitales, âges */
+  --text-sm:      0.8125rem;  /* 13 px : tâches, aides, tableaux */
+  --text-base:    0.875rem;   /* 14 px : texte courant */
+  --text-lg:      1.125rem;   /* 18 px : titre des détails */
+  --text-xl:      1.25rem;    /* 20 px : titres de section */
+  --text-2xl:     1.5rem;     /* 24 px : valeurs des critères */
+  --text-3xl:     1.625rem;   /* 26 px : titre du centre */
+  --text-4xl:     2.125rem;   /* 34 px : mot du verdict */
+  --text-5xl:     2.75rem;
+  --text-display: 3.5rem;
 
-  /* Échelle modulaire 1,25, fluide. */
-  --text-xs:      clamp(0.625rem, 0.6rem + 0.1vw, 0.64rem);
-  --text-sm:      clamp(0.75rem, 0.7rem + 0.2vw, 0.8rem);
-  --text-base:    clamp(0.938rem, 0.9rem + 0.2vw, 1rem);
-  --text-lg:      clamp(1.125rem, 1rem + 0.5vw, 1.25rem);
-  --text-xl:      clamp(1.25rem, 1.1rem + 0.8vw, 1.563rem);
-  --text-2xl:     clamp(1.5rem, 1.2rem + 1.2vw, 1.953rem);
-  --text-3xl:     clamp(1.875rem, 1.5rem + 1.8vw, 2.441rem);
-  --text-4xl:     clamp(2.25rem, 1.8rem + 2.5vw, 3.052rem);
-  --text-5xl:     clamp(2.75rem, 2rem + 3.5vw, 4rem);
-  --text-display: clamp(3.5rem, 2.5rem + 5vw, 7rem);
-
-  --leading-tight:  1;
-  --leading-snug:   1.2;
-  --leading-normal: 1.5;
-  --tracking-tight:  -0.04em;
-  --tracking-snug:   -0.02em;
+  --leading-tight:  1.1;
+  --leading-snug:   1.25;
+  --leading-normal: 1.45;
+  --tracking-tight:  -0.02em;
+  --tracking-snug:   -0.01em;
   --tracking-normal: 0;
-  --tracking-wide:   0.08em;
-  --tracking-widest: 0.16em;
+  --tracking-wide:   0.06em;
+  --tracking-widest: 0.12em;
 
   /* Espacements, base 4 px. */
   --space-1:  0.25rem;
   --space-2:  0.5rem;
   --space-3:  0.75rem;
   --space-4:  1rem;
+  --space-5:  1.25rem;
   --space-6:  1.5rem;
   --space-8:  2rem;
   --space-12: 3rem;
   --space-16: 4rem;
   --space-24: 6rem;
 
+  /* Retraits de l'arbre : papier, puis résolution. */
+  --retrait-2: 1.375rem;  /* 22 px */
+  --retrait-3: 2.5rem;    /* 40 px */
+
   /* Filets : le dessin remplace l'ombre. */
   --rule:        1px;
   --rule-strong: 2px;
   --rule-heavy:  4px;
-  --radius:      0;
 
-  /* Grille. */
-  --grid-columns: 12;
-  --grid-gutter:  var(--space-6);
-  --grid-margin:  var(--space-8);
-  --grid-max:     90rem;
-  --measure:      65ch;
-}
+  /* Icônes des tâches, pastille de l'instrument. */
+  --icone:    1.25rem;
+  --pastille: 0.625rem;
 
-:root[data-theme="dark"] {
-  --color-paper: #121211;
-  --color-ink:   #ecebe6;
-  --color-muted: #a09d94;
-  --color-rule:  #ecebe6;
-  --color-hair:  #3a3935;
-  --color-ok:    #5fd38d;
-  --color-warn:  #e8a64a;
-  --color-bad:   #ff7a80;
-  --color-grid:  rgba(255, 122, 128, 0.1);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --color-paper: #121211;
-    --color-ink:   #ecebe6;
-    --color-muted: #a09d94;
-    --color-rule:  #ecebe6;
-    --color-hair:  #3a3935;
-    --color-ok:    #5fd38d;
-    --color-warn:  #e8a64a;
-    --color-bad:   #ff7a80;
-    --color-grid:  rgba(255, 122, 128, 0.1);
-  }
-}
-@media (max-width: 64rem) {
-  :root { --grid-margin: var(--space-4); --grid-gutter: var(--space-4); }
+  --measure: 65ch;
 }

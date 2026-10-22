@@ -232,12 +232,24 @@ _Éviter_ : cible, target, standard
 ### Application
 
 **Tâche** :
-L'un des quatre grands travaux proposés dans la barre du haut : Mesurer, Contrôler, Profiler, Bibliothèque. Chaque tâche a sa feuille de travail au centre.
+L'un des cinq grands travaux proposés dans la barre du haut, dans cet ordre : Bibliothèque, Profiler, Mesurer, Contrôler, Imprimer. Chaque tâche a sa vue au centre ; une tâche pas encore livrée montre une carte « Prévu ».
 _Éviter_ : onglet, module, mode
 
 **Bibliothèque** :
-Base unique sur le poste, pour un utilisateur, où sont rangées les conditions d'impression et leurs mesures, chacune rattachée à l'instrument qui l'a produite (ADR 0001). Elle conserve les mesures telles que le pont les a données, sans rien recalculer. La colonne de gauche de l'application en montre l'arborescence.
+Base unique sur le poste, pour un utilisateur, où sont rangées les conditions d'impression et leurs mesures, chacune rattachée à l'instrument qui l'a produite (ADR 0001). Elle conserve les mesures telles que le pont les a données, sans rien recalculer. La zone gauche de l'application en montre l'arbre imprimante → papier → résolution ; les conditions d'avant le parc y sont « non classées ».
 _Éviter_ : base de données (au sens technique), dossier de mesures, catalogue
+
+**Pastille de l'instrument** :
+Petit rond de couleur dans la barre du haut, devant le nom et l'état de l'instrument actif : non détecté, connecté, étalonnage requis, étalonné, en mesure. Le texte dit toujours l'état : la couleur n'est jamais seule. Un clic ouvre la liste des instruments du poste.
+_Éviter_ : voyant, LED, indicateur
+
+**Ranger un profil existant** :
+Mettre dans une résolution de la bibliothèque un profil ICC RVB ou CMJN déjà fait ailleurs (fichier `.icc` ou `.icm`). Il devient le profil actif, sous le nom proposé (imprimante, papier, résolution, date) ; sa provenance dit « profil existant », et l'instrument et la mire qui l'ont produit restent « inconnus ».
+_Éviter_ : importer un profil (« importer » est réservé aux mesures CGATS), ajouter un profil
+
+**Installer dans Windows** :
+Copier le profil actif d'une résolution dans le dossier des couleurs de Windows, pour que le pilote de l'imprimante et les logiciels le trouvent. Un autre profil du même nom, au contenu différent, n'est jamais écrasé ; si Windows refuse, on exporte le profil et on l'installe depuis l'Explorateur.
+_Éviter_ : déployer, enregistrer le profil
 
 **Sauvegarde** :
 Copie complète de la bibliothèque en un seul fichier, à garder en lieu sûr ou à restaurer sur un autre poste. La restaurer remplace toute la bibliothèque, après accord de l'opérateur.

@@ -252,6 +252,19 @@ impl Bibliotheque {
             .ok_or(ErreurBibliotheque::ProfilInconnu(id))
     }
 
+    /// Les paramètres qui ont produit le profil, tels qu'ils ont été
+    /// enregistrés (commande et réglages, ou origine d'un profil rangé).
+    pub fn parametres_profil(&self, id: IdProfil) -> Resultat<String> {
+        self.base
+            .query_row(
+                "SELECT parametres FROM profils WHERE id = ?1",
+                params![id.0],
+                |l| l.get(0),
+            )
+            .optional()?
+            .ok_or(ErreurBibliotheque::ProfilInconnu(id))
+    }
+
     /// Note le résultat de la vérification d'un profil.
     pub fn marquer_verification(&self, id: IdProfil, etat: EtatVerification) -> Resultat<()> {
         let modifies = self.base.execute(

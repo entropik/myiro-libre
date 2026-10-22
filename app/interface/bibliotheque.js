@@ -1,5 +1,5 @@
-// Bibliothèque à l'écran : colonne de gauche (conditions d'impression → mesures, avec
-// recherche), feuille du centre (la mesure ou la condition choisie) et cartouche de
+// Feuille des mesures de la bibliothèque : barre d'actions (import, export CGATS, sauvegarde,
+// restauration), la mesure choisie dans l'arbre (parc.js) au centre et son cartouche de
 // provenance à droite. Les données viennent de la bibliothèque locale (module Rust
 // `colonne`) ; les textes, du catalogue (`textes`, chargé par app.js). Aucun texte en dur.
 "use strict";
@@ -9,11 +9,7 @@
   const t = (cle) => textes[cle] || cle;
 
   const zone = document.querySelector("[data-bibliotheque]");
-  const arbre = zone.querySelector("[data-arbre]");
-  const message = zone.querySelector("[data-arbre-message]");
-  const recherche = zone.querySelector("[data-recherche]");
-  const nouvelle = zone.querySelector("[data-nouvelle-condition]");
-  const nouvelleErreur = zone.querySelector("[data-nouvelle-erreur]");
+  const vueReglage = document.querySelector("[data-vue-reglage]");
   const centreVide = document.querySelector("[data-centre-vide]");
   const centrePhrase = document.querySelector("[data-centre-phrase]");
   const centreAjout = document.querySelector("[data-centre-ajout]");
@@ -21,11 +17,10 @@
   const detailsChoix = document.querySelector("[data-details-choix]");
   const detailsVide = document.querySelector("[data-details-vide]");
 
-  let branches = [];
-  let bibliothequeVide = false; // aucune condition d'impression, recherche à part
+  let branches = []; // conditions d'impression, destinations d'un import
   let erreurBibliotheque = null; // clé du catalogue si la bibliothèque ne répond pas
   let version = ""; // version de l'application, pour le pied du cartouche
-  let choix = null; // { type: "condition" | "mesure" | "importee" | "apercu", id }
+  let choix = null; // { type: "mesure" | "importee" | "apercu", id }
   let spectreChoisi = 0; // spectre 1, 2 ou 3 de chaque plage dans le tableau
 
   // ---- Petits outils ----
@@ -45,16 +40,6 @@
     return new Intl.DateTimeFormat(document.documentElement.lang, {
       day: "numeric", month: "short", year: "numeric",
       hour: "2-digit", minute: "2-digit", timeZone: "UTC",
-    }).format(d);
-  }
-
-  // Date courte pour la colonne de gauche : jour, mois et heure (« 9 oct., 09:15 »).
-  function dateCourte(horodatage) {
-    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(horodatage);
-    if (!m) return horodatage;
-    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
-    return new Intl.DateTimeFormat(document.documentElement.lang, {
-      day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC",
     }).format(d);
   }
 
@@ -106,76 +91,23 @@
     return b.mesures.length + b.importees.length;
   }
 
-  // Condition d'impression du choix courant : la condition elle-même, ou celle
-  // de la mesure choisie.
+  // Condition d'impression du choix courant : celle de la mesure choisie, sinon la
+  // résolution ouverte dans l'arbre (parc.js).
   function conditionChoisie() {
-    if (!choix) return null;
-    if (choix.type === "condition") return choix.id;
-    const b = branches.find((b) => b.mesures.some((m) => m.id === choix.id) || b.importees.some((m) => m.id === choix.id));
-    return b ? b.condition.id : null;
+    const b = choix && branches.find((b) => b.mesures.some((m) => m.id === choix.id) || b.importees.some((m) => m.id === choix.id));
+    if (b) return b.condition.id;
+    return window.Parc ? window.Parc.conditionChoisie() : null;
   }
 
-  // ---- Arborescence, à gauche ----
-  // `texte` : une chaîne, ou [nom, détail] pour une mesure, sur deux lignes au plus.
-  function ligne(numero, texte, droite, choixLigne, niveau1) {
-    const li = el("li", niveau1 ? "l1" : "");
-    li.tabIndex = 0;
-    let corps;
-    if (Array.isArray(texte)) {
-      const [nom, detail] = texte;
-      corps = el("span");
-      const n = el("span", "index__nom", nom);
-      const d = el("span", "index__meta", detail);
-      n.title = nom; // le texte entier au survol, si la colonne est trop étroite
-      d.title = detail;
-      corps.append(n, d);
-    } else {
-      corps = el("span", "", texte);
-    }
-    li.append(el("span", "num mute", numero), corps, el("span", "num", droite));
-    li.dataset.type = choixLigne.type;
-    li.dataset.id = choixLigne.id;
-    if (choix && choix.type === choixLigne.type && choix.id === choixLigne.id) {
-      li.classList.add("sel");
-      li.setAttribute("aria-current", "true");
-    }
-    return li;
-  }
-
-  function dessinerArbre() {
-    arbre.replaceChildren();
-    branches.forEach((b, i) => {
-      arbre.append(ligne(String(i + 1), b.condition.nom, String(nombreMesures(b)),
-        { type: "condition", id: b.condition.id }, true));
-      b.mesures.forEach((m, j) => {
-        // Ligne 1 : le nom donné à la mesure (tâche Mesurer), sinon la lecture ; ligne 2 : la date
-        // courte, suivie de la lecture si elle n'est pas déjà en ligne 1. Jamais la date deux fois.
-        const nom = m.nom || lecture(m.geometrie, m.plages);
-        const detail = m.nom ? `${dateCourte(m.horodatage)} · ${lecture(m.geometrie, m.plages)}` : dateCourte(m.horodatage);
-        arbre.append(ligne(`${i + 1}.${j + 1}`, [nom, detail], "",
-          { type: "mesure", id: m.id }, false));
-      });
-      // Les mesures importées suivent, marquées comme telles avec le nom de leur fichier.
-      b.importees.forEach((m, j) => {
-        arbre.append(ligne(`${i + 1}.${b.mesures.length + j + 1}`, [m.fichier, t("import.importee")], "",
-          { type: "importee", id: m.id }, false));
-      });
-    });
-    message.hidden = branches.length > 0;
-    if (erreurBibliotheque) message.textContent = t(erreurBibliotheque);
-    else message.textContent = recherche.value.trim() ? t("bibliotheque.aucun_resultat") : t("vide.bibliotheque.phrase");
-  }
-
+  // Les conditions d'impression et leurs mesures : l'arbre lui-même est dessiné par parc.js.
   async function chargerArbre() {
     try {
-      branches = await invoke("bibliotheque_arborescence", { recherche: recherche.value });
+      branches = await invoke("bibliotheque_arborescence", { recherche: "" });
       erreurBibliotheque = null;
     } catch (cle) {
       branches = [];
       erreurBibliotheque = cle;
     }
-    if (!erreurBibliotheque && !recherche.value.trim()) bibliothequeVide = branches.length === 0;
-    dessinerArbre();
   }
 
   // ---- Cartouche de provenance, à droite ----
@@ -217,9 +149,11 @@
     centreChoix.hidden = true;
     centreVide.hidden = false;
     // Une bibliothèque qui ne s'ouvre pas le dit aussi au centre, sans proposer d'ajout.
+    // Sans imprimante, la feuille dit quoi faire et propose « Ajouter une imprimante ».
+    const vide = Boolean(window.Parc && window.Parc.estVide());
     if (erreurBibliotheque) centrePhrase.textContent = t(erreurBibliotheque);
-    else centrePhrase.textContent = t(bibliothequeVide ? "vide.bibliotheque.phrase" : "centre.choisir");
-    centreAjout.hidden = Boolean(erreurBibliotheque) || !bibliothequeVide;
+    else centrePhrase.textContent = t(vide ? "parc.vide" : "centre.choisir");
+    centreAjout.hidden = Boolean(erreurBibliotheque) || !vide;
   }
 
   function enTete(titre, contexte) {
@@ -318,6 +252,7 @@
         await invoke("bibliotheque_renommer_condition", { id: b.condition.id, nom: saisie.value });
         await chargerArbre();
         afficherChoix();
+        document.dispatchEvent(new CustomEvent("parc-modifie")); // parc.js : le nouveau nom
       } catch (cle) {
         saisie.classList.add("input--error");
         erreur.hidden = false;
@@ -463,6 +398,7 @@
       await chargerArbre();
       afficherChoix();
       annoncer(t("import.rangee").replace("{}", choisie ? choisie.condition.nom : ""));
+      document.dispatchEvent(new CustomEvent("parc-modifie")); // parc.js : l'arbre la montre
     } catch (cle) {
       bouton.disabled = false;
       annoncer(t(cle));
@@ -524,12 +460,13 @@
       if (!contenu) return;
       // Sans sélection, « Annuler » revient à la feuille vide, pas à un ancien choix.
       avantApercu = choix && choix.type === "apercu" ? avantApercu : choix;
+      // La résolution ouverte, ou la condition de la mesure choisie, est la destination proposée.
       destination = conditionChoisie();
       apercu = contenu;
-      recherche.value = "";
       await chargerArbre();
       if (destination !== null && !brancheDe(destination)) destination = null;
       choix = { type: "apercu", id: 0 };
+      if (window.Parc) window.Parc.quitterReglage(); // parc.js : la feuille reprend le centre
       afficherTache("bibliotheque"); // app.js : la feuille du centre montre l'aperçu
       afficherChoix();
     } catch (cle) {
@@ -545,19 +482,21 @@
       if (!nom) return;
       choix = null;
       apercu = null;
-      recherche.value = "";
       await chargerArbre();
+      if (window.Parc) window.Parc.quitterReglage();
       afficherChoix();
       annoncer(`${t("export.restaure")} ${nom}`);
       document.dispatchEvent(new CustomEvent("bibliotheque-restauree")); // mesurer.js : la référence suit
+      document.dispatchEvent(new CustomEvent("parc-modifie")); // parc.js : l'arbre de la sauvegarde
     } catch (cle) {
       annoncer(t(cle));
     }
   }
 
   function afficherChoix() {
-    dessinerArbre();
     dessinerExport();
+    // Une résolution ouverte (parc.js) occupe le centre et la droite : rien à dessiner ici.
+    if (!vueReglage.hidden) return;
     if (choix && choix.type === "apercu" && apercu) return montrerApercu();
     const b = choix && choix.type === "condition" ? brancheDe(choix.id) : null;
     if (b) return choisirCondition(b);
@@ -567,65 +506,23 @@
     centreSansChoix();
   }
 
-  function choisir(li) {
+  // Choix fait dans l'arbre (parc.js) : une mesure, une mesure importée, une condition
+  // non classée, ou rien.
+  function afficher(type, id) {
     // Choisir ailleurs abandonne l'aperçu : rien n'avait été rangé.
     if (apercu) {
       apercu = null;
       invoke("bibliotheque_annuler_import").catch(() => {});
       annoncer(t("import.abandonne"));
     }
-    choix = { type: li.dataset.type, id: Number(li.dataset.id) };
+    choix = type ? { type, id } : null;
     afficherTache("bibliotheque"); // app.js : la feuille du centre montre le choix
     afficherChoix();
   }
 
-  // ---- Ajout d'une condition d'impression ----
-  async function creer() {
-    try {
-      const c = await invoke("bibliotheque_creer_condition", { nom: nouvelle.value });
-      nouvelle.value = "";
-      nouvelle.classList.remove("input--error");
-      nouvelleErreur.hidden = true;
-      recherche.value = "";
-      // Pendant un aperçu, la nouvelle condition devient sa destination.
-      if (apercu) destination = c.id;
-      else choix = { type: "condition", id: c.id };
-      await chargerArbre();
-      afficherChoix();
-    } catch (cle) {
-      nouvelle.classList.add("input--error");
-      nouvelleErreur.hidden = false;
-      nouvelleErreur.textContent = t(cle);
-    }
-  }
-
   // ---- Événements ----
-  arbre.addEventListener("click", (e) => {
-    const li = e.target.closest("li");
-    if (li) choisir(li);
-  });
-  arbre.addEventListener("keydown", (e) => {
-    const li = e.target.closest("li");
-    if (li && (e.key === "Enter" || e.key === " ")) {
-      e.preventDefault();
-      choisir(li);
-      const meme = arbre.querySelector(`li[data-type="${li.dataset.type}"][data-id="${li.dataset.id}"]`);
-      if (meme) meme.focus();
-    }
-  });
-
-  let attente;
-  recherche.addEventListener("input", () => {
-    clearTimeout(attente);
-    attente = setTimeout(chargerArbre, 150);
-  });
-  zone.querySelector("[data-creer-condition]").addEventListener("click", creer);
-  nouvelle.addEventListener("keydown", (e) => { if (e.key === "Enter") creer(); });
-  // L'action principale de la feuille vide mène au champ d'ajout, à gauche.
-  centreAjout.addEventListener("click", () => {
-    if (nouvelle.value.trim()) creer();
-    else nouvelle.focus();
-  });
+  // L'action principale de la feuille vide ouvre l'ajout d'une imprimante, à gauche.
+  centreAjout.addEventListener("click", () => window.Parc.ouvrirAjoutImprimante());
 
   exporterBouton.addEventListener("click", exporter);
   exportZone.querySelector("[data-sauvegarder]").addEventListener("click", sauvegarder);
@@ -641,7 +538,6 @@
   // La langue est appliquée au lancement puis à chaque changement : tout se redessine.
   let premiereFois = true;
   async function langueAppliquee() {
-    recherche.placeholder = t("bibliotheque.recherche_aide");
     if (premiereFois) {
       premiereFois = false;
       version = await invoke("version_application");
@@ -652,8 +548,16 @@
     afficherChoix();
   }
   document.addEventListener("langue-appliquee", langueAppliquee);
-  // Une mesure vient d'être rangée (mesurer.js) : l'arborescence la montre.
+  // Une mesure rangée (mesurer.js) ou une condition ajoutée (parc.js) : destinations à jour.
   document.addEventListener("bibliotheque-modifiee", chargerArbre);
+
+  window.Bibliotheque = {
+    afficherMesure: (id) => afficher("mesure", id),
+    afficherImportee: (id) => afficher("importee", id),
+    afficherCondition: (id) => afficher("condition", id),
+    afficherRien: () => afficher(null, 0),
+    redessiner: afficherChoix,
+  };
   // Le catalogue a pu arriver avant le chargement de ce script.
   if (Object.keys(textes).length > 0) langueAppliquee();
 })();
