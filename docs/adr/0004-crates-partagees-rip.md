@@ -1,5 +1,7 @@
 # myiro-libre et le futur RIP sont deux projets qui partagent des crates
 
+> Remplacé par l'[ADR 0007](0007-poste-unique.md) pour le RIP séparé ; le contrat de `colorimetrie` reste valable.
+
 Un RIP libre est en préparation. Il sera un projet distinct de myiro-libre (pilotes d'imprimante, trame et file d'impression sont un autre produit), mais réutilisera les crates de myiro-libre : `colorimetrie`, `mires` et les formats d'échange. myiro-libre reste l'outil de mesure ; il produit profils, linéarisations et conditions d'impression que le RIP consomme.
 
 ## Conséquences

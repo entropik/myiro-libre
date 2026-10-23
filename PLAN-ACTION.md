@@ -2,6 +2,11 @@
 
 Date : 6 octobre 2026. Document de travail, à relire avec `Audit-MYIRO/LIRE-MOI-AUDIT.txt`.
 
+Mise à jour du cadrage le 9 octobre 2026 : la [spécification couleur](docs/specifications/poste-travail-couleur.md)
+fixe le premier jalon RVB vérifié et remplace les anciennes priorités. Les phases
+ci-dessous décrivent le périmètre complet ; leurs numéros n'imposent pas d'attendre
+la densitométrie, la linéarisation ou le contrôle complet pour livrer le profilage.
+
 Convention : **[confirmé]** = vérifié dans les fichiers du dossier (chemin cité) ; **[supposé]** = déduction à valider.
 
 ---
@@ -144,7 +149,7 @@ Chaque phase a un critère de sortie. Les phases 1 à 3 se font **sans instrumen
 
 *Sortie : fiches et crate `fd9-sys`, avec la question de la clé de licence tranchée.*
 
-La phase 2 se mène **en parallèle** des phases 1, 3 et 4 : le MYIRO-1 est livré en premier, mais le FD-9 est étudié et développé dans le même projet (phase 5).
+La phase 2 se mène **en parallèle** des phases 1, 3 et 4 : MYIRO-1 et FD-9 sont tous deux requis pour la première livraison de profilage RVB vérifié. Chaque instrument conserve ses paliers de sécurité et ses propres mires.
 
 ### Phase 3 — Ponts et banc d'essai sans instrument
 
@@ -175,7 +180,7 @@ Si un comportement reste ambigu, observer une session d'un logiciel fonctionnel 
 
 Même progression : détection → connexion/infos → reconnaissance d'une mire standard (ECI2002 ou IT8.7/4) → mesure d'une feuille → export CGATS.17, comparé à une mesure FD-S2w de la même feuille.
 
-En attendant, **FD-S2w reste le chemin de secours pour le FD-9** : ses exports CGATS peuvent déjà alimenter le profilage (phase 7). C'est pourquoi le MYIRO-1, qui n'a plus de logiciel de mesure sur le poste, passe en premier.
+**FD-S2w reste une source permanente d'import pour le FD-9** : ses exports CGATS alimentent le même profilage que l'acquisition directe. Cela ne remplace pas le pilotage FD-9 attendu, en parallèle du MYIRO-1, dans la première livraison.
 
 *Sortie : feuille FD-9 mesurée par l'application, écarts avec FD-S2w documentés.*
 
@@ -195,7 +200,7 @@ En attendant, **FD-S2w reste le chemin de secours pour le FD-9** : ses exports C
 - **Contrôle d'impression** : références issues d'un tirage validé (en premier) ou de jeux de valeurs normatifs importables ; tolérances ΔE00 par famille de plages (aplats, gris, autres) et densité des aplats, seuils modifiables ; verdict, historique par condition d'impression, rapport PDF.
 - **Linéarisation** (ArgyllCMS `printcal`) : mire de linéarisation incluse, courbes et limite d'encre par canal ; format maison ouvert plus export `.cal`. En v1 les courbes sont exportées pour un RIP, pas appliquées aux mires de profilage (ADR 0004).
 - **Profilage** CMJN et RVB : export `.ti3` puis `colprof` ; préréglages et panneau expert (TAC, GCR, intentions, qualité, azurants) ; contrôle `profcheck`.
-- **Vérification de profil** : mire imprimée à travers le profil, mesurée et comparée à la référence calculée depuis le profil ; même chaîne que le contrôle d'impression.
+- **Vérification de profil** : seconde mire imprimée manuellement à travers le profil ; résultats distincts de fidélité aux couleurs demandées et d'accord avec la prédiction. Tolérances versionnées choisies avant vérification et rapport inclus dès le premier jalon, sans attendre le contrôle complet.
 - Validation : profil comparé à un profil de référence (par exemple FOGRA39 sur une impression certifiée, ou un profil produit par un autre outil à partir des mêmes mesures).
 
 *Sortie : de la mire au profil vérifié, de bout en bout, à partir de mesures MYIRO-1 et FD-9.*
@@ -243,7 +248,7 @@ Commence une fois la v1 mesurant par la DLL. Le pilote libre est un adapter de p
 
 ## 6. Décisions à prendre
 
-1. **Priorité d'instrument — tranché** : MYIRO-1 d'abord ; FD-9 étudié et développé en parallèle.
+1. **Priorité d'instrument — révisée par le grill** : MYIRO-1 et FD-9 développés en parallèle et présents dans la première livraison RVB vérifiée ; mires et préréglages propres à chacun.
 2. **Langage — tranché** : Rust ; interface **Tauri 2**, bilingue FR/EN (ADR 0003).
 3. **Usage — tranché le 6 octobre 2026** : projet **libre, open source, non commercial**, destiné aux imprimeurs et utilisateurs privés d'outil par l'arrêt du support Konica. Conséquences :
    - licence recommandée : **GPL-3.0** (ou AGPL-3.0), compatible avec ArgyllCMS appelé en processus externe ou même intégré ;
@@ -251,7 +256,7 @@ Commence une fois la v1 mesurant par la DLL. Le pilote libre est un adapter de p
    - l'utilisateur indique que Konica Minolta ne fait plus valoir de licence sur ces SDK (réponse obtenue par l'utilisateur, non vue dans ce dossier). Tant que cette réponse n'est pas **écrite et archivée** dans le dépôt, l'application ne redistribue pas les DLL ni les manuels KM et les trouve dans les installations existantes de chaque utilisateur (FD-S2w, Ergosoft, EIZO…) ; avec un accord écrit, un paquet incluant les DLL devient envisageable ;
    - les mires XML FD-S2w et les tables ISO 5-3 suivent la même règle : on les lit chez l'utilisateur, on ne les copie pas dans le dépôt sans droit établi.
 4. **FD-S2w — tranché** : FD-S2w pilote encore le FD-9 sur ce poste, **en réseau** (FD-9 sur le réseau local, adresse MAC au préfixe Konica Minolta 00:20:6B), avec mesure M0/M1/M2, données spectrales, densité statut E, D50/2°. Il sert de référence et de secours.
-5. **Périmètre v1 — tranché le 6 octobre 2026** : application complète et autonome, Windows seulement pour l'instant : mires (création, mise en page, TIFF/PDF), mesure, densités, contrôle d'impression, linéarisation, profils CMJN et RVB, vérification de profil. Bibliothèque locale mono-poste (ADR 0001), ArgyllCMS inclus (ADR 0002). FD-5 BT non promis mais non exclu.
+5. **Premier jalon — révisé par le grill** : sous Windows, mire RVB → impression manuelle via pilote → mesure MYIRO-1/FD-9 ou import FD-S2w → profil ICC → seconde mire de vérification et rapport. Cas terrain : Epson pigmentaire / semigloss. Profilage direct sans linéarisation obligatoire. Densités, listes de couleurs, contrôle récurrent, linéarisation, CMJN et gamuts restent prévus ensuite. Bibliothèque locale mono-poste (ADR 0001), ArgyllCMS inclus (ADR 0002). FD-5 BT non promis mais non exclu.
 6. **Futur RIP — tranché** : projet distinct, qui partage avec myiro-libre les crates `colorimetrie`, `mires` et les formats d'échange (ADR 0004).
 7. **Dépendance aux DLL — tranché le 7 octobre 2026** : la DLL d'abord pour la v1, puis un pilote libre validé contre elle, pour un projet entièrement libre et multiplateforme (ADR 0006, phase 9).
 

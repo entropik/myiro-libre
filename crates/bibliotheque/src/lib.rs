@@ -13,6 +13,11 @@ use pont_protocole::{ecrire_mesure, lire_mesure, Geometrie, Info, Mesure};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, TransactionBehavior, MAIN_DB};
 use serde::Serialize;
 
+mod parc;
+mod profils;
+pub use parc::*;
+pub use profils::*;
+
 /// Nom du fichier de la base, dans le dossier de la bibliothèque.
 pub const FICHIER_BASE: &str = "bibliotheque.sqlite";
 
@@ -63,17 +68,27 @@ fn fichier_libre(chemin: &Path) -> std::path::PathBuf {
 }
 
 /// Version de l'organisation de la base ; une base plus récente est refusée.
-const VERSION_BASE: i32 = 4;
+const VERSION_BASE: i32 = 5;
 
 /// Ce qui peut empêcher une opération sur la bibliothèque.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErreurBibliotheque {
-    /// Le nom d'une condition d'impression est vide.
+    /// Un nom (condition d'impression, mesure, imprimante, papier,
+    /// résolution, profil) est vide.
     NomVide,
     /// Une autre condition d'impression porte déjà ce nom.
     NomDejaPris(String),
     ConditionInconnue(IdCondition),
     MesureInconnue(IdMesure),
+    ImprimanteInconnue(IdImprimante),
+    PapierInconnu(IdPapier),
+    ProfilInconnu(IdProfil),
+    /// Le fichier n'est pas un profil ICC RVB ou CMJN utilisable ; rien
+    /// n'est enregistré.
+    ProfilIllisible(String),
+    /// La date d'un profil n'est pas une date RFC 3339 valide (texte reçu) ;
+    /// rien n'est enregistré.
+    HorodatageInvalide(String),
     /// Le seuil d'une couleur de référence n'est pas un nombre fini
     /// strictement positif.
     SeuilInvalide,
@@ -96,12 +111,23 @@ pub enum ErreurBibliotheque {
 impl fmt::Display for ErreurBibliotheque {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NomVide => f.write_str("nom de condition d'impression vide"),
+            Self::NomVide => f.write_str("nom vide"),
             Self::NomDejaPris(nom) => {
                 write!(f, "une condition d'impression s'appelle déjà « {nom} »")
             }
             Self::ConditionInconnue(id) => write!(f, "condition d'impression n° {} inconnue", id.0),
             Self::MesureInconnue(id) => write!(f, "mesure n° {} inconnue", id.0),
+            Self::ImprimanteInconnue(id) => write!(f, "imprimante n° {} inconnue", id.0),
+            Self::PapierInconnu(id) => write!(f, "papier n° {} inconnu", id.0),
+            Self::ProfilInconnu(id) => write!(f, "profil n° {} inconnu", id.0),
+            Self::ProfilIllisible(detail) => write!(
+                f,
+                "ce fichier n'est pas un profil ICC RVB ou CMJN utilisable : {detail}"
+            ),
+            Self::HorodatageInvalide(texte) => write!(
+                f,
+                "date du profil illisible « {texte} » (attendu : 2026-10-20T09:00:00Z), rien n'a été enregistré"
+            ),
             Self::SeuilInvalide => f.write_str("seuil d'écart impossible"),
             Self::VersionBase(v) => write!(
                 f,
@@ -916,6 +942,7 @@ fn migrer(base: &mut Connection) -> Resultat<()> {
             1 => transaction.execute_batch(ORGANISATION_2)?,
             2 => transaction.execute_batch(ORGANISATION_3)?,
             3 => transaction.execute_batch(ORGANISATION_4)?,
+            4 => transaction.execute_batch(ORGANISATION_5)?,
             autre => unreachable!("aucune migration depuis l'organisation {autre}"),
         }
         version += 1;
@@ -1003,6 +1030,45 @@ CREATE TABLE references_couleur (
     mesure INTEGER PRIMARY KEY REFERENCES mesures (id),
     seuil REAL CHECK (seuil IS NULL OR seuil > 0)
 );
+";
+
+/// Organisation 5 (ticket #66), par-dessus l'organisation 4 : le parc des
+/// imprimantes et de leurs papiers, la résolution d'impression de chaque
+/// condition, et les profils ICC. Une condition déjà présente garde
+/// `papier` et `resolution` à `NULL` : elle est « non classée ». Rien n'est
+/// réécrit ni effacé. La base tient elle-même la règle d'un seul profil
+/// actif par condition.
+const ORGANISATION_5: &str = "
+CREATE TABLE imprimantes (
+    id INTEGER PRIMARY KEY,
+    nom TEXT NOT NULL UNIQUE
+);
+CREATE TABLE papiers (
+    id INTEGER PRIMARY KEY,
+    imprimante INTEGER NOT NULL REFERENCES imprimantes (id),
+    nom TEXT NOT NULL,
+    UNIQUE (imprimante, nom)
+);
+ALTER TABLE conditions ADD COLUMN papier INTEGER REFERENCES papiers (id);
+ALTER TABLE conditions ADD COLUMN resolution TEXT;
+CREATE UNIQUE INDEX conditions_par_papier ON conditions (papier, resolution)
+    WHERE papier IS NOT NULL;
+CREATE TABLE profils (
+    id INTEGER PRIMARY KEY,
+    condition INTEGER NOT NULL REFERENCES conditions (id),
+    nom TEXT NOT NULL,
+    horodatage TEXT NOT NULL,
+    espace TEXT NOT NULL CHECK (espace IN ('rvb', 'cmjn')),
+    etat TEXT NOT NULL DEFAULT 'non_verifie'
+        CHECK (etat IN ('non_verifie', 'accepte', 'hors_tolerance', 'incomplet')),
+    actif INTEGER NOT NULL CHECK (actif IN (0, 1)),
+    empreinte TEXT NOT NULL,
+    parametres TEXT NOT NULL,
+    mesures TEXT NOT NULL,
+    icc BLOB NOT NULL
+);
+CREATE INDEX profils_par_condition ON profils (condition);
+CREATE UNIQUE INDEX un_profil_actif_par_condition ON profils (condition) WHERE actif = 1;
 ";
 
 #[cfg(test)]

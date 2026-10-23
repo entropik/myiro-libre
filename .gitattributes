@@ -1,0 +1,4 @@
+# Les hooks sont exécutés par le shell Git, y compris sous Windows.
+.githooks/* text eol=lf
+# Bases SQLite figées des tests : binaires, sans conversion de fin de ligne.
+*.sqlite binary

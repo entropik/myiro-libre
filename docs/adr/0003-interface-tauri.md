@@ -14,6 +14,8 @@ L'application de bureau utilise Tauri 2 : cœur Rust, interface web rendue par W
 
 ## Direction visuelle (7 octobre 2026)
 
+> **Remplacée le 22 octobre 2026** par le thème bleu nuit du poste unique ([ADR 0007](0007-poste-unique.md), ticket #68) : cartes, accent bleu, verdicts vert, orange et rouge, bascule clair et sombre ; cinq tâches (Bibliothèque, Profiler, Mesurer, Contrôler, Imprimer) et pastille d'état de l'instrument. La grille suisse est retirée de `design-system/` ; le cartouche de provenance reste, restylé en carte. Les règles d'usage ci-dessous restent valables (un seul bouton principal, raison de toute action inactive, rouge réservé au danger, verdict jamais en couleur seule, une langue par fenêtre). Le texte d'origine reste ici pour l'histoire.
+
 Retenue après une maquette jetable à deux itérations (branche `prototype/interface-maquette`, `prototypes/interface-maquette/swiss.html`) :
 
 - **Trois zones** : bibliothèque par condition d'impression à gauche, feuille de travail au centre, détails à droite. Barre du haut par tâche (Mesurer, Contrôler, Profiler, Bibliothèque), avec l'instrument et son état toujours visibles.

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,12 +12,26 @@
 <link rel="stylesheet" href="doc.css">
 </head>
 <body>
-<header class="ds-head"><div class="page"><div class="grid">
-  <div class="c-1-4 brand">myiro-libre</div>
-  <nav class="c-5-12" aria-label="Pages du système graphique"><a href="index.html">Sommaire</a><a href="brand-book.html">Couleurs</a><a href="typography.html">Typographie</a><a href="grid.html">Grille</a><a href="ui-kit.html">Composants</a><a href="patterns.html">Assemblages</a></nav>
-</div></div></header>
+<header class="ds-head"><div class="page">
+  <div class="marque">myiro-libre<small>système graphique</small></div>
+  <nav aria-label="Pages du système graphique"><a href="index.html" aria-current="page">Sommaire</a><a href="brand-book.html">Couleurs</a><a href="typography.html">Typographie</a><a href="ui-kit.html">Composants</a><a href="patterns.html">Assemblages</a></nav>
+  <div class="seg" role="group" aria-label="Thème"><button data-theme-choix="dark" aria-pressed="true">Sombre</button><button data-theme-choix="light" aria-pressed="false">Clair</button></div>
+</div></header>
 <main class="page">
-<section class="ds-intro"><span class="label">Système graphique</span><h1>Grille, filets, cartouche</h1><p class="prose">Référence unique de l’identité visuelle de l’application&#8239;: jetons, couleurs, typographie, grille, composants et assemblages. Chaque valeur vient de <code>tokens.css</code>.</p></section>
-<table><thead><tr><th>N°</th><th>Page</th></tr></thead><tbody><tr><td class="id num">01</td><td><a href="brand-book.html"><b>Couleurs</b></a></td></tr><tr><td class="id num">02</td><td><a href="typography.html"><b>Typographie</b></a></td></tr><tr><td class="id num">03</td><td><a href="grid.html"><b>Grille</b></a></td></tr><tr><td class="id num">04</td><td><a href="ui-kit.html"><b>Composants</b></a></td></tr><tr><td class="id num">05</td><td><a href="patterns.html"><b>Assemblages</b></a></td></tr></tbody></table><section class="ds-block"><span class="label">Principes</span><h2>Ce qui ne change jamais</h2><p>Un seul bouton principal par écran. Le verdict est un mot en très grand corps, doublé d’un carré de couleur&#8239;: la couleur n’est jamais seule. Le rouge est réservé au danger et au hors tolérance. Aucune ombre, aucun dégradé, aucun arrondi&#8239;: le dessin est fait de filets. Chaque résultat affiche sa provenance dans un cartouche.</p></section></main>
+<section class="ds-intro"><span class="label">Système graphique</span><h1>Bleu nuit, cartes, accent bleu</h1><p class="prose">Référence unique de l’identité visuelle de l’application&#8239;: jetons, couleurs, typographie, composants et assemblages. Chaque valeur vient de <code>tokens.css</code>. Le thème sombre est celui par défaut&#8239;; la bascule de la barre du haut passe en clair.</p></section>
+<table><thead><tr><th>N°</th><th>Page</th></tr></thead><tbody>
+<tr><td class="id num">01</td><td><a href="brand-book.html"><b>Couleurs</b></a></td></tr>
+<tr><td class="id num">02</td><td><a href="typography.html"><b>Typographie</b></a></td></tr>
+<tr><td class="id num">03</td><td><a href="ui-kit.html"><b>Composants</b></a></td></tr>
+<tr><td class="id num">04</td><td><a href="patterns.html"><b>Assemblages</b></a></td></tr>
+</tbody></table>
+<section class="ds-block"><span class="label">Principes</span><h2>Ce qui ne change jamais</h2><p>Un seul bouton principal par écran, et tout bouton inactif dit pourquoi, juste à côté. Un verdict est toujours une couleur, une icône et un mot&#8239;: la couleur n’est jamais seule. Le rouge est réservé au danger et au hors tolérance. Aucune ombre, aucun dégradé, aucun emoji&#8239;; des angles droits, sauf la pastille de l’instrument. Seules les zones défilent, jamais la fenêtre ni en largeur.</p></section>
+</main>
+<script>
+for (const b of document.querySelectorAll("[data-theme-choix]")) b.addEventListener("click", () => {
+  document.documentElement.dataset.theme = b.dataset.themeChoix;
+  for (const c of document.querySelectorAll("[data-theme-choix]")) c.setAttribute("aria-pressed", String(c === b));
+});
+</script>
 </body>
 </html>

@@ -1,46 +1,66 @@
 # AGENTS.md
 
-Consignes communes aux agents (Claude Code, Codex) qui travaillent sur ce projet. Lire aussi `CLAUDE.md` (contexte, règles de sécurité matérielle) et `PLAN-ACTION.md` (plan).
+Consignes communes à Claude Code et Codex. Lire aussi `CLAUDE.md` pour le contexte
+et la sécurité matérielle, et `PLAN-ACTION.md` pour le plan.
 
 ## Isolement des agents
 
-Un seul dépôt git, un dossier de travail et une branche par agent :
+- Le dossier de travail courant est `C:\Code\MYIRO-fork`, sur la branche `dev`.
+  Claude Code et Codex y travaillent directement, **un seul agent à la fois**.
+  Avant toute écriture, vérifier le dossier, la branche et `git status --short` ;
+  conserver les changements préexistants et se coordonner en cas de recouvrement.
+- `dev` est la branche publique de développement et d'intégration. `main` reçoit
+  les versions validées par PR `dev` → `main` ; ne pas changer de branche dans le
+  dossier principal pour préparer une livraison.
+- Pour un chantier parallèle ou une PR demandée, créer un worktree séparé et une
+  branche `ticket/*` depuis `dev`, puis intégrer vers `dev`. Aucun second agent
+  ne modifie simultanément le même dossier de travail.
+- L'ancien worktree `C:\Code\MYIRO-fork-codex` reste une archive locale, sous
+  `archive/codex-initial-2026-10-09`. `prive`, l'ancienne branche `codex` et
+  `archive/*` contiennent de la rétro-analyse privée : ne jamais les pousser ni
+  fusionner leur historique dans une branche publique. Reprendre seulement les
+  fichiers publics utiles dans un commit propre issu de `dev`.
+- Le hook `pre-push` autorise `main`, `dev` et `ticket/*` et refuse l'historique
+  privé. Sa source versionnée est `.githooks/pre-push` ; conserver les autres
+  hooks documentaires lors de son installation.
+- Ne pas utiliser `git reset --hard`, `git push --force`, `git clean -f`, ni
+  réécrire l'historique partagé. Préserver les archives et worktrees existants.
 
-| Agent | Dossier de travail | Branche |
-|---|---|---|
-| Claude Code | `C:\Code\MYIRO-fork` | `main` |
-| Codex | `C:\Code\MYIRO-fork-codex` (worktree git) | `codex` |
+## Contrôle avant travail
 
-- Chaque agent ne modifie que son propre dossier de travail.
-- `main` est la seule branche publiée (dépôt public `entropik/myiro-libre`). Son historique ne contient aucun travail de rétro-analyse.
-- `prive` (historique complet d'origine) et `codex` contiennent les dossiers privés : **ne jamais les pousser**, ne jamais les fusionner dans `main` (`git merge codex` ferait entrer l'historique privé). Un hook `pre-push` refuse toute autre branche que `main`.
-- Pour faire entrer un livrable public de Codex (fiches d'ABI rédigées dans `docs/abi/`, etc.) dans `main` : `git checkout codex -- <chemins publics>` puis commit, chemin par chemin.
-- Ne jamais faire `git checkout prive` ou `git checkout codex` dans `C:\Code\MYIRO-fork` : quitter ensuite ces branches supprimerait du disque les dossiers privés.
-- Ne jamais faire `git reset --hard`, `git push --force`, `git clean -f` ni réécrire l'historique d'une branche partagée.
+Dans le dossier principal :
 
-## Archive commune hors git
+```text
+python outils/verifier_contexte.py --worktree C:/Code/MYIRO-fork --branch dev --reference dev
+```
 
-`Audit-MYIRO/collecte/`, `Audit-ColorGPS/collecte/` et `SDK/` ne sont pas versionnés (binaires et manuels sous licence Konica Minolta / Ergosoft). Ils n'existent que dans `C:\Code\MYIRO-fork`. Les deux agents les lisent **en lecture seule** à ce chemin absolu ; personne ne les modifie ni n'exécute les installateurs.
+Dans un worktree de chantier, fournir son chemin et sa branche `ticket/*`, avec
+`--reference dev`. Une divergence des règles impose leur comparaison ; elle
+n'autorise ni fusion automatique ni changement de branche dans le dossier principal.
 
-Les désassemblages `**/code.asm.txt` et les ressources extraites `*.resources/` ne sont pas versionnés non plus : ils se régénèrent avec les scripts de `outils/`.
+## Publications GitHub
 
-## Ce qui est public, ce qui reste local
+Avant de publier ou reprendre une spécification, un lot de tickets ou leurs
+relations, lire [la procédure](docs/agents/publication-github.md). Utiliser le
+helper, son état durable sous `.local/publications/`, et annoncer la réussite
+après relecture des résultats. Ces archives locales restent ignorées par Git.
 
-Public (branche `main`) : plan, consignes, scripts d'audit `Audit-MYIRO/outils/*.py`, synthèse `Audit-MYIRO/LIRE-MOI-AUDIT.txt`, documentation rédigée (`docs/`), code Rust.
+## Archives et contenu public
 
-Local uniquement : `Audit-ColorGPS/` (Ergosoft, logiciel commercial, et fichiers d'environnement d'impression), `Audit-MYIRO/analyse/` et `Audit-MYIRO/retroanalyse/` (chaînes et désassemblages tirés des DLL Konica Minolta). Ne publier aucun numéro de série, adresse MAC ou IP d'instrument.
+- `Audit-MYIRO/collecte/`, `Audit-ColorGPS/collecte/` et `SDK/` restent dans
+  `C:\Code\MYIRO-fork`, en lecture seule pour les agents : aucun installateur exécuté.
+- Public : code Rust, documentation rédigée, plans, scripts d'audit et synthèse
+  `Audit-MYIRO/LIRE-MOI-AUDIT.txt`.
+- Local uniquement : `Audit-ColorGPS/`, `Audit-MYIRO/analyse/`,
+  `Audit-MYIRO/retroanalyse/`, DLL, manuels et données propriétaires. Aucun numéro
+  de série, adresse MAC ou IP d'instrument dans le dépôt public.
+- Les désassemblages `**/code.asm.txt` et ressources `*.resources/` restent
+  ignorés ; ils se régénèrent avec les outils d'audit.
 
-## Répartition des dossiers
+## Coordination et langue
 
-| Dossier | Responsable par défaut |
-|---|---|
-| `Audit-ColorGPS/` | Codex |
-| `Audit-MYIRO/retroanalyse/`, `Audit-MYIRO/outils/desassemble.py` | Codex |
-| `crates/`, `app/`, `docs/`, `Cargo.toml` (application Rust) | Claude Code |
-| `PLAN-ACTION.md`, `CLAUDE.md`, `AGENTS.md` | Claude Code ; Codex propose ses changements dans un commit séparé sur `codex` |
-
-Toucher au dossier d'un autre agent seulement par un commit sur sa propre branche, signalé dans le message de commit.
-
-## Langue
+Les dossiers ne sont plus réservés à un agent nommé. Le chantier demandé fixe
+le périmètre ; avant de toucher un fichier déjà modifié, identifier le travail
+en cours et préserver ce qui ne relève pas du chantier.
 
 Documentation, rapports et messages de commit en français.

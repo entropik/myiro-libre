@@ -184,8 +184,24 @@ _Éviter_ : hue, nuance
 ### Impression
 
 **Condition d'impression** :
-Combinaison caractérisée d'une machine, d'un papier, d'encres et de réglages ; elle porte les tirages, les profils et les références de contrôle.
+Combinaison caractérisée d'une machine, d'un papier, d'encres et de réglages ; elle porte les tirages, les profils et les références de contrôle. Dans la bibliothèque, c'est la feuille de l'arbre imprimante → papier → résolution d'impression ; une condition créée avant ce rangement, sans papier, est dite « non classée ».
 _Éviter_ : setup, configuration, preset
+
+**Imprimante** :
+Une machine du parc de l'atelier, premier niveau de la bibliothèque ; chaque imprimante a ses propres papiers.
+_Éviter_ : périphérique, device, traceur
+
+**Papier** :
+Un support utilisé sur une imprimante donnée ; le même papier sur deux imprimantes fait deux papiers, car il s'imprime différemment.
+_Éviter_ : média, media, substrat
+
+**Résolution d'impression** :
+Réglage de qualité du pilote pour un papier (par exemple « 1200 ppp ») ; chaque résolution d'un papier est une condition d'impression et peut avoir son propre profil.
+_Éviter_ : DPI, qualité, mode
+
+**Profil actif** :
+Le profil ICC en service pour une condition d'impression : un seul à la fois. Un nouveau profil le remplace, et l'ancien reste dans l'historique avec son fichier intact. Un profil actif de plus d'un an est signalé comme ancien.
+_Éviter_ : profil courant, profil par défaut
 
 **Linéarisation** :
 Courbes par canal ramenant la réponse de chaque encre à une progression visuellement régulière, avant le profilage.
@@ -196,7 +212,7 @@ Quantité maximale utile d'un canal d'encre, au-delà de laquelle la couleur ne 
 _Éviter_ : ink limit, saturation
 
 **Vérification de profil** :
-Contrôle d'impression d'un tirage imprimé à travers un profil, dont la référence est calculée à partir de ce profil.
+Évaluation d'un tirage d'une seconde mire imprimée à travers un profil : elle distingue la fidélité aux couleurs demandées de l'accord entre les mesures et la prédiction du profil. Les deux résultats conservent leurs références et leurs tolérances.
 _Éviter_ : validation de profil, test de profil
 
 ### Densitométrie et contrôle
@@ -216,12 +232,24 @@ _Éviter_ : cible, target, standard
 ### Application
 
 **Tâche** :
-L'un des quatre grands travaux proposés dans la barre du haut : Mesurer, Contrôler, Profiler, Bibliothèque. Chaque tâche a sa feuille de travail au centre.
+L'un des cinq grands travaux proposés dans la barre du haut, dans cet ordre : Bibliothèque, Profiler, Mesurer, Contrôler, Imprimer. Chaque tâche a sa vue au centre ; une tâche pas encore livrée montre une carte « Prévu ».
 _Éviter_ : onglet, module, mode
 
 **Bibliothèque** :
-Base unique sur le poste, pour un utilisateur, où sont rangées les conditions d'impression et leurs mesures, chacune rattachée à l'instrument qui l'a produite (ADR 0001). Elle conserve les mesures telles que le pont les a données, sans rien recalculer. La colonne de gauche de l'application en montre l'arborescence.
+Base unique sur le poste, pour un utilisateur, où sont rangées les conditions d'impression et leurs mesures, chacune rattachée à l'instrument qui l'a produite (ADR 0001). Elle conserve les mesures telles que le pont les a données, sans rien recalculer. La zone gauche de l'application en montre l'arbre imprimante → papier → résolution ; les conditions d'avant le parc y sont « non classées ».
 _Éviter_ : base de données (au sens technique), dossier de mesures, catalogue
+
+**Pastille de l'instrument** :
+Petit rond de couleur dans la barre du haut, devant le nom et l'état de l'instrument actif : non détecté, connecté, étalonnage requis, étalonné, en mesure. Le texte dit toujours l'état : la couleur n'est jamais seule. Un clic ouvre la liste des instruments du poste.
+_Éviter_ : voyant, LED, indicateur
+
+**Ranger un profil existant** :
+Mettre dans une résolution de la bibliothèque un profil ICC RVB ou CMJN déjà fait ailleurs (fichier `.icc` ou `.icm`). Il devient le profil actif, sous le nom proposé (imprimante, papier, résolution, date) ; sa provenance dit « profil existant », et l'instrument et la mire qui l'ont produit restent « inconnus ».
+_Éviter_ : importer un profil (« importer » est réservé aux mesures CGATS), ajouter un profil
+
+**Installer dans Windows** :
+Copier le profil actif d'une résolution dans le dossier des couleurs de Windows, pour que le pilote de l'imprimante et les logiciels le trouvent. Un autre profil du même nom, au contenu différent, n'est jamais écrasé ; si Windows refuse, on exporte le profil et on l'installe depuis l'Explorateur.
+_Éviter_ : déployer, enregistrer le profil
 
 **Sauvegarde** :
 Copie complète de la bibliothèque en un seul fichier, à garder en lieu sûr ou à restaurer sur un autre poste. La restaurer remplace toute la bibliothèque, après accord de l'opérateur.
