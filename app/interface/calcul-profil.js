@@ -254,7 +254,7 @@ window.CalculProfil = (() => {
     const precision = t("profil.precision.valeur")
       .replace("{moyenne}", nombre(p.precision_moyenne)).replace("{max}", nombre(p.precision_max));
     const avance = el("details", "replie");
-    avance.append(el("summary", "", t("profil.avance")), el("pre", "", p.commandes.join("\n")),
+    avance.append(el("summary", "", t("profil.avance.provenance")), el("pre", "", p.commandes.join("\n")),
       el("span", "label", t("profil.journal")), el("pre", "", p.journal));
     return [
       cleValeur("profil.source", p.fichier),
@@ -270,7 +270,8 @@ window.CalculProfil = (() => {
     brancher: (fonctions) => { parc = fonctions; },
     dessiner,
     dessinerRaison,
-    enCours: () => calculEnCours,
+    // La raison « en cours » du calcul est à l'écran, sous son bouton : le message général se tait.
+    raisonVisible: () => calculEnCours && raisonCalcul !== null,
     texteErreur,
     provenance,
   };

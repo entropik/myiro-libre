@@ -299,6 +299,7 @@ const FRANCAIS: Catalogue = &[
     ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "Journal d’ArgyllCMS"),
+    ("profil.avance.provenance", "Avancé\u{202f}: commande et journal"),
     (
         "parc.erreur.inattendue",
         "L’action s’est arrêtée sur une erreur inattendue. Choisissez à nouveau cette résolution dans la bibliothèque, puis réessayez.",
@@ -1217,11 +1218,12 @@ const ANGLAIS: Catalogue = &[
     ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "ArgyllCMS log"),
+    ("profil.avance.provenance", "Advanced: command and log"),
     (
         "parc.erreur.inattendue",
         "The action stopped on an unexpected error. Choose this resolution again in the library, then try again.",
     ),
-    ("profil.precision", "Computation accuracy"),
+    ("profil.precision", "Calculation accuracy"),
     (
         "profil.precision.valeur",
         "{moyenne} on average, {max} at most (ΔE00)",

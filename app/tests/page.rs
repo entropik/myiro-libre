@@ -676,7 +676,7 @@ fn le_bouton_calculer_inactif_dit_pourquoi() {
         "mécanisme agir() existant"
     );
     let reglage = lire("interface/reglage.js");
-    assert!(reglage.contains("occupe.hidden = !enCours || calcul.enCours();"));
+    assert!(reglage.contains("occupe.hidden = !enCours || calcul.raisonVisible();"));
 }
 
 /// Un calcul fini alors que l'opérateur a changé de résolution n'annonce rien
@@ -707,6 +707,29 @@ fn la_commande_et_le_journal_restent_consultables() {
     assert!(script.contains("el(\"pre\", \"\", p.commandes.join(\"\\n\"))"));
     assert!(script.contains("el(\"pre\", \"\", p.journal)"));
     assert!(script.contains("el(\"details\", \"replie\")"));
+    assert!(script.contains("el(\"summary\", \"\", t(\"profil.avance.provenance\"))"));
+    use app::textes::{texte, Langue};
+    assert_eq!(
+        texte(Langue::Francais, "profil.avance.provenance"),
+        "Avancé\u{202f}: commande et journal"
+    );
+    assert_eq!(
+        texte(Langue::Anglais, "profil.avance.provenance"),
+        "Advanced: command and log"
+    );
+    assert_eq!(
+        texte(Langue::Anglais, "profil.precision"),
+        "Calculation accuracy"
+    );
+}
+
+/// Pendant un calcul, le message général ne se cache que si la raison du
+/// calcul est vraiment à l'écran (section vidée après un changement de
+/// résolution : le message général reste).
+#[test]
+fn pendant_un_calcul_une_raison_reste_toujours_visible() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains("raisonVisible: () => calculEnCours && raisonCalcul !== null,"));
 }
 
 /// Le bouton d'import de la section ne casse rien si la feuille n'a pas le
@@ -789,7 +812,7 @@ fn pendant_une_action_sur_le_profil_les_boutons_disent_pourquoi() {
         ),
         "les boutons de la vue"
     );
-    assert!(script.contains("occupe.hidden = !enCours || calcul.enCours();"));
+    assert!(script.contains("occupe.hidden = !enCours || calcul.raisonVisible();"));
     assert!(app::textes::cles().any(|c| c == "parc.en_cours"));
 }
 

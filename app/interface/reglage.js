@@ -52,7 +52,7 @@ window.Reglage = (() => {
     for (const b of vue.querySelectorAll(BOUTONS)) {
       b.disabled = enCours || b.hasAttribute("data-inactif") || (sansProfil && b.hasAttribute("data-installer"));
     }
-    occupe.hidden = !enCours || calcul.enCours();
+    occupe.hidden = !enCours || calcul.raisonVisible();
     calcul.dessinerRaison();
   }
 
