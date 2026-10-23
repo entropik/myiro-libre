@@ -19,6 +19,7 @@ use crate::colonne::BibliothequeOuverte;
 use crate::installation::{
     self, est_installe, EtatInstallation, InstallationProfils, InstallationWindows,
 };
+use crate::profiler::{sources_profil, SourceProfil};
 
 /// Taille au-delà de laquelle un fichier n'est pas lu comme un profil :
 /// 64 Mio, bien plus qu'un profil d'imprimante.
@@ -45,6 +46,9 @@ pub struct DetailReglage {
     pub origine: Option<&'static str>,
     pub mesures: Vec<ResumeMesure>,
     pub importees: Vec<ResumeImportee>,
+    /// Les mesures importées vues comme sources d'un profil, dans le même
+    /// ordre que `importees`.
+    pub sources: Vec<SourceProfil>,
     /// Le profil actif est installé dans Windows, à l'identique. Faux tant
     /// que le système n'a pas été regardé ([`BibliothequeOuverte::detail_reglage_installe`]).
     pub installe: bool,
@@ -168,6 +172,7 @@ impl BibliothequeOuverte {
                 Some(_) => Some("calcul"),
                 None => None,
             };
+            let sources = sources_profil(b, &importees)?;
             Ok(Some(DetailReglage {
                 origine,
                 condition: r.condition.clone(),
@@ -179,6 +184,7 @@ impl BibliothequeOuverte {
                 ancien: r.profil_ancien,
                 mesures,
                 importees,
+                sources,
                 installe: false,
             }))
         })?;

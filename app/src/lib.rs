@@ -12,6 +12,7 @@ pub mod instrument;
 pub mod mesurer;
 pub mod parc;
 pub mod pont;
+pub mod profiler;
 pub mod textes;
 
 use std::collections::BTreeMap;
@@ -577,6 +578,7 @@ pub fn lancer() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Instruments::default())
         .manage(PareFeuFd9::default())
+        .manage(profiler::Moteur::au_lancement())
         .setup(ouvrir_bibliotheque)
         .manage(GesteEnAttente::default())
         .invoke_handler(tauri::generate_handler![
@@ -615,6 +617,8 @@ pub fn lancer() {
             parc::parc_ranger_profil,
             parc::parc_exporter_profil,
             parc::parc_installer_profil,
+            profiler::profiler_commandes,
+            profiler::profiler_calculer,
             etalonner,
             repondre_geste
         ])

@@ -193,6 +193,103 @@ const FRANCAIS: Catalogue = &[
         "parc.erreur.fichier_illisible",
         "Le fichier n’a pas pu être lu. Vérifiez qu’il existe encore et qu’il n’est pas ouvert ailleurs.",
     ),
+    // Calcul d’un profil (ticket #40)
+    (
+        "profil.titre",
+        "Calculer un profil",
+    ),
+    (
+        "profil.source",
+        "Mesure",
+    ),
+    (
+        "profil.condition",
+        "Condition de mesure",
+    ),
+    (
+        "profil.recette",
+        "Qualité du calcul",
+    ),
+    (
+        "profil.recette.rapide",
+        "Rapide\u{202f}: pour un essai, en une minute environ",
+    ),
+    (
+        "profil.recette.standard",
+        "Standard\u{202f}: conseillée pour la production, en quelques minutes",
+    ),
+    (
+        "profil.recette.approfondi",
+        "Approfondi\u{202f}: le plus fin, nettement plus long",
+    ),
+    (
+        "profil.avance",
+        "Avancé\u{202f}: commande équivalente",
+    ),
+    (
+        "profil.calculer",
+        "Calculer le profil",
+    ),
+    (
+        "profil.en_cours",
+        "Calcul du profil en cours. Cela peut prendre plusieurs minutes.",
+    ),
+    (
+        "profil.fait",
+        "Profil calculé. Écart moyen {moyenne} ΔE00, maximum {max}. Il n’est pas encore vérifié.",
+    ),
+    (
+        "profil.supposee",
+        "supposée",
+    ),
+    (
+        "profil.refus.condition_absente",
+        "Cette mesure ne contient pas cette condition de mesure. Choisissez une condition proposée dans la liste.",
+    ),
+    (
+        "profil.refus.rvb_inconnus",
+        "Cette mesure ne dit pas quelles valeurs RVB ont été imprimées. Importez un export CGATS de FD-S2w qui contient les colonnes RVB.",
+    ),
+    (
+        "profil.refus.lab_inconnu",
+        "Une plage de cette mesure n’a pas de valeur Lab pour cette condition. Choisissez une autre condition, ou mesurez à nouveau la mire.",
+    ),
+    (
+        "profil.refus.rvb_hors_echelle",
+        "Une plage de cette mesure a une valeur RVB hors de l’échelle prévue. Vérifiez le fichier exporté, puis importez-le à nouveau.",
+    ),
+    (
+        "profil.refus.vide",
+        "Cette mesure ne contient aucune plage. Importez un autre fichier.",
+    ),
+    (
+        "profil.refus.aucune_condition",
+        "Aucune condition de mesure de ce fichier n’a toutes ses plages en Lab. Importez un export complet de FD-S2w.",
+    ),
+    (
+        "profil.erreur.argyll_introuvable",
+        "ArgyllCMS 3.5.0 est introuvable. Placez-le dans le dossier argyll à côté de l’application.",
+    ),
+    (
+        "profil.erreur.argyll_version",
+        "L’ArgyllCMS trouvé n’est pas en version 3.5.0, la seule validée. Placez ArgyllCMS 3.5.0 dans le dossier argyll à côté de l’application.",
+    ),
+    (
+        "profil.erreur.calcul",
+        "Le calcul du profil a échoué dans ArgyllCMS. Le profil actuel n’a pas changé. Vérifiez la mesure, puis réessayez.",
+    ),
+    (
+        "profil.erreur.controle",
+        "Le contrôle du profil calculé a échoué dans ArgyllCMS. Rien n’a été rangé, le profil actuel n’a pas changé. Réessayez.",
+    ),
+    (
+        "profil.erreur.fichier",
+        "Les fichiers de travail du calcul n’ont pas pu être écrits. Vérifiez la place libre sur le disque, puis réessayez.",
+    ),
+    (
+        "profil.erreur.mesure_ailleurs",
+        "Cette mesure est rangée dans une autre résolution. Choisissez une mesure de cette résolution.",
+    ),
     // Installation dans Windows
     ("installation.installe", "Installé dans Windows"),
     (
@@ -995,6 +1092,103 @@ const ANGLAIS: Catalogue = &[
     (
         "parc.erreur.fichier_illisible",
         "The file could not be read. Check that it still exists and is not open elsewhere.",
+    ),
+    // Computing a profile (ticket #40)
+    (
+        "profil.titre",
+        "Compute a profile",
+    ),
+    (
+        "profil.source",
+        "Measurement",
+    ),
+    (
+        "profil.condition",
+        "Measurement condition",
+    ),
+    (
+        "profil.recette",
+        "Computation quality",
+    ),
+    (
+        "profil.recette.rapide",
+        "Fast: for a trial, about one minute",
+    ),
+    (
+        "profil.recette.standard",
+        "Standard: advised for production, a few minutes",
+    ),
+    (
+        "profil.recette.approfondi",
+        "Thorough: the finest, much longer",
+    ),
+    (
+        "profil.avance",
+        "Advanced: equivalent command",
+    ),
+    (
+        "profil.calculer",
+        "Compute the profile",
+    ),
+    (
+        "profil.en_cours",
+        "Computing the profile. This may take several minutes.",
+    ),
+    (
+        "profil.fait",
+        "Profile computed. Mean difference {moyenne} ΔE00, maximum {max}. It is not verified yet.",
+    ),
+    (
+        "profil.supposee",
+        "assumed",
+    ),
+    (
+        "profil.refus.condition_absente",
+        "This measurement does not contain this measurement condition. Choose a condition offered in the list.",
+    ),
+    (
+        "profil.refus.rvb_inconnus",
+        "This measurement does not say which RGB values were printed. Import an FD-S2w CGATS export that contains the RGB columns.",
+    ),
+    (
+        "profil.refus.lab_inconnu",
+        "A patch of this measurement has no Lab value for this condition. Choose another condition, or measure the chart again.",
+    ),
+    (
+        "profil.refus.rvb_hors_echelle",
+        "A patch of this measurement has an RGB value outside the expected scale. Check the exported file, then import it again.",
+    ),
+    (
+        "profil.refus.vide",
+        "This measurement contains no patch. Import another file.",
+    ),
+    (
+        "profil.refus.aucune_condition",
+        "No measurement condition of this file has all its patches in Lab. Import a complete FD-S2w export.",
+    ),
+    (
+        "profil.erreur.argyll_introuvable",
+        "ArgyllCMS 3.5.0 cannot be found. Place it in the argyll folder next to the application.",
+    ),
+    (
+        "profil.erreur.argyll_version",
+        "The ArgyllCMS found is not version 3.5.0, the only validated one. Place ArgyllCMS 3.5.0 in the argyll folder next to the application.",
+    ),
+    (
+        "profil.erreur.calcul",
+        "Computing the profile failed in ArgyllCMS. The current profile has not changed. Check the measurement, then try again.",
+    ),
+    (
+        "profil.erreur.controle",
+        "Checking the computed profile failed in ArgyllCMS. Nothing was stored, the current profile has not changed. Try again.",
+    ),
+    (
+        "profil.erreur.fichier",
+        "The working files of the computation could not be written. Check the free disk space, then try again.",
+    ),
+    (
+        "profil.erreur.mesure_ailleurs",
+        "This measurement is stored in another resolution. Choose a measurement of this resolution.",
     ),
     // Installing in Windows
     ("installation.installe", "Installed in Windows"),

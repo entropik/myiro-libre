@@ -55,6 +55,7 @@ dependencies = [
  "cgats",
  "colorimetrie",
  "pont-protocole",
+ "profilage",
  "serde",
  "serde_json",
  "tauri",
