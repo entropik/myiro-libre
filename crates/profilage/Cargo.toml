@@ -1,0 +1,11 @@
+[package]
+name = "profilage"
+version = "0.1.0"
+description = "Calcul d'un profil ICC à partir d'une mesure : plages contrôlées, fichier .ti3, ArgyllCMS (ADR 0002)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+cgats = { path = "../cgats" }
+pont-protocole = { path = "../pont-protocole" }
