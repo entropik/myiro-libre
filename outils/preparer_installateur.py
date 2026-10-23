@@ -14,6 +14,14 @@ Usage (à la racine du dépôt) :
    l'installateur. Si le dossier `SDK/` du dépôt existe (ignoré par git), chacun
    de ses sous-dossiers qui contient FDXSDK.dll est embarqué entier dans
    `sdk/x64/` ou `sdk/x86/` selon l'architecture de la DLL.
+3. Si le dossier `argyll/` du dépôt existe (ignoré par git), vérifie qu'il
+   contient ArgyllCMS 3.5.0 (ADR 0002 : version figée) et embarque `colprof`,
+   `profcheck`, `ref/sRGB.icm` et le texte de la licence sous `argyll/`.
+   Sans `argyll/`, l'installateur se construit sans ArgyllCMS : l'application
+   dira qu'il est introuvable au moment de calculer un profil.
+
+ArgyllCMS est sous AGPL-3.0 : chaque publication d'un installateur qui
+l'embarque fournit les sources de la version incluse, ou leur lien précis.
 
 Un installateur qui embarque `SDK/` est STRICTEMENT LOCAL : les DLL du fabricant
 n'ont aucun droit de redistribution. Ne jamais le publier (Releases GitHub
@@ -30,6 +38,11 @@ RACINE = pathlib.Path(__file__).resolve().parent.parent
 APP = RACINE / "app"
 CIBLE_32 = "i686-pc-windows-msvc"
 PONTS = ("pont-myiro1", "pont-fd9")
+VERSION_ARGYLL = "3.5.0"
+ARGYLL_FICHIERS = ("bin/colprof.exe", "bin/profcheck.exe", "ref/sRGB.icm")
+# Nom du texte de licence à la racine de la distribution : non confirmé pour
+# la 3.5.0, le premier présent de cette liste est retenu.
+ARGYLL_LICENCES = ("License.txt", "AGPLv3.txt", "License3.txt", "LICENSE.txt", "COPYING.txt", "COPYING")
 
 
 def architecture(fichier):
@@ -81,9 +94,51 @@ def dll_embarquees():
     return ressources
 
 
+def lire_version_argyll(texte):
+    """« Version 3.5.0 » dans l'aide de colprof → « 3.5.0 ». Seul un numéro en
+    trois parties compte (« AGPL Version 3 » n'en est pas un) ; deux numéros
+    différents ne donnent rien, comme dans la crate `profilage`."""
+    mots = texte.split()
+    versions = set()
+    for mot, suivant in zip(mots, mots[1:]):
+        v = suivant.rstrip(".,;:)")
+        parties = v.split(".")
+        if mot == "Version" and len(parties) == 3 and all(p.isdigit() for p in parties):
+            versions.add(v)
+    return versions.pop() if len(versions) == 1 else None
+
+
+def aide_colprof(colprof):
+    """Aide de colprof lancé sans argument (il rend un code d'erreur : seul le texte compte)."""
+    sortie = subprocess.run([str(colprof)], capture_output=True, timeout=30)
+    return (sortie.stdout + sortie.stderr).decode("utf-8", errors="replace")
+
+
+def argyll_embarque(racine=RACINE, aide=aide_colprof):
+    """Ressources Tauri d'ArgyllCMS sous `argyll/`, ou {} sans dossier `argyll/`.
+    Un ArgyllCMS incomplet, sans licence ou d'une autre version arrête tout."""
+    argyll = racine / "argyll"
+    if not argyll.is_dir():
+        return {}
+    manquants = [f for f in ARGYLL_FICHIERS if not (argyll / f).is_file()]
+    if manquants:
+        sys.exit(f"ArgyllCMS incomplet dans {argyll} : il manque {', '.join(manquants)}")
+    licence = next((nom for nom in ARGYLL_LICENCES if (argyll / nom).is_file()), None)
+    if licence is None:
+        sys.exit(f"Texte de licence d'ArgyllCMS introuvable dans {argyll} (cherché : {', '.join(ARGYLL_LICENCES)}) : "
+                 "l'AGPL interdit de l'embarquer sans lui.")
+    version = lire_version_argyll(aide(argyll / "bin" / "colprof.exe"))
+    if version != VERSION_ARGYLL:
+        sys.exit(f"ArgyllCMS de {argyll} en version {version or 'illisible'} : seule la {VERSION_ARGYLL} est validée (ADR 0002).")
+    return {f"../argyll/{f}": f"argyll/{f}" for f in (*ARGYLL_FICHIERS, licence)}
+
+
 def main():
+    # ArgyllCMS est contrôlé avant la compilation des ponts, qui est longue.
+    argyll = argyll_embarque()
     compiler_ponts(hote())
     ressources = dll_embarquees()
+    ressources.update(argyll)
     bundle = {
         "active": True,
         "targets": ["nsis"],
@@ -94,11 +149,17 @@ def main():
     (APP / "tauri.installateur.json").write_text(
         json.dumps({"bundle": bundle}, indent=2) + "\n", encoding="utf-8")
     print("Configuration écrite : app/tauri.installateur.json")
-    if ressources:
-        print("ATTENTION : cet installateur embarque les DLL du fabricant (" + ", ".join(ressources.values())
+    dll = [cible for cible in ressources.values() if cible.startswith("sdk/")]
+    if dll:
+        print("ATTENTION : cet installateur embarque les DLL du fabricant (" + ", ".join(dll)
               + "). Il est STRICTEMENT LOCAL : ne jamais le publier, ni sur GitHub ni ailleurs.")
     else:
         print("Dossier SDK/ absent : aucune DLL embarquée, l'installateur cherchera le logiciel du fabricant.")
+    if argyll:
+        print(f"ArgyllCMS {VERSION_ARGYLL} embarqué (AGPL-3.0) : toute publication de cet installateur fournit "
+              f"les sources d'ArgyllCMS {VERSION_ARGYLL} ou leur lien précis.")
+    else:
+        print("Dossier argyll/ absent : ArgyllCMS non embarqué, l'application ne pourra pas calculer de profil.")
     print("Suite : cargo tauri build --config app/tauri.installateur.json")
 
 
