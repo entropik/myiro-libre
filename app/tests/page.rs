@@ -537,24 +537,108 @@ fn la_vue_d_une_resolution_a_un_seul_bouton_principal() {
         .unwrap_or_default();
     assert!(principal.contains("data-installer"), "{principal}");
 
-    let refaire = vue
+    // « Calculer un profil » ouvre la section ; ce n'est pas un bouton principal.
+    let ouvrir = vue
         .split('<')
-        .find(|b| b.contains("data-refaire"))
+        .find(|b| b.contains("data-calcul-ouvrir"))
         .and_then(|b| b.split('>').next())
-        .unwrap_or_default();
+        .expect("bouton « Calculer un profil »");
+    assert!(ouvrir.starts_with("button class=\"btn\""), "{ouvrir}");
+    assert!(ouvrir.contains("data-t=\"profil.titre\""), "{ouvrir}");
+    assert!(ouvrir.contains("aria-expanded=\"false\""), "{ouvrir}");
+    assert!(vue.contains("data-calcul-profil"), "section absente");
+}
+
+// ---- Calcul d'un profil depuis la vue d'une résolution (ticket #40) ----
+
+#[test]
+fn la_vue_d_une_resolution_appelle_le_calcul_du_profil() {
+    let script = lire("interface/reglage.js");
+    for attendu in [
+        "invoke(\"profiler_calculer\"",
+        "invoke(\"profiler_commandes\"",
+        // Tauri attend les paramètres en camelCase.
+        "mesureCondition:",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+}
+
+#[test]
+fn le_texte_de_l_ancien_bouton_prevu_a_disparu() {
+    for fichier in [
+        "interface/index.html",
+        "interface/reglage.js",
+        "src/textes.rs",
+    ] {
+        let texte = lire(fichier);
+        assert!(!texte.contains("parc.refaire"), "{fichier}");
+        assert!(!texte.contains("data-refaire"), "{fichier}");
+    }
+}
+
+/// Chaque clé `profil.…` lue par la vue d'une résolution existe en français
+/// et en anglais ; les clés complétées à l'écran (`"profil.recette.nom." +
+/// recette`) existent pour chaque recette.
+#[test]
+fn toutes_les_cles_profil_de_la_page_existent_en_deux_langues() {
+    use app::textes::{texte, Langue};
+    let script = lire("interface/reglage.js") + &lire("interface/index.html");
+    let mut demandees: Vec<String> = script
+        .match_indices("\"profil.")
+        .filter_map(|(i, _)| script[i + 1..].split('"').next())
+        .map(String::from)
+        .collect();
+    assert!(demandees.len() > 10, "clés lues : {demandees:?}");
+    assert!(demandees.iter().any(|c| c == "profil.recette.nom."));
+    let prefixes: Vec<String> = demandees
+        .iter()
+        .filter(|c| c.ends_with('.'))
+        .cloned()
+        .collect();
+    demandees.retain(|c| !c.ends_with('.'));
+    for prefixe in prefixes {
+        for recette in ["rapide", "standard", "approfondi"] {
+            demandees.push(format!("{prefixe}{recette}"));
+        }
+    }
+    let absentes: Vec<_> = demandees
+        .iter()
+        .filter(|c| {
+            [Langue::Francais, Langue::Anglais]
+                .iter()
+                .any(|l| texte(*l, c) == c.as_str())
+        })
+        .collect();
+    assert!(absentes.is_empty(), "clés absentes : {absentes:?}");
+}
+
+/// Une erreur du calcul arrive en objet `{cle, cause}` : la page dit le texte
+/// de la clé, puis la cause d'ArgyllCMS, jamais « [object Object] ».
+#[test]
+fn une_erreur_du_calcul_dit_sa_cle_puis_sa_cause() {
+    let script = lire("interface/reglage.js");
+    assert!(!script.contains("t(String(cle))"), "objet affiché tel quel");
+    assert!(script.contains("function texteErreur(erreur)"));
+    assert!(script.contains("t(\"profil.erreur.cause\").replace(\"{cause}\", erreur.cause)"));
+}
+
+/// « Calculer le profil » inactif dit pourquoi juste à côté ; pendant le
+/// calcul, le texte « en cours » du calcul remplace celui des autres actions.
+#[test]
+fn le_bouton_calculer_inactif_dit_pourquoi() {
+    let script = lire("interface/reglage.js");
     assert!(
-        refaire.split_whitespace().any(|a| a == "disabled"),
-        "« Refaire le profil » doit être inactif : {refaire}"
+        script.contains("corps.append(actions, raisonCalcul);"),
+        "raison loin du bouton"
     );
-    let apres = &vue[vue.find("data-refaire").unwrap_or(0)..];
-    let raison = apres
-        .find("<p class=\"why\"")
-        .expect("raison de « Refaire »");
-    assert!(!apres[..raison].contains("<button "), "raison trop loin");
-    assert!(apres[raison..]
-        .split('>')
-        .next()
-        .is_some_and(|p| p.contains("data-t=\"parc.refaire.raison\"")));
+    assert!(script.contains("if (choix.mesure === null) calculer.dataset.inactif = \"\";"));
+    assert!(script.contains("(choix.mesure === null ? t(\"profil.calculer.raison\") : \"\")"));
+    assert!(script.contains("calculEnCours ? t(\"profil.en_cours\")"));
+    assert!(
+        script.contains("agir(calculerProfil)"),
+        "mécanisme agir() existant"
+    );
 }
 
 /// Chaque texte demandé par l'arbre et la vue d'une résolution (`t("…")`
@@ -615,9 +699,9 @@ fn pendant_une_action_sur_le_profil_les_boutons_disent_pourquoi() {
     let script = lire("interface/reglage.js");
     assert!(
         script.contains(
-            "const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil]\";"
+            "const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-calcul-profil] button, [data-calcul-profil] input\";"
         ),
-        "les trois boutons"
+        "les boutons de la vue"
     );
     assert!(script.contains("occupe.hidden = !enCours;"));
     assert!(app::textes::cles().any(|c| c == "parc.en_cours"));

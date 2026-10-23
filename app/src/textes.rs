@@ -129,11 +129,6 @@ const FRANCAIS: Catalogue = &[
     ),
     ("parc.exporter", "Exporter"),
     ("parc.ranger", "Ranger un profil existant"),
-    ("parc.refaire", "Refaire le profil"),
-    (
-        "parc.refaire.raison",
-        "Le calcul des profils arrive dans une prochaine étape.",
-    ),
     ("parc.range", "Profil rangé. Il devient le profil actuel."),
     (
         "parc.en_cours",
@@ -291,6 +286,23 @@ const FRANCAIS: Catalogue = &[
         "Cette mesure est rangée dans une autre résolution. Choisissez une mesure de cette résolution.",
     ),
     ("profil.erreur.cause", "Message d’ArgyllCMS\u{202f}: {cause}"),
+    ("profil.recette.nom.rapide", "Rapide"),
+    ("profil.recette.nom.standard", "Standard"),
+    ("profil.recette.nom.approfondi", "Approfondi"),
+    (
+        "profil.calculer.raison",
+        "Aucune mesure de cette résolution ne peut servir à calculer un profil. La raison est dite sous chaque mesure.",
+    ),
+    (
+        "profil.sans_mesure",
+        "Importez d’abord un export CGATS de FD-S2w dans cette résolution.",
+    ),
+    ("profil.version", "ArgyllCMS"),
+    ("profil.precision", "Précision du calcul"),
+    (
+        "profil.precision.valeur",
+        "{moyenne} en moyenne, {max} au plus (ΔE00)",
+    ),
     // Installation dans Windows
     ("installation.installe", "Installé dans Windows"),
     (
@@ -1030,11 +1042,6 @@ const ANGLAIS: Catalogue = &[
     ),
     ("parc.exporter", "Export"),
     ("parc.ranger", "Store an existing profile"),
-    ("parc.refaire", "Redo the profile"),
-    (
-        "parc.refaire.raison",
-        "Profile computation arrives in a coming step.",
-    ),
     ("parc.range", "Profile stored. It is now the current profile."),
     (
         "parc.en_cours",
@@ -1192,6 +1199,23 @@ const ANGLAIS: Catalogue = &[
         "This measurement is stored in another resolution. Choose a measurement of this resolution.",
     ),
     ("profil.erreur.cause", "ArgyllCMS message: {cause}"),
+    ("profil.recette.nom.rapide", "Fast"),
+    ("profil.recette.nom.standard", "Standard"),
+    ("profil.recette.nom.approfondi", "Thorough"),
+    (
+        "profil.calculer.raison",
+        "No measurement of this resolution can be used to compute a profile. The reason is given under each measurement.",
+    ),
+    (
+        "profil.sans_mesure",
+        "First import a CGATS export from FD-S2w into this resolution.",
+    ),
+    ("profil.version", "ArgyllCMS"),
+    ("profil.precision", "Computation accuracy"),
+    (
+        "profil.precision.valeur",
+        "{moyenne} on average, {max} at most (ΔE00)",
+    ),
     // Installing in Windows
     ("installation.installe", "Installed in Windows"),
     (

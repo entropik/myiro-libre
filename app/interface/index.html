@@ -214,7 +214,7 @@
     </section>
     <!-- Bibliothèque : la vue d’une résolution (parc.js), ou la feuille des mesures (bibliotheque.js). -->
     <section class="vue-pleine" data-vue="bibliotheque" hidden>
-    <!-- Vue d’une résolution : profil actif, un seul bouton principal, historique, mesures. -->
+    <!-- Vue d’une résolution : profil actif, un seul bouton principal, calcul d’un profil, historique, mesures. -->
     <div data-vue-reglage hidden>
       <h1 class="titre" data-reglage-titre></h1>
       <div class="carte carte--verdict" data-reglage-verdict>
@@ -227,10 +227,11 @@
       <div class="actions">
         <button class="btn" data-exporter-profil data-t="parc.exporter"></button>
         <button class="btn" data-ranger-profil data-t="parc.ranger"></button>
-        <button class="btn" data-refaire data-t="parc.refaire" disabled></button>
+        <button class="btn" data-calcul-ouvrir data-t="profil.titre" aria-expanded="false" aria-controls="calcul-profil"></button>
       </div>
-      <p class="why" data-t="parc.refaire.raison"></p>
       <p class="why" role="status" data-reglage-occupe data-t="parc.en_cours" hidden></p>
+      <!-- Calcul d’un profil (reglage.js) : mesure, condition, qualité, commande équivalente. -->
+      <div id="calcul-profil" data-calcul-profil hidden></div>
       <div class="section">
         <div class="section__head"><span class="label label--ink" data-t="parc.historique"></span></div>
         <div data-historique></div>
