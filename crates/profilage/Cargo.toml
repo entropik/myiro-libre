@@ -9,3 +9,9 @@ repository.workspace = true
 [dependencies]
 cgats = { path = "../cgats" }
 pont-protocole = { path = "../pont-protocole" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+bibliotheque = { path = "../bibliotheque" }
+serde_json = "1"
+tempfile = "3"

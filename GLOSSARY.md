@@ -215,6 +215,14 @@ _Éviter_ : ink limit, saturation
 Évaluation d'un tirage d'une seconde mire imprimée à travers un profil : elle distingue la fidélité aux couleurs demandées de l'accord entre les mesures et la prédiction du profil. Les deux résultats conservent leurs références et leurs tolérances.
 _Éviter_ : validation de profil, test de profil
 
+**Recette de calcul** :
+Qualité demandée au calcul d'un profil : rapide (pour un essai), standard (par défaut, en production) ou approfondie (la plus longue). Elle est conservée avec le profil, avec la version d'ArgyllCMS et la commande lancée.
+_Éviter_ : preset, mode, qualité seule
+
+**Précision du calcul** :
+Écart ΔE00 moyen et maximal entre les mesures qui ont servi au calcul et ce que le profil prédit pour elles. Elle dit si le calcul a bien suivi les mesures, pas si le profil est bon : un profil calculé reste « non vérifié » jusqu'à la vérification de profil.
+_Éviter_ : qualité du profil, vérification
+
 ### Densitométrie et contrôle
 
 **Densité** :
