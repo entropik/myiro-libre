@@ -19,7 +19,7 @@ use crate::colonne::BibliothequeOuverte;
 use crate::installation::{
     self, est_installe, EtatInstallation, InstallationProfils, InstallationWindows,
 };
-use crate::profiler::{sources_profil, SourceProfil};
+use crate::profiler::{provenance_profil, sources_profil, ProvenanceProfil, SourceProfil};
 
 /// Taille au-delà de laquelle un fichier n'est pas lu comme un profil :
 /// 64 Mio, bien plus qu'un profil d'imprimante.
@@ -44,6 +44,8 @@ pub struct DetailReglage {
     /// D'où vient le profil actif : `profil_existant` (rangé tel quel) ou
     /// `calcul` ; rien sans profil.
     pub origine: Option<&'static str>,
+    /// Mesure, condition, recette, version et précision d'un profil calculé.
+    pub provenance: Option<ProvenanceProfil>,
     pub mesures: Vec<ResumeMesure>,
     pub importees: Vec<ResumeImportee>,
     /// Les mesures importées vues comme sources d'un profil, dans le même
@@ -173,8 +175,10 @@ impl BibliothequeOuverte {
                 None => None,
             };
             let sources = sources_profil(b, &importees)?;
+            let provenance = provenance_profil(b, r.profil.as_ref())?;
             Ok(Some(DetailReglage {
                 origine,
+                provenance,
                 condition: r.condition.clone(),
                 imprimante: i.imprimante.nom.clone(),
                 papier: p.papier.nom.clone(),

@@ -290,6 +290,7 @@ const FRANCAIS: Catalogue = &[
         "profil.erreur.mesure_ailleurs",
         "Cette mesure est rangée dans une autre résolution. Choisissez une mesure de cette résolution.",
     ),
+    ("profil.erreur.cause", "Message d’ArgyllCMS\u{202f}: {cause}"),
     // Installation dans Windows
     ("installation.installe", "Installé dans Windows"),
     (
@@ -1190,6 +1191,7 @@ const ANGLAIS: Catalogue = &[
         "profil.erreur.mesure_ailleurs",
         "This measurement is stored in another resolution. Choose a measurement of this resolution.",
     ),
+    ("profil.erreur.cause", "ArgyllCMS message: {cause}"),
     // Installing in Windows
     ("installation.installe", "Installed in Windows"),
     (

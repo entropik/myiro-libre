@@ -7,7 +7,7 @@ use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use app::colonne::{emplacement, BibliothequeOuverte};
-use app::profiler::Moteur;
+use app::profiler::{ErreurProfil, Moteur, ProvenanceProfil};
 use bibliotheque::{nom_profil_propose, EtatVerification, IdCondition, IdMesure};
 use pont_protocole::ConditionMesure;
 use profilage::{ErreurMoteur, Etape, MoteurSimule, Recette};
@@ -227,8 +227,15 @@ fn un_echec_du_moteur_laisse_le_profil_actif_inchange() {
         )
         .unwrap_err();
 
-    assert_eq!(erreur, "profil.erreur.calcul");
-    assert!(est_au_catalogue(&erreur));
+    // La page reçoit la clé et la dernière ligne d'erreur d'ArgyllCMS.
+    assert_eq!(
+        erreur,
+        ErreurProfil {
+            cle: "profil.erreur.calcul",
+            cause: Some("Not enough patches".to_string()),
+        }
+    );
+    assert!(est_au_catalogue(erreur.cle));
     let detail = b.ouverte.detail_reglage(b.condition).unwrap();
     assert_eq!(detail.actif.map(|p| p.id), Some(ancien));
     assert_eq!(detail.historique.len(), 1);
@@ -238,7 +245,13 @@ fn un_echec_du_moteur_laisse_le_profil_actif_inchange() {
 fn argyll_introuvable_ne_range_rien() {
     // Au lancement, ArgyllCMS n'a pas été trouvé : le moteur manque.
     let erreur = Moteur(None).moteur().err();
-    assert_eq!(erreur.as_deref(), Some("profil.erreur.argyll_introuvable"));
+    assert_eq!(
+        erreur,
+        Some(ErreurProfil {
+            cle: "profil.erreur.argyll_introuvable",
+            cause: None,
+        })
+    );
     assert!(est_au_catalogue("profil.erreur.argyll_introuvable"));
 
     // Trouvé puis disparu : le moteur le dit au calcul.
@@ -255,7 +268,8 @@ fn argyll_introuvable_ne_range_rien() {
             maintenant(),
         )
         .unwrap_err();
-    assert_eq!(erreur, "profil.erreur.argyll_introuvable");
+    assert_eq!(erreur.cle, "profil.erreur.argyll_introuvable");
+    assert_eq!(erreur.cause, None);
     let detail = b.ouverte.detail_reglage(b.condition).unwrap();
     assert!(detail.actif.is_none());
     assert!(detail.historique.is_empty());
@@ -293,7 +307,7 @@ fn une_mesure_sans_rvb_ne_peut_pas_servir_de_source() {
             maintenant(),
         )
         .unwrap_err();
-    assert_eq!(erreur, "profil.refus.rvb_inconnus");
+    assert_eq!(erreur.cle, "profil.refus.rvb_inconnus");
     assert!(moteur.demandes().is_empty());
 }
 
@@ -351,8 +365,8 @@ fn une_condition_absente_de_la_mesure_est_refusee() {
             maintenant(),
         )
         .unwrap_err();
-    assert_eq!(erreur, "profil.refus.condition_absente");
-    assert!(est_au_catalogue(&erreur));
+    assert_eq!(erreur.cle, "profil.refus.condition_absente");
+    assert!(est_au_catalogue(erreur.cle));
 }
 
 #[test]
@@ -393,7 +407,13 @@ fn une_mesure_d_une_autre_resolution_est_refusee() {
             )
             .unwrap_err(),
     ] {
-        assert_eq!(erreur, "profil.erreur.mesure_ailleurs");
+        assert_eq!(
+            erreur,
+            ErreurProfil {
+                cle: "profil.erreur.mesure_ailleurs",
+                cause: None,
+            }
+        );
     }
     assert!(est_au_catalogue("profil.erreur.mesure_ailleurs"));
     assert!(moteur.demandes().is_empty());
@@ -466,7 +486,93 @@ fn les_textes_du_calcul_existent() {
         "profil.erreur.controle",
         "profil.erreur.fichier",
         "profil.erreur.mesure_ailleurs",
+        "profil.erreur.cause",
     ] {
         assert!(est_au_catalogue(cle), "{cle}");
     }
+}
+
+#[test]
+fn une_autre_version_d_argyll_donne_la_version_trouvee() {
+    let b = banc();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
+    let moteur = MoteurSimule::echoue(ErreurMoteur::VersionNonValidee {
+        trouvee: "3.4.1".to_string(),
+    });
+    let erreur = b
+        .ouverte
+        .calculer_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M1,
+            Recette::Standard,
+            &moteur,
+            maintenant(),
+        )
+        .unwrap_err();
+    assert_eq!(
+        erreur,
+        ErreurProfil {
+            cle: "profil.erreur.argyll_version",
+            cause: Some("3.4.1".to_string()),
+        }
+    );
+}
+
+#[test]
+fn la_cause_s_ecrit_dans_les_deux_langues() {
+    use app::textes::{texte, Langue};
+    for langue in [Langue::Francais, Langue::Anglais] {
+        let t = texte(langue, "profil.erreur.cause");
+        assert!(t.contains("{cause}") && t.contains("ArgyllCMS"), "{t}");
+    }
+}
+
+#[test]
+fn la_provenance_d_un_profil_calcule_est_donnee_a_la_page() {
+    let b = banc();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
+    b.ouverte
+        .calculer_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M1,
+            Recette::Standard,
+            &MoteurSimule::reussit(icc()),
+            maintenant(),
+        )
+        .unwrap();
+
+    let detail = b.ouverte.detail_reglage(b.condition).unwrap();
+    assert_eq!(
+        detail.provenance,
+        Some(ProvenanceProfil {
+            mesure,
+            fichier: "mesure00001_M1.txt".to_string(),
+            condition: ConditionMesure::M1,
+            condition_supposee: true,
+            recette: Recette::Standard,
+            version: "3.5.0".to_string(),
+            precision_moyenne: 0.5,
+            precision_max: 2.0,
+        })
+    );
+}
+
+#[test]
+fn un_profil_seulement_range_n_a_pas_de_provenance_de_calcul() {
+    let b = banc();
+    b.ranger_un_profil_existant();
+    let detail = b.ouverte.detail_reglage(b.condition).unwrap();
+    assert!(detail.actif.is_some());
+    assert_eq!(detail.provenance, None);
+    // Sans profil non plus.
+    let vide = banc();
+    assert_eq!(
+        vide.ouverte
+            .detail_reglage(vide.condition)
+            .unwrap()
+            .provenance,
+        None
+    );
 }

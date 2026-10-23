@@ -395,24 +395,34 @@ git commit -am "Profilage : ArgyllCMS derrière le trait MoteurProfil, version f
   ```rust
   #[derive(Serialize)]
   pub struct SourceProfil { pub mesure: IdMesure, pub fichier: String, pub conditions: Vec<ConditionMesure>, pub raison: Option<&'static str> }
-  // raison : clé de texte quand la mesure ne peut pas servir (rvb inconnus, aucune condition complète)
-  pub struct DetailReglage { /* … */ pub sources: Vec<SourceProfil> } // une par mesure importée de la résolution
+  // raison : clé de texte quand la mesure ne peut pas servir (RefusPlages::Vide, RvbInconnus, AucuneCondition)
+  #[derive(Serialize)]
+  pub struct ProvenanceProfil { pub mesure: IdMesure, pub fichier: String, pub condition: ConditionMesure, pub condition_supposee: bool,
+                                pub recette: Recette, pub version: String, pub precision_moyenne: f64, pub precision_max: f64 }
+  pub struct DetailReglage { /* … */
+      pub sources: Vec<SourceProfil>,            // une par mesure importée de la résolution
+      pub provenance: Option<ProvenanceProfil>,  // lue dans les paramètres du profil actif ; None s'il n'a pas été calculé
+  }
+  #[derive(Serialize)]
+  pub struct ErreurProfil { pub cle: &'static str, pub cause: Option<String> }
+  // cause : la cause d'ErreurMoteur::Echec (dernière ligne d'erreur), la version trouvée pour VersionNonValidee, None ailleurs.
+  // La page affiche le texte de `cle`, puis `profil.erreur.cause` (« Message d'ArgyllCMS : {cause} ») si `cause` est là.
   impl BibliothequeOuverte {
       pub fn commandes_profil(&self, condition: IdCondition, mesure: IdMesure, mesure_condition: ConditionMesure,
-                              recette: Recette, moteur: &dyn MoteurProfil) -> Result<Vec<String>, String>;
+                              recette: Recette, moteur: &dyn MoteurProfil) -> Result<Vec<String>, ErreurProfil>;
       pub fn calculer_profil(&self, condition: IdCondition, mesure: IdMesure, mesure_condition: ConditionMesure,
-                             recette: Recette, moteur: &dyn MoteurProfil, maintenant: SystemTime) -> Result<ResultatProfil, String>;
+                             recette: Recette, moteur: &dyn MoteurProfil, maintenant: SystemTime) -> Result<ResultatProfil, ErreurProfil>;
   }
   #[derive(Serialize)]
   pub struct ResultatProfil { pub profil: IdProfil, pub precision_moyenne: f64, pub precision_max: f64 }
   // Commandes (async, hors du fil de la fenêtre) :
-  // profiler_commandes(condition: i64, mesure: i64, mesure_condition: ConditionMesure, recette: Recette) -> Result<Vec<String>, String>
-  // profiler_calculer(condition: i64, mesure: i64, mesure_condition: ConditionMesure, recette: Recette) -> Result<ResultatProfil, String>
+  // profiler_commandes(condition: i64, mesure: i64, mesure_condition: ConditionMesure, recette: Recette) -> Result<Vec<String>, ErreurProfil>
+  // profiler_calculer(condition: i64, mesure: i64, mesure_condition: ConditionMesure, recette: Recette) -> Result<ResultatProfil, ErreurProfil>
   ```
 - Paramètres conservés (`NouveauProfil::parametres`), un JSON :
   `{"origine":"calcul","moteur":"ArgyllCMS","version":"3.5.0","recette":"standard","condition":"M1","condition_supposee":true,"rvb_supposes":true,"mesure":12,"fichier":"mesure00001_M1.txt","commandes":[…],"precision":{"moyenne_de00":…,"max_de00":…},"ti3":"…","journal":"…"}`.
   `mesures` = `[mesure]`. Nom : `nom_profil_propose(imprimante, papier, résolution, date du jour)`. `DetailReglage::origine` donne déjà `calcul` pour tout ce qui n'est pas un profil existant.
-- État Tauri `Moteur(Option<ArgyllCms>)`, rempli au lancement par `chercher_argyll(dossier de l'exécutable)`. `None` → `profil.erreur.argyll_introuvable`.
+- État Tauri `Moteur(Option<ArgyllCms>)`, rempli au lancement par `chercher_argyll(dossier de l'exécutable)`. `None` → `ErreurProfil { cle: "profil.erreur.argyll_introuvable", cause: None }`.
 
 - [ ] **Step 1 : Tests en échec (`app/tests/profiler.rs`, bibliothèque temporaire, `MoteurSimule`)**
 
@@ -438,7 +448,7 @@ Expected: échec de compilation.
 
 - [ ] **Step 3 : Implémenter `app/src/profiler.rs`**
 
-`calculer_profil` lit la mesure importée et les noms sous le verrou (`self.avec`), relâche le verrou, lance `moteur.calculer`, puis reprend le verrou pour `enregistrer_profil`. Toute erreur devient une clé de texte : `RefusPlages::cle`, `ErreurMoteur::cle`, `profil.erreur.mesure_ailleurs`. La cause brute est écrite dans le journal du terminal (`eprintln!`), comme dans `parc.rs`. Les commandes Tauri sont `#[tauri::command(async)]`, comme `ouvrir_instrument` (`app/src/lib.rs:203`).
+`calculer_profil` lit la mesure importée et les noms sous le verrou (`self.avec`), relâche le verrou, lance `moteur.calculer`, puis reprend le verrou pour `enregistrer_profil`. Toute erreur devient une `ErreurProfil` : sa clé de texte (`RefusPlages::cle`, `ErreurMoteur::cle`, `profil.erreur.mesure_ailleurs`, ou la clé d'une erreur de la bibliothèque) et, pour un échec d'ArgyllCMS, sa cause, rendue à la page : la dernière ligne d'erreur de l'outil, ou la version trouvée. L'erreur complète est aussi écrite dans le journal du terminal (`eprintln!`), comme dans `parc.rs`. Les commandes Tauri sont `#[tauri::command(async)]`, comme `ouvrir_instrument` (`app/src/lib.rs:203`).
 
 - [ ] **Step 4 : Textes FR et EN dans `textes.rs`**
 

@@ -44,6 +44,9 @@ pub enum RefusPlages {
     RvbHorsEchelle { plage: String },
     /// Une mesure sans plage.
     Vide,
+    /// RVB connus, mais aucune condition de mesure n'a un Lab pour toutes
+    /// les plages ([`conditions_utilisables`] est vide).
+    AucuneCondition,
 }
 
 impl RefusPlages {
@@ -55,6 +58,7 @@ impl RefusPlages {
             RefusPlages::LabInconnu { .. } => "profil.refus.lab_inconnu",
             RefusPlages::RvbHorsEchelle { .. } => "profil.refus.rvb_hors_echelle",
             RefusPlages::Vide => "profil.refus.vide",
+            RefusPlages::AucuneCondition => "profil.refus.aucune_condition",
         }
     }
 }
@@ -73,6 +77,9 @@ impl fmt::Display for RefusPlages {
                 write!(f, "la plage {plage} a une valeur RVB hors de 0 à 100 %")
             }
             RefusPlages::Vide => f.write_str("la mesure ne contient aucune plage"),
+            RefusPlages::AucuneCondition => {
+                f.write_str("aucune condition de mesure n'a un Lab pour toutes les plages")
+            }
         }
     }
 }
