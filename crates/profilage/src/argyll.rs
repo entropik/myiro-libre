@@ -35,6 +35,13 @@ impl ArgyllCms {
         ArgyllCms { racine }
     }
 
+    /// Les trois fichiers dont le calcul a besoin sont là.
+    fn complet(&self) -> bool {
+        self.outil("colprof").is_file()
+            && self.outil("profcheck").is_file()
+            && self.racine.join("ref").join(SRGB).is_file()
+    }
+
     fn outil(&self, nom: &str) -> PathBuf {
         self.racine
             .join("bin")
@@ -163,14 +170,16 @@ fn commande(programme: &Path) -> Command {
 
 /// Cherche ArgyllCMS : `<dossier de l'exécutable>/argyll` (installation),
 /// puis deux niveaux plus haut (`target/debug` → racine du dépôt, en
-/// développement). Un dossier compte s'il contient `bin/colprof`.
+/// développement). Un dossier compte s'il contient `bin/colprof`,
+/// `bin/profcheck` et `ref/sRGB.icm` : un ArgyllCMS incomplet est dit
+/// introuvable avant tout calcul.
 pub fn chercher_argyll(dossier_exe: &Path) -> Option<PathBuf> {
     [
         dossier_exe.join("argyll"),
         dossier_exe.join("..").join("..").join("argyll"),
     ]
     .into_iter()
-    .find(|racine| ArgyllCms::new(racine.clone()).outil("colprof").is_file())
+    .find(|racine| ArgyllCms::new(racine.clone()).complet())
 }
 
 /// Arguments de `colprof` : `-v` (journal), la qualité de la recette, une
@@ -256,12 +265,28 @@ fn valeur_apres(ligne: &str, cle: &str) -> Option<f64> {
 }
 
 /// Version lue dans l'aide de `colprof` : « Version 3.5.0 » → `"3.5.0"`.
+/// Seul un numéro en trois parties compte (« AGPL Version 3 » n'en est pas
+/// un). Deux numéros différents ne donnent rien : mieux vaut refuser que
+/// retenir le mauvais.
 pub fn lire_version(sortie_colprof: &str) -> Option<String> {
     let mots: Vec<&str> = sortie_colprof.split_whitespace().collect();
-    mots.windows(2).find_map(|m| {
+    let mut versions = mots.windows(2).filter_map(|m| {
         let v = m[1].trim_end_matches(|c: char| !c.is_ascii_alphanumeric());
-        (m[0] == "Version" && v.starts_with(|c: char| c.is_ascii_digit())).then(|| v.to_string())
-    })
+        (m[0] == "Version" && numero_en_trois_parties(v)).then_some(v)
+    });
+    let premiere = versions.next()?;
+    versions
+        .all(|v| v == premiere)
+        .then(|| premiere.to_string())
+}
+
+/// « 3.5.0 » : trois nombres séparés par des points.
+fn numero_en_trois_parties(texte: &str) -> bool {
+    let parties: Vec<&str> = texte.split('.').collect();
+    parties.len() == 3
+        && parties
+            .iter()
+            .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// Refuse toute version autre que [`VERSION_ARGYLL`].
@@ -313,7 +338,9 @@ impl DossierTravail {
 
 impl Drop for DossierTravail {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
+        if let Err(e) = fs::remove_dir_all(&self.0) {
+            eprintln!("dossier de travail non effacé ({}) : {e}", self.0.display());
+        }
     }
 }
 

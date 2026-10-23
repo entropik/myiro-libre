@@ -105,14 +105,27 @@ fn une_sortie_sans_precision_donne_rien() {
     );
 }
 
-fn poser_colprof(racine: &Path) {
-    let bin = racine.join("bin");
-    fs::create_dir_all(&bin).unwrap();
-    fs::write(
-        bin.join(format!("colprof{}", std::env::consts::EXE_SUFFIX)),
-        "",
-    )
-    .unwrap();
+/// Pose un ArgyllCMS factice : `bin/colprof`, `bin/profcheck` et
+/// `ref/sRGB.icm`, sauf le fichier `sauf`.
+fn poser_argyll_sauf(racine: &Path, sauf: Option<&str>) {
+    let exe = std::env::consts::EXE_SUFFIX;
+    let fichiers = [
+        format!("bin/colprof{exe}"),
+        format!("bin/profcheck{exe}"),
+        "ref/sRGB.icm".to_string(),
+    ];
+    for f in fichiers {
+        if sauf.is_some_and(|s| f.starts_with(s)) {
+            continue;
+        }
+        let chemin = racine.join(&f);
+        fs::create_dir_all(chemin.parent().unwrap()).unwrap();
+        fs::write(chemin, "").unwrap();
+    }
+}
+
+fn poser_argyll(racine: &Path) {
+    poser_argyll_sauf(racine, None);
 }
 
 #[test]
@@ -123,7 +136,7 @@ fn argyll_est_cherche_a_cote_de_l_executable_puis_a_la_racine_du_depot() {
     assert_eq!(chercher_argyll(&exe), None);
 
     // Développement : <dépôt>/argyll, deux niveaux au-dessus de target/debug.
-    poser_colprof(&depot.path().join("argyll"));
+    poser_argyll(&depot.path().join("argyll"));
     let trouve = chercher_argyll(&exe).unwrap();
     assert!(trouve.join("bin").exists());
     assert_eq!(
@@ -132,7 +145,7 @@ fn argyll_est_cherche_a_cote_de_l_executable_puis_a_la_racine_du_depot() {
     );
 
     // Installation : <exe>/argyll passe avant.
-    poser_colprof(&exe.join("argyll"));
+    poser_argyll(&exe.join("argyll"));
     assert_eq!(chercher_argyll(&exe), Some(exe.join("argyll")));
 }
 
@@ -141,6 +154,46 @@ fn un_dossier_argyll_sans_colprof_est_ignore() {
     let exe = tempfile::tempdir().unwrap();
     fs::create_dir_all(exe.path().join("argyll").join("bin")).unwrap();
     assert_eq!(chercher_argyll(exe.path()), None);
+}
+
+#[test]
+fn un_dossier_argyll_incomplet_est_ignore() {
+    // Sans sRGB.icm ou sans profcheck, le calcul échouerait en route :
+    // mieux vaut dire « introuvable » avant de commencer.
+    for manque in ["ref/sRGB.icm", "bin/profcheck", "bin/colprof"] {
+        let exe = tempfile::tempdir().unwrap();
+        poser_argyll_sauf(&exe.path().join("argyll"), Some(manque));
+        assert_eq!(chercher_argyll(exe.path()), None, "sans {manque}");
+    }
+}
+
+#[test]
+fn la_licence_agpl_version_3_ne_passe_pas_pour_la_version() {
+    let avant = "Author: Graeme W. Gill, licensed under the AGPL Version 3
+                 Create ICC profile, Version 3.5.0
+";
+    let apres = "Create ICC profile, Version 3.5.0
+                 Author: Graeme W. Gill, licensed under the AGPL Version 3
+";
+    assert_eq!(lire_version(avant).as_deref(), Some("3.5.0"));
+    assert_eq!(lire_version(apres).as_deref(), Some("3.5.0"));
+    // La licence seule ne donne aucune version.
+    assert_eq!(
+        lire_version(
+            "licensed under the AGPL Version 3
+"
+        ),
+        None
+    );
+    // Deux versions différentes : rien n'est retenu, le calcul est refusé.
+    assert_eq!(
+        lire_version(
+            "Create ICC profile, Version 3.5.0
+library Version 3.4.1
+"
+        ),
+        None
+    );
 }
 
 #[test]
