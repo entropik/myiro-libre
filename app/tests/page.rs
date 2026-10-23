@@ -551,9 +551,25 @@ fn la_vue_d_une_resolution_a_un_seul_bouton_principal() {
 
 // ---- Calcul d'un profil depuis la vue d'une résolution (ticket #40) ----
 
+/// La section du calcul vit dans calcul-profil.js, chargé après arbre.js et
+/// avant reglage.js, qui s'en sert.
+#[test]
+fn calcul_profil_js_est_charge_entre_arbre_js_et_reglage_js() {
+    let page = lire("interface/index.html");
+    let position = |nom: &str| page.find(&format!("<script src=\"{nom}\" defer>"));
+    let (arbre, calcul, reglage) = (
+        position("arbre.js"),
+        position("calcul-profil.js"),
+        position("reglage.js"),
+    );
+    assert!(arbre.is_some() && calcul.is_some() && reglage.is_some());
+    assert!(arbre < calcul && calcul < reglage, "ordre des scripts");
+    assert!(lire("interface/reglage.js").contains("window.CalculProfil"));
+}
+
 #[test]
 fn la_vue_d_une_resolution_appelle_le_calcul_du_profil() {
-    let script = lire("interface/reglage.js");
+    let script = lire("interface/calcul-profil.js");
     for attendu in [
         "invoke(\"profiler_calculer\"",
         "invoke(\"profiler_commandes\"",
@@ -569,6 +585,7 @@ fn le_texte_de_l_ancien_bouton_prevu_a_disparu() {
     for fichier in [
         "interface/index.html",
         "interface/reglage.js",
+        "interface/calcul-profil.js",
         "src/textes.rs",
     ] {
         let texte = lire(fichier);
@@ -583,7 +600,9 @@ fn le_texte_de_l_ancien_bouton_prevu_a_disparu() {
 #[test]
 fn toutes_les_cles_profil_de_la_page_existent_en_deux_langues() {
     use app::textes::{texte, Langue};
-    let script = lire("interface/reglage.js") + &lire("interface/index.html");
+    let script = lire("interface/reglage.js")
+        + &lire("interface/calcul-profil.js")
+        + &lire("interface/index.html");
     let mut demandees: Vec<String> = script
         .match_indices("\"profil.")
         .filter_map(|(i, _)| script[i + 1..].split('"').next())
@@ -614,30 +633,96 @@ fn toutes_les_cles_profil_de_la_page_existent_en_deux_langues() {
 }
 
 /// Une erreur du calcul arrive en objet `{cle, cause}` : la page dit le texte
-/// de la clé, puis la cause d'ArgyllCMS, jamais « [object Object] ».
+/// de la clé, puis la cause d'ArgyllCMS, jamais « [object Object] ». Un objet
+/// sans clé ou une exception de la page donne une erreur inattendue ; la
+/// cause est insérée telle quelle (`$&` n'est pas interprété).
 #[test]
 fn une_erreur_du_calcul_dit_sa_cle_puis_sa_cause() {
-    let script = lire("interface/reglage.js");
-    assert!(!script.contains("t(String(cle))"), "objet affiché tel quel");
+    let reglage = lire("interface/reglage.js");
+    assert!(
+        !reglage.contains("t(String(cle))"),
+        "objet affiché tel quel"
+    );
+    assert!(reglage.contains("annoncer(texteErreur(erreur));"));
+    let script = lire("interface/calcul-profil.js");
     assert!(script.contains("function texteErreur(erreur)"));
-    assert!(script.contains("t(\"profil.erreur.cause\").replace(\"{cause}\", erreur.cause)"));
+    assert!(script.contains("t(\"profil.erreur.cause\").replace(\"{cause}\", () => erreur.cause)"));
+    assert!(script.contains("t(\"parc.erreur.inattendue\")"));
+    assert!(app::textes::cles().any(|c| c == "parc.erreur.inattendue"));
 }
 
 /// « Calculer le profil » inactif dit pourquoi juste à côté ; pendant le
-/// calcul, le texte « en cours » du calcul remplace celui des autres actions.
+/// calcul, un seul message « en cours », celui du calcul. Une erreur des
+/// commandes (ArgyllCMS introuvable) se lit sous le bouton, sans rien ouvrir.
 #[test]
 fn le_bouton_calculer_inactif_dit_pourquoi() {
-    let script = lire("interface/reglage.js");
+    let script = lire("interface/calcul-profil.js");
     assert!(
         script.contains("corps.append(actions, raisonCalcul);"),
         "raison loin du bouton"
     );
     assert!(script.contains("if (choix.mesure === null) calculer.dataset.inactif = \"\";"));
-    assert!(script.contains("(choix.mesure === null ? t(\"profil.calculer.raison\") : \"\")"));
     assert!(script.contains("calculEnCours ? t(\"profil.en_cours\")"));
+    assert!(script.contains(
+        ": erreurCalcul || erreurCommandes || (choix.mesure === null ? t(\"profil.calculer.raison\") : \"\")"
+    ));
+    assert!(script.contains("erreurCommandes = texteErreur(erreur);"));
+    assert!(
+        !script.contains("texte = texteErreur(erreur)"),
+        "erreur dans le <pre> replié"
+    );
     assert!(
         script.contains("agir(calculerProfil)"),
         "mécanisme agir() existant"
+    );
+    let reglage = lire("interface/reglage.js");
+    assert!(reglage.contains("occupe.hidden = !enCours || calcul.enCours();"));
+}
+
+/// Un calcul fini alors que l'opérateur a changé de résolution n'annonce rien
+/// sur l'autre vue ; un rechargement qui échoue après un calcul réussi ne
+/// dit pas que le calcul a échoué.
+#[test]
+fn un_calcul_fini_ne_s_annonce_que_sur_sa_resolution() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains("const ici = () => parc.reglage()?.condition.id === condition;"));
+    assert!(script.contains("if (ici()) erreurCalcul = texteErreur(erreur);"));
+    assert!(script.contains("if (ici()) parc.annoncer("));
+    let apres = script
+        .split("await parc.recharger();")
+        .nth(1)
+        .unwrap_or_default();
+    assert!(
+        script.contains("try {\n      await parc.recharger();")
+            && apres.trim_start().starts_with("} catch"),
+        "rechargement non protégé"
+    );
+}
+
+/// La commande et le journal d'un profil calculé restent consultables à
+/// droite, repliés sous « Avancé », en lecture seule.
+#[test]
+fn la_commande_et_le_journal_restent_consultables() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains("el(\"pre\", \"\", p.commandes.join(\"\\n\"))"));
+    assert!(script.contains("el(\"pre\", \"\", p.journal)"));
+    assert!(script.contains("el(\"details\", \"replie\")"));
+}
+
+/// Le bouton d'import de la section ne casse rien si la feuille n'a pas le
+/// sien ; « Recette de calcul » ne se confond pas avec la qualité vérifiée.
+#[test]
+fn import_protege_et_recette_de_calcul() {
+    use app::textes::{texte, Langue};
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains("if (bouton) bouton.click();"));
+    assert_eq!(
+        texte(Langue::Francais, "profil.recette"),
+        "Recette de calcul"
+    );
+    assert_eq!(
+        texte(Langue::Anglais, "profil.recette"),
+        "Calculation recipe"
     );
 }
 
@@ -648,6 +733,7 @@ fn le_parc_ne_demande_que_des_cles_du_catalogue() {
     let script = [
         "interface/parc.js",
         "interface/arbre.js",
+        "interface/calcul-profil.js",
         "interface/reglage.js",
     ]
     .map(lire)
@@ -703,7 +789,7 @@ fn pendant_une_action_sur_le_profil_les_boutons_disent_pourquoi() {
         ),
         "les boutons de la vue"
     );
-    assert!(script.contains("occupe.hidden = !enCours;"));
+    assert!(script.contains("occupe.hidden = !enCours || calcul.enCours();"));
     assert!(app::textes::cles().any(|c| c == "parc.en_cours"));
 }
 

@@ -203,7 +203,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.recette",
-        "Qualité du calcul",
+        "Recette de calcul",
     ),
     (
         "profil.recette.rapide",
@@ -298,6 +298,11 @@ const FRANCAIS: Catalogue = &[
         "Importez d’abord un export CGATS de FD-S2w dans cette résolution.",
     ),
     ("profil.version", "ArgyllCMS"),
+    ("profil.journal", "Journal d’ArgyllCMS"),
+    (
+        "parc.erreur.inattendue",
+        "L’action s’est arrêtée sur une erreur inattendue. Choisissez à nouveau cette résolution dans la bibliothèque, puis réessayez.",
+    ),
     ("profil.precision", "Précision du calcul"),
     (
         "profil.precision.valeur",
@@ -1116,7 +1121,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.recette",
-        "Computation quality",
+        "Calculation recipe",
     ),
     (
         "profil.recette.rapide",
@@ -1211,6 +1216,11 @@ const ANGLAIS: Catalogue = &[
         "First import a CGATS export from FD-S2w into this resolution.",
     ),
     ("profil.version", "ArgyllCMS"),
+    ("profil.journal", "ArgyllCMS log"),
+    (
+        "parc.erreur.inattendue",
+        "The action stopped on an unexpected error. Choose this resolution again in the library, then try again.",
+    ),
     ("profil.precision", "Computation accuracy"),
     (
         "profil.precision.valeur",

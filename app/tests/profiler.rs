@@ -532,7 +532,8 @@ fn la_cause_s_ecrit_dans_les_deux_langues() {
 fn la_provenance_d_un_profil_calcule_est_donnee_a_la_page() {
     let b = banc();
     let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
-    b.ouverte
+    let resultat = b
+        .ouverte
         .calculer_profil(
             b.condition,
             mesure,
@@ -542,11 +543,23 @@ fn la_provenance_d_un_profil_calcule_est_donnee_a_la_page() {
             maintenant(),
         )
         .unwrap();
+    let texte = b.ouverte.parametres_profil(resultat.profil).unwrap();
+    let parametres: serde_json::Value = serde_json::from_str(&texte).unwrap();
+    let commandes: Vec<String> = parametres["commandes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c.as_str().map(String::from))
+        .collect();
+    assert_eq!(commandes.len(), 2, "{commandes:?}");
 
     let detail = b.ouverte.detail_reglage(b.condition).unwrap();
     assert_eq!(
         detail.provenance,
         Some(ProvenanceProfil {
+            // La commande et le journal restent consultables après le calcul.
+            commandes,
+            journal: "moteur simulé\n".to_string(),
             mesure,
             fichier: "mesure00001_M1.txt".to_string(),
             condition: ConditionMesure::M1,

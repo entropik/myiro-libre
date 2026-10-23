@@ -65,16 +65,16 @@ Hors de ce plan, et laissés à #35 et #41 : moyenne de plusieurs exemplaires, m
 **Files:**
 - Modify: `.gitignore`
 
-- [ ] **Step 1 : Contexte**
+- [x] **Step 1 : Contexte**
 
 Run: `python outils/verifier_contexte.py --worktree C:/Code/MYIRO-fork --branch dev --reference dev` puis `git status --short`
 Expected: contexte conforme ; noter les changements préexistants (journal du 9 octobre, `.agents/`, `docs/mires/`). Ils ne relèvent pas de ce plan.
 
-- [ ] **Step 2 : Créer le worktree du ticket**
+- [x] **Step 2 : Créer le worktree du ticket**
 
 Run: `git worktree add .claude/worktrees/ticket-40 -b ticket/40-profil-rvb-import dev`
 
-- [ ] **Step 3 : Ignorer ArgyllCMS et les mires de tiers**
+- [x] **Step 3 : Ignorer ArgyllCMS et les mires de tiers**
 
 Ajouter à `.gitignore`, avec un commentaire en français :
 ```
@@ -88,7 +88,7 @@ docs/mires/
 
 Télécharger ArgyllCMS 3.5.0 pour Windows 64 bits sur https://www.argyllcms.com/ et le décompresser à la racine du dépôt principal, sous `argyll/`, de sorte qu'existent `argyll/bin/colprof.exe`, `argyll/bin/profcheck.exe` et `argyll/ref/sRGB.icm`. Les tâches 1 à 5 n'en ont pas besoin : seuls les tests `--ignored` de la tâche 3 et l'essai d'écran de la tâche 6 l'utilisent.
 
-- [ ] **Step 5 : Commit**
+- [x] **Step 5 : Commit**
 
 ```bash
 git add .gitignore
@@ -108,7 +108,7 @@ git commit -m "Ignore ArgyllCMS posé à la main et les mires de tiers"
 - Produces : `PlageImportee::rvb: Info<[f32; 3]>`, valeurs ramenées de 0 à 1 (1 = 100 % de la composante). `Confirmee` pour un fichier `CTI3` (échelle 0 à 100), `Supposee` pour un export FD-S2w (échelle 0 à 255), `Inconnue` sans colonnes RVB ou quand l'échelle n'est pas établie.
 - Règles : `RGB_R`, `RGB_G` et `RGB_B` présentes toutes trois ; une ou deux seulement → refus `"tableau {rang} : colonnes RVB incomplètes"`. L'identifiant de la première ligne du fichier (`CTI3`, `CGATS.17`…) est gardé par `tableaux` s'il ne l'est pas déjà. Plusieurs tableaux portent les mêmes RVB, sinon refus `"tableau {n} : pas les mêmes valeurs RVB que le premier tableau"`. Une valeur RVB non numérique est refusée comme un Lab illisible. Une valeur hors échelle est gardée telle quelle : c'est la tâche 2 qui la refuse pour le calcul.
 
-- [ ] **Step 1 : Tests en échec**
+- [x] **Step 1 : Tests en échec**
 
 ```rust
 #[test]
@@ -142,20 +142,20 @@ fn deux_colonnes_rvb_sur_trois_sont_refusees() {}
 fn deux_tableaux_aux_rvb_differents_sont_refuses() {}
 ```
 
-- [ ] **Step 2 : Lancer, constater l'échec**
+- [x] **Step 2 : Lancer, constater l'échec**
 
 Run: `cargo test -p cgats`
 Expected: échec de compilation (`rvb` inconnu).
 
-- [ ] **Step 3 : Implémenter dans `lecture.rs`**
+- [x] **Step 3 : Implémenter dans `lecture.rs`**
 
 Dans `lire_tableau`, chercher les trois colonnes avec la même fonction `colonne` (sans tenir compte de la casse). L'échelle se décide une fois par fichier dans `lire`, d'après l'identifiant de la première ligne et le `FILE_DESCRIPTOR` du premier tableau, puis se passe à `lire_tableau`.
 
-- [ ] **Step 4 : Documenter**
+- [x] **Step 4 : Documenter**
 
 Dans `docs/formats/cgats.md`, remplacer « Les autres colonnes (densités, RVB, …) sont ignorées » par une phrase sur les RVB, avec un petit tableau « qui écrit / échelle / qualification » sur le modèle de celui des spectres.
 
-- [ ] **Step 5 : Vérifier et commiter**
+- [x] **Step 5 : Vérifier et commiter**
 
 Run: `cargo test -p cgats && cargo test -p bibliotheque`
 Expected: PASS (la bibliothèque relit les imports existants à l'identique).
@@ -197,7 +197,7 @@ git commit -am "CGATS : lire les valeurs RVB des plages, échelle jamais deviné
   ```
 - `RefusPlages` implémente `Display` (phrase française simple) et donne une clé de texte par `pub fn cle(&self) -> &'static str` : `profil.refus.condition_absente`, `profil.refus.rvb_inconnus`, `profil.refus.lab_inconnu`, `profil.refus.rvb_hors_echelle`, `profil.refus.vide`.
 
-- [ ] **Step 1 : Tests en échec (`tests/plages.rs`)**
+- [x] **Step 1 : Tests en échec (`tests/plages.rs`)**
 
 ```rust
 #[test]
@@ -215,7 +215,7 @@ fn une_mesure_fd_s2w_m1_se_prepare() {
 #[test] fn sans_spectre_complet_les_longueurs_d_onde_sont_absentes() {}
 ```
 
-- [ ] **Step 2 : Tests en échec (`tests/ti3.rs`)**
+- [x] **Step 2 : Tests en échec (`tests/ti3.rs`)**
 
 ```rust
 #[test]
@@ -233,13 +233,13 @@ fn le_ti3_a_l_en_tete_attendu_par_argyll() {
 #[test] fn les_nombres_se_relisent_a_l_identique() {}
 ```
 
-- [ ] **Step 3 : Implémenter**
+- [x] **Step 3 : Implémenter**
 
 `plages.rs` : lecture de `mesure.plages[i].lab[condition as usize]` et de `rvb` ; conversion 0–1 → 0–100 en f64 ; spectres pris seulement si toutes les plages en ont un pour cette condition et que `mesure.longueurs_onde` est connue. `ti3.rs` : mise en forme sur le modèle de `crates/cgats/src/ecriture.rs` (tabulations, `\r\n`, `KEYWORD` avant tout mot-clé hors CGATS, nombres avec `{}`). `INSTRUMENT_TYPE_SPECTRAL "YES"` avec spectres, `"NO"` sinon.
 
 `COLOR_REP "iRGB_LAB"` reprend l'exemple établi de la description du `.ti3` pour une imprimante RVB. Il est **confirmé à la tâche 3, step 6**, contre `targen -d2` : si ArgyllCMS 3.5.0 écrit autre chose pour « Print RGB », on prend sa valeur et on corrige ce test.
 
-- [ ] **Step 4 : Vérifier et commiter**
+- [x] **Step 4 : Vérifier et commiter**
 
 Run: `cargo test -p profilage && cargo clippy -p profilage --all-targets -- -D warnings`
 Expected: PASS.
@@ -291,7 +291,7 @@ git commit -m "Profilage : plages contrôlées et fichier .ti3 pour ArgyllCMS"
   ```
 - `ErreurMoteur::cle(&self) -> &'static str` : `profil.erreur.argyll_introuvable`, `profil.erreur.argyll_version`, `profil.erreur.calcul`, `profil.erreur.controle`, `profil.erreur.fichier`.
 
-- [ ] **Step 1 : Tests en échec (`tests/moteur.rs`)**
+- [x] **Step 1 : Tests en échec (`tests/moteur.rs`)**
 
 ```rust
 #[test]
@@ -334,12 +334,12 @@ fn le_dossier_de_travail_est_efface_apres_un_echec() {
 }
 ```
 
-- [ ] **Step 2 : Lancer, constater l'échec**
+- [x] **Step 2 : Lancer, constater l'échec**
 
 Run: `cargo test -p profilage`
 Expected: échec de compilation.
 
-- [ ] **Step 3 : Implémenter `ArgyllCms::calculer`**
+- [x] **Step 3 : Implémenter `ArgyllCms::calculer`**
 
 Déroulé, sans `unwrap` :
 1. `version()` : lance `bin/colprof` sans argument, lit `Version (\S+)` dans stdout+stderr ; si elle diffère de `VERSION_ARGYLL` → `VersionNonValidee`.
@@ -349,12 +349,12 @@ Déroulé, sans `unwrap` :
 5. `journal` = stdout et stderr des deux outils ; `commandes` = les deux lignes de commande, chemins réduits à leur nom (`colprof -v -qh … mesure`). Elles servent à l'affichage et à l'archive.
 6. Précision illisible → `Echec { etape: Controle, cause }` : un profil sans précision n'est pas présenté comme terminé.
 
-- [ ] **Step 4 : Vérifier**
+- [x] **Step 4 : Vérifier**
 
 Run: `cargo test -p profilage`
 Expected: PASS.
 
-- [ ] **Step 5 : Tests réels `#[ignore]` (`tests/argyll.rs`)**
+- [x] **Step 5 : Tests réels `#[ignore]` (`tests/argyll.rs`)**
 
 ```rust
 #[test] #[ignore] fn argyll_du_depot_est_en_version_3_5_0() {}
@@ -374,7 +374,7 @@ Expected: `COLOR_REP "iRGB"`. Sinon, reprendre la valeur d'ArgyllCMS dans `ti3.r
 Run: `cargo test -p profilage --test argyll -- --ignored --nocapture`
 Expected: PASS.
 
-- [ ] **Step 7 : Commit**
+- [x] **Step 7 : Commit**
 
 ```bash
 git commit -am "Profilage : ArgyllCMS derrière le trait MoteurProfil, version figée 3.5.0"
@@ -424,7 +424,7 @@ git commit -am "Profilage : ArgyllCMS derrière le trait MoteurProfil, version f
   `mesures` = `[mesure]`. Nom : `nom_profil_propose(imprimante, papier, résolution, date du jour)`. `DetailReglage::origine` donne déjà `calcul` pour tout ce qui n'est pas un profil existant.
 - État Tauri `Moteur(Option<ArgyllCms>)`, rempli au lancement par `chercher_argyll(dossier de l'exécutable)`. `None` → `ErreurProfil { cle: "profil.erreur.argyll_introuvable", cause: None }`.
 
-- [ ] **Step 1 : Tests en échec (`app/tests/profiler.rs`, bibliothèque temporaire, `MoteurSimule`)**
+- [x] **Step 1 : Tests en échec (`app/tests/profiler.rs`, bibliothèque temporaire, `MoteurSimule`)**
 
 ```rust
 #[test] fn un_profil_calcule_devient_actif_et_non_verifie() {}
@@ -441,20 +441,20 @@ git commit -am "Profilage : ArgyllCMS derrière le trait MoteurProfil, version f
 #[test] fn les_commandes_se_montrent_sans_rien_calculer() {}      // commandes_profil n'appelle pas calculer
 ```
 
-- [ ] **Step 2 : Lancer, constater l'échec**
+- [x] **Step 2 : Lancer, constater l'échec**
 
 Run: `cargo test -p app --test profiler`
 Expected: échec de compilation.
 
-- [ ] **Step 3 : Implémenter `app/src/profiler.rs`**
+- [x] **Step 3 : Implémenter `app/src/profiler.rs`**
 
 `calculer_profil` lit la mesure importée et les noms sous le verrou (`self.avec`), relâche le verrou, lance `moteur.calculer`, puis reprend le verrou pour `enregistrer_profil`. Toute erreur devient une `ErreurProfil` : sa clé de texte (`RefusPlages::cle`, `ErreurMoteur::cle`, `profil.erreur.mesure_ailleurs`, ou la clé d'une erreur de la bibliothèque) et, pour un échec d'ArgyllCMS, sa cause, rendue à la page : la dernière ligne d'erreur de l'outil, ou la version trouvée. L'erreur complète est aussi écrite dans le journal du terminal (`eprintln!`), comme dans `parc.rs`. Les commandes Tauri sont `#[tauri::command(async)]`, comme `ouvrir_instrument` (`app/src/lib.rs:203`).
 
-- [ ] **Step 4 : Textes FR et EN dans `textes.rs`**
+- [x] **Step 4 : Textes FR et EN dans `textes.rs`**
 
 Clés : `profil.titre` « Calculer un profil », `profil.source` « Mesure », `profil.condition` « Condition de mesure », `profil.recette` « Qualité du calcul », `profil.recette.rapide` / `.standard` / `.approfondi` avec une phrase chacune (« pour un essai, en une minute environ », etc. ; durées à confirmer à la tâche 6), `profil.avance` « Avancé : commande équivalente », `profil.calculer` « Calculer le profil », `profil.en_cours` « Calcul du profil en cours. Cela peut prendre plusieurs minutes. », `profil.fait` « Profil calculé. Écart moyen {moyenne} ΔE00, maximum {max}. Il n'est pas encore vérifié. », `profil.supposee` « supposée », toutes les clés `profil.refus.*` et `profil.erreur.*` des tâches 2 à 4. Chaque erreur dit la cause, puis l'action ; `profil.erreur.argyll_introuvable` : « ArgyllCMS 3.5.0 est introuvable. Placez-le dans le dossier argyll à côté de l'application. » Retirer `parc.refaire.raison`.
 
-- [ ] **Step 5 : Vérifier et commiter**
+- [x] **Step 5 : Vérifier et commiter**
 
 Run: `cargo test -p app && cargo clippy --all-targets -- -D warnings`
 Expected: PASS (les tests de typographie française de `textes.rs` compris).
@@ -484,7 +484,7 @@ Comportement :
 - Une erreur s'affiche à côté du bouton, en texte et non en rouge plein : le rouge reste réservé au danger et au hors tolérance. Elle donne la cause, puis l'action.
 - À droite, dans la provenance d'un profil calculé : mesure source (nom du fichier), condition (avec « supposée » s'il y a lieu), recette, version d'ArgyllCMS et précision. L'instrument est celui que déclare le fichier ; sinon « inconnu ».
 
-- [ ] **Step 1 : Tests en échec dans `app/tests/page.rs`**
+- [x] **Step 1 : Tests en échec dans `app/tests/page.rs`**
 
 ```rust
 #[test] fn la_vue_d_une_resolution_appelle_le_calcul_du_profil() {}  // reglage.js contient "profiler_calculer" et "profiler_commandes"
@@ -492,11 +492,11 @@ Comportement :
 #[test] fn toutes_les_cles_profil_de_la_page_existent_en_deux_langues() {}
 ```
 
-- [ ] **Step 2 : Implémenter dans `reglage.js`**
+- [x] **Step 2 : Implémenter dans `reglage.js`**
 
 Le fichier fait 164 lignes. Si la section l'amène au-delà de 400 lignes, créer `app/interface/calcul-profil.js`, chargé par `index.html` avant `reglage.js`, sur le modèle d'`arbre.js`.
 
-- [ ] **Step 3 : Vérifier et commiter**
+- [x] **Step 3 : Vérifier et commiter**
 
 Run: `cargo test -p app --test page`
 Expected: PASS.

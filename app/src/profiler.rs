@@ -100,6 +100,10 @@ pub struct ProvenanceProfil {
     pub version: String,
     pub precision_moyenne: f64,
     pub precision_max: f64,
+    /// Commandes équivalentes au calcul, en lecture seule.
+    pub commandes: Vec<String>,
+    /// Journal d'ArgyllCMS pendant le calcul.
+    pub journal: String,
 }
 
 /// Paramètres conservés d'un profil calculé, tels que [`BibliothequeOuverte::calculer_profil`]
@@ -114,6 +118,8 @@ struct ParametresCalcul {
     recette: Recette,
     version: String,
     precision: PrecisionLue,
+    commandes: Vec<String>,
+    journal: String,
 }
 
 #[derive(Deserialize)]
@@ -144,6 +150,8 @@ pub(crate) fn provenance_profil(
             version: p.version,
             precision_moyenne: p.precision.moyenne_de00,
             precision_max: p.precision.max_de00,
+            commandes: p.commandes,
+            journal: p.journal,
         }))
 }
 
