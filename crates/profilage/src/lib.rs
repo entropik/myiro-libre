@@ -16,7 +16,8 @@ mod plages;
 mod ti3;
 
 pub use argyll::{
-    arguments_colprof, chercher_argyll, controler_version, lire_precision, lire_version, ArgyllCms,
+    arguments_colprof, chercher_argyll, controler_version, lignes_commandes, lire_precision,
+    lire_version, ArgyllCms,
 };
 pub use moteur::{
     DemandeProfil, ErreurMoteur, Etape, MoteurProfil, MoteurSimule, Precision, ProfilCalcule,

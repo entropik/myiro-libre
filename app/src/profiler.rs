@@ -16,8 +16,8 @@ use bibliotheque::{
 };
 use pont_protocole::ConditionMesure;
 use profilage::{
-    chercher_argyll, conditions_utilisables, ecrire_ti3, preparer_plages, ArgyllCms, DemandeProfil,
-    ErreurMoteur, MoteurProfil, PlagesProfil, Recette, RefusPlages,
+    chercher_argyll, conditions_utilisables, ecrire_ti3, lignes_commandes, preparer_plages,
+    ArgyllCms, DemandeProfil, ErreurMoteur, MoteurProfil, PlagesProfil, Recette, RefusPlages,
 };
 use serde::{Deserialize, Serialize};
 
@@ -53,27 +53,43 @@ pub struct ResultatProfil {
 pub struct ErreurProfil {
     /// Clé du texte : l'étape, la cause et l'action.
     pub cle: &'static str,
-    /// Ce qu'ArgyllCMS a dit : la dernière ligne d'erreur d'un outil, ou la
-    /// version trouvée. Montrée telle quelle, après le texte de la clé.
+    /// Ce qu'ArgyllCMS ou le système a dit : la dernière ligne d'erreur d'un
+    /// outil, ou la cause d'un fichier de travail. Montrée telle quelle,
+    /// après le texte de la clé.
     pub cause: Option<String>,
+    /// Version d'ArgyllCMS trouvée mais refusée : elle prend la place de
+    /// `{version}` dans le texte de la clé.
+    pub version: Option<String>,
 }
 
 impl ErreurProfil {
     fn sans_cause(cle: &'static str) -> Self {
-        ErreurProfil { cle, cause: None }
+        ErreurProfil {
+            cle,
+            cause: None,
+            version: None,
+        }
     }
 
     fn du_moteur(erreur: &ErreurMoteur) -> Self {
-        let cause = match erreur {
-            ErreurMoteur::Echec { cause, .. } => Some(cause.clone()),
-            ErreurMoteur::VersionNonValidee { trouvee } => Some(trouvee.clone()),
-            ErreurMoteur::Introuvable | ErreurMoteur::Fichier(_) => None,
-        };
-        ErreurProfil {
-            cle: erreur.cle(),
-            cause,
+        let mut e = ErreurProfil::sans_cause(erreur.cle());
+        match erreur {
+            ErreurMoteur::Echec { cause, .. } | ErreurMoteur::Fichier(cause) => {
+                e.cause = Some(cause.clone());
+            }
+            ErreurMoteur::VersionNonValidee { trouvee } => e.version = Some(trouvee.clone()),
+            ErreurMoteur::Introuvable => {}
         }
+        e
     }
+}
+
+/// Ce que la page reçoit pour la section « Avancé » : la commande
+/// équivalente, et la raison qui empêchera le calcul si ArgyllCMS manque.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct CommandesProfil {
+    pub commandes: Vec<String>,
+    pub moteur: Option<ErreurProfil>,
 }
 
 impl From<String> for ErreurProfil {
@@ -95,6 +111,8 @@ pub struct ProvenanceProfil {
     pub condition: ConditionMesure,
     /// La condition est déduite d'une convention du fabricant.
     pub condition_supposee: bool,
+    /// L'échelle des valeurs RVB (0 à 255 pour FD-S2w) est supposée.
+    pub rvb_supposes: bool,
     pub recette: Recette,
     /// Version d'ArgyllCMS qui a calculé le profil.
     pub version: String,
@@ -115,6 +133,7 @@ struct ParametresCalcul {
     fichier: String,
     condition: ConditionMesure,
     condition_supposee: bool,
+    rvb_supposes: bool,
     recette: Recette,
     version: String,
     precision: PrecisionLue,
@@ -146,6 +165,7 @@ pub(crate) fn provenance_profil(
             fichier: p.fichier,
             condition: p.condition,
             condition_supposee: p.condition_supposee,
+            rvb_supposes: p.rvb_supposes,
             recette: p.recette,
             version: p.version,
             precision_moyenne: p.precision.moyenne_de00,
@@ -179,6 +199,12 @@ impl Moteur {
             .as_ref()
             .map(|a| a as &dyn MoteurProfil)
             .ok_or_else(|| ErreurProfil::du_moteur(&ErreurMoteur::Introuvable))
+    }
+
+    /// Pourquoi le calcul sera refusé avant même d'être lancé ; rien si
+    /// ArgyllCMS a été trouvé au lancement.
+    pub fn indisponible(&self) -> Option<ErreurProfil> {
+        self.moteur().err()
     }
 }
 
@@ -262,21 +288,16 @@ impl BibliothequeOuverte {
     }
 
     /// Commandes équivalentes au calcul, sans rien lancer (section
-    /// « Avancé » de la page).
+    /// « Avancé » de la page) ; ArgyllCMS n'est pas nécessaire.
     pub fn commandes_profil(
         &self,
         condition: IdCondition,
         mesure: IdMesure,
         mesure_condition: ConditionMesure,
         recette: Recette,
-        moteur: &dyn MoteurProfil,
     ) -> Result<Vec<String>, ErreurProfil> {
         let p = self.preparer_profil(condition, mesure, mesure_condition, SystemTime::now())?;
-        Ok(moteur.commandes(&DemandeProfil {
-            ti3: &p.ti3,
-            description: &p.description,
-            recette,
-        }))
+        Ok(lignes_commandes(recette, &p.description))
     }
 
     /// Calcule un profil RVB à partir d'une mesure importée de la résolution
@@ -346,7 +367,8 @@ impl BibliothequeOuverte {
 
 // ---- Commandes de la page ----
 
-/// Commandes équivalentes au calcul, en lecture seule.
+/// Commandes équivalentes au calcul, en lecture seule, même sans
+/// ArgyllCMS ; la page apprend aussi s'il manque, avant le clic.
 #[tauri::command(async)]
 pub fn profiler_commandes(
     ouverte: tauri::State<'_, BibliothequeOuverte>,
@@ -355,14 +377,16 @@ pub fn profiler_commandes(
     mesure: i64,
     mesure_condition: ConditionMesure,
     recette: Recette,
-) -> Result<Vec<String>, ErreurProfil> {
-    ouverte.commandes_profil(
-        IdCondition(condition),
-        IdMesure(mesure),
-        mesure_condition,
-        recette,
-        moteur.moteur()?,
-    )
+) -> Result<CommandesProfil, ErreurProfil> {
+    Ok(CommandesProfil {
+        commandes: ouverte.commandes_profil(
+            IdCondition(condition),
+            IdMesure(mesure),
+            mesure_condition,
+            recette,
+        )?,
+        moteur: moteur.indisponible(),
+    })
 }
 
 /// Calcule et range le profil. Hors du fil de la fenêtre : le calcul peut

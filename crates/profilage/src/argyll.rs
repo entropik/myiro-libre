@@ -212,8 +212,9 @@ fn arguments_profcheck() -> Vec<OsString> {
 }
 
 /// Les deux commandes du calcul, telles qu'elles sont lancées dans le
-/// dossier de travail.
-pub(crate) fn lignes_commandes(recette: Recette, description: &str) -> Vec<String> {
+/// dossier de travail. Rien n'est lancé : elles se construisent même sans
+/// ArgyllCMS.
+pub fn lignes_commandes(recette: Recette, description: &str) -> Vec<String> {
     let colprof = arguments_colprof(
         recette,
         description,

@@ -233,6 +233,7 @@ fn un_echec_du_moteur_laisse_le_profil_actif_inchange() {
         ErreurProfil {
             cle: "profil.erreur.calcul",
             cause: Some("Not enough patches".to_string()),
+            version: None,
         }
     );
     assert!(est_au_catalogue(erreur.cle));
@@ -250,6 +251,7 @@ fn argyll_introuvable_ne_range_rien() {
         Some(ErreurProfil {
             cle: "profil.erreur.argyll_introuvable",
             cause: None,
+            version: None,
         })
     );
     assert!(est_au_catalogue("profil.erreur.argyll_introuvable"));
@@ -398,13 +400,7 @@ fn une_mesure_d_une_autre_resolution_est_refusee() {
             )
             .unwrap_err(),
         b.ouverte
-            .commandes_profil(
-                b.condition,
-                mesure,
-                ConditionMesure::M1,
-                Recette::Standard,
-                &moteur,
-            )
+            .commandes_profil(b.condition, mesure, ConditionMesure::M1, Recette::Standard)
             .unwrap_err(),
     ] {
         assert_eq!(
@@ -412,6 +408,7 @@ fn une_mesure_d_une_autre_resolution_est_refusee() {
             ErreurProfil {
                 cle: "profil.erreur.mesure_ailleurs",
                 cause: None,
+                version: None,
             }
         );
     }
@@ -429,8 +426,8 @@ fn une_mesure_d_une_autre_resolution_est_refusee() {
 fn les_commandes_se_montrent_sans_rien_calculer() {
     let b = banc();
     let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
-    let moteur = MoteurSimule::reussit(icc());
 
+    // Aucun moteur n'est demandé : la commande se construit sans ArgyllCMS.
     let commandes = b
         .ouverte
         .commandes_profil(
@@ -438,7 +435,6 @@ fn les_commandes_se_montrent_sans_rien_calculer() {
             mesure,
             ConditionMesure::M1,
             Recette::Approfondi,
-            &moteur,
         )
         .unwrap();
 
@@ -450,7 +446,6 @@ fn les_commandes_se_montrent_sans_rien_calculer() {
         "{}",
         commandes[0]
     );
-    assert!(moteur.demandes().is_empty());
     assert!(b
         .ouverte
         .detail_reglage(b.condition)
@@ -482,11 +477,14 @@ fn les_textes_du_calcul_existent() {
         "profil.refus.aucune_condition",
         "profil.erreur.argyll_introuvable",
         "profil.erreur.argyll_version",
+        "profil.erreur.argyll_illisible",
         "profil.erreur.calcul",
         "profil.erreur.controle",
         "profil.erreur.fichier",
         "profil.erreur.mesure_ailleurs",
         "profil.erreur.cause",
+        "profil.rvb",
+        "profil.rvb.supposee",
     ] {
         assert!(est_au_catalogue(cle), "{cle}");
     }
@@ -514,9 +512,107 @@ fn une_autre_version_d_argyll_donne_la_version_trouvee() {
         erreur,
         ErreurProfil {
             cle: "profil.erreur.argyll_version",
-            cause: Some("3.4.1".to_string()),
+            cause: None,
+            version: Some("3.4.1".to_string()),
         }
     );
+    use app::textes::{texte, Langue};
+    for langue in [Langue::Francais, Langue::Anglais] {
+        let t = texte(langue, "profil.erreur.argyll_version");
+        assert!(t.contains("{version}") && t.contains("3.5.0"), "{t}");
+    }
+}
+
+/// C4 : une version qu'on ne sait pas lire a son texte à elle, avec la
+/// sortie d'ArgyllCMS en cause.
+#[test]
+fn une_version_illisible_a_sa_propre_cle() {
+    let b = banc();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
+    let moteur = MoteurSimule::echoue(ErreurMoteur::Echec {
+        etape: Etape::Version,
+        cause: "colprof: Error - usage".to_string(),
+    });
+    let erreur = b
+        .ouverte
+        .calculer_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M1,
+            Recette::Standard,
+            &moteur,
+            maintenant(),
+        )
+        .unwrap_err();
+    assert_eq!(
+        erreur,
+        ErreurProfil {
+            cle: "profil.erreur.argyll_illisible",
+            cause: Some("colprof: Error - usage".to_string()),
+            version: None,
+        }
+    );
+    assert!(est_au_catalogue(erreur.cle));
+}
+
+/// C6 : un fichier de travail illisible garde sa cause ; le texte ne
+/// suppose pas un disque plein.
+#[test]
+fn un_fichier_de_travail_garde_sa_cause() {
+    let b = banc();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
+    let moteur = MoteurSimule::echoue(ErreurMoteur::Fichier("accès refusé".to_string()));
+    let erreur = b
+        .ouverte
+        .calculer_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M1,
+            Recette::Standard,
+            &moteur,
+            maintenant(),
+        )
+        .unwrap_err();
+    assert_eq!(
+        erreur,
+        ErreurProfil {
+            cle: "profil.erreur.fichier",
+            cause: Some("accès refusé".to_string()),
+            version: None,
+        }
+    );
+    use app::textes::{texte, Langue};
+    let fr = texte(Langue::Francais, "profil.erreur.fichier");
+    assert!(fr.contains("lu ou écrit") && !fr.contains("disque"), "{fr}");
+    let en = texte(Langue::Anglais, "profil.erreur.fichier");
+    assert!(
+        en.contains("read or written") && !en.contains("disk"),
+        "{en}"
+    );
+}
+
+/// La recherche d'ArgyllCMS ne se fait qu'au lancement : le message le dit.
+#[test]
+fn argyll_introuvable_demande_de_relancer() {
+    use app::textes::{texte, Langue};
+    assert!(texte(Langue::Francais, "profil.erreur.argyll_introuvable").contains("relancez"));
+    assert!(texte(Langue::Anglais, "profil.erreur.argyll_introuvable").contains("restart"));
+}
+
+/// Les durées des recettes ne sont pas encore mesurées : aucun texte ne les
+/// donne comme un fait.
+#[test]
+fn les_recettes_ne_promettent_pas_de_duree() {
+    use app::textes::{texte, Langue};
+    for recette in ["rapide", "standard", "approfondi"] {
+        let cle = format!("profil.recette.{recette}");
+        let fr = texte(Langue::Francais, &cle);
+        let en = texte(Langue::Anglais, &cle);
+        assert!(
+            !fr.contains("minute") && !en.contains("minute"),
+            "{fr} / {en}"
+        );
+    }
 }
 
 #[test]
@@ -564,6 +660,8 @@ fn la_provenance_d_un_profil_calcule_est_donnee_a_la_page() {
             fichier: "mesure00001_M1.txt".to_string(),
             condition: ConditionMesure::M1,
             condition_supposee: true,
+            // Export FD-S2w : échelle 0 à 255 supposée.
+            rvb_supposes: true,
             recette: Recette::Standard,
             version: "3.5.0".to_string(),
             precision_moyenne: 0.5,
@@ -586,6 +684,24 @@ fn un_profil_seulement_range_n_a_pas_de_provenance_de_calcul() {
             .detail_reglage(vide.condition)
             .unwrap()
             .provenance,
+        None
+    );
+}
+
+/// C3 : sans ArgyllCMS, la page reçoit quand même la commande, avec la
+/// raison qui empêchera le calcul.
+#[test]
+fn sans_argyll_la_page_sait_pourquoi_avant_le_clic() {
+    assert_eq!(
+        Moteur(None).indisponible(),
+        Some(ErreurProfil {
+            cle: "profil.erreur.argyll_introuvable",
+            cause: None,
+            version: None,
+        })
+    );
+    assert_eq!(
+        Moteur(Some(profilage::ArgyllCms::new("argyll".into()))).indisponible(),
         None
     );
 }

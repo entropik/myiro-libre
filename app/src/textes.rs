@@ -207,15 +207,15 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.recette.rapide",
-        "Rapide\u{202f}: pour un essai, en une minute environ",
+        "Rapide\u{202f}: pour un essai, le plus court (durée à mesurer)",
     ),
     (
         "profil.recette.standard",
-        "Standard\u{202f}: conseillée pour la production, en quelques minutes",
+        "Standard\u{202f}: conseillée pour la production (durée à mesurer)",
     ),
     (
         "profil.recette.approfondi",
-        "Approfondi\u{202f}: le plus fin, nettement plus long",
+        "Approfondi\u{202f}: le plus fin, le plus long (durée à mesurer)",
     ),
     (
         "profil.avance",
@@ -263,11 +263,15 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.erreur.argyll_introuvable",
-        "ArgyllCMS 3.5.0 est introuvable. Placez-le dans le dossier argyll à côté de l’application.",
+        "ArgyllCMS 3.5.0 est introuvable. Placez-le dans le dossier argyll à côté de l’application, puis relancez l’application.",
     ),
     (
         "profil.erreur.argyll_version",
-        "L’ArgyllCMS trouvé n’est pas en version 3.5.0, la seule validée. Placez ArgyllCMS 3.5.0 dans le dossier argyll à côté de l’application.",
+        "ArgyllCMS {version} a été trouvé, mais seule la version 3.5.0 est validée. Placez ArgyllCMS 3.5.0 dans le dossier argyll à côté de l’application, puis relancez l’application.",
+    ),
+    (
+        "profil.erreur.argyll_illisible",
+        "ArgyllCMS ne répond pas comme prévu\u{202f}: sa version n’a pas pu être lue. Remplacez le dossier argyll à côté de l’application par une copie complète d’ArgyllCMS 3.5.0, puis relancez l’application.",
     ),
     (
         "profil.erreur.calcul",
@@ -279,7 +283,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.erreur.fichier",
-        "Les fichiers de travail du calcul n’ont pas pu être écrits. Vérifiez la place libre sur le disque, puis réessayez.",
+        "Un fichier de travail du calcul n’a pas pu être lu ou écrit. Rien n’a été rangé. Réessayez, puis redémarrez l’ordinateur si l’erreur revient.",
     ),
     (
         "profil.erreur.mesure_ailleurs",
@@ -299,6 +303,8 @@ const FRANCAIS: Catalogue = &[
     ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "Journal d’ArgyllCMS"),
+    ("profil.rvb", "Valeurs RVB"),
+    ("profil.rvb.supposee", "échelle 0 à 255 supposée"),
     ("profil.avance.provenance", "Avancé\u{202f}: commande et journal"),
     (
         "parc.erreur.inattendue",
@@ -1126,15 +1132,15 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.recette.rapide",
-        "Fast: for a trial, about one minute",
+        "Fast: for a trial, the shortest (duration to be measured)",
     ),
     (
         "profil.recette.standard",
-        "Standard: advised for production, a few minutes",
+        "Standard: advised for production (duration to be measured)",
     ),
     (
         "profil.recette.approfondi",
-        "Thorough: the finest, much longer",
+        "Thorough: the finest, the longest (duration to be measured)",
     ),
     (
         "profil.avance",
@@ -1182,11 +1188,15 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.erreur.argyll_introuvable",
-        "ArgyllCMS 3.5.0 cannot be found. Place it in the argyll folder next to the application.",
+        "ArgyllCMS 3.5.0 cannot be found. Place it in the argyll folder next to the application, then restart the application.",
     ),
     (
         "profil.erreur.argyll_version",
-        "The ArgyllCMS found is not version 3.5.0, the only validated one. Place ArgyllCMS 3.5.0 in the argyll folder next to the application.",
+        "ArgyllCMS {version} was found, but only version 3.5.0 is validated. Place ArgyllCMS 3.5.0 in the argyll folder next to the application, then restart the application.",
+    ),
+    (
+        "profil.erreur.argyll_illisible",
+        "ArgyllCMS does not answer as expected: its version could not be read. Replace the argyll folder next to the application with a complete copy of ArgyllCMS 3.5.0, then restart the application.",
     ),
     (
         "profil.erreur.calcul",
@@ -1198,7 +1208,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.erreur.fichier",
-        "The working files of the computation could not be written. Check the free disk space, then try again.",
+        "A working file of the calculation could not be read or written. Nothing was stored. Try again, then restart the computer if the error comes back.",
     ),
     (
         "profil.erreur.mesure_ailleurs",
@@ -1218,6 +1228,8 @@ const ANGLAIS: Catalogue = &[
     ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "ArgyllCMS log"),
+    ("profil.rvb", "RGB values"),
+    ("profil.rvb.supposee", "0 to 255 scale assumed"),
     ("profil.avance.provenance", "Advanced: command and log"),
     (
         "parc.erreur.inattendue",

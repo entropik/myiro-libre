@@ -838,3 +838,42 @@ fn un_etat_de_verification_inconnu_est_montre_non_verifie() {
         "repli absent"
     );
 }
+
+// ---- Relecture finale du ticket #40 ----
+
+/// La commande arrive même sans ArgyllCMS ; la raison qui empêchera le
+/// calcul est dite sous le bouton avant le clic.
+#[test]
+fn sans_argyll_la_commande_se_montre_et_la_raison_aussi() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains("commandes = reponse.commandes.join(\"\\n\");"));
+    assert!(
+        script.contains("erreurCommandes = reponse.moteur ? texteErreur(reponse.moteur) : \"\";")
+    );
+}
+
+/// La version refusée prend place dans le texte de la clé, pas sous
+/// « Message d'ArgyllCMS ».
+#[test]
+fn la_version_refusee_se_lit_dans_la_phrase() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains(".replace(\"{version}\", () => erreur.version)"));
+}
+
+/// Une échelle RVB supposée est dite à droite, dans la provenance.
+#[test]
+fn l_echelle_rvb_supposee_est_dite() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains(
+        "if (p.rvb_supposes) lignes.push(cleValeur(\"profil.rvb\", t(\"profil.rvb.supposee\")));"
+    ));
+}
+
+/// Le commentaire de la page nomme le script qui construit la section.
+#[test]
+fn la_section_du_calcul_est_construite_par_calcul_profil_js() {
+    let page = lire("interface/index.html");
+    let section = page.find("data-calcul-profil hidden").expect("section");
+    let commentaire = &page[page[..section].rfind("<!--").unwrap_or(0)..section];
+    assert!(commentaire.contains("calcul-profil.js"), "{commentaire}");
+}

@@ -33,16 +33,18 @@ window.CalculProfil = (() => {
   let commandes = "";
   let demande = 0; // dernière demande de commandes : une réponse plus ancienne est ignorée
 
-  // Une erreur arrive en clé du catalogue, ou en objet {cle, cause} (calcul d'un profil) :
-  // le texte de la clé, puis ce qu'a dit ArgyllCMS, inséré tel quel. Tout le reste (objet sans
-  // clé, exception de la page) est une erreur inattendue.
+  // Une erreur arrive en clé du catalogue, ou en objet {cle, cause, version} (calcul d'un
+  // profil) : le texte de la clé, avec la version refusée à sa place, puis ce qu'a dit ArgyllCMS,
+  // inséré tel quel. Tout le reste (objet sans clé, exception de la page) est une erreur
+  // inattendue.
   function texteErreur(erreur) {
     if (typeof erreur === "string") return t(erreur);
     if (!erreur || typeof erreur.cle !== "string") {
       console.error(erreur);
       return t("parc.erreur.inattendue");
     }
-    const texte = t(erreur.cle);
+    let texte = t(erreur.cle);
+    if (erreur.version) texte = texte.replace("{version}", () => erreur.version);
     return erreur.cause ? `${texte} ${t("profil.erreur.cause").replace("{cause}", () => erreur.cause)}` : texte;
   }
 
@@ -180,16 +182,20 @@ window.CalculProfil = (() => {
     return { condition: d.condition.id, mesure: choix.mesure, mesureCondition: choix.mesureCondition, recette: choix.recette };
   }
 
-  // Les commandes suivent chaque changement de choix ; rien n'est calculé. Une erreur se lit
-  // sous le bouton, pas dans le bloc replié.
+  // Les commandes suivent chaque changement de choix ; rien n'est calculé. Elles se montrent
+  // même sans ArgyllCMS ; la raison qui empêchera le calcul, ou une erreur, se lit sous le
+  // bouton avant le clic, pas dans le bloc replié.
   async function chargerCommandes(d) {
     const n = ++demande;
     commandes = "";
     erreurCommandes = "";
     if (ouvert && choix.mesure !== null && choix.mesureCondition) {
       try {
-        const lignes = await invoke("profiler_commandes", parametres(d));
-        if (n === demande) commandes = lignes.join("\n");
+        const reponse = await invoke("profiler_commandes", parametres(d));
+        if (n === demande) {
+          commandes = reponse.commandes.join("\n");
+          erreurCommandes = reponse.moteur ? texteErreur(reponse.moteur) : "";
+        }
       } catch (erreur) {
         if (n === demande) erreurCommandes = texteErreur(erreur);
       }
@@ -244,9 +250,9 @@ window.CalculProfil = (() => {
     chargerCommandes(d);
   }
 
-  // Provenance d'un profil calculé, à droite : mesure source, condition, recette, version
-  // d'ArgyllCMS et précision du calcul (le verdict « non vérifié » reste à part), puis, repliés,
-  // la commande et le journal, en lecture seule.
+  // Provenance d'un profil calculé, à droite : mesure source, condition, échelle RVB si elle
+  // est supposée, recette, version d'ArgyllCMS et précision du calcul (le verdict « non
+  // vérifié » reste à part), puis, repliés, la commande et le journal, en lecture seule.
   function provenance(d, cleValeur) {
     const p = d.provenance;
     if (!p) return [];
@@ -256,14 +262,15 @@ window.CalculProfil = (() => {
     const avance = el("details", "replie");
     avance.append(el("summary", "", t("profil.avance.provenance")), el("pre", "", p.commandes.join("\n")),
       el("span", "label", t("profil.journal")), el("pre", "", p.journal));
-    return [
-      cleValeur("profil.source", p.fichier),
-      cleValeur("profil.condition", condition),
+    const lignes = [cleValeur("profil.source", p.fichier), cleValeur("profil.condition", condition)];
+    if (p.rvb_supposes) lignes.push(cleValeur("profil.rvb", t("profil.rvb.supposee")));
+    lignes.push(
       cleValeur("profil.recette", t("profil.recette.nom." + p.recette)),
       cleValeur("profil.version", p.version),
       cleValeur("profil.precision", precision),
       avance,
-    ];
+    );
+    return lignes;
   }
 
   return {

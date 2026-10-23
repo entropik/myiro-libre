@@ -16,7 +16,8 @@ Usage (à la racine du dépôt) :
    `sdk/x64/` ou `sdk/x86/` selon l'architecture de la DLL.
 3. Si le dossier `argyll/` du dépôt existe (ignoré par git), vérifie qu'il
    contient ArgyllCMS 3.5.0 (ADR 0002 : version figée) et embarque `colprof`,
-   `profcheck`, `ref/sRGB.icm` et le texte de la licence sous `argyll/`.
+   `profcheck`, `ref/sRGB.icm` et tous les textes de licence présents sous
+   `argyll/`.
    Sans `argyll/`, l'installateur se construit sans ArgyllCMS : l'application
    dira qu'il est introuvable au moment de calculer un profil.
 
@@ -40,8 +41,9 @@ CIBLE_32 = "i686-pc-windows-msvc"
 PONTS = ("pont-myiro1", "pont-fd9")
 VERSION_ARGYLL = "3.5.0"
 ARGYLL_FICHIERS = ("bin/colprof.exe", "bin/profcheck.exe", "ref/sRGB.icm")
-# Nom du texte de licence à la racine de la distribution : non confirmé pour
-# la 3.5.0, le premier présent de cette liste est retenu.
+# Noms possibles des textes de licence à la racine de la distribution (non
+# confirmés pour la 3.5.0) : tous ceux qui sont présents sont embarqués, sous
+# leur nom réel, sans tenir compte de la casse.
 ARGYLL_LICENCES = ("License.txt", "AGPLv3.txt", "License3.txt", "LICENSE.txt", "COPYING.txt", "COPYING")
 
 
@@ -108,10 +110,20 @@ def lire_version_argyll(texte):
     return versions.pop() if len(versions) == 1 else None
 
 
-def aide_colprof(colprof):
+def aide_colprof(colprof, delai=30):
     """Aide de colprof lancé sans argument (il rend un code d'erreur : seul le texte compte)."""
-    sortie = subprocess.run([str(colprof)], capture_output=True, timeout=30)
+    try:
+        sortie = subprocess.run([str(colprof)], capture_output=True, timeout=delai)
+    except subprocess.TimeoutExpired:
+        sys.exit(f"{colprof} n'a pas répondu en {delai} s : impossible de lire la version d'ArgyllCMS. "
+                 "Vérifiez que le dossier argyll/ contient une copie complète d'ArgyllCMS 3.5.0, puis relancez.")
     return (sortie.stdout + sortie.stderr).decode("utf-8", errors="replace")
+
+
+def licences_argyll(argyll):
+    """Textes de licence présents à la racine d'`argyll/`, sous leur nom réel."""
+    noms = {nom.lower() for nom in ARGYLL_LICENCES}
+    return sorted(p.name for p in argyll.iterdir() if p.is_file() and p.name.lower() in noms)
 
 
 def argyll_embarque(racine=RACINE, aide=aide_colprof):
@@ -123,14 +135,14 @@ def argyll_embarque(racine=RACINE, aide=aide_colprof):
     manquants = [f for f in ARGYLL_FICHIERS if not (argyll / f).is_file()]
     if manquants:
         sys.exit(f"ArgyllCMS incomplet dans {argyll} : il manque {', '.join(manquants)}")
-    licence = next((nom for nom in ARGYLL_LICENCES if (argyll / nom).is_file()), None)
-    if licence is None:
+    licences = licences_argyll(argyll)
+    if not licences:
         sys.exit(f"Texte de licence d'ArgyllCMS introuvable dans {argyll} (cherché : {', '.join(ARGYLL_LICENCES)}) : "
                  "l'AGPL interdit de l'embarquer sans lui.")
     version = lire_version_argyll(aide(argyll / "bin" / "colprof.exe"))
     if version != VERSION_ARGYLL:
         sys.exit(f"ArgyllCMS de {argyll} en version {version or 'illisible'} : seule la {VERSION_ARGYLL} est validée (ADR 0002).")
-    return {f"../argyll/{f}": f"argyll/{f}" for f in (*ARGYLL_FICHIERS, licence)}
+    return {f"../argyll/{f}": f"argyll/{f}" for f in (*ARGYLL_FICHIERS, *licences)}
 
 
 def main():

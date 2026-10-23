@@ -368,6 +368,8 @@ Racine d'ArgyllCMS : variable `ARGYLL` ou, à défaut, `<racine du dépôt>/argy
 
 - [ ] **Step 6 : Confirmer `COLOR_REP` et la sortie de `profcheck`**
 
+> **À confirmer à l'essai.** ArgyllCMS 3.5.0 n'est pas encore posé sur le poste : `COLOR_REP "iRGB"` et la ligne de bilan de `profcheck` restent supposés tant que cette étape n'a pas été faite avec le vrai ArgyllCMS.
+
 Run (dans un dossier temporaire) : `<argyll>/bin/targen -d2 -f20 essai`, puis lire `COLOR_REP` dans `essai.ti1`. Lancer ensuite le test ignoré de la tâche 3.
 Expected: `COLOR_REP "iRGB"`. Sinon, reprendre la valeur d'ArgyllCMS dans `ti3.rs` et dans son test. La ligne de `profcheck` doit correspondre à `lire_precision` ; sinon, corriger le motif et le test avec la ligne réelle. Noter les deux constats (« confirmé le … avec 3.5.0 ») dans `docs/references/icc-argyll-options.md`.
 
@@ -512,7 +514,7 @@ git commit -am "Interface : calculer un profil depuis la vue d'une résolution"
 **Files:**
 - Modify: `outils/preparer_installateur.py`, `CLAUDE.md` (commandes et crate `profilage`), `docs/adr/0002-argyllcms-inclus.md` (section « Livré »), `GLOSSARY.md` (Recette de calcul, Précision du profil), `docs/blog/<jour>.md`
 
-- [ ] **Step 1 : Installateur**
+- [x] **Step 1 : Installateur**
 
 Si `argyll/` existe à la racine, `preparer_installateur.py` vérifie la version (`argyll/bin/colprof` → `Version 3.5.0`) et ajoute à `app/tauri.installateur.json` les ressources `argyll/bin/colprof.exe`, `argyll/bin/profcheck.exe`, `argyll/ref/sRGB.icm` et le texte de licence d'ArgyllCMS, sous `argyll/`. Sans `argyll/`, il prévient en une ligne et continue. Le journal et l'ADR 0002 rappellent l'obligation de l'AGPL : chaque publication fournit les sources de la version incluse ou en donne le lien précis.
 
@@ -521,6 +523,8 @@ Expected: OK.
 
 - [ ] **Step 2 : Essai d'écran avec le mainteneur (geste humain)**
 
+> **À confirmer à l'essai.** Pas encore fait : le calcul réel, les durées des recettes (écrites « durée à mesurer » dans l'interface) et l'affichage restent à constater avec le mainteneur et ArgyllCMS 3.5.0.
+
 1. Compiler, puis lancer avec `cargo run -p app`.
 2. Dans « Canon PRO-4100 / <papier> / <résolution> », importer un export FD-S2w réel (M1), puis calculer avec la recette Standard.
 3. Noter la durée de chaque recette, la précision obtenue et le nom du profil.
@@ -528,7 +532,7 @@ Expected: OK.
 5. Recommencer sans `argyll/` pour voir le message.
 6. Reporter les durées dans les textes des recettes (tâche 4, step 4).
 
-- [ ] **Step 3 : Journal, glossaire, ADR, commit**
+- [x] **Step 3 : Journal, glossaire, ADR, commit**
 
 Écrire le journal du jour en mots simples (ce qui marche, ce qui reste « Prévu »), puis :
 

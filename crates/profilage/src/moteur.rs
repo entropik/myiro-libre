@@ -85,11 +85,11 @@ impl ErreurMoteur {
     pub fn cle(&self) -> &'static str {
         match self {
             ErreurMoteur::Introuvable => "profil.erreur.argyll_introuvable",
-            ErreurMoteur::VersionNonValidee { .. }
-            | ErreurMoteur::Echec {
+            ErreurMoteur::VersionNonValidee { .. } => "profil.erreur.argyll_version",
+            ErreurMoteur::Echec {
                 etape: Etape::Version,
                 ..
-            } => "profil.erreur.argyll_version",
+            } => "profil.erreur.argyll_illisible",
             ErreurMoteur::Echec {
                 etape: Etape::Profil,
                 ..

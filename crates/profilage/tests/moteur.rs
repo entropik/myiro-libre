@@ -3,12 +3,12 @@
 //! simulé. Rien ici ne lance ArgyllCMS.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use profilage::{
-    arguments_colprof, chercher_argyll, controler_version, lire_precision, lire_version,
-    DemandeProfil, ErreurMoteur, Etape, MoteurProfil, MoteurSimule, Precision, Recette,
-    VERSION_ARGYLL,
+    arguments_colprof, chercher_argyll, controler_version, lignes_commandes, lire_precision,
+    lire_version, ArgyllCms, DemandeProfil, ErreurMoteur, Etape, MoteurProfil, MoteurSimule,
+    Precision, Recette, VERSION_ARGYLL,
 };
 
 fn textes(recette: Recette, description: &str) -> Vec<String> {
@@ -229,7 +229,7 @@ fn chaque_erreur_a_sa_cle_de_texte() {
                 etape: Etape::Version,
                 cause: "x".into(),
             },
-            "profil.erreur.argyll_version",
+            "profil.erreur.argyll_illisible",
         ),
         (
             ErreurMoteur::Echec {
@@ -318,4 +318,24 @@ fn les_commandes_montrees_citent_une_description_avec_espaces() {
             "profcheck -k mesure.ti3 profil.icc"
         ]
     );
+}
+
+/// La commande équivalente se construit sans ArgyllCMS : la page la montre
+/// même quand il manque.
+#[test]
+fn les_commandes_se_construisent_sans_argyll() {
+    let demande = DemandeProfil {
+        ti3: "CTI3\r\n",
+        description: "Hahnemühle Photo Rag 308",
+        recette: Recette::Standard,
+    };
+    let commandes = lignes_commandes(Recette::Standard, "Hahnemühle Photo Rag 308");
+    assert_eq!(commandes.len(), 2);
+    assert!(
+        commandes[0].starts_with("colprof -v -qh "),
+        "{}",
+        commandes[0]
+    );
+    let absent = ArgyllCms::new(PathBuf::from("dossier-qui-n-existe-pas"));
+    assert_eq!(absent.commandes(&demande), commandes);
 }
