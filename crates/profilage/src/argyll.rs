@@ -244,13 +244,19 @@ fn ligne(outil: &str, arguments: &[OsString]) -> String {
     ligne
 }
 
-/// Précision lue dans la ligne de bilan de `profcheck` :
-/// `Profile check complete, peak err = 2.51, avg err = 0.45, RMS = 0.6`.
+/// Précision lue dans la ligne de bilan de `profcheck -k` (confirmée avec
+/// ArgyllCMS 3.5.0) :
+/// `Profile check complete, errors(CIEDE2000): max. = 0.003447, avg. = 0.001526, RMS = 0.001680`.
+/// Une ligne en CIE94 (`errors(CIE94)`, option `-c`) ou en CIE76
+/// (`errors:`, sans option) n'est pas en ΔE00 : elle ne donne rien.
 pub fn lire_precision(sortie_profcheck: &str) -> Option<Precision> {
     sortie_profcheck.lines().find_map(|l| {
+        let bilan = l
+            .split_once("Profile check complete, errors(CIEDE2000):")?
+            .1;
         Some(Precision {
-            max_de00: valeur_apres(l, "peak err =")?,
-            moyenne_de00: valeur_apres(l, "avg err =")?,
+            max_de00: valeur_apres(bilan, "max. =")?,
+            moyenne_de00: valeur_apres(bilan, "avg. =")?,
         })
     })
 }

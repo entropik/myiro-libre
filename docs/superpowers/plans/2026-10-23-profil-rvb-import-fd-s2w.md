@@ -368,7 +368,7 @@ Racine d'ArgyllCMS : variable `ARGYLL` ou, à défaut, `<racine du dépôt>/argy
 
 - [ ] **Step 6 : Confirmer `COLOR_REP` et la sortie de `profcheck`**
 
-> **À confirmer à l'essai.** ArgyllCMS 3.5.0 n'est pas encore posé sur le poste : `COLOR_REP "iRGB"` et la ligne de bilan de `profcheck` restent supposés tant que cette étape n'a pas été faite avec le vrai ArgyllCMS.
+> **Confirmé le 26 octobre 2026 avec ArgyllCMS 3.5.0.** `targen -d2` écrit `COLOR_REP "iRGB"` dans le `.ti1` ; le `.ti3` garde `"iRGB_LAB"` (il porte le Lab), lu par `colprof`. La ligne de bilan réelle de `profcheck -k` est `Profile check complete, errors(CIEDE2000): max. = …, avg. = …, RMS = …` : `lire_precision` la lit. Constats dans `docs/references/icc-argyll-options.md`.
 
 Run (dans un dossier temporaire) : `<argyll>/bin/targen -d2 -f20 essai`, puis lire `COLOR_REP` dans `essai.ti1`. Lancer ensuite le test ignoré de la tâche 3.
 Expected: `COLOR_REP "iRGB"`. Sinon, reprendre la valeur d'ArgyllCMS dans `ti3.rs` et dans son test. La ligne de `profcheck` doit correspondre à `lire_precision` ; sinon, corriger le motif et le test avec la ligne réelle. Noter les deux constats (« confirmé le … avec 3.5.0 ») dans `docs/references/icc-argyll-options.md`.

@@ -46,6 +46,9 @@ pub fn ecrire_ti3(plages: &PlagesProfil, description: &str, cree: &str) -> Strin
     s.mot_cle("ORIGINATOR", "myiro-libre");
     s.mot_cle("CREATED", cree);
     s.mot_cle_declare("DEVICE_CLASS", "OUTPUT");
+    // `targen -d2` écrit "iRGB" dans le `.ti1` (valeurs RVB seules) ; le
+    // `.ti3` y ajoute les mesures Lab : "iRGB_LAB", que `colprof` 3.5.0 lit
+    // (confirmé le 26 octobre 2026).
     s.mot_cle_declare("COLOR_REP", "iRGB_LAB");
 
     let longueur = plages

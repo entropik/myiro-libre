@@ -74,18 +74,19 @@ fn la_recette_s_enregistre_en_json() {
     assert_eq!(r, Recette::Approfondi);
 }
 
+/// Ligne réelle de `profcheck -k` (ArgyllCMS 3.5.0, 26 octobre 2026).
 #[test]
 fn la_precision_se_lit_dans_la_sortie_de_profcheck() {
     let p = lire_precision(
-        "Profile check complete, peak err = 2.512836, avg err = 0.448123, RMS = 0.6\n",
+        "Profile check complete, errors(CIEDE2000): max. = 0.003447, avg. = 0.001526, RMS = 0.001680\n",
     )
     .unwrap();
-    assert_eq!((p.max_de00, p.moyenne_de00), (2.512836, 0.448123));
+    assert_eq!((p.max_de00, p.moyenne_de00), (0.003447, 0.001526));
 }
 
 #[test]
 fn la_precision_se_lit_au_milieu_d_un_journal() {
-    let sortie = "[1] 0.1 0.2 0.3\nProfile check complete, peak err = 1.5, avg err = 0.25, RMS = 0.3\r\nfin\n";
+    let sortie = "[1] 0.1 0.2 0.3\nProfile check complete, errors(CIEDE2000): max. = 1.5, avg. = 0.25, RMS = 0.3\r\nfin\n";
     assert_eq!(
         lire_precision(sortie),
         Some(Precision {
@@ -100,7 +101,25 @@ fn une_sortie_sans_precision_donne_rien() {
     assert_eq!(lire_precision(""), None);
     assert_eq!(lire_precision("profcheck: Error - file not found\n"), None);
     assert_eq!(
-        lire_precision("Profile check complete, peak err = abc, avg err = 0.4\n"),
+        lire_precision(
+            "Profile check complete, errors(CIEDE2000): max. = abc, avg. = 0.4, RMS = 0.5\n"
+        ),
+        None
+    );
+}
+
+/// Sans `-k`, profcheck compte en CIE94 (`-c`) ou en CIE76 (rien) : ce ne
+/// sont pas des ΔE00, la précision n'est pas lue.
+#[test]
+fn des_ecarts_qui_ne_sont_pas_en_de00_ne_donnent_rien() {
+    assert_eq!(
+        lire_precision(
+            "Profile check complete, errors(CIE94): max. = 1.2, avg. = 0.4, RMS = 0.5\n"
+        ),
+        None
+    );
+    assert_eq!(
+        lire_precision("Profile check complete, errors: max. = 1.2, avg. = 0.4, RMS = 0.5\n"),
         None
     );
 }
