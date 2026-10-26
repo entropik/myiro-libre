@@ -788,19 +788,24 @@ fn argyll_introuvable_demande_de_relancer() {
     assert!(texte(Langue::Anglais, "profil.erreur.argyll_introuvable").contains("restart"));
 }
 
-/// Les durées des recettes ne sont pas encore mesurées : aucun texte ne les
-/// donne comme un fait.
+/// Seule la durée de Standard a été mesurée (essai d'écran du 26 octobre
+/// 2026 : un peu moins de 3 minutes pour 2 520 plages) ; Rapide et
+/// Approfondi ne promettent aucune durée.
 #[test]
-fn les_recettes_ne_promettent_pas_de_duree() {
+fn seule_la_duree_mesuree_est_donnee() {
     use app::textes::{texte, Langue};
-    for recette in ["rapide", "standard", "approfondi"] {
+    assert!(texte(Langue::Francais, "profil.recette.standard")
+        .contains("environ 3\u{a0}min pour 2\u{202f}520 plages"));
+    assert!(
+        texte(Langue::Anglais, "profil.recette.standard").contains("about 3 min for 2,520 patches")
+    );
+    for recette in ["rapide", "approfondi"] {
         let cle = format!("profil.recette.{recette}");
         let fr = texte(Langue::Francais, &cle);
         let en = texte(Langue::Anglais, &cle);
-        assert!(
-            !fr.contains("minute") && !en.contains("minute"),
-            "{fr} / {en}"
-        );
+        assert!(fr.contains("durée à mesurer"), "{fr}");
+        assert!(en.contains("duration to be measured"), "{en}");
+        assert!(!fr.contains("min") && !en.contains("min"), "{fr} / {en}");
     }
 }
 

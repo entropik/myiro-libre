@@ -213,7 +213,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.recette.standard",
-        "Standard\u{202f}: conseillée pour la production (durée à mesurer)",
+        "Standard\u{202f}: conseillée pour la production (environ 3\u{a0}min pour 2\u{202f}520 plages)",
     ),
     (
         "profil.recette.approfondi",
@@ -1196,7 +1196,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.recette.standard",
-        "Standard: advised for production (duration to be measured)",
+        "Standard: advised for production (about 3 min for 2,520 patches)",
     ),
     (
         "profil.recette.approfondi",
