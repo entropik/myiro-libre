@@ -209,7 +209,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.recette.rapide",
-        "Rapide\u{202f}: pour un essai, le plus court (durée à mesurer)",
+        "Rapide\u{202f}: pour un essai, le plus court (environ 1\u{a0}min pour 2\u{202f}520 plages)",
     ),
     (
         "profil.recette.standard",
@@ -369,6 +369,7 @@ const FRANCAIS: Catalogue = &[
         "L’action s’est arrêtée sur une erreur inattendue. Choisissez à nouveau cette résolution dans la bibliothèque, puis réessayez.",
     ),
     ("profil.precision", "Précision du calcul"),
+    ("profil.duree", "Durée du calcul"),
     (
         "profil.precision.valeur",
         "{moyenne} en moyenne, {max} au plus (ΔE00)",
@@ -1192,7 +1193,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.recette.rapide",
-        "Fast: for a trial, the shortest (duration to be measured)",
+        "Fast: for a trial, the shortest (about 1 min for 2,520 patches)",
     ),
     (
         "profil.recette.standard",
@@ -1352,6 +1353,7 @@ const ANGLAIS: Catalogue = &[
         "The action stopped on an unexpected error. Choose this resolution again in the library, then try again.",
     ),
     ("profil.precision", "Calculation accuracy"),
+    ("profil.duree", "Calculation time"),
     (
         "profil.precision.valeur",
         "{moyenne} on average, {max} at most (ΔE00)",

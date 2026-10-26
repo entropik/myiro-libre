@@ -408,8 +408,10 @@ window.CalculProfil = (() => {
       cleValeur("profil.recette", t("profil.recette.nom." + p.recette)),
       cleValeur("profil.version", p.version),
       cleValeur("profil.precision", precision),
-      avance,
     );
+    // Durée du calcul, seulement si elle a été gardée : un profil plus ancien n'en a pas.
+    if (typeof p.duree_s === "number") lignes.push(cleValeur("profil.duree", duree(Math.round(p.duree_s) * 1000)));
+    lignes.push(avance);
     return lignes;
   }
 

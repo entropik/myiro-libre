@@ -50,6 +50,9 @@ pub struct ResultatProfil {
     /// précision de calcul, pas une vérification.
     pub precision_moyenne: f64,
     pub precision_max: f64,
+    /// Durée réelle du calcul, en secondes, de la préparation des mesures à
+    /// la fin du contrôle de précision.
+    pub duree_s: f64,
 }
 
 /// Pourquoi un profil n'a pas été calculé, pour la page.
@@ -225,6 +228,9 @@ pub struct ProvenanceProfil {
     /// Journal d'ArgyllCMS pendant le calcul, astérisques regroupés pour
     /// l'affichage ([`journal_court`]) ; le journal enregistré reste complet.
     pub journal: String,
+    /// Durée réelle du calcul, en secondes ; rien pour un profil calculé
+    /// avant qu'elle soit gardée (rien n'est inventé).
+    pub duree_s: Option<f64>,
 }
 
 /// Paramètres conservés d'un profil calculé, tels que [`BibliothequeOuverte::calculer_profil`]
@@ -242,6 +248,8 @@ struct ParametresCalcul {
     precision: PrecisionLue,
     commandes: Vec<String>,
     journal: String,
+    #[serde(default)]
+    duree_s: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -260,7 +268,20 @@ pub(crate) fn provenance_profil(
         return Ok(None);
     };
     let texte = b.parametres_profil(actif.id)?;
-    Ok(serde_json::from_str::<ParametresCalcul>(&texte)
+    Ok(provenance_depuis_parametres(&texte))
+}
+
+/// Durée d'un calcul arrondie au dixième de seconde, telle qu'elle est rangée
+/// (provenance du profil et `durees-calcul.json`) : elle se relit à
+/// l'identique.
+pub fn arrondir_duree(secondes: f64) -> f64 {
+    (secondes * 10.0).round() / 10.0
+}
+
+/// Provenance lue dans les paramètres conservés d'un profil ; rien pour un
+/// profil rangé tel quel ou des paramètres illisibles.
+pub fn provenance_depuis_parametres(texte: &str) -> Option<ProvenanceProfil> {
+    serde_json::from_str::<ParametresCalcul>(texte)
         .ok()
         .filter(|p| p.origine == "calcul")
         .map(|p| ProvenanceProfil {
@@ -275,7 +296,8 @@ pub(crate) fn provenance_profil(
             precision_max: p.precision.max_de00,
             commandes: p.commandes,
             journal: journal_court(&p.journal),
-        }))
+            duree_s: p.duree_s,
+        })
 }
 
 /// Le moteur de calcul de l'application : ArgyllCMS, cherché une fois au
@@ -434,6 +456,7 @@ impl BibliothequeOuverte {
         maintenant: SystemTime,
         avancement: &mut dyn FnMut(Avancement),
     ) -> Result<ResultatProfil, ErreurProfil> {
+        let debut = std::time::Instant::now();
         avancement(Avancement::Etape(EtapeCalcul::Preparation));
         let p = self.preparer_profil(condition, mesure, mesure_condition, maintenant)?;
         // Hors du verrou : la page et l'arbre restent utilisables.
@@ -450,6 +473,8 @@ impl BibliothequeOuverte {
                 eprintln!("{e}");
                 ErreurProfil::du_moteur(&e)
             })?;
+        // De la préparation à la fin du contrôle de précision.
+        let duree_s = arrondir_duree(debut.elapsed().as_secs_f64());
         let parametres = serde_json::json!({
             "origine": "calcul",
             "moteur": "ArgyllCMS",
@@ -464,6 +489,7 @@ impl BibliothequeOuverte {
             "precision": calcule.precision,
             "ti3": p.ti3,
             "journal": calcule.journal,
+            "duree_s": duree_s,
         })
         .to_string();
         let profil = self.avec(|b| {
@@ -481,6 +507,7 @@ impl BibliothequeOuverte {
             plages: p.plages.plages.len(),
             precision_moyenne: calcule.precision.moyenne_de00,
             precision_max: calcule.precision.max_de00,
+            duree_s,
         })
     }
 
@@ -585,7 +612,6 @@ pub fn profiler_calculer(
     calcul: u64,
 ) -> Result<ResultatProfil, ErreurProfil> {
     use tauri::Emitter;
-    let debut = std::time::Instant::now();
     let mut suivi = SuiviCalcul::new(calcul);
     let resultat = ouverte.calculer_profil(
         IdCondition(condition),
@@ -601,7 +627,8 @@ pub fn profiler_calculer(
     )?;
     if let Some(fichier) = fichier_durees(&app) {
         let mut historique = HistoriqueDurees::lire(&fichier);
-        historique.noter(recette, debut.elapsed().as_secs_f64(), resultat.plages);
+        // La même durée que celle gardée dans la provenance du profil.
+        historique.noter(recette, resultat.duree_s, resultat.plages);
         // Une estimation perdue n'empêche pas le profil d'être rangé.
         if let Err(e) = historique.ecrire(&fichier) {
             eprintln!("{} : {e}", fichier.display());

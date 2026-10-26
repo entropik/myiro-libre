@@ -719,6 +719,10 @@ fn la_commande_et_le_journal_restent_consultables() {
     let script = lire("interface/calcul-profil.js");
     assert!(script.contains("el(\"pre\", \"\", p.commandes.join(\"\\n\"))"));
     assert!(script.contains("el(\"pre\", \"\", p.journal)"));
+    // La durée du calcul, seulement si elle a été gardée, au format court
+    // (« 58 s », « 3 min 03 s »).
+    assert!(script.contains("if (typeof p.duree_s === \"number\")"));
+    assert!(script.contains("cleValeur(\"profil.duree\", duree(Math.round(p.duree_s) * 1000))"));
     assert!(script.contains("el(\"details\", \"replie\")"));
     assert!(script.contains("el(\"summary\", \"\", t(\"profil.avance.provenance\"))"));
     use app::textes::{texte, Langue};
