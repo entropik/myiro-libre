@@ -4,8 +4,13 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+/// Fichier de la page, fins de ligne ramenées à `\n` : git peut l'avoir
+/// extrait en `\r\n` (Windows, `core.autocrlf`), et les tests cherchent des
+/// morceaux sur plusieurs lignes.
 fn lire(relatif: &str) -> String {
-    std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(relatif)).unwrap()
+    std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(relatif))
+        .unwrap()
+        .replace("\r\n", "\n")
 }
 
 /// Classes du système graphique dont une règle à elles seules fixe `display`.
