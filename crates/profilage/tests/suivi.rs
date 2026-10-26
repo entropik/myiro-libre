@@ -1,5 +1,5 @@
 //! Suivi de l'avancement d'un calcul, tel que l'écran le montre : étape,
-//! position de la barre, pourcentage de la suite en cours, reflet. Rien ici
+//! position de la barre, pourcentage de la suite en cours. Rien ici
 //! ne lance ArgyllCMS.
 
 use profilage::{Avancement, EtapeCalcul, SuiviAvancement};
@@ -30,7 +30,6 @@ fn au_depart_la_preparation_commence_et_rien_n_avance() {
     assert_eq!((e.faites, e.total), (0, 7));
     assert!(proche(e.position, 0.0));
     assert_eq!((e.pourcentage, e.ligne.as_deref()), (None, None));
-    assert!(e.reflet, "le calcul travaille, la barre n'avance pas");
 }
 
 /// Chaque étape occupe une part égale : une étape qui commence place la
@@ -52,7 +51,7 @@ fn une_etape_qui_commence_avance_la_barre_d_une_part() {
 }
 
 /// Un pourcentage écrit par ArgyllCMS fait avancer la barre dans la part de
-/// l'étape en cours, et le reflet s'efface.
+/// l'étape en cours.
 #[test]
 fn un_pourcentage_reel_avance_la_barre_dans_sa_part() {
     let mut s = SuiviAvancement::new();
@@ -64,12 +63,10 @@ fn un_pourcentage_reel_avance_la_barre_dans_sa_part() {
     assert_eq!(e.pourcentage, Some(50));
     assert_eq!(e.ligne.as_deref(), Some("Creating B to A tables"));
     assert!(proche(e.position, (4.0 + 0.5) / TOTAL));
-    assert!(!e.reflet);
 }
 
 /// Plusieurs suites de 0 à 100 % dans la même étape : la barre suit la plus
-/// haute valeur de la suite en cours, ne recule jamais, et le reflet revient
-/// quand la suite en cours ne la fait plus avancer (elle ne paraît pas figée).
+/// haute valeur de la suite en cours et ne recule jamais.
 #[test]
 fn plusieurs_suites_de_pourcentages_dans_une_etape() {
     let mut s = SuiviAvancement::new();
@@ -89,7 +86,6 @@ fn plusieurs_suites_de_pourcentages_dans_une_etape() {
     s.recevoir(&pct(30));
     assert_eq!(s.etat().pourcentage, Some(30));
     assert!(proche(s.etat().position, fin_de_part));
-    assert!(s.etat().reflet, "la suite en cours n'avance plus la barre");
 
     // Nouvelle suite sans ligne entre les deux : le pourcentage qui baisse
     // ouvre une nouvelle suite, sans faire reculer la barre.
@@ -101,7 +97,6 @@ fn plusieurs_suites_de_pourcentages_dans_une_etape() {
     s.recevoir(&etape(EtapeCalcul::Table));
     assert!(proche(s.etat().position, fin_de_part));
     assert_eq!(s.etat().pourcentage, None);
-    assert!(s.etat().reflet);
 }
 
 /// Dans une suite, la plus haute valeur compte : un pourcentage répété ou
@@ -113,7 +108,6 @@ fn dans_une_suite_la_plus_haute_valeur_compte() {
     s.recevoir(&pct(40));
     s.recevoir(&pct(40));
     assert_eq!(s.etat().pourcentage, Some(40));
-    assert!(!s.etat().reflet);
     s.recevoir(&pct(41));
     assert!(proche(s.etat().position, (4.0 + 0.41) / TOTAL));
 }
@@ -131,6 +125,8 @@ fn l_etat_s_envoie_en_json() {
     assert_eq!(json["total"], 7);
     assert_eq!(json["pourcentage"], 50);
     assert_eq!(json["ligne"], "Creating B to A tables");
-    assert_eq!(json["reflet"], false);
+    // La lumière de la barre reste allumée pendant tout le calcul : l'état
+    // ne dit plus s'il faut un reflet.
+    assert!(json.get("reflet").is_none(), "{json}");
     assert!(json["position"].as_f64().is_some());
 }

@@ -3,8 +3,7 @@
 //!
 //! Chaque étape occupe une part égale de la barre. Elle avance d'une part à
 //! chaque étape et, dans une étape, seulement d'après un pourcentage écrit
-//! par ArgyllCMS. Elle ne recule jamais. Quand rien de réel ne la fait
-//! avancer, un reflet dit que le calcul travaille.
+//! par ArgyllCMS. Elle ne recule jamais.
 
 use serde::Serialize;
 
@@ -25,9 +24,6 @@ pub struct EtatAvancement {
     pub pourcentage: Option<u8>,
     /// Dernière ligne écrite par ArgyllCMS.
     pub ligne: Option<String>,
-    /// Rien de réel ne fait avancer la barre en ce moment : un reflet dit que
-    /// le calcul travaille.
-    pub reflet: bool,
 }
 
 /// Suit les annonces d'un calcul, de la préparation au contrôle.
@@ -60,7 +56,6 @@ impl SuiviAvancement {
                 position: 0.0,
                 pourcentage: None,
                 ligne: None,
-                reflet: true,
             },
         }
     }
@@ -81,14 +76,12 @@ impl SuiviAvancement {
                 e.position = e.position.max(e.faites as f64 / total);
                 e.pourcentage = None;
                 e.ligne = None;
-                e.reflet = true;
             }
             Avancement::Etape(_) => {}
             // Une ligne de texte clôt la suite de pourcentages en cours.
             Avancement::Ligne(texte) => {
                 e.ligne = Some(texte.clone());
                 e.pourcentage = None;
-                e.reflet = true;
             }
             Avancement::Pourcentage(p) => {
                 // colprof écrit chaque suite en montant : la valeur reçue est
@@ -97,10 +90,6 @@ impl SuiviAvancement {
                 let suite = (*p).min(100);
                 e.pourcentage = Some(suite);
                 let ici = (e.faites as f64 + f64::from(suite) / 100.0) / total;
-                // La suite en cours ne fait avancer la barre que si elle va
-                // plus loin ; sinon le reflet revient, la barre ne paraît pas
-                // figée.
-                e.reflet = ici + 1e-9 < e.position;
                 e.position = e.position.max(ici);
             }
         }
