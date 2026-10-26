@@ -126,16 +126,53 @@ impl fmt::Display for ErreurMoteur {
 
 impl std::error::Error for ErreurMoteur {}
 
-/// Étape d'un calcul, annoncée à l'écran pendant qu'il tourne.
+/// Étape d'un calcul, annoncée à l'écran pendant qu'il tourne. Les parties
+/// de `colprof` sont repérées dans ses lignes ([`etape_colprof`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EtapeCalcul {
     /// Lecture et contrôle des mesures, écriture du `.ti3` (application).
     Preparation,
-    /// Calcul du profil (`colprof`).
+    /// Début de `colprof` : courbes et matrice.
     Profil,
+    /// `colprof` : table principale (« Create final clut from scattered data »).
+    Table,
+    /// `colprof` : correspondance des gamuts (« Creating Gamut Mapping »).
+    Gamut,
+    /// `colprof` : tables inverses (« Creating B to A tables »).
+    Inverses,
+    /// `colprof` : limite du gamut (« Creating gamut boundary table »).
+    Limite,
     /// Contrôle de précision (`profcheck`).
     Controle,
+}
+
+impl EtapeCalcul {
+    /// Toutes les étapes, dans l'ordre où elles se suivent.
+    pub const TOUTES: [EtapeCalcul; 7] = [
+        EtapeCalcul::Preparation,
+        EtapeCalcul::Profil,
+        EtapeCalcul::Table,
+        EtapeCalcul::Gamut,
+        EtapeCalcul::Inverses,
+        EtapeCalcul::Limite,
+        EtapeCalcul::Controle,
+    ];
+}
+
+/// Partie de `colprof` qui commence avec cette ligne (`colprof -v`,
+/// ArgyllCMS 3.5.0) ; rien pour une autre ligne.
+pub fn etape_colprof(ligne: &str) -> Option<EtapeCalcul> {
+    let ligne = ligne.trim();
+    [
+        ("Create final clut from scattered data", EtapeCalcul::Table),
+        ("Creating Gamut Mapping", EtapeCalcul::Gamut),
+        ("Creating B to A tables", EtapeCalcul::Inverses),
+        ("Creating gamut boundary table", EtapeCalcul::Limite),
+    ]
+    .into_iter()
+    .find(|(debut, _)| ligne.starts_with(debut))
+    .map(|(_, etape)| etape)
 }
 
 /// Ce que le calcul annonce pendant qu'il tourne.
@@ -154,10 +191,11 @@ pub enum Avancement {
 }
 
 /// Ce qu'une ligne d'un outil annonce : un pourcentage écrit seul sur sa
-/// ligne (de 0 à 100), sinon la ligne elle-même ; rien pour une ligne vide.
+/// ligne (de 0 à 100), sinon la ligne elle-même ; rien pour une ligne vide
+/// ou faite seulement d'astérisques (« ****** » de la table principale).
 pub fn lire_avancement(ligne: &str) -> Option<Avancement> {
     let ligne = ligne.trim();
-    if ligne.is_empty() {
+    if ligne.chars().all(|c| c == '*' || c.is_whitespace()) {
         return None;
     }
     let pourcentage = ligne

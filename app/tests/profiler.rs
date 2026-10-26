@@ -7,7 +7,7 @@ use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use app::colonne::{emplacement, BibliothequeOuverte};
-use app::profiler::{ErreurProfil, Moteur, ProvenanceProfil};
+use app::profiler::{journal_court, ErreurProfil, HistoriqueDurees, Moteur, ProvenanceProfil};
 use bibliotheque::{nom_profil_propose, EtatVerification, IdCondition, IdMesure};
 use pont_protocole::ConditionMesure;
 use profilage::{Avancement, ErreurMoteur, Etape, EtapeCalcul, MoteurSimule, Recette};
@@ -497,6 +497,107 @@ fn les_textes_du_calcul_existent() {
     ] {
         assert!(est_au_catalogue(cle), "{cle}");
     }
+}
+
+/// Sans calcul précédent avec la même recette, aucune estimation : rien
+/// n'est inventé.
+#[test]
+fn sans_historique_aucune_duree_n_est_estimee() {
+    let h = HistoriqueDurees::default();
+    assert_eq!(h.estimer(Recette::Standard, 2520), None);
+}
+
+/// L'estimation reprend la durée du dernier calcul de la même recette,
+/// rapportée au nombre de plages ; une autre recette n'en a pas.
+#[test]
+fn la_duree_s_estime_d_apres_le_dernier_calcul_de_la_recette() {
+    let mut h = HistoriqueDurees::default();
+    h.noter(Recette::Standard, 120.0, 1260);
+    assert_eq!(h.estimer(Recette::Standard, 2520), Some(240.0));
+    assert_eq!(h.estimer(Recette::Standard, 630), Some(60.0));
+    assert_eq!(h.estimer(Recette::Rapide, 2520), None);
+    // Le dernier calcul remplace le précédent.
+    h.noter(Recette::Standard, 300.0, 2520);
+    assert_eq!(h.estimer(Recette::Standard, 2520), Some(300.0));
+    // Rien à rapporter : pas d'estimation.
+    h.noter(Recette::Rapide, 10.0, 0);
+    assert_eq!(h.estimer(Recette::Rapide, 100), None);
+}
+
+/// L'historique est enregistré sur le poste et relu au calcul suivant ; un
+/// fichier absent ou illisible donne un historique vide.
+#[test]
+fn l_historique_des_durees_se_relit() {
+    let dossier = TempDir::new().unwrap();
+    let fichier = dossier.path().join("config").join("durees-calcul.json");
+    assert_eq!(
+        HistoriqueDurees::lire(&fichier),
+        HistoriqueDurees::default()
+    );
+    let mut h = HistoriqueDurees::default();
+    h.noter(Recette::Approfondi, 900.0, 2520);
+    h.ecrire(&fichier).unwrap();
+    assert_eq!(HistoriqueDurees::lire(&fichier), h);
+    std::fs::write(&fichier, "pas du json").unwrap();
+    assert_eq!(
+        HistoriqueDurees::lire(&fichier),
+        HistoriqueDurees::default()
+    );
+}
+
+/// Un calcul réussi dit combien de plages il a pris : c'est ce qui rapporte
+/// sa durée à la mesure suivante.
+#[test]
+fn un_calcul_reussi_dit_son_nombre_de_plages() {
+    let b = banc();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
+    let r = b
+        .ouverte
+        .calculer_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M1,
+            Recette::Standard,
+            &MoteurSimule::reussit(icc()),
+            maintenant(),
+            &mut |_| {},
+        )
+        .unwrap();
+    assert_eq!(r.plages, 3);
+}
+
+/// Avant le clic, la page reçoit la durée estimée du calcul choisi, s'il y
+/// a un historique pour sa recette.
+#[test]
+fn l_estimation_suit_la_mesure_et_la_recette_choisies() {
+    let b = banc();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
+    let mut h = HistoriqueDurees::default();
+    h.noter(Recette::Standard, 60.0, 6);
+    let estimer = |recette| {
+        b.ouverte
+            .estimation_profil(b.condition, mesure, ConditionMesure::M1, recette, &h)
+            .unwrap()
+    };
+    assert_eq!(estimer(Recette::Standard), Some(30.0));
+    assert_eq!(estimer(Recette::Rapide), None);
+}
+
+/// Dans « Avancé », chaque suite d'astérisques de colprof tient sur une
+/// ligne courte avec leur nombre ; le reste du journal ne change pas.
+#[test]
+fn les_asterisques_du_journal_se_regroupent_a_l_affichage() {
+    let journal = "$ colprof -v\r\nCreate final clut from scattered data\r\n*********\r\n****\r\nWarning\r\nfin\n";
+    assert_eq!(
+        journal_court(journal),
+        "$ colprof -v\r\nCreate final clut from scattered data\r\n****** (×13)\r\nWarning\r\nfin\n"
+    );
+    assert_eq!(
+        journal_court("a\n**\nb\n***"),
+        "a\n****** (×2)\nb\n****** (×3)"
+    );
+    assert_eq!(journal_court("sans étoiles\n"), "sans étoiles\n");
+    assert_eq!(journal_court("* note *\n"), "* note *\n");
 }
 
 /// Pendant le calcul, l'écran apprend l'étape en cours : préparation des

@@ -7,7 +7,7 @@
 //! la page sont des [`ErreurProfil`] : une clé du catalogue de textes et, si
 //! ArgyllCMS en a donné une, sa cause.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use bibliotheque::{
@@ -43,6 +43,9 @@ pub struct SourceProfil {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub struct ResultatProfil {
     pub profil: IdProfil,
+    /// Nombre de plages calculées : rapporte la durée du calcul à la mesure
+    /// suivante ([`HistoriqueDurees`]).
+    pub plages: usize,
     /// Écarts ΔE00 entre les mesures et ce que le profil prédit : une
     /// précision de calcul, pas une vérification.
     pub precision_moyenne: f64,
@@ -91,6 +94,104 @@ impl ErreurProfil {
 pub struct CommandesProfil {
     pub commandes: Vec<String>,
     pub moteur: Option<ErreurProfil>,
+    /// Durée estimée du calcul choisi, en secondes ; rien sans historique
+    /// pour sa recette ([`HistoriqueDurees`]).
+    pub estimation: Option<f64>,
+}
+
+/// Fichier où les durées des derniers calculs sont enregistrées, dans le
+/// dossier de configuration de l'application.
+pub const FICHIER_DUREES: &str = "durees-calcul.json";
+
+/// Durée et nombre de plages d'un calcul réussi.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DureeCalcul {
+    pub secondes: f64,
+    pub plages: usize,
+}
+
+/// Durée du dernier calcul réussi de chaque recette, enregistrée sur le
+/// poste. Elle sert à estimer la durée du calcul suivant, rapportée au
+/// nombre de plages : une estimation, dite comme telle à l'écran.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct HistoriqueDurees {
+    #[serde(default)]
+    rapide: Option<DureeCalcul>,
+    #[serde(default)]
+    standard: Option<DureeCalcul>,
+    #[serde(default)]
+    approfondi: Option<DureeCalcul>,
+}
+
+impl HistoriqueDurees {
+    fn place(&mut self, recette: Recette) -> &mut Option<DureeCalcul> {
+        match recette {
+            Recette::Rapide => &mut self.rapide,
+            Recette::Standard => &mut self.standard,
+            Recette::Approfondi => &mut self.approfondi,
+        }
+    }
+
+    /// Historique enregistré ; vide si le fichier manque ou est illisible.
+    pub fn lire(fichier: &Path) -> Self {
+        std::fs::read_to_string(fichier)
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn ecrire(&self, fichier: &Path) -> std::io::Result<()> {
+        if let Some(dossier) = fichier.parent() {
+            std::fs::create_dir_all(dossier)?;
+        }
+        let texte = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
+        std::fs::write(fichier, texte)
+    }
+
+    /// Retient la durée d'un calcul réussi : elle remplace la précédente de
+    /// la même recette.
+    pub fn noter(&mut self, recette: Recette, secondes: f64, plages: usize) {
+        *self.place(recette) = Some(DureeCalcul { secondes, plages });
+    }
+
+    /// Durée estimée d'un calcul de `plages` plages : celle du dernier calcul
+    /// de la même recette, rapportée au nombre de plages. Rien sans
+    /// historique.
+    pub fn estimer(&self, recette: Recette, plages: usize) -> Option<f64> {
+        let mut copie = self.clone();
+        let d = (*copie.place(recette))?;
+        (d.plages > 0 && d.secondes.is_finite() && d.secondes > 0.0)
+            .then(|| d.secondes * plages as f64 / d.plages as f64)
+    }
+}
+
+/// Journal tel qu'affiché dans « Avancé » : chaque suite de lignes faites
+/// seulement d'astérisques (table principale de colprof) devient une seule
+/// ligne « ****** (×N) », N le nombre d'astérisques. Le journal enregistré,
+/// lui, reste complet.
+pub fn journal_court(journal: &str) -> String {
+    let mut sortie = String::with_capacity(journal.len());
+    let mut asterisques = 0usize;
+    // Fin de ligne de la suite en cours, reprise après « (×N) ».
+    let mut fin_suite = "";
+    for morceau in journal.split_inclusive('\n') {
+        let contenu = morceau.trim_end_matches(['\r', '\n']);
+        let fin = &morceau[contenu.len()..];
+        if !contenu.is_empty() && contenu.chars().all(|c| c == '*') {
+            asterisques += contenu.len();
+            fin_suite = fin;
+            continue;
+        }
+        if asterisques > 0 {
+            sortie.push_str(&format!("****** (×{asterisques}){fin_suite}"));
+            asterisques = 0;
+        }
+        sortie.push_str(morceau);
+    }
+    if asterisques > 0 {
+        sortie.push_str(&format!("****** (×{asterisques}){fin_suite}"));
+    }
+    sortie
 }
 
 impl From<String> for ErreurProfil {
@@ -121,7 +222,8 @@ pub struct ProvenanceProfil {
     pub precision_max: f64,
     /// Commandes équivalentes au calcul, en lecture seule.
     pub commandes: Vec<String>,
-    /// Journal d'ArgyllCMS pendant le calcul.
+    /// Journal d'ArgyllCMS pendant le calcul, astérisques regroupés pour
+    /// l'affichage ([`journal_court`]) ; le journal enregistré reste complet.
     pub journal: String,
 }
 
@@ -172,7 +274,7 @@ pub(crate) fn provenance_profil(
             precision_moyenne: p.precision.moyenne_de00,
             precision_max: p.precision.max_de00,
             commandes: p.commandes,
-            journal: p.journal,
+            journal: journal_court(&p.journal),
         }))
 }
 
@@ -301,6 +403,20 @@ impl BibliothequeOuverte {
         Ok(lignes_commandes(recette, &p.description))
     }
 
+    /// Durée estimée du calcul choisi, d'après l'historique ; rien sans
+    /// historique pour la recette.
+    pub fn estimation_profil(
+        &self,
+        condition: IdCondition,
+        mesure: IdMesure,
+        mesure_condition: ConditionMesure,
+        recette: Recette,
+        historique: &HistoriqueDurees,
+    ) -> Result<Option<f64>, ErreurProfil> {
+        let p = self.preparer_profil(condition, mesure, mesure_condition, SystemTime::now())?;
+        Ok(historique.estimer(recette, p.plages.plages.len()))
+    }
+
     /// Calcule un profil RVB à partir d'une mesure importée de la résolution
     /// et le range : il devient le profil actuel, « non vérifié », sous le
     /// nom proposé. La commande, la version du moteur, le journal et la
@@ -362,6 +478,7 @@ impl BibliothequeOuverte {
         })?;
         Ok(ResultatProfil {
             profil,
+            plages: p.plages.plages.len(),
             precision_moyenne: calcule.precision.moyenne_de00,
             precision_max: calcule.precision.max_de00,
         })
@@ -375,10 +492,22 @@ impl BibliothequeOuverte {
 
 // ---- Commandes de la page ----
 
+/// Fichier de l'historique des durées de calcul ; rien si le dossier de
+/// configuration est introuvable.
+fn fichier_durees(app: &tauri::AppHandle) -> Option<PathBuf> {
+    use tauri::Manager;
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join(FICHIER_DUREES))
+}
+
 /// Commandes équivalentes au calcul, en lecture seule, même sans
-/// ArgyllCMS ; la page apprend aussi s'il manque, avant le clic.
+/// ArgyllCMS ; la page apprend aussi s'il manque, avant le clic, et la
+/// durée estimée d'après le dernier calcul de la même recette.
 #[tauri::command(async)]
 pub fn profiler_commandes(
+    app: tauri::AppHandle,
     ouverte: tauri::State<'_, BibliothequeOuverte>,
     moteur: tauri::State<'_, Moteur>,
     condition: i64,
@@ -386,14 +515,20 @@ pub fn profiler_commandes(
     mesure_condition: ConditionMesure,
     recette: Recette,
 ) -> Result<CommandesProfil, ErreurProfil> {
+    let (condition, mesure) = (IdCondition(condition), IdMesure(mesure));
+    let historique = fichier_durees(&app)
+        .map(|f| HistoriqueDurees::lire(&f))
+        .unwrap_or_default();
     Ok(CommandesProfil {
-        commandes: ouverte.commandes_profil(
-            IdCondition(condition),
-            IdMesure(mesure),
+        commandes: ouverte.commandes_profil(condition, mesure, mesure_condition, recette)?,
+        moteur: moteur.indisponible(),
+        estimation: ouverte.estimation_profil(
+            condition,
+            mesure,
             mesure_condition,
             recette,
+            &historique,
         )?,
-        moteur: moteur.indisponible(),
     })
 }
 
@@ -402,7 +537,8 @@ pub const EVENEMENT_AVANCEMENT: &str = "profil-avancement";
 
 /// Calcule et range le profil. Hors du fil de la fenêtre : le calcul peut
 /// durer plusieurs minutes. Son avancement part vers la page par
-/// l'événement [`EVENEMENT_AVANCEMENT`].
+/// l'événement [`EVENEMENT_AVANCEMENT`] ; la durée d'un calcul réussi est
+/// retenue pour estimer le suivant.
 #[tauri::command(async)]
 pub fn profiler_calculer(
     app: tauri::AppHandle,
@@ -414,7 +550,8 @@ pub fn profiler_calculer(
     recette: Recette,
 ) -> Result<ResultatProfil, ErreurProfil> {
     use tauri::Emitter;
-    ouverte.calculer_profil(
+    let debut = std::time::Instant::now();
+    let resultat = ouverte.calculer_profil(
         IdCondition(condition),
         IdMesure(mesure),
         mesure_condition,
@@ -425,5 +562,14 @@ pub fn profiler_calculer(
         &mut |a| {
             let _ = app.emit(EVENEMENT_AVANCEMENT, a);
         },
-    )
+    )?;
+    if let Some(fichier) = fichier_durees(&app) {
+        let mut historique = HistoriqueDurees::lire(&fichier);
+        historique.noter(recette, debut.elapsed().as_secs_f64(), resultat.plages);
+        // Une estimation perdue n'empêche pas le profil d'être rangé.
+        if let Err(e) = historique.ecrire(&fichier) {
+            eprintln!("{} : {e}", fichier.display());
+        }
+    }
+    Ok(resultat)
 }

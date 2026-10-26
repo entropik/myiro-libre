@@ -6,10 +6,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use profilage::{
-    arguments_colprof, chercher_argyll, controler_version, description_argyll, lignes_commandes,
-    lire_avancement, lire_precision, lire_version, ArgyllCms, Avancement, DemandeProfil,
-    ErreurMoteur, Etape, EtapeCalcul, MoteurProfil, MoteurSimule, Precision, Recette,
-    VERSION_ARGYLL,
+    arguments_colprof, chercher_argyll, controler_version, description_argyll, etape_colprof,
+    lignes_commandes, lire_avancement, lire_precision, lire_version, ArgyllCms, Avancement,
+    DemandeProfil, ErreurMoteur, Etape, EtapeCalcul, MoteurProfil, MoteurSimule, Precision,
+    Recette, VERSION_ARGYLL,
 };
 
 fn textes(recette: Recette, description: &str) -> Vec<String> {
@@ -442,4 +442,60 @@ fn l_avancement_s_envoie_en_json() {
         serde_json::to_string(&Avancement::Pourcentage(45)).unwrap(),
         r#"{"pourcentage":45}"#
     );
+}
+
+/// Les parties du calcul de `colprof` se repèrent à leur première ligne
+/// (`colprof -v`, ArgyllCMS 3.5.0, relevé le 26 octobre 2026), dans cet
+/// ordre : table principale, correspondance des gamuts, tables inverses,
+/// limite du gamut. Toute autre ligne ne change pas d'étape.
+#[test]
+fn les_parties_de_colprof_se_reperent_dans_ses_lignes() {
+    assert_eq!(
+        etape_colprof("Create final clut from scattered data"),
+        Some(EtapeCalcul::Table)
+    );
+    assert_eq!(
+        etape_colprof("Creating Gamut Mapping"),
+        Some(EtapeCalcul::Gamut)
+    );
+    assert_eq!(
+        etape_colprof("Creating B to A tables"),
+        Some(EtapeCalcul::Inverses)
+    );
+    assert_eq!(
+        etape_colprof("Creating gamut boundary table"),
+        Some(EtapeCalcul::Limite)
+    );
+    for autre in [
+        "Done B to A tables",
+        "About to optimise temporary matrix",
+        "No of test patches = 2520",
+        "Setting up B to A table lookup",
+    ] {
+        assert_eq!(etape_colprof(autre), None, "{autre}");
+    }
+    let etapes: Vec<String> = EtapeCalcul::TOUTES
+        .iter()
+        .map(|e| serde_json::to_string(e).unwrap())
+        .collect();
+    assert_eq!(
+        etapes,
+        [
+            "\"preparation\"",
+            "\"profil\"",
+            "\"table\"",
+            "\"gamut\"",
+            "\"inverses\"",
+            "\"limite\"",
+            "\"controle\""
+        ]
+    );
+}
+
+/// Les astérisques que `colprof` écrit pendant la table principale ne disent
+/// ni étape ni pourcentage : la dernière ligne montrée reste la précédente.
+#[test]
+fn une_ligne_d_asterisques_n_annonce_rien() {
+    assert_eq!(lire_avancement("*********"), None);
+    assert_eq!(lire_avancement(" * "), None);
 }

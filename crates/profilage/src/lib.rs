@@ -20,8 +20,8 @@ pub use argyll::{
     lire_precision, lire_version, ArgyllCms,
 };
 pub use moteur::{
-    lire_avancement, Avancement, DemandeProfil, ErreurMoteur, Etape, EtapeCalcul, MoteurProfil,
-    MoteurSimule, Precision, ProfilCalcule, Recette, VERSION_ARGYLL,
+    etape_colprof, lire_avancement, Avancement, DemandeProfil, ErreurMoteur, Etape, EtapeCalcul,
+    MoteurProfil, MoteurSimule, Precision, ProfilCalcule, Recette, VERSION_ARGYLL,
 };
 
 pub use plages::{conditions_utilisables, preparer_plages, PlageProfil, PlagesProfil, RefusPlages};

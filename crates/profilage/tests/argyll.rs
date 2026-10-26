@@ -122,15 +122,20 @@ fn argyll_du_depot_est_en_version_3_5_0() {
 fn un_profil_se_calcule_sur_une_mire_synthetique() {
     let (profil, annonces) =
         calculer_avec_avancement("Essai synthétique 2026-10-23", Recette::Standard);
-    // colprof annonce ses étapes, ses lignes et des pourcentages à lui.
-    let profil_puis_controle: Vec<_> = annonces
+    // colprof annonce ses étapes, ses lignes et des pourcentages à lui ;
+    // les parties de colprof sont repérées dans ses lignes, dans l'ordre.
+    let etapes: Vec<_> = annonces
         .iter()
         .filter(|a| matches!(a, Avancement::Etape(_)))
         .collect();
     assert_eq!(
-        profil_puis_controle,
+        etapes,
         [
             &Avancement::Etape(EtapeCalcul::Profil),
+            &Avancement::Etape(EtapeCalcul::Table),
+            &Avancement::Etape(EtapeCalcul::Gamut),
+            &Avancement::Etape(EtapeCalcul::Inverses),
+            &Avancement::Etape(EtapeCalcul::Limite),
             &Avancement::Etape(EtapeCalcul::Controle)
         ]
     );

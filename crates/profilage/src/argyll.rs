@@ -16,8 +16,8 @@ use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::moteur::{
-    lire_avancement, Avancement, DemandeProfil, ErreurMoteur, Etape, EtapeCalcul, MoteurProfil,
-    Precision, ProfilCalcule, Recette, VERSION_ARGYLL,
+    etape_colprof, lire_avancement, Avancement, DemandeProfil, ErreurMoteur, Etape, EtapeCalcul,
+    MoteurProfil, Precision, ProfilCalcule, Recette, VERSION_ARGYLL,
 };
 
 /// Noms des fichiers dans le dossier de travail.
@@ -107,6 +107,10 @@ impl ArgyllCms {
             let lecteur_sortie = s.spawn(move || lire_flux(sortie, &envoi_sortie));
             let lecteur_erreurs = s.spawn(move || lire_flux(erreurs, &envoi));
             for l in reception {
+                // Une ligne qui ouvre une partie de colprof l'annonce d'abord.
+                if let Some(e) = etape_colprof(&l) {
+                    avancement(Avancement::Etape(e));
+                }
                 if let Some(a) = lire_avancement(&l) {
                     avancement(a);
                 }

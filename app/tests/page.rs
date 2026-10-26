@@ -762,6 +762,72 @@ fn pendant_un_calcul_l_avancement_se_voit() {
     assert!(texte(Langue::Anglais, "profil.argyll.pourcentage").contains("part"));
 }
 
+/// Barre d'avancement par étapes, dans l'ordre des étapes du moteur. Elle
+/// est accessible (progressbar) : sa valeur est le nombre d'étapes faites,
+/// une valeur réelle ; seule la case en cours se remplit, et seulement d'un
+/// pourcentage écrit par ArgyllCMS. La durée restante n'est qu'une
+/// estimation, dite « estimé », et rien sans historique.
+#[test]
+fn pendant_un_calcul_une_barre_avance_par_etapes() {
+    use app::textes::{texte, Langue};
+    use profilage::EtapeCalcul;
+    let script = lire("interface/calcul-profil.js");
+    let etapes: Vec<String> = EtapeCalcul::TOUTES
+        .iter()
+        .map(|e| serde_json::to_string(e).unwrap())
+        .collect();
+    assert!(
+        script.contains(&format!("const ETAPES = [{}];", etapes.join(", "))),
+        "ordre des étapes du moteur"
+    );
+    for attendu in [
+        "setAttribute(\"role\", \"progressbar\")",
+        "setAttribute(\"aria-valuemin\", \"0\")",
+        "setAttribute(\"aria-valuemax\", String(ETAPES.length))",
+        "setAttribute(\"aria-valuenow\", String(faites))",
+        "setAttribute(\"aria-valuetext\"",
+        "\"progression__etape\"",
+        "\"progression__remplissage\"",
+        "avancement.pourcentage !== null",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+    // Le remplissage ne vient que du pourcentage écrit par ArgyllCMS.
+    assert_eq!(script.matches(".style.width").count(), 1);
+    assert!(script.contains(".style.width = `${avancement.pourcentage}%`"));
+    // Une étape ne recule jamais.
+    assert!(script.contains("ETAPES.indexOf(a.etape) > ETAPES.indexOf(avancement.etape)"));
+    // Estimation : seulement si la page en a reçu une.
+    assert!(script.contains("estimationCalcul = estimation;"));
+    assert!(script.contains("if (estimationCalcul !== null)"));
+    for cle in [
+        "profil.etape.table",
+        "profil.etape.gamut",
+        "profil.etape.inverses",
+        "profil.etape.limite",
+        "profil.progression",
+        "profil.estimation.restante",
+        "profil.estimation.depassee",
+    ] {
+        assert!(
+            script.contains(&format!("\"{cle}\"")),
+            "{cle} absente de la page"
+        );
+        for langue in [Langue::Francais, Langue::Anglais] {
+            assert_ne!(texte(langue, cle), cle, "{cle} absente du catalogue");
+        }
+    }
+    for cle in ["profil.estimation.restante", "profil.estimation.depassee"] {
+        assert!(texte(Langue::Francais, cle).contains("estimé"), "{cle}");
+        assert!(texte(Langue::Anglais, cle).contains("estimated"), "{cle}");
+    }
+    // Dessin : jetons du système graphique, angles droits (tests plus haut).
+    let css = composants();
+    assert!(!regle(&css, ".progression").is_empty());
+    assert!(!regle(&css, ".progression__etape").is_empty());
+    assert!(!regle(&css, ".progression__remplissage").is_empty());
+}
+
 /// Pendant un calcul, le message général ne se cache que si la raison du
 /// calcul est vraiment à l'écran (section vidée après un changement de
 /// résolution : le message général reste).

@@ -173,6 +173,13 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .steps button.done .label { color: var(--conforme); }
 .steps button[aria-current="step"] { border-color: var(--accent); background: var(--selection); color: var(--encre); font-weight: 600; }
 .steps button[disabled] { cursor: default; }
+/* Barre d'avancement d'un calcul (calcul-profil.js) : une case par étape, faite, en cours ou à
+   venir. Seule la case en cours se remplit, et seulement d'un pourcentage écrit par l'outil. */
+.progression { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-1); margin-top: var(--space-2); }
+.progression__etape { height: var(--space-2); border: var(--rule) solid var(--filet); background: var(--carte); }
+.progression__etape[data-etat="faite"] { background: var(--accent); border-color: var(--accent); }
+.progression__etape[data-etat="en-cours"] { border-color: var(--accent); }
+.progression__remplissage { display: block; height: 100%; background: var(--accent); }
 
 /* ---- Puces : choix parmi quelques valeurs ---- */
 .puces { display: flex; flex-wrap: wrap; gap: var(--space-2); }

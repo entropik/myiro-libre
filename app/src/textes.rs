@@ -235,7 +235,35 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.etape.profil",
-        "Calcul du profil (colprof)",
+        "Calcul du profil (colprof)\u{202f}: courbes",
+    ),
+    (
+        "profil.etape.table",
+        "Calcul du profil (colprof)\u{202f}: table principale",
+    ),
+    (
+        "profil.etape.gamut",
+        "Calcul du profil (colprof)\u{202f}: correspondance des gamuts",
+    ),
+    (
+        "profil.etape.inverses",
+        "Calcul du profil (colprof)\u{202f}: tables inverses",
+    ),
+    (
+        "profil.etape.limite",
+        "Calcul du profil (colprof)\u{202f}: limite du gamut",
+    ),
+    (
+        "profil.progression",
+        "Avancement du calcul",
+    ),
+    (
+        "profil.estimation.restante",
+        "environ {duree} restantes (estimé)",
+    ),
+    (
+        "profil.estimation.depassee",
+        "plus long que le dernier calcul de cette recette (estimé)",
     ),
     (
         "profil.etape.controle",
@@ -1184,7 +1212,35 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.etape.profil",
-        "Computing the profile (colprof)",
+        "Computing the profile (colprof): curves",
+    ),
+    (
+        "profil.etape.table",
+        "Computing the profile (colprof): main table",
+    ),
+    (
+        "profil.etape.gamut",
+        "Computing the profile (colprof): gamut mapping",
+    ),
+    (
+        "profil.etape.inverses",
+        "Computing the profile (colprof): inverse tables",
+    ),
+    (
+        "profil.etape.limite",
+        "Computing the profile (colprof): gamut boundary",
+    ),
+    (
+        "profil.progression",
+        "Calculation progress",
+    ),
+    (
+        "profil.estimation.restante",
+        "about {duree} left (estimated)",
+    ),
+    (
+        "profil.estimation.depassee",
+        "longer than the last calculation with this recipe (estimated)",
     ),
     (
         "profil.etape.controle",

@@ -34,41 +34,105 @@ window.CalculProfil = (() => {
   let demande = 0; // dernière demande de commandes : une réponse plus ancienne est ignorée
 
   // Avancement du calcul en cours, reçu du module `profiler` (événement « profil-avancement ») :
-  // l'étape, puis la dernière ligne écrite par ArgyllCMS et le pourcentage qu'il a écrit lui-même
-  // pour la partie en cours. Rien n'est estimé. Le temps écoulé est redessiné chaque seconde.
-  const ETAPES = {
+  // l'étape (dans l'ordre des étapes du moteur, jamais en arrière), puis la dernière ligne écrite
+  // par ArgyllCMS et le pourcentage qu'il a écrit lui-même pour la partie en cours. La barre a une
+  // case par étape ; seule la case en cours se remplit, et seulement de ce pourcentage. La durée
+  // restante est une estimation, d'après le dernier calcul de la même recette, dite comme telle.
+  const ETAPES = ["preparation", "profil", "table", "gamut", "inverses", "limite", "controle"];
+  const NOMS_ETAPES = {
     preparation: "profil.etape.preparation",
     profil: "profil.etape.profil",
+    table: "profil.etape.table",
+    gamut: "profil.etape.gamut",
+    inverses: "profil.etape.inverses",
+    limite: "profil.etape.limite",
     controle: "profil.etape.controle",
   };
   let avancement = { etape: "preparation", ligne: "", pourcentage: null, debut: 0 };
   let minuterie = null;
+  let estimation = null; // durée estimée du calcul choisi (secondes), reçue avec les commandes
+  let estimationCalcul = null; // celle du calcul lancé
+  let barre = null; // barre d'avancement, présente seulement pendant le calcul
 
   const duree = (ms) => {
     const s = Math.max(0, Math.floor(ms / 1000));
     const m = Math.floor(s / 60);
     return m ? `${m} min ${String(s % 60).padStart(2, "0")} s` : `${s} s`;
   };
+  // Une estimation se dit en minutes rondes : elle n'a pas la précision de la seconde.
+  const dureeEstimee = (s) => (s >= 60 ? `${Math.round(s / 60)} min` : `${Math.ceil(s)} s`);
 
-  // Le seul message « en cours » : la phrase d'attente, l'étape et le temps écoulé, puis ce
-  // qu'ArgyllCMS a écrit en dernier.
-  function texteEnCours() {
-    const ecoule = t("profil.ecoule").replace("{duree}", () => duree(Date.now() - avancement.debut));
-    const lignes = [t("profil.en_cours"), `${t(ETAPES[avancement.etape])} · ${ecoule}`];
-    if (avancement.ligne) {
-      lignes.push(avancement.pourcentage === null
-        ? t("profil.argyll.ligne").replace("{ligne}", () => avancement.ligne)
-        : t("profil.argyll.pourcentage").replace("{ligne}", () => avancement.ligne)
-          .replace("{pourcentage}", () => String(avancement.pourcentage)));
+  // L'étape et le temps écoulé, avec la durée restante estimée s'il y a un historique.
+  function ligneEtape() {
+    const ecoule = Date.now() - avancement.debut;
+    const morceaux = [t(NOMS_ETAPES[avancement.etape]), t("profil.ecoule").replace("{duree}", () => duree(ecoule))];
+    if (estimationCalcul !== null) {
+      const reste = estimationCalcul - ecoule / 1000;
+      morceaux.push(reste > 0
+        ? t("profil.estimation.restante").replace("{duree}", () => dureeEstimee(reste))
+        : t("profil.estimation.depassee"));
     }
-    return lignes.join("\n");
+    return morceaux.join(" · ");
+  }
+
+  // Ce qu'ArgyllCMS a écrit en dernier, avec son pourcentage de la partie en cours.
+  function ligneArgyll() {
+    if (!avancement.ligne) return "";
+    return avancement.pourcentage !== null
+      ? t("profil.argyll.pourcentage").replace("{ligne}", () => avancement.ligne)
+        .replace("{pourcentage}", () => String(avancement.pourcentage))
+      : t("profil.argyll.ligne").replace("{ligne}", () => avancement.ligne);
+  }
+
+  // Le seul message « en cours » : la phrase d'attente, l'étape et le temps, puis ArgyllCMS.
+  function texteEnCours() {
+    return [t("profil.en_cours"), ligneEtape(), ligneArgyll()].filter(Boolean).join("\n");
+  }
+
+  // Une case par étape : faite, en cours ou à venir. La valeur annoncée est le nombre d'étapes
+  // faites, une valeur réelle ; le pourcentage d'ArgyllCMS remplit la case en cours.
+  function dessinerBarre() {
+    if (!calculEnCours || !raisonCalcul) return;
+    // Pendant le calcul seulement, entre le bouton et le message.
+    if (!barre) {
+      barre = barreProgression();
+      raisonCalcul.before(barre);
+    }
+    const faites = ETAPES.indexOf(avancement.etape);
+    barre.setAttribute("aria-valuenow", String(faites));
+    barre.setAttribute("aria-valuetext", [ligneEtape(), ligneArgyll()].filter(Boolean).join(". "));
+    barre.replaceChildren(...ETAPES.map((etape, rang) => {
+      const c = el("span", "progression__etape");
+      c.title = t(NOMS_ETAPES[etape]);
+      if (rang < faites) c.dataset.etat = "faite";
+      if (rang === faites) {
+        c.dataset.etat = "en-cours";
+        if (avancement.pourcentage !== null) {
+          const remplissage = el("span", "progression__remplissage");
+          remplissage.style.width = `${avancement.pourcentage}%`;
+          c.append(remplissage);
+        }
+      }
+      return c;
+    }));
+  }
+
+  function barreProgression() {
+    const b = el("div", "progression");
+    b.setAttribute("role", "progressbar");
+    b.setAttribute("aria-label", t("profil.progression"));
+    b.setAttribute("aria-valuemin", "0");
+    b.setAttribute("aria-valuemax", String(ETAPES.length));
+    return b;
   }
 
   window.__TAURI__.event.listen("profil-avancement", (evenement) => {
     if (!calculEnCours) return;
     const a = evenement.payload || {};
-    if (a.etape in ETAPES) {
-      avancement = { ...avancement, etape: a.etape, ligne: "", pourcentage: null };
+    if (ETAPES.includes(a.etape)) {
+      if (ETAPES.indexOf(a.etape) > ETAPES.indexOf(avancement.etape)) {
+        avancement = { ...avancement, etape: a.etape, ligne: "", pourcentage: null };
+      }
     } else if (typeof a.ligne === "string") {
       avancement = { ...avancement, ligne: a.ligne, pourcentage: null };
     } else if (typeof a.pourcentage === "number") {
@@ -102,6 +166,7 @@ window.CalculProfil = (() => {
       : erreurCalcul || erreurCommandes || (choix.mesure === null ? t("profil.calculer.raison") : "");
     raisonCalcul.textContent = texte;
     raisonCalcul.hidden = !texte;
+    dessinerBarre();
   }
 
   // La mesure proposée : celle déjà choisie si elle peut servir, sinon la plus récente qui peut
@@ -184,6 +249,7 @@ window.CalculProfil = (() => {
     installer.classList.toggle("btn--primary", !ouvert);
     raisonCalcul = null;
     commandesBloc = null;
+    barre = null;
     if (!ouvert) return calcul.replaceChildren();
     const corps = el("div", "section section--serree");
     const tete = el("div", "section__head");
@@ -233,12 +299,14 @@ window.CalculProfil = (() => {
     const n = ++demande;
     commandes = "";
     erreurCommandes = "";
+    estimation = null;
     if (ouvert && choix.mesure !== null && choix.mesureCondition) {
       try {
         const reponse = await invoke("profiler_commandes", parametres(d));
         if (n === demande) {
           commandes = reponse.commandes.join("\n");
           erreurCommandes = reponse.moteur ? texteErreur(reponse.moteur) : "";
+          estimation = typeof reponse.estimation === "number" ? reponse.estimation : null;
         }
       } catch (erreur) {
         if (n === demande) erreurCommandes = texteErreur(erreur);
@@ -262,6 +330,7 @@ window.CalculProfil = (() => {
     const ici = () => parc.reglage()?.condition.id === condition;
     erreurCalcul = "";
     avancement = { etape: "preparation", ligne: "", pourcentage: null, debut: Date.now() };
+    estimationCalcul = estimation;
     calculEnCours = true;
     clearInterval(minuterie);
     minuterie = setInterval(dessinerRaison, 1000);
@@ -277,6 +346,8 @@ window.CalculProfil = (() => {
     } finally {
       clearInterval(minuterie);
       minuterie = null;
+      if (barre) barre.remove();
+      barre = null;
     }
     calculEnCours = false;
     if (ici()) ouvert = false;
