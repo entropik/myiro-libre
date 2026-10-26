@@ -6,9 +6,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use profilage::{
-    arguments_colprof, chercher_argyll, controler_version, lignes_commandes, lire_precision,
-    lire_version, ArgyllCms, DemandeProfil, ErreurMoteur, Etape, MoteurProfil, MoteurSimule,
-    Precision, Recette, VERSION_ARGYLL,
+    arguments_colprof, chercher_argyll, controler_version, description_argyll, lignes_commandes,
+    lire_precision, lire_version, ArgyllCms, DemandeProfil, ErreurMoteur, Etape, MoteurProfil,
+    MoteurSimule, Precision, Recette, VERSION_ARGYLL,
 };
 
 fn textes(recette: Recette, description: &str) -> Vec<String> {
@@ -54,14 +54,33 @@ fn rapide_et_approfondi_changent_seulement_la_qualite() {
     }
 }
 
+/// `-D` reçoit le nom sans accents (colprof n'écrit que de l'ASCII), en un
+/// seul argument, guillemets compris.
 #[test]
 fn une_description_accentuee_avec_guillemets_reste_un_seul_argument() {
-    let description = "Hahnemühle \"Rag\" 308";
-    let a = textes(Recette::Standard, description);
+    let a = textes(Recette::Standard, "Hahnemühle \"Rag\" 308");
     assert_eq!(a.len(), 11);
-    assert_eq!(a.iter().filter(|s| s.as_str() == description).count(), 1);
     let rang = a.iter().position(|s| s == "-D").unwrap();
-    assert_eq!(a[rang + 1], description);
+    assert_eq!(a[rang + 1], "Hahnemuhle \"Rag\" 308");
+}
+
+#[test]
+fn la_description_pour_argyll_perd_ses_accents() {
+    assert_eq!(
+        description_argyll("àâäéèêëîïôöùûüÿç ÀÂÄÉÈÊËÎÏÔÖÙÛÜŸÇ"),
+        "aaaeeeeiioouuuyc AAAEEEEIIOOUUUYC"
+    );
+    assert_eq!(
+        description_argyll("œuvre Œ æ Æ Straße"),
+        "oeuvre OE ae AE Strasse"
+    );
+    // Le reste du texte ASCII ne bouge pas, guillemets compris.
+    assert_eq!(
+        description_argyll("PRO-4100 Rag \"308\" 720 dpi"),
+        "PRO-4100 Rag \"308\" 720 dpi"
+    );
+    // Tout autre caractère non ASCII donne « ? », comme ArgyllCMS.
+    assert_eq!(description_argyll("Łódź 日本 ñ"), "??d? ?? ?");
 }
 
 #[test]

@@ -440,9 +440,10 @@ fn les_commandes_se_montrent_sans_rien_calculer() {
 
     assert_eq!(commandes.len(), 2, "{commandes:?}");
     assert!(commandes[0].starts_with("colprof") && commandes[0].contains("-qu"));
-    // La description du profil garde les accents.
+    // La description passée à colprof est sans accents (ArgyllCMS n'écrit
+    // que de l'ASCII) ; la bibliothèque garde le nom d'origine.
     assert!(
-        commandes[0].contains("Hahnemühle Photo Rag 308"),
+        commandes[0].contains("-D \"Canon PRO-4100, Hahnemuhle Photo Rag 308, 720 dpi\""),
         "{}",
         commandes[0]
     );

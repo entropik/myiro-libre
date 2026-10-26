@@ -182,10 +182,50 @@ pub fn chercher_argyll(dossier_exe: &Path) -> Option<PathBuf> {
     .find(|racine| ArgyllCms::new(racine.clone()).complet())
 }
 
+/// Description telle qu'elle part à `colprof -D` : ArgyllCMS 3.5.0 n'écrit
+/// que de l'ASCII dans la description du profil (un accent y devient « ? »).
+/// Les accents français et allemands courants sont donc retirés, œ, æ et ß
+/// écrits oe, ae et ss ; tout autre caractère non ASCII donne « ? ». La
+/// bibliothèque, elle, garde le nom d'origine.
+pub fn description_argyll(description: &str) -> String {
+    let mut ascii = String::with_capacity(description.len());
+    for c in description.chars() {
+        let remplacement = match c {
+            'à' | 'â' | 'ä' => "a",
+            'À' | 'Â' | 'Ä' => "A",
+            'é' | 'è' | 'ê' | 'ë' => "e",
+            'É' | 'È' | 'Ê' | 'Ë' => "E",
+            'î' | 'ï' => "i",
+            'Î' | 'Ï' => "I",
+            'ô' | 'ö' => "o",
+            'Ô' | 'Ö' => "O",
+            'ù' | 'û' | 'ü' => "u",
+            'Ù' | 'Û' | 'Ü' => "U",
+            'ÿ' => "y",
+            'Ÿ' => "Y",
+            'ç' => "c",
+            'Ç' => "C",
+            'œ' => "oe",
+            'Œ' => "OE",
+            'æ' => "ae",
+            'Æ' => "AE",
+            'ß' => "ss",
+            c if c.is_ascii() => {
+                ascii.push(c);
+                continue;
+            }
+            _ => "?",
+        };
+        ascii.push_str(remplacement);
+    }
+    ascii
+}
+
 /// Arguments de `colprof` : `-v` (journal), la qualité de la recette, une
 /// table perceptuelle à partir de sRGB (`-S … -cmt -dpp`), la description
-/// (`-D`), le profil produit (`-O`) et la base du `.ti3` lu. Chaque valeur
-/// reste un seul argument, quels que soient ses espaces ou guillemets.
+/// sans accents (`-D`, voir [`description_argyll`]), le profil produit
+/// (`-O`) et la base du `.ti3` lu. Chaque valeur reste un seul argument,
+/// quels que soient ses espaces ou guillemets.
 pub fn arguments_colprof(
     recette: Recette,
     description: &str,
@@ -200,7 +240,9 @@ pub fn arguments_colprof(
     };
     let mut a: Vec<OsString> = ["-v", qualite, "-S"].map(OsString::from).into();
     a.push(srgb.into());
-    a.extend(["-cmt", "-dpp", "-D", description, "-O"].map(OsString::from));
+    a.extend(["-cmt", "-dpp", "-D"].map(OsString::from));
+    a.push(description_argyll(description).into());
+    a.push("-O".into());
     a.push(sortie.into());
     a.push(base.into());
     a
