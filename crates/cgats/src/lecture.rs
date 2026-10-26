@@ -199,8 +199,8 @@ fn nombre_f64(texte: &str, quoi: &str) -> Result<f64, ErreurCgats> {
 enum EchelleRvb {
     /// Fichier `CTI3` d'ArgyllCMS : 0 à 100, établi par la description du format.
     Confirmee(f64),
-    /// Export FD-S2w : 0 à 255, observé sur des exports réels, sans document
-    /// du fabricant qui l'affirme.
+    /// Export FD-S2w ou MYIROtools : 0 à 255, observé sur des exports réels
+    /// de FD-S2w et de MYIROtools, sans document du fabricant qui l'affirme.
     Supposee(f64),
     Inconnue,
 }
@@ -209,7 +209,9 @@ impl EchelleRvb {
     fn du_fichier(premier: &Tableau) -> Self {
         if premier.identifiant.as_deref() == Some("CTI3") {
             EchelleRvb::Confirmee(100.0)
-        } else if premier.mot_cle("FILE_DESCRIPTOR") == Some("FD-S2w") {
+        } else if premier.mot_cle("FILE_DESCRIPTOR") == Some("FD-S2w")
+            || premier.mot_cle("ORIGINATOR") == Some("MYIROtools")
+        {
             EchelleRvb::Supposee(255.0)
         } else {
             EchelleRvb::Inconnue
@@ -271,6 +273,11 @@ fn emplacement(t: &Tableau, rang: usize) -> Result<(usize, Info<ConditionMesure>
         return Ok((c as usize, Info::Confirmee(c)));
     }
     let source = t.mot_cle("MEASUREMENT_SOURCE");
+    // MYIROtools écrit la condition elle-même comme source : elle est
+    // écrite en clair, donc confirmée.
+    if let Some(c) = source.and_then(condition_depuis) {
+        return Ok((c as usize, Info::Confirmee(c)));
+    }
     let deduite = match source {
         Some("A") => Some(ConditionMesure::M0),
         Some("D50") => Some(ConditionMesure::M1),

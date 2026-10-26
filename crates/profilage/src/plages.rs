@@ -24,7 +24,7 @@ pub struct PlagesProfil {
     pub condition: ConditionMesure,
     /// La condition est déduite d'une convention du fabricant (source `D50`).
     pub condition_supposee: bool,
-    /// L'échelle des RVB est déduite d'une convention de logiciel (FD-S2w).
+    /// L'échelle des RVB est déduite d'une convention de logiciel (FD-S2w, MYIROtools).
     pub rvb_supposes: bool,
     /// Longueurs d'onde des spectres, connues seulement si toutes les plages
     /// ont un spectre de même longueur.

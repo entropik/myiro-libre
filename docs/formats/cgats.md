@@ -63,9 +63,10 @@ Chaque tableau va dans un emplacement `m0`, `m1` ou `m2`, dans cet ordre de pré
 
 1. `MYIRO_LIBRE_SPECTRE` (fichier de myiro-libre) ;
 2. `MEASUREMENT_CONDITION` `M0`, `M1` ou `M2` : condition confirmée ;
-3. `MEASUREMENT_SOURCE` `A`, `D50` ou `UVCUT` : condition **supposée** M0, M1 ou M2. C'est la convention des exports CGATS du fabricant (un fichier par condition, source `A` pour M0, `D50` pour M1, `UVCUT` pour M2), observée sur des exports réels du poste ; elle correspond à la définition des conditions dans l'ISO 13655, mais aucun document du fabricant ne l'affirme.
+3. `MEASUREMENT_SOURCE` `M0`, `M1` ou `M2` : condition confirmée, écrite en clair. C'est ce qu'écrit MYIROtools dans ses exports RVB (observé sur un export réel d'un imprimeur, 26 octobre 2026) ;
+4. `MEASUREMENT_SOURCE` `A`, `D50` ou `UVCUT` : condition **supposée** M0, M1 ou M2. C'est la convention des exports CGATS du fabricant (un fichier par condition, source `A` pour M0, `D50` pour M1, `UVCUT` pour M2), observée sur des exports réels du poste ; elle correspond à la définition des conditions dans l'ISO 13655, mais aucun document du fabricant ne l'affirme.
 
-Sans aucun des trois, le fichier est **refusé** avec une phrase claire : on ne range pas des valeurs sous une condition devinée.
+Sans aucun de ces mots-clés, le fichier est **refusé** avec une phrase claire : on ne range pas des valeurs sous une condition devinée.
 
 Dans les colonnes : `SAMPLE_ID` donne l'identifiant de la plage (sinon son rang), `LAB_L`, `LAB_A`, `LAB_B` le Lab, et le spectre vient de l'une de ces familles de colonnes, chacune avec son échelle, jamais devinée :
 
@@ -83,9 +84,12 @@ Les **valeurs RVB** envoyées à l'imprimante (colonnes `RGB_R`, `RGB_G`, `RGB_B
 |---|---|---|---|
 | ArgyllCMS (`.ti3`) | première ligne `CTI3` | 0 à 100 | confirmée (description du format `.ti3`) |
 | Export FD-S2w | `FILE_DESCRIPTOR "FD-S2w"` | 0 à 255 | **supposée** : observée sur des exports réels du poste (7 octobre 2026), aucun document du fabricant ne l'affirme |
+| Export MYIROtools | `ORIGINATOR "MYIROtools"` | 0 à 255 | **supposée** : observée sur un export réel d'un imprimeur (26 octobre 2026 : RVB de 0.00 à 255.00 sur 2520 plages, colonnes XYZ et Lab), aucun document du fabricant ne l'affirme |
 | Tout autre fichier | | non établie | inconnue : les RVB restent inconnus |
 
-Une valeur RVB qui n'est pas un nombre est refusée, comme un Lab illisible. Une valeur hors de l'échelle (au-delà de 255 dans un export FD-S2w) est gardée telle quelle à la lecture : c'est le calcul du profil qui la refuse.
+L'export MYIROtools archivé sur le poste (une couleur d'accompagnement) ne tranche rien sur les RVB : il porte `ORIGINATOR` au nom du fabricant, `FILE_DESCRIPTOR "MYIROtools"` et des colonnes CMJN, sans colonne RVB. Il reste donc sans échelle RVB, ce qui est sans effet puisqu'il n'a pas de RVB.
+
+Une valeur RVB qui n'est pas un nombre est refusée, comme un Lab illisible. Une valeur hors de l'échelle (au-delà de 255 dans un export FD-S2w ou MYIROtools) est gardée telle quelle à la lecture : c'est le calcul du profil qui la refuse.
 
 Plusieurs tableaux doivent porter les mêmes plages, dans le même ordre, avec les mêmes valeurs RVB. Un fichier de myiro-libre d'une autre version (`MYIRO_LIBRE_FORMAT` différent) ou dont la provenance est incomplète est refusé : il ne se relit pas à moitié.
 

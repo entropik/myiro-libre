@@ -243,7 +243,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.refus.rvb_inconnus",
-        "Cette mesure ne dit pas quelles valeurs RVB ont été imprimées. Importez un export CGATS de FD-S2w qui contient les colonnes RVB.",
+        "Cette mesure ne dit pas quelles valeurs RVB ont été imprimées. Importez un export CGATS de FD-S2w ou de MYIROtools qui contient les colonnes RVB.",
     ),
     (
         "profil.refus.lab_inconnu",
@@ -259,7 +259,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.refus.aucune_condition",
-        "Aucune condition de mesure de ce fichier n’a toutes ses plages en Lab. Importez un export complet de FD-S2w.",
+        "Aucune condition de mesure de ce fichier n’a toutes ses plages en Lab. Importez un export complet de FD-S2w ou de MYIROtools.",
     ),
     (
         "profil.erreur.argyll_introuvable",
@@ -299,7 +299,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.sans_mesure",
-        "Importez d’abord un export CGATS de FD-S2w dans cette résolution.",
+        "Importez d’abord un export CGATS de FD-S2w ou de MYIROtools dans cette résolution.",
     ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "Journal d’ArgyllCMS"),
@@ -1168,7 +1168,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.refus.rvb_inconnus",
-        "This measurement does not say which RGB values were printed. Import an FD-S2w CGATS export that contains the RGB columns.",
+        "This measurement does not say which RGB values were printed. Import a CGATS export from FD-S2w or MYIROtools that contains the RGB columns.",
     ),
     (
         "profil.refus.lab_inconnu",
@@ -1184,7 +1184,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.refus.aucune_condition",
-        "No measurement condition of this file has all its patches in Lab. Import a complete FD-S2w export.",
+        "No measurement condition of this file has all its patches in Lab. Import a complete export from FD-S2w or MYIROtools.",
     ),
     (
         "profil.erreur.argyll_introuvable",
@@ -1224,7 +1224,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.sans_mesure",
-        "First import a CGATS export from FD-S2w into this resolution.",
+        "First import a CGATS export from FD-S2w or MYIROtools into this resolution.",
     ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "ArgyllCMS log"),

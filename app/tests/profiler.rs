@@ -491,6 +491,23 @@ fn les_textes_du_calcul_existent() {
     }
 }
 
+/// Les exports RVB de FD-S2w et de MYIROtools sont tous deux acceptés : les
+/// textes qui invitent à importer les nomment tous les deux.
+#[test]
+fn les_textes_d_import_nomment_fd_s2w_et_myirotools() {
+    use app::textes::{texte, Langue};
+    for langue in [Langue::Francais, Langue::Anglais] {
+        for cle in [
+            "profil.refus.rvb_inconnus",
+            "profil.refus.aucune_condition",
+            "profil.sans_mesure",
+        ] {
+            let t = texte(langue, cle);
+            assert!(t.contains("FD-S2w") && t.contains("MYIROtools"), "{t}");
+        }
+    }
+}
+
 #[test]
 fn une_autre_version_d_argyll_donne_la_version_trouvee() {
     let b = banc();

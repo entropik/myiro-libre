@@ -111,7 +111,7 @@ pub struct ProvenanceProfil {
     pub condition: ConditionMesure,
     /// La condition est déduite d'une convention du fabricant.
     pub condition_supposee: bool,
-    /// L'échelle des valeurs RVB (0 à 255 pour FD-S2w) est supposée.
+    /// L'échelle des valeurs RVB (0 à 255 pour FD-S2w et MYIROtools) est supposée.
     pub rvb_supposes: bool,
     pub recette: Recette,
     /// Version d'ArgyllCMS qui a calculé le profil.

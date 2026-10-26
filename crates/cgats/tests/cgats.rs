@@ -501,6 +501,47 @@ fn un_export_fd_s2w_donne_des_rvb_supposes_sur_255() {
     assert!((v[2] - 199.05 / 255.0).abs() < 1e-6);
 }
 
+/// En-tête fictif à la manière d'un export RVB de MYIROtools : condition
+/// écrite en clair (`MEASUREMENT_SOURCE "M1"`), colonnes XYZ et Lab, RVB de
+/// 0.00 à 255.00, numéro de série fictif.
+fn fichier_myirotools_rvb() -> String {
+    fichier_rvb(
+        "CGATS.17",
+        "ORIGINATOR\t\"MYIROtools\"\r\nDESCRIPTOR\t\"MYIROtools CGATS export file\"\r\n\
+         MEASUREMENT_SOURCE\t\"M1\"\r\nSERIAL\t\"00000000\"\r\n",
+        "SAMPLE_ID\tRGB_R\tRGB_G\tRGB_B\tXYZ_X\tXYZ_Y\tXYZ_Z\tLAB_L\tLAB_A\tLAB_B",
+        &[
+            "1\t255.00\t255.00\t255.00\t87.00\t90.00\t74.00\t95.00\t0.00\t2.00",
+            "2\t0.00\t127.50\t51.00\t10.00\t15.00\t8.00\t45.00\t-40.00\t20.00",
+        ],
+    )
+}
+
+#[test]
+fn un_export_myirotools_donne_des_rvb_supposes_sur_255() {
+    let m = lire(&fichier_myirotools_rvb()).unwrap();
+    assert_eq!(m.plages.len(), 2);
+    assert_eq!(m.plages[0].rvb, Info::Supposee([1.0, 1.0, 1.0]));
+    assert_eq!(m.plages[1].rvb, Info::Supposee([0.0, 0.5, 0.2]));
+}
+
+#[test]
+fn un_export_myirotools_ecrit_sa_condition_en_clair() {
+    let m = lire(&fichier_myirotools_rvb()).unwrap();
+    assert_eq!(m.conditions[1], Info::Confirmee(ConditionMesure::M1));
+    assert_eq!(m.conditions[0], Info::Inconnue);
+    assert_eq!(m.conditions[2], Info::Inconnue);
+    assert!(m.plages.iter().all(|p| p.lab[1] != Info::Inconnue));
+    for (source, rang, condition) in [
+        ("M0", 0, ConditionMesure::M0),
+        ("M2", 2, ConditionMesure::M2),
+    ] {
+        let texte = fichier_myirotools_rvb().replace("\"M1\"", &format!("\"{source}\""));
+        let m = lire(&texte).unwrap();
+        assert_eq!(m.conditions[rang], Info::Confirmee(condition));
+    }
+}
+
 #[test]
 fn un_ti3_d_argyll_donne_des_rvb_confirmes_sur_100() {
     let texte = fichier_rvb(

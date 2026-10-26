@@ -80,8 +80,9 @@ pub struct PlageImportee {
     /// Valeurs RVB envoyées à l'imprimante (`RGB_R`, `RGB_G`, `RGB_B`),
     /// ramenées de 0 à 1 (1 = 100 % de la composante). L'échelle n'est jamais
     /// devinée : `Confirmee` pour un fichier `CTI3` d'ArgyllCMS (0 à 100),
-    /// `Supposee` pour un export FD-S2w (0 à 255, observé sur des exports
-    /// réels), `Inconnue` sans colonnes RVB ou pour un autre logiciel. Une
+    /// `Supposee` pour un export FD-S2w ou MYIROtools (0 à 255, observé sur
+    /// des exports réels de FD-S2w et de MYIROtools), `Inconnue` sans
+    /// colonnes RVB ou pour un autre logiciel. Une
     /// valeur hors de l'échelle est gardée telle quelle.
     pub rvb: Info<[f32; 3]>,
 }
