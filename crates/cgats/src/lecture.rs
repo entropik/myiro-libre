@@ -263,6 +263,16 @@ fn emplacement(t: &Tableau, rang: usize) -> Result<(usize, Info<ConditionMesure>
         })?),
         None => None,
     };
+    let source = t.mot_cle("MEASUREMENT_SOURCE");
+    // Une condition écrite en clair (MYIROtools, par exemple) comme source.
+    let source_en_clair = source.and_then(condition_depuis);
+    if let (Some(c), Some(s)) = (ecrite, source_en_clair) {
+        if c != s {
+            return erreur(format!(
+                "tableau {rang} : MEASUREMENT_CONDITION « {c:?} » et MEASUREMENT_SOURCE « {s:?} » se contredisent ; rien n'est deviné"
+            ));
+        }
+    }
     if let Some(e) = t.mot_cle(&format!("{PREFIXE}SPECTRE")) {
         let n = EMPLACEMENTS.iter().position(|x| *x == e).ok_or_else(|| {
             ErreurCgats(format!("tableau {rang} : {PREFIXE}SPECTRE « {e} » inconnu"))
@@ -272,10 +282,8 @@ fn emplacement(t: &Tableau, rang: usize) -> Result<(usize, Info<ConditionMesure>
     if let Some(c) = ecrite {
         return Ok((c as usize, Info::Confirmee(c)));
     }
-    let source = t.mot_cle("MEASUREMENT_SOURCE");
-    // MYIROtools écrit la condition elle-même comme source : elle est
-    // écrite en clair, donc confirmée.
-    if let Some(c) = source.and_then(condition_depuis) {
+    // Condition écrite en clair (MYIROtools, par exemple) : confirmée.
+    if let Some(c) = source_en_clair {
         return Ok((c as usize, Info::Confirmee(c)));
     }
     let deduite = match source {
@@ -287,7 +295,7 @@ fn emplacement(t: &Tableau, rang: usize) -> Result<(usize, Info<ConditionMesure>
     match deduite {
         Some(c) => Ok((c as usize, Info::Supposee(c))),
         None => erreur(format!(
-            "tableau {rang} : condition de mesure introuvable (ni MEASUREMENT_CONDITION, ni MEASUREMENT_SOURCE A, D50 ou UVCUT) ; rien n'est deviné"
+            "tableau {rang} : condition de mesure introuvable (ni MEASUREMENT_CONDITION, ni MEASUREMENT_SOURCE M0, M1, M2, A, D50 ou UVCUT) ; rien n'est deviné"
         )),
     }
 }

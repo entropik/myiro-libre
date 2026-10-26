@@ -341,6 +341,13 @@ fn sans_condition_de_mesure_le_fichier_est_refuse_plutot_que_devine() {
         erreur.0.contains("condition de mesure introuvable"),
         "{erreur}"
     );
+    // Le message dit aussi les conditions écrites en clair qu'il accepte.
+    assert!(
+        erreur
+            .0
+            .contains("MEASUREMENT_SOURCE M0, M1, M2, A, D50 ou UVCUT"),
+        "{erreur}"
+    );
 }
 
 #[test]
@@ -540,6 +547,30 @@ fn un_export_myirotools_ecrit_sa_condition_en_clair() {
         let m = lire(&texte).unwrap();
         assert_eq!(m.conditions[rang], Info::Confirmee(condition));
     }
+}
+
+/// Deux conditions écrites qui se contredisent : refusé plutôt que deviné.
+#[test]
+fn une_condition_et_une_source_contradictoires_sont_refusees() {
+    let texte = fichier_myirotools_rvb().replace(
+        "MEASUREMENT_SOURCE\t\"M1\"",
+        "MEASUREMENT_CONDITION\t\"M2\"\r\nMEASUREMENT_SOURCE\t\"M1\"",
+    );
+    let e = lire(&texte).unwrap_err();
+    assert!(
+        e.0.contains("MEASUREMENT_CONDITION « M2 »") && e.0.contains("MEASUREMENT_SOURCE « M1 »"),
+        "{e}"
+    );
+}
+
+#[test]
+fn une_condition_et_une_source_concordantes_sont_acceptees() {
+    let texte = fichier_myirotools_rvb().replace(
+        "MEASUREMENT_SOURCE\t\"M1\"",
+        "MEASUREMENT_CONDITION\t\"M1\"\r\nMEASUREMENT_SOURCE\t\"M1\"",
+    );
+    let m = lire(&texte).unwrap();
+    assert_eq!(m.conditions[1], Info::Confirmee(ConditionMesure::M1));
 }
 
 #[test]

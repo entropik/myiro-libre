@@ -66,6 +66,8 @@ Chaque tableau va dans un emplacement `m0`, `m1` ou `m2`, dans cet ordre de pré
 3. `MEASUREMENT_SOURCE` `M0`, `M1` ou `M2` : condition confirmée, écrite en clair. C'est ce qu'écrit MYIROtools dans ses exports RVB (observé sur un export réel d'un imprimeur, 26 octobre 2026) ;
 4. `MEASUREMENT_SOURCE` `A`, `D50` ou `UVCUT` : condition **supposée** M0, M1 ou M2. C'est la convention des exports CGATS du fabricant (un fichier par condition, source `A` pour M0, `D50` pour M1, `UVCUT` pour M2), observée sur des exports réels du poste ; elle correspond à la définition des conditions dans l'ISO 13655, mais aucun document du fabricant ne l'affirme.
 
+Un tableau qui porte `MEASUREMENT_CONDITION` et une `MEASUREMENT_SOURCE` `M0`, `M1` ou `M2` différente est **refusé**, avec un message qui cite les deux valeurs : deux conditions écrites qui se contredisent, on n'en choisit pas une. Si elles concordent, le fichier est accepté.
+
 Sans aucun de ces mots-clés, le fichier est **refusé** avec une phrase claire : on ne range pas des valeurs sous une condition devinée.
 
 Dans les colonnes : `SAMPLE_ID` donne l'identifiant de la plage (sinon son rang), `LAB_L`, `LAB_A`, `LAB_B` le Lab, et le spectre vient de l'une de ces familles de colonnes, chacune avec son échelle, jamais devinée :
