@@ -22,13 +22,13 @@ Le plan ajoute aussi le **contrôle de cohérence des mesures** (#1, rattaché �
 
 ## Feuille de route
 
-Ce plan est le **plan 4** de la feuille de route du 23 octobre 2026. Le plan 3 calcule un profil à partir d'une mesure importée. Le plan 5 mesure une feuille au FD-9 (#34) : le FD-9 scanne d'abord la feuille, lit le QR code de la mire RGB-2520 et place ses points de mesure d'après la géométrie que ce plan établit. Le plan 6 assemble le parcours en 4 étapes (#41). Le plan 7 gère le séchage, avec la file « en attente de mesure ».
+Ce plan est le **plan 4** de la feuille de route du 23 octobre 2026. Depuis le 26 octobre, il s'exécute après le plan 5 (comparer des profils, #71), et les plans suivants sont décalés d'un numéro. Le plan 3 calcule un profil à partir d'une mesure importée. Le plan 6 mesure une feuille au FD-9 (#34) : le FD-9 scanne d'abord la feuille, lit le QR code de la mire RGB-2520 et place ses points de mesure d'après la géométrie que ce plan établit. Le plan 7 assemble le parcours en 4 étapes (#41). Le plan 8 gère le séchage, avec la file « en attente de mesure ».
 
 Révision du 26 octobre 2026, demandée par le mainteneur : la première version de ce plan dessinait aussi les mires FD-9 (480, 960 ou 1 920 plages de 10 mm, sur 1 à 4 pages). Elle ignorait la capacité d'une page donnée par le manuel du FD-9 (2 928 plages en A3). Les mires FD-9 dessinées sont retirées : le FD-9 utilise la mire RGB-2520, telle quelle, sur une seule page.
 
 Reportés, avec l'accord du mainteneur (23 octobre 2026) :
-- la **fiche d'impression** (réglages du pilote) va au plan 6, avec le parcours ;
-- l'**import des mires existantes** (CGATS, XML de FD-S2w) va au plan 8, avec la reprise de l'existant ;
+- la **fiche d'impression** (réglages du pilote) va au plan 7, avec le parcours ;
+- l'**import des mires existantes** (CGATS, XML de FD-S2w) va au plan 9, avec la reprise de l'existant ;
 - les **mires CMJN** vont avec le profilage CMJN. Le modèle de ce plan les prévoit sans les produire ;
 - le PDF ne vient pas maintenant : le ticket donne la priorité au TIFF.
 
@@ -551,7 +551,7 @@ git commit -m "Mires : pages TIFF RVB sans profil, texte lisible et QR code"
   );
   CREATE INDEX tirages_par_condition ON tirages (condition);
   ```
-  L'état `prepare` est le seul pour l'instant. Le plan 7 ajoutera « en attente de mesure » par une nouvelle organisation.
+  L'état `prepare` est le seul pour l'instant. Le plan 8 ajoutera « en attente de mesure » par une nouvelle organisation.
 
 - [ ] **Step 1 : Tests en échec**
 
@@ -858,7 +858,7 @@ Ajouter les termes suivants, sans collision avec « Feuille » ni « Tirage » :
 4. À la règle : côté d'une plage FD-9 (6 mm environ) et MYIRO-1 (8 mm), longueur d'une bande MYIRO-1 avec ses blancs (257 mm au plus), marges de la mire FD-9 imprimée (au moins 23 mm en tête, 33 mm en pied, 4 mm sur les côtés).
 5. Lire les QR codes avec un téléphone : `FD-9:011M:RGB-2520 - 1P MY9*1+` pour la mire FD-9, un texte qui commence par `MYIRO-LIBRE:T` pour la page MYIRO-1.
 6. Vérifier que le texte lisible de la page MYIRO-1 est net et que les accents sont justes.
-7. Passer une bande au MYIRO-1 dans un logiciel officiel, si le mainteneur le souhaite. La mesure au FD-9 par l'application vient au plan 5 ; d'ici là, la mire FD-9 imprimée se mesure comme aujourd'hui, et son export s'importe (plan 3).
+7. Passer une bande au MYIRO-1 dans un logiciel officiel, si le mainteneur le souhaite. La mesure au FD-9 par l'application vient au plan 6 ; d'ici là, la mire FD-9 imprimée se mesure comme aujourd'hui, et son export s'importe (plan 3).
 8. Contrôle de cohérence : relancer le calcul sur la mesure du 26 octobre (2 520 plages, HFA Mat 200g) ; aucune alerte attendue, et la provenance dit « Mesures contrôlées : cohérentes ». Si le mainteneur a encore les mesures faussées de 2021, les importer : le calcul doit être refusé, avec les plages en cause.
 
 Consigner les résultats dans le ticket #33, sans identifiant matériel.
@@ -871,11 +871,11 @@ git commit -am "Documentation : mire FD-9 RGB-2520, mires MYIRO-1 et essai d'imp
 
 - [ ] **Step 5 : PR vers `dev`**
 
-PR `ticket/33-mires-rvb` → `dev`, avec les « Choix de l'assistant » et les résultats de l'essai. La PR ferme #1 (« Closes #1 ») si ses quatre critères sont couverts. Le ticket #33 reste ouvert : il manque encore l'import des mires existantes, la fiche d'impression, le PDF, le CMJN et la lecture des pages au FD-9 (plan 5).
+PR `ticket/33-mires-rvb` → `dev`, avec les « Choix de l'assistant » et les résultats de l'essai. La PR ferme #1 (« Closes #1 ») si ses quatre critères sont couverts. Le ticket #33 reste ouvert : il manque encore l'import des mires existantes, la fiche d'impression, le PDF, le CMJN et la lecture des pages au FD-9 (plan 6).
 
 ## Questions ouvertes (ne bloquent pas le plan)
 
-- **Mesure au FD-9 par l'application (plan 5)** : le FD-9 commence toujours par scanner la feuille (« prénumérisation », manuel p. 38 à 42). Il cherche le QR code dès ce scan : le SDK contient un détecteur de QR, `PatchPosExtractor::DetectQRCode`. Avec une mire définie, il compare les plages trouvées à la définition et rend les points de mesure (`FD9_MatchingChart`, sortie `outMeasurePoint`). Sans définition, il reconnaît seul les plages (`FD9_StartPatchRecognition`, `FD9_GetPatchRecognitionResult2`). Le manuel conseille une mire définie quand la reconnaissance libre se trompe. Le plan 5 passera donc la géométrie RGB-2520 de ce plan au SDK. La forme exacte des structures est **à établir** par des fiches d'ABI, palier par palier.
+- **Mesure au FD-9 par l'application (plan 6)** : le FD-9 commence toujours par scanner la feuille (« prénumérisation », manuel p. 38 à 42). Il cherche le QR code dès ce scan : le SDK contient un détecteur de QR, `PatchPosExtractor::DetectQRCode`. Avec une mire définie, il compare les plages trouvées à la définition et rend les points de mesure (`FD9_MatchingChart`, sortie `outMeasurePoint`). Sans définition, il reconnaît seul les plages (`FD9_StartPatchRecognition`, `FD9_GetPatchRecognitionResult2`). Le manuel conseille une mire définie quand la reconnaissance libre se trompe. Le plan 6 passera donc la géométrie RGB-2520 de ce plan au SDK. La forme exacte des structures est **à établir** par des fiches d'ABI, palier par palier.
 - **Définition de mire de FD-S2w** : FD-S2w range ses mires définies en XML (`Identifier="ChartDefinition"` : feuilles, zones, nombre de rangées et de colonnes, taille et pas des plages, couleur de chaque plage). Écrire la définition de RGB-2520 dans ce format permettrait de la mesurer dans FD-S2w avec sélection automatique par le QR code, dès maintenant. L'unité des dimensions (centièmes de millimètre ?) est **à vérifier** sur une définition connue avant d'en écrire une.
-- **Champs du QR code** `011M` et `*1+` : sens à établir (plan 5).
+- **Champs du QR code** `011M` et `*1+` : sens à établir (plan 6).
 - **Mire imprimée centrée sur A3** : décalage d'environ 8,8 mm par rapport au fichier, toléré par le manuel (21 mm au plus) ; à confirmer à l'essai.
