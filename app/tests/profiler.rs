@@ -8,7 +8,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use app::colonne::{emplacement, BibliothequeOuverte};
 use app::profiler::{
-    journal_court, ErreurProfil, HistoriqueDurees, Moteur, ProvenanceProfil, SuiviCalcul,
+    arrondir_duree, journal_court, provenance_depuis_parametres, ErreurProfil, HistoriqueDurees,
+    Moteur, ProvenanceProfil, SuiviCalcul,
 };
 use bibliotheque::{nom_profil_propose, EtatVerification, IdCondition, IdMesure};
 use pont_protocole::ConditionMesure;
@@ -788,25 +789,33 @@ fn argyll_introuvable_demande_de_relancer() {
     assert!(texte(Langue::Anglais, "profil.erreur.argyll_introuvable").contains("restart"));
 }
 
-/// Seule la durée de Standard a été mesurée (essai d'écran du 26 octobre
-/// 2026 : un peu moins de 3 minutes pour 2 520 plages) ; Rapide et
-/// Approfondi ne promettent aucune durée.
+/// Seules les durées mesurées sont données (poste de l'imprimeur, 26 octobre
+/// 2026, 2 520 plages) : Rapide 58 s, Standard 3 min 03 s. Approfondi ne
+/// promet aucune durée.
 #[test]
 fn seule_la_duree_mesuree_est_donnee() {
     use app::textes::{texte, Langue};
-    assert!(texte(Langue::Francais, "profil.recette.standard")
-        .contains("environ 3\u{a0}min pour 2\u{202f}520 plages"));
-    assert!(
-        texte(Langue::Anglais, "profil.recette.standard").contains("about 3 min for 2,520 patches")
-    );
-    for recette in ["rapide", "approfondi"] {
+    for (recette, fr, en) in [
+        (
+            "rapide",
+            "environ 1\u{a0}min pour 2\u{202f}520 plages",
+            "about 1 min for 2,520 patches",
+        ),
+        (
+            "standard",
+            "environ 3\u{a0}min pour 2\u{202f}520 plages",
+            "about 3 min for 2,520 patches",
+        ),
+    ] {
         let cle = format!("profil.recette.{recette}");
-        let fr = texte(Langue::Francais, &cle);
-        let en = texte(Langue::Anglais, &cle);
-        assert!(fr.contains("durée à mesurer"), "{fr}");
-        assert!(en.contains("duration to be measured"), "{en}");
-        assert!(!fr.contains("min") && !en.contains("min"), "{fr} / {en}");
+        assert!(texte(Langue::Francais, &cle).contains(fr), "{cle}");
+        assert!(texte(Langue::Anglais, &cle).contains(en), "{cle}");
     }
+    let fr = texte(Langue::Francais, "profil.recette.approfondi");
+    let en = texte(Langue::Anglais, "profil.recette.approfondi");
+    assert!(fr.contains("durée à mesurer"), "{fr}");
+    assert!(en.contains("duration to be measured"), "{en}");
+    assert!(!fr.contains("min") && !en.contains("min"), "{fr} / {en}");
 }
 
 #[test]
@@ -861,8 +870,55 @@ fn la_provenance_d_un_profil_calcule_est_donnee_a_la_page() {
             version: "3.5.0".to_string(),
             precision_moyenne: 0.5,
             precision_max: 2.0,
+            // La durée mesurée du calcul, la même que celle retenue pour
+            // estimer le suivant.
+            duree_s: Some(resultat.duree_s),
         })
     );
+    // Durée rangée au dixième de seconde : elle se relit à l'identique.
+    assert!(resultat.duree_s >= 0.0 && resultat.duree_s.is_finite());
+    assert_eq!(
+        resultat.duree_s,
+        (resultat.duree_s * 10.0).round() / 10.0,
+        "durée non arrondie au dixième"
+    );
+    assert_eq!(parametres["duree_s"].as_f64(), Some(resultat.duree_s));
+}
+
+/// La durée est arrondie au dixième de seconde avant d'être rangée.
+#[test]
+fn la_duree_est_arrondie_au_dixieme() {
+    assert_eq!(arrondir_duree(182.96), 183.0);
+    assert_eq!(arrondir_duree(58.04), 58.0);
+    assert_eq!(arrondir_duree(0.0004), 0.0);
+    assert_eq!(arrondir_duree(3.25), 3.3);
+}
+
+/// Un profil calculé avant que la durée soit gardée n'en a pas : rien
+/// n'est inventé, le reste de sa provenance se lit comme avant.
+#[test]
+fn un_profil_calcule_sans_duree_gardee_n_en_montre_pas() {
+    let ancien = r#"{"origine":"calcul","moteur":"ArgyllCMS","version":"3.5.0","recette":"standard","condition":"M1","condition_supposee":false,"rvb_supposes":true,"mesure":3,"fichier":"mesure.txt","commandes":["colprof"],"precision":{"moyenne_de00":0.22,"max_de00":3.53},"ti3":"CTI3","journal":"j"}"#;
+    let p = provenance_depuis_parametres(ancien).expect("provenance lue");
+    assert_eq!(p.duree_s, None);
+    assert_eq!(p.recette, Recette::Standard);
+    let nouveau = ancien.replace(r#""journal":"j""#, r#""journal":"j","duree_s":183.4"#);
+    assert_eq!(
+        provenance_depuis_parametres(&nouveau).unwrap().duree_s,
+        Some(183.4)
+    );
+    // Un profil rangé tel quel n'a pas de provenance de calcul.
+    assert_eq!(
+        provenance_depuis_parametres(r#"{"origine":"profil existant"}"#),
+        None
+    );
+}
+
+#[test]
+fn la_duree_du_calcul_se_dit_dans_les_deux_langues() {
+    use app::textes::{texte, Langue};
+    assert_eq!(texte(Langue::Francais, "profil.duree"), "Durée du calcul");
+    assert_eq!(texte(Langue::Anglais, "profil.duree"), "Calculation time");
 }
 
 #[test]
