@@ -71,8 +71,8 @@ fn la_description_pour_argyll_perd_ses_accents() {
         "aaaeeeeiioouuuyc AAAEEEEIIOOUUUYC"
     );
     assert_eq!(
-        description_argyll("œuvre Œ æ Æ Straße"),
-        "oeuvre OE ae AE Strasse"
+        description_argyll("œuvre Œ æ Æ Straße STRAẞE"),
+        "oeuvre OE ae AE Strasse STRASSE"
     );
     // Le reste du texte ASCII ne bouge pas, guillemets compris.
     assert_eq!(

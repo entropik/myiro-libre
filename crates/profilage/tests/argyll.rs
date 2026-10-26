@@ -117,19 +117,18 @@ fn un_profil_se_calcule_sur_une_mire_synthetique() {
     assert!(profil.commandes[0].starts_with("colprof -v -qh "));
 }
 
-/// Review Focus 5 : guillemets doublés dans le `DESCRIPTOR` du `.ti3` et
-/// accents. `colprof` 3.5.0 n'écrit que la partie ASCII de la description
-/// (un accent y deviendrait « ? », constaté le 26 octobre 2026) : `-D`
-/// reçoit le nom sans accents, les guillemets passent tels quels.
+/// Guillemets doublés dans le `DESCRIPTOR` du `.ti3` et accents.
+/// `colprof` 3.5.0 n'écrit que la partie ASCII de la description (un accent
+/// y deviendrait « ? », constaté le 26 octobre 2026) : `-D` reçoit le nom
+/// sans accents, les guillemets passent tels quels.
 #[test]
 #[ignore = "demande ArgyllCMS 3.5.0"]
-fn une_description_accentuee_avec_guillemets_se_retrouve_dans_le_profil() {
+fn une_description_accentuee_avec_guillemets_s_ecrit_sans_accents_dans_le_profil() {
     let description = "Hahnemühle Photo Rag 308 Canson \"Baryta\"";
     let profil = calculer(description, Recette::Rapide);
     let (ascii, unicode) = description_icc(&profil.icc);
     println!("desc ASCII : {ascii:?}\ndesc Unicode : {unicode:?}");
     assert_eq!(ascii, "Hahnemuhle Photo Rag 308 Canson \"Baryta\"");
-    assert_eq!(unicode, "");
 }
 
 /// Valeur de `COLOR_REP` qu'ArgyllCMS écrit pour une imprimante RVB

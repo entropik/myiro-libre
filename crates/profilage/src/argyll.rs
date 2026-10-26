@@ -184,8 +184,8 @@ pub fn chercher_argyll(dossier_exe: &Path) -> Option<PathBuf> {
 
 /// Description telle qu'elle part à `colprof -D` : ArgyllCMS 3.5.0 n'écrit
 /// que de l'ASCII dans la description du profil (un accent y devient « ? »).
-/// Les accents français et allemands courants sont donc retirés, œ, æ et ß
-/// écrits oe, ae et ss ; tout autre caractère non ASCII donne « ? ». La
+/// Les accents français et allemands courants sont donc retirés, œ, æ, ß et ẞ
+/// écrits oe, ae, ss et SS ; tout autre caractère non ASCII donne « ? ». La
 /// bibliothèque, elle, garde le nom d'origine.
 pub fn description_argyll(description: &str) -> String {
     let mut ascii = String::with_capacity(description.len());
@@ -210,6 +210,7 @@ pub fn description_argyll(description: &str) -> String {
             'æ' => "ae",
             'Æ' => "AE",
             'ß' => "ss",
+            'ẞ' => "SS",
             c if c.is_ascii() => {
                 ascii.push(c);
                 continue;
