@@ -1008,13 +1008,19 @@ fn la_pastille_n_est_en_mesure_que_pendant_une_mesure() {
 }
 
 /// Un état de vérification inconnu de la page ne casse pas la vue : elle le
-/// montre comme « Profil non vérifié ».
+/// montre comme « Profil à vérifier ».
 #[test]
 fn un_etat_de_verification_inconnu_est_montre_non_verifie() {
     let script = lire("interface/reglage.js");
     assert!(
         script.contains("VERDICTS[actif.etat] || VERDICTS.non_verifie"),
         "repli absent"
+    );
+    // Le mot du verdict et l'état de l'historique viennent du module `parc`,
+    // qui sait si le profil est calculé ou importé.
+    assert!(script.contains("const mot = textes[d.verdict] ? d.verdict : repli;"));
+    assert!(
+        script.contains("const etat = textes[p.libelle] ? p.libelle : \"parc.etat.non_verifie\";")
     );
 }
 

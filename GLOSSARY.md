@@ -220,7 +220,7 @@ Qualité demandée au calcul d'un profil : rapide (pour un essai), standard (par
 _Éviter_ : preset, mode, qualité seule
 
 **Précision du calcul** :
-Écart ΔE00 moyen et maximal entre les mesures qui ont servi au calcul et ce que le profil prédit pour elles. Elle dit si le calcul a bien suivi les mesures, pas si le profil est bon : un profil calculé reste « non vérifié » jusqu'à la vérification de profil.
+Écart ΔE00 moyen et maximal entre les mesures qui ont servi au calcul et ce que le profil prédit pour elles. Elle dit si le calcul a bien suivi les mesures, pas si le profil est bon : un profil calculé reste « à vérifier » (« Profil calculé, à vérifier ») jusqu'à la vérification de profil.
 _Éviter_ : qualité du profil, vérification
 
 ### Densitométrie et contrôle

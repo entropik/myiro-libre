@@ -1,5 +1,5 @@
 //! Calcul d'un profil RVB à partir d'une mesure importée (ticket #40), rangé
-//! dans la résolution comme profil actuel, « non vérifié ».
+//! dans la résolution comme profil actuel, « à vérifier ».
 //!
 //! Les méthodes de [`BibliothequeOuverte`] se testent sans Tauri, avec le
 //! moteur simulé de la crate `profilage`. Le calcul se fait hors du verrou de
@@ -418,7 +418,7 @@ impl BibliothequeOuverte {
     }
 
     /// Calcule un profil RVB à partir d'une mesure importée de la résolution
-    /// et le range : il devient le profil actuel, « non vérifié », sous le
+    /// et le range : il devient le profil actuel, « à vérifier », sous le
     /// nom proposé. La commande, la version du moteur, le journal et la
     /// précision sont conservés avec lui. En cas d'erreur, rien n'est rangé
     /// et le profil actuel reste le même. L'avancement (étapes, lignes et

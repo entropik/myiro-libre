@@ -122,6 +122,13 @@ fn un_profil_calcule_devient_actif_et_non_verifie() {
     assert_eq!(actif.id, resultat.profil);
     assert_eq!(actif.etat, EtatVerification::NonVerifie);
     assert_eq!(detail.origine, Some("calcul"));
+    // Verdict et historique : « Profil calculé, à vérifier ».
+    assert_eq!(detail.verdict, "parc.verdict.calcule_a_verifier");
+    assert_eq!(detail.historique[0].origine, "calcul");
+    assert_eq!(
+        detail.historique[0].libelle,
+        "parc.verdict.calcule_a_verifier"
+    );
     assert_eq!(
         (resultat.precision_moyenne, resultat.precision_max),
         (0.5, 2.0)

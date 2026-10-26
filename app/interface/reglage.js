@@ -61,8 +61,10 @@ window.Reglage = (() => {
     titre.textContent = `${d.papier} · ${d.resolution}`;
     titre.title = `${d.imprimante} · ${titre.textContent}`;
     const actif = d.actif;
-    // Un état que la page ne connaît pas encore est montré comme « non vérifié », sans rien casser.
-    const [classe, mot] = actif ? VERDICTS[actif.etat] || VERDICTS.non_verifie : ["aucun", "parc.verdict.aucun"];
+    // Un état que la page ne connaît pas encore est montré comme « à vérifier », sans rien casser.
+    // Le mot vient du module `parc` : un profil à vérifier dit s'il est calculé ou importé.
+    const [classe, repli] = actif ? VERDICTS[actif.etat] || VERDICTS.non_verifie : ["aucun", "parc.verdict.aucun"];
+    const mot = textes[d.verdict] ? d.verdict : repli;
     vue.querySelector("[data-reglage-verdict]").className = "carte carte--verdict verdict--" + classe;
     vue.querySelector("[data-verdict-trace]").setAttribute("d", TRACES[classe]);
     vue.querySelector("[data-verdict-mot]").textContent = t(mot);
@@ -82,7 +84,7 @@ window.Reglage = (() => {
       const ligne = el("div", "cle-valeur mute");
       const quand = el("span", "", `${date(p.horodatage)} · ${t(p.actif ? "parc.historique.actuel" : "parc.historique.remplace")}`);
       quand.title = p.nom;
-      const etat = textes["parc.etat." + p.etat] ? "parc.etat." + p.etat : "parc.etat.non_verifie";
+      const etat = textes[p.libelle] ? p.libelle : "parc.etat.non_verifie";
       ligne.append(quand, el("span", "", t(etat)));
       return ligne;
     }));

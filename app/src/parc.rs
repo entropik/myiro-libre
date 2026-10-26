@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bibliotheque::{
-    nom_profil_propose, ConditionImpression, IdCondition, IdImprimante, IdPapier, IdProfil,
-    Imprimante, NouveauProfil, Parc, ResumeImportee, ResumeMesure, ResumeProfil,
+    nom_profil_propose, Bibliotheque, ConditionImpression, ErreurBibliotheque, EtatVerification,
+    IdCondition, IdImprimante, IdPapier, IdProfil, Imprimante, NouveauProfil, Parc, ResumeImportee,
+    ResumeMesure, ResumeProfil,
 };
 use serde::Serialize;
 use tauri_plugin_dialog::DialogExt;
@@ -28,6 +29,58 @@ pub const TAILLE_MAX_PROFIL: u64 = 64 * 1024 * 1024;
 /// Paramètres conservés avec un profil rangé tel quel, sans calcul.
 const ORIGINE_PROFIL_EXISTANT: &str = r#"{"origine":"profil existant"}"#;
 
+/// D'où vient un profil : `profil_existant` (rangé tel quel) ou `calcul`.
+fn origine_profil(b: &Bibliotheque, profil: IdProfil) -> Result<&'static str, ErreurBibliotheque> {
+    Ok(if b.parametres_profil(profil)? == ORIGINE_PROFIL_EXISTANT {
+        "profil_existant"
+    } else {
+        "calcul"
+    })
+}
+
+/// Clé du grand verdict d'une résolution. Un profil à vérifier dit d'où il
+/// vient : « Profil calculé, à vérifier » ou « Profil importé, à
+/// vérifier ». Seul le texte dépend de l'origine : l'état enregistré reste
+/// `non_verifie`.
+pub fn cle_verdict(etat: EtatVerification, origine: &str) -> &'static str {
+    match etat {
+        EtatVerification::NonVerifie if origine == "calcul" => "parc.verdict.calcule_a_verifier",
+        EtatVerification::NonVerifie => "parc.verdict.importe_a_verifier",
+        EtatVerification::Accepte => "parc.verdict.verifie",
+        EtatVerification::HorsTolerance => "parc.verdict.hors",
+        EtatVerification::Incomplet => "parc.verdict.incomplet",
+    }
+}
+
+/// Clé de l'état d'un profil dans l'historique : le libellé du verdict tant
+/// qu'il reste à vérifier, sinon son état court.
+pub fn cle_etat(etat: EtatVerification, origine: &str) -> &'static str {
+    match etat {
+        EtatVerification::NonVerifie => cle_verdict(etat, origine),
+        EtatVerification::Accepte => "parc.etat.accepte",
+        EtatVerification::HorsTolerance => "parc.etat.hors_tolerance",
+        EtatVerification::Incomplet => "parc.etat.incomplet",
+    }
+}
+
+/// Un profil de l'historique, avec son origine et la clé de son libellé.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ProfilHistorique {
+    #[serde(flatten)]
+    pub profil: ResumeProfil,
+    /// `profil_existant` ou `calcul`.
+    pub origine: &'static str,
+    /// Clé du texte de son état ([`cle_etat`]).
+    pub libelle: &'static str,
+}
+
+impl std::ops::Deref for ProfilHistorique {
+    type Target = ResumeProfil;
+    fn deref(&self) -> &ResumeProfil {
+        &self.profil
+    }
+}
+
 /// Ce que le centre et la droite montrent d'une résolution d'impression.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct DetailReglage {
@@ -38,7 +91,9 @@ pub struct DetailReglage {
     /// Le profil actif, s'il y en a un.
     pub actif: Option<ResumeProfil>,
     /// Tous les profils, le plus récent d'abord, actif compris.
-    pub historique: Vec<ResumeProfil>,
+    pub historique: Vec<ProfilHistorique>,
+    /// Clé du grand verdict ([`cle_verdict`]) ; « Aucun profil » sans profil.
+    pub verdict: &'static str,
     /// Le profil actif a plus d'un an.
     pub ancien: bool,
     /// D'où vient le profil actif : `profil_existant` (rangé tel quel) ou
@@ -168,12 +223,25 @@ impl BibliothequeOuverte {
             let (mesures, importees) =
                 branche.map_or_else(Default::default, |br| (br.mesures, br.importees));
             let origine = match &r.profil {
-                Some(p) if b.parametres_profil(p.id)? == ORIGINE_PROFIL_EXISTANT => {
-                    Some("profil_existant")
-                }
-                Some(_) => Some("calcul"),
+                Some(p) => Some(origine_profil(b, p.id)?),
                 None => None,
             };
+            let verdict = match (&r.profil, origine) {
+                (Some(p), Some(o)) => cle_verdict(p.etat, o),
+                _ => "parc.verdict.aucun",
+            };
+            let historique = b
+                .historique_profils(condition)?
+                .into_iter()
+                .map(|profil| {
+                    let origine = origine_profil(b, profil.id)?;
+                    Ok(ProfilHistorique {
+                        libelle: cle_etat(profil.etat, origine),
+                        origine,
+                        profil,
+                    })
+                })
+                .collect::<Result<Vec<_>, ErreurBibliotheque>>()?;
             let sources = sources_profil(b, &importees)?;
             let provenance = provenance_profil(b, r.profil.as_ref())?;
             Ok(Some(DetailReglage {
@@ -184,7 +252,8 @@ impl BibliothequeOuverte {
                 papier: p.papier.nom.clone(),
                 resolution: r.resolution.clone(),
                 actif: r.profil.clone(),
-                historique: b.historique_profils(condition)?,
+                historique,
+                verdict,
                 ancien: r.profil_ancien,
                 mesures,
                 importees,
