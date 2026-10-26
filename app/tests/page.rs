@@ -190,13 +190,21 @@ fn aucune_couleur_hors_des_jetons() {
 }
 
 /// Ni ombre, ni dégradé ; des angles droits, sauf la pastille de
-/// l'instrument (un cercle).
+/// l'instrument (un cercle). Seule exception au dégradé : la lumière
+/// spectrale de la barre de calcul, signe que le calcul travaille.
 #[test]
 fn aucune_ombre_ni_degrade_ni_arrondi_hors_pastille() {
     let css = composants();
     for (selecteurs, corps) in &css {
         assert!(!corps.contains("box-shadow"), "{selecteurs}");
-        assert!(!corps.contains("gradient("), "{selecteurs}");
+        if corps.contains("gradient(") {
+            assert!(
+                selecteurs
+                    .split(',')
+                    .all(|s| s.trim().starts_with(".progression__reflet")),
+                "dégradé hors de la barre de calcul : {selecteurs}"
+            );
+        }
         if corps.contains("border-radius") {
             assert!(
                 selecteurs
@@ -816,7 +824,6 @@ fn pendant_un_calcul_une_barre_avance_par_etapes() {
         "\"progression__remplissage\"",
         "\"progression__reflet\"",
         "\"progression__detail\"",
-        "reflet.hidden = !etat.reflet;",
         "piste.dataset.etat = \"reussi\";",
         "piste.dataset.etat = \"erreur\";",
         "estimationCalcul = estimation;",
@@ -890,16 +897,19 @@ fn seul_un_changement_d_etape_est_annonce() {
     assert!(lire("../design-system/ui-kit.html").contains("lecteur-ecran"));
 }
 
-/// La barre est un composant du système graphique : jetons seulement,
-/// hauteur de 8 px (`--space-2`), largeur animée en 300 ms ease-out, reflet
-/// fait d'une bande pleine qui glisse (le système n'a pas de dégradé), état
-/// réussi et état erreur ; rien d'animé si l'utilisateur réduit les
-/// animations. Une page d'exemple la montre.
+/// La barre est un composant du système graphique (rendu « Spectre », choisi
+/// par l'imprimeur le 26 octobre 2026) : jetons seulement, 16 px de haut
+/// (`--space-4`), angles droits. Le remplissage glisse en 300 ms ease-out ;
+/// une lumière spectrale traverse toute la piste, de -40 % à 110 %, en
+/// 2,6 s ease-in-out, en boucle. Elle s'éteint en 300 ms à la fin (réussi
+/// ou erreur). Rien d'animé si l'utilisateur réduit les animations. Une page
+/// d'exemple la montre.
 #[test]
 fn la_barre_d_avancement_est_un_composant_du_systeme() {
     let css = composants();
     let piste = regle(&css, ".progression__piste").join(";");
-    assert!(piste.contains("height:var(--space-2)"), "{piste}");
+    assert!(piste.contains("height:var(--space-4)"), "{piste}");
+    assert!(!piste.contains("border-radius"), "{piste}");
     let remplissage = regle(&css, ".progression__remplissage").join(";");
     assert!(
         remplissage.contains("transition:width300msease-out"),
@@ -909,8 +919,32 @@ fn la_barre_d_avancement_est_un_composant_du_systeme() {
         remplissage.contains("background:var(--accent)"),
         "{remplissage}"
     );
-    let reflet = regle(&css, ".progression__reflet::after").join(";");
-    assert!(reflet.contains("animation:"), "{reflet}");
+    // La lumière couvre toute la piste et s'éteint en 300 ms.
+    let couche = regle(&css, ".progression__reflet").join(";");
+    for attendu in [
+        "inset:0",
+        "pointer-events:none",
+        "overflow:hidden",
+        "transition:opacity300msease-out",
+    ] {
+        assert!(couche.contains(attendu), "{attendu} : {couche}");
+    }
+    let lumiere = regle(&css, ".progression__reflet::after").join(";");
+    for attendu in [
+        "width:40%",
+        "left:-40%",
+        "opacity:var(--lumiere-force)",
+        "mix-blend-mode:var(--lumiere-melange)",
+        "linear-gradient(90deg,transparent,var(--spectre-1)15%,var(--spectre-2)30%,var(--spectre-3)45%,var(--spectre-4)55%,var(--spectre-5)70%,var(--spectre-6)85%,transparent)",
+        "animation:progression-spectre2.6sease-in-outinfinite",
+    ] {
+        assert!(lumiere.contains(attendu), "{attendu} : {lumiere}");
+    }
+    let brut = lire("../design-system/components.css");
+    assert!(
+        brut.contains("@keyframes progression-spectre { from { left: -40%; } to { left: 110%; } }")
+    );
+    // Fin : vert ou rouge, et la lumière s'éteint.
     assert!(!regle(
         &css,
         ".progression__piste[data-etat=\"reussi\"]>.progression__remplissage"
@@ -921,20 +955,63 @@ fn la_barre_d_avancement_est_un_composant_du_systeme() {
         ".progression__piste[data-etat=\"erreur\"]>.progression__remplissage"
     )
     .is_empty());
-    let brut = lire("../design-system/components.css");
-    assert!(brut.contains("@keyframes progression-reflet"));
+    assert!(
+        regle(&css, ".progression__piste[data-etat]>.progression__reflet")
+            .join(";")
+            .contains("opacity:0")
+    );
     let reduit = brut
         .split("@media (prefers-reduced-motion: reduce)")
         .nth(1)
         .expect("règle prefers-reduced-motion absente");
     let reduit = &reduit[..reduit.find("\n}").unwrap_or(reduit.len())];
     assert!(reduit.contains(".progression__remplissage") && reduit.contains("transition: none"));
-    assert!(reduit.contains(".progression__reflet") && reduit.contains("animation: none"));
+    assert!(reduit.contains(".progression__reflet") && reduit.contains("visibility: hidden"));
+    assert!(reduit.contains("animation: none"));
+    // La page laisse la lumière à la feuille de style : plus de part ni de
+    // reflet limité à l'étape en cours.
+    let script = lire("interface/calcul-profil.js");
+    assert!(!script.contains("--debut") && !script.contains("--part"));
+    assert!(!script.contains("reflet.hidden"));
     let exemple = lire("../design-system/ui-kit.html");
     assert!(exemple.contains("class=\"progression__piste\""));
     assert!(exemple.contains("role=\"progressbar\""));
     assert!(exemple.contains("data-etat=\"reussi\""));
     assert!(exemple.contains("data-etat=\"erreur\""));
+    assert!(!exemple.contains("--debut"));
+}
+
+/// Les couleurs du spectre sont des jetons, définis une seule fois et
+/// valables dans les deux thèmes ; le mélange et la force de la lumière
+/// suivent le thème. L'exception au « pas de dégradé » est écrite.
+#[test]
+fn la_lumiere_spectrale_vient_des_jetons() {
+    let jetons = lire("../design-system/tokens.css");
+    for (n, valeur) in [
+        (1, "#7a00ff"),
+        (2, "#2f6bff"),
+        (3, "#19d3c8"),
+        (4, "#19d36b"),
+        (5, "#ffe11a"),
+        (6, "#ff2a3c"),
+    ] {
+        let nom = format!("--spectre-{n}:");
+        assert_eq!(jetons.matches(&nom).count(), 1, "{nom}");
+        let ligne = jetons.lines().find(|l| l.contains(&nom)).unwrap();
+        assert!(ligne.contains(valeur), "{ligne}");
+    }
+    let (sombre, clair) = jetons
+        .split_once(":root[data-theme=\"light\"]")
+        .expect("thème clair");
+    let clair = &clair[..clair.find('}').unwrap()];
+    assert!(sombre.contains("--lumiere-melange: screen;"));
+    assert!(sombre.contains("--lumiere-force: .9;"));
+    assert!(clair.contains("--lumiere-melange: normal;"));
+    assert!(clair.contains("--lumiere-force: .55;"));
+    let readme = lire("../design-system/README.md");
+    assert!(readme.contains(
+        "Seule la barre de calcul peut porter un dégradé : une lumière spectrale animée, signe que le calcul travaille. Partout ailleurs, pas de dégradé."
+    ));
 }
 
 /// Pendant un calcul, le message général ne se cache que si la raison du

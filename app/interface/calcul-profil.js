@@ -35,10 +35,10 @@ window.CalculProfil = (() => {
 
   // Avancement du calcul en cours. Le module `profiler` envoie, par l'événement « profil-avancement »
   // au numéro du calcul lancé, ce que la barre montre : l'étape, les étapes faites, la position (de
-  // 0 à 1, qui ne recule jamais), le pourcentage de la suite en cours écrit par ArgyllCMS, sa
-  // dernière ligne, et s'il faut un reflet (rien de réel ne fait avancer la barre). La page dessine
-  // cet état ; elle y ajoute le temps écoulé et la durée restante estimée d'après le dernier calcul
-  // de la même recette, dite comme telle.
+  // 0 à 1, qui ne recule jamais), le pourcentage de la suite en cours écrit par ArgyllCMS et sa
+  // dernière ligne. La page dessine cet état ; elle y ajoute le temps écoulé et la durée restante
+  // estimée d'après le dernier calcul de la même recette, dite comme telle. La lumière spectrale qui
+  // traverse la piste (le calcul travaille) est l'affaire de la feuille de style.
   const NOMS_ETAPES = {
     preparation: "profil.etape.preparation",
     profil: "profil.etape.profil",
@@ -48,7 +48,7 @@ window.CalculProfil = (() => {
     limite: "profil.etape.limite",
     controle: "profil.etape.controle",
   };
-  const ETAT_DEPART = { etape: "preparation", faites: 0, total: 7, position: 0, pourcentage: null, ligne: null, reflet: true };
+  const ETAT_DEPART = { etape: "preparation", faites: 0, total: 7, position: 0, pourcentage: null, ligne: null };
   let etat = ETAT_DEPART;
   let debutCalcul = 0;
   let dernierCalcul = Date.now(); // numéro du dernier calcul lancé par cette page
@@ -59,8 +59,6 @@ window.CalculProfil = (() => {
   // Barre d'avancement, présente pendant le calcul (et, après une erreur, jusqu'au prochain dessin).
   let barre = null;
   let piste = null;
-  let remplissage = null;
-  let reflet = null;
   let detail = null;
   let annonceEtape = null; // zone lue par les lecteurs d'écran : l'étape seulement
 
@@ -96,8 +94,8 @@ window.CalculProfil = (() => {
       : t("profil.argyll.ligne").replace("{ligne}", () => etat.ligne);
   }
 
-  // Barre et détail, créés une fois puis mis à jour par des propriétés personnalisées (--position,
-  // --debut, --part) : la largeur glisse (transition CSS).
+  // Barre et détail, créés une fois puis mis à jour par la propriété personnalisée --position : la
+  // largeur glisse (transition CSS).
   function creerBarre() {
     barre = el("div", "progression");
     piste = el("div", "progression__piste");
@@ -105,9 +103,7 @@ window.CalculProfil = (() => {
     piste.setAttribute("aria-label", t("profil.progression"));
     piste.setAttribute("aria-valuemin", "0");
     piste.title = t("profil.en_cours");
-    remplissage = el("span", "progression__remplissage");
-    reflet = el("span", "progression__reflet");
-    piste.append(remplissage, reflet);
+    piste.append(el("span", "progression__remplissage"), el("span", "progression__reflet"));
     detail = el("p", "progression__detail");
     annonceEtape = el("p", "lecteur-ecran");
     annonceEtape.setAttribute("aria-live", "polite");
@@ -117,18 +113,13 @@ window.CalculProfil = (() => {
   }
 
   function oublierBarre() {
-    barre = piste = remplissage = reflet = detail = annonceEtape = null;
+    barre = piste = detail = annonceEtape = null;
   }
 
   function dessinerBarre() {
     if (!calculEnCours || !raisonCalcul) return;
     if (!barre) creerBarre();
-    const part = 100 / etat.total;
     piste.style.setProperty("--position", `${etat.position * 100}%`);
-    // Le reflet glisse sur la part en cours quand rien de réel ne fait avancer la barre.
-    reflet.hidden = !etat.reflet;
-    piste.style.setProperty("--debut", `${part * etat.faites}%`);
-    piste.style.setProperty("--part", `${part}%`);
     piste.setAttribute("aria-valuemax", String(etat.total));
     piste.setAttribute("aria-valuenow", String(etat.faites));
     piste.setAttribute("aria-valuetext", t("profil.progression.etape")
@@ -140,10 +131,10 @@ window.CalculProfil = (() => {
     if (annonceEtape.textContent !== nomEtape) annonceEtape.textContent = nomEtape;
   }
 
-  // Fin du calcul : la barre se remplit et passe à l'état réussi, ou passe à l'état erreur.
+  // Fin du calcul : la barre se remplit et passe à l'état réussi, ou passe à l'état erreur ; la
+  // lumière s'éteint (feuille de style, sur data-etat).
   function finirBarre(reussi) {
     if (!piste) return;
-    reflet.hidden = true;
     if (reussi) {
       piste.style.setProperty("--position", "100%");
       piste.setAttribute("aria-valuenow", piste.getAttribute("aria-valuemax"));
