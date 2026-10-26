@@ -12,9 +12,11 @@
 
 La bibliothèque reçoit deux tables, `mires` et `tirages` (organisation 6). L'application ajoute le module `app/src/mires.rs`, dont les méthodes de `BibliothequeOuverte` se testent sans Tauri, et une section « Préparer une mire » dans `reglage.js`.
 
+Le plan ajoute aussi le **contrôle de cohérence des mesures** (#1, rattaché à #33 par le mainteneur le 26 octobre 2026) : avant tout calcul de profil, la crate `profilage` vérifie que les mesures correspondent aux plages (dégradé gris, blanc et noir, doublons, voisines, décalage). Si ce n'est pas le cas, le calcul est refusé en mots simples, avec les plages en cause. Le résultat du contrôle est gardé dans la provenance du profil. Le contrôle vaut pour une mesure importée (FD-S2w, MYIROtools) comme pour les futures mesures des mires de ce plan.
+
 **Tech Stack:** Rust 2021, Tauri 2, ArgyllCMS 3.5.0 (`targen`, version figée, ADR 0002), crates `qrcode` (codage du QR, sans image) et `font8x8` (police bitmap du domaine public). Le TIFF est écrit à la main en PackBits, une compression du TIFF de base. En test seulement : `tiff` (relecture) et `rqrr` (décodage du QR).
 
-**Spec:** `docs/specifications/2026-10-20-poste-unique-design.md` (étape 1 « Mire » et étape 2 « Impression » du parcours, « Séchage et QR code ») ; ticket #33 (critères d'acceptation) ; `docs/references/icc-argyll-options.md` (`targen`) ; contraintes des manuels relevées dans `outils/mire_comparaison.py`.
+**Spec:** `docs/specifications/2026-10-20-poste-unique-design.md` (étape 1 « Mire » et étape 2 « Impression » du parcours, « Séchage et QR code ») ; ticket #33 (critères d'acceptation) ; ticket #1 (contrôle de cohérence) et `docs/references/icc-gamut-maximal.md`, section 10 (le cas qui l'a fait ouvrir) ; `docs/references/icc-argyll-options.md` (`targen`) ; contraintes des manuels relevées dans `outils/mire_comparaison.py`.
 
 **Dépend de :** plan 3 (`docs/superpowers/plans/2026-10-23-profil-rvb-import-fd-s2w.md`) fusionné dans `dev`. Ce plan reprend sa crate `profilage`, `VERSION_ARGYLL`, `chercher_argyll`, la garde `DossierTravail`, `CREATE_NO_WINDOW` et `argyll/` ignoré par git.
 
@@ -32,6 +34,7 @@ Reportés, avec l'accord du mainteneur (23 octobre 2026) :
 
 - Worktree `ticket/33-mires-rvb` issu de `dev`, PR vers `dev` (`AGENTS.md`). Avant d'écrire : `python outils/verifier_contexte.py --worktree <worktree> --branch ticket/33-mires-rvb --reference dev`.
 - La crate `mires` reste indépendante de Tauri, de Windows, des ponts et d'ArgyllCMS (ADR 0004, ADR 0007). Ses seules dépendances : `colorimetrie`, `serde`, `serde_json`, `sha2`, `qrcode` (`default-features = false`) et `font8x8`.
+- Le contrôle de cohérence vit dans la crate `profilage` (`coherence.rs`), qui reçoit la dépendance `colorimetrie` pour le ΔE00. Il ne corrige jamais les mesures : il ne remet aucune plage en ordre, n'en écarte aucune et n'applique aucun décalage ; il refuse ou il laisse passer, et il le dit.
 - ArgyllCMS : uniquement par la crate `profilage` et son trait `MoteurProfil`, version `VERSION_ARGYLL` = `3.5.0`. Aucune seconde recherche ni seconde garde de dossier.
 - Contraintes des manuels, reprises telles quelles et jamais resserrées par invention :
   - **FD-9** : plages de 6 à 30 mm ; marges d'au moins 23 mm en tête, 33 mm en pied et 4 mm sur les côtés ; 8 mm de blanc entre zones de plages ; aucun texte à moins de 2 mm d'une zone ; contraste suffisant entre voisines.
@@ -67,6 +70,13 @@ Reportés, avec l'accord du mainteneur (23 octobre 2026) :
 - **QR code** : contenu `MYIRO-LIBRE:T<tirage>:P<page>/<pages>:<8 premiers caractères de l'empreinte>`, en mode alphanumérique, correction M, modules de 0,6 mm. Il figure aussi sur les mires MYIRO-1, qui ne le lisent pas : il sert à les reconnaître ailleurs, et il ne coûte rien.
 - **Dossier des fichiers à imprimer** : `Documents\myiro-libre\Mires\`, créé par l'application. L'utilisateur ne choisit pas de dossier, et un bouton « Ouvrir le dossier » le montre dans l'Explorateur.
 - **Nombre libre en mode avancé** : de 24 à 3 000 plages. Ce sont des bornes de saisie, pas un avis sur la qualité.
+- **Seuils du contrôle de cohérence** (tâche 8), tous « choix, à vérifier » sur des mesures réelles :
+  - dégradé gris : un retour en arrière de plus de 3 L* entre deux gris successifs ;
+  - blanc et noir : le blanc RVB 100 à moins de 2 L* de la plage la plus claire, le noir RVB 0 à moins de 5 L* de la plus foncée ;
+  - doublons : plus de 3 ΔE00 entre deux plages de même RVB (entre MYIRO-1 et FD-9, les écarts mesurés le 7 octobre restaient sous 0,6 ΔE00) ;
+  - voisines : plus de 20 ΔE00 entre une plage et la moyenne de ses 6 plus proches voisines en RVB, pondérée par l'inverse de la distance ;
+  - le calcul est refusé dès qu'un contrôle signale une plage. Un contrôle qui ne peut pas se faire (moins de 3 gris, pas de blanc ou de noir dans la mire) est dit « non fait » dans le résultat, sans bloquer les autres.
+- **Décalage** : seulement une piste donnée à l'imprimeur. Si le contrôle refuse, on essaie de décaler les mesures de 1 à 60 plages, dans les deux sens. Si un décalage ne laisse plus aucune plage suspecte, le message le dit (« les mesures semblent décalées de 3 plages »), mais rien n'est recalculé avec ce décalage.
 
 ## Review Focus
 
@@ -75,6 +85,8 @@ Reportés, avec l'accord du mainteneur (23 octobre 2026) :
 3. **Côté de plage hors des limites du manuel** (5 mm au FD-9, 6 mm au MYIRO-1, 31 mm au FD-9) : refusé à la saisie, avec la limite dite à côté du champ, et aucune génération lancée. → test `un_cote_hors_limites_est_refuse` (tâche 1).
 4. **ArgyllCMS absent, ou `targen` qui rend moins de plages que demandé** : message clair (étape, cause, action), rien n'est rangé, et la vue reste utilisable. → tests `argyll_introuvable_ne_prepare_rien` (tâche 6) et `un_ti1_au_nombre_inattendu_est_refuse` (tâche 2).
 5. **Pages mélangées** : deux mises en page de la même mire avec deux graines différentes n'ont pas la même empreinte. Le QR code d'une page dit son numéro et se relit à l'identique. → tests `deux_graines_donnent_deux_empreintes` (tâche 3) et `le_qr_d_une_page_se_relit` (tâche 4).
+6. **Mesures mélangées ou décalées** (cas du ticket #1) : le calcul est refusé avant ArgyllCMS, les plages en cause sont nommées, rien n'est rangé et le profil actuel ne change pas. → tests `des_mesures_decalees_d_une_plage_sont_refusees_et_le_decalage_est_dit` (tâche 8), `des_mesures_melangees_sont_refusees_avec_les_plages_en_cause` (tâche 8) et `des_mesures_incoherentes_ne_lancent_pas_argyll` (tâche 8).
+7. **Fausse alerte sur une mesure saine** : une mire saine de 840 plages, et la vraie mesure de 2 520 plages du 26 octobre, passent sans alerte. → tests `une_mesure_saine_de_840_plages_passe_sans_alerte` et `la_mesure_reelle_du_26_octobre_passe` (`#[ignore]`, tâche 8).
 
 ---
 
@@ -629,10 +641,112 @@ git commit -m "Interface : section « Préparer une mire » dans la vue d'une r�
 
 ---
 
-### Tâche 8 : Installateur, documentation et essai avec le mainteneur
+### Tâche 8 : Contrôler la cohérence des mesures avant un calcul (#1)
+
+Le logiciel du fabricant a calculé un profil sur une mesure de 2 520 plages dont les mesures ne correspondaient pas aux plages, sans avertissement (`docs/references/icc-gamut-maximal.md`, section 10). myiro-libre refuse ce cas avant d'appeler ArgyllCMS.
 
 **Files:**
-- Modify: `outils/preparer_installateur.py` (ajouter `argyll/bin/targen.exe` à la liste des ressources du plan 3), `CLAUDE.md` (crate `mires`, module `mires` de l'application), `GLOSSARY.md`, `docs/blog/<jour>.md`
+- Create: `crates/profilage/src/coherence.rs`
+- Modify: `crates/profilage/Cargo.toml` (`colorimetrie`), `crates/profilage/src/lib.rs` (`pub use`), `app/src/profiler.rs`, `app/src/textes.rs`, `app/interface/calcul-profil.js`
+- Test: `crates/profilage/tests/coherence.rs`, `app/tests/profiler.rs`, `app/tests/page.rs`
+
+**Interfaces:**
+- Consumes : `PlagesProfil`, `PlageProfil` (plan 3) ; `colorimetrie::delta_e00`, `colorimetrie::Lab`.
+- Produces, dans `profilage` :
+  ```rust
+  // Seuils : « choix, à vérifier » (voir « Choix de l'assistant »), chacun commenté.
+  pub const RETOUR_GRIS_MAX_L: f64 = 3.0;
+  pub const ECART_BLANC_MAX_L: f64 = 2.0;
+  pub const ECART_NOIR_MAX_L: f64 = 5.0;
+  pub const ECART_DOUBLONS_MAX_DE00: f64 = 3.0;
+  pub const ECART_VOISINES_MAX_DE00: f64 = 20.0;
+  pub const VOISINES: usize = 6;
+  pub const DECALAGE_MAX: usize = 60;
+  #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)] #[serde(rename_all = "snake_case")]
+  pub enum Critere { DegradeGris, BlancNoir, Doublons, Voisines }
+  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  pub struct PlageSuspecte { pub rang: usize /* à partir de 1, dans l'ordre du fichier */, pub critere: Critere, pub ecart: f64 }
+  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+  pub struct ControleCoherence {
+      pub faits: Vec<Critere>,
+      pub non_faits: Vec<Critere>,            // contrôle impossible : moins de 3 gris, pas de blanc ou de noir, aucun doublon
+      pub suspectes: Vec<PlageSuspecte>,      // triées par rang
+      pub decalage: Option<i64>,              // piste seulement : comparer le RVB de la plage i au Lab de la plage i + s ne laisse aucune suspecte
+  }
+  impl ControleCoherence { pub fn accepte(&self) -> bool; }   // aucune plage suspecte
+  pub fn controler_coherence(plages: &PlagesProfil) -> ControleCoherence;
+  ```
+- Règles, sur les RVB de 0 à 100 et les Lab des plages :
+  - **Gris** : plages dont R, G et B diffèrent de moins de 0,5. Triées par RVB croissant, leur L* ne recule pas de plus de `RETOUR_GRIS_MAX_L` d'un gris au suivant ; les deux plages d'un recul sont suspectes. Moins de 3 gris : critère non fait.
+  - **Blanc et noir** : la plage RVB (100, 100, 100) a un L* à moins de `ECART_BLANC_MAX_L` du plus grand L* de la mesure ; la plage RVB (0, 0, 0) a un L* à moins de `ECART_NOIR_MAX_L` du plus petit. Plage absente : critère non fait pour elle.
+  - **Doublons** : plages de même RVB (au centième près) ; plus de `ECART_DOUBLONS_MAX_DE00` entre deux d'entre elles les rend suspectes. Aucun doublon : critère non fait.
+  - **Voisines** : pour chaque plage, ses `VOISINES` plus proches voisines en RVB (distance euclidienne, sans elle-même ni ses doublons) ; leur Lab moyen, pondéré par l'inverse de la distance, est comparé au sien en ΔE00. Au-delà de `ECART_VOISINES_MAX_DE00`, la plage est suspecte.
+  - **Décalage**, seulement si des plages sont suspectes : pour s de −`DECALAGE_MAX` à +`DECALAGE_MAX` (sauf 0), refaire les quatre contrôles en associant le RVB de la plage i au Lab de la plage i + s, sur les plages communes. Le premier s, par valeur absolue croissante, qui ne laisse aucune suspecte est rendu. Les voisines en RVB ne dépendent pas de s : elles sont calculées une seule fois, pour que 2 520 plages restent sous 2 secondes en mode debug.
+- Application (`app/src/profiler.rs`) :
+  - `preparer_profil` appelle `controler_coherence` juste après `preparer_plages`. Si le contrôle refuse : `ErreurProfil` de clé `profil.refus.incoherent`, avec un nouveau champ `coherence: Option<RefusCoherence>`. Les commandes, l'estimation et le calcul refusent donc tous les trois, et la page montre le refus dès le choix de la mesure, avant le bouton « Calculer ».
+  - `RefusCoherence { plages: Vec<String> /* identifiants du fichier, 10 au plus */, autres: usize, criteres: Vec<Critere>, decalage: Option<i64> }` : les rangs sont traduits en identifiants de plage du fichier (`SAMPLE_ID`).
+  - Si le contrôle accepte, `"coherence"` est ajouté aux paramètres du profil rangé. `ParametresCalcul` le lit avec `#[serde(default)]`, et `ProvenanceProfil` reçoit `coherence: Option<ControleCoherence>`. Un profil calculé avant ce plan n'a pas ce champ : il est dit « mesures non contrôlées ».
+- Textes (français et anglais), en mots simples :
+  - `profil.refus.incoherent` : « Les mesures ne correspondent pas aux plages de la mire : le profil serait faux. Plages en cause : {plages}. Relisez la mire, vérifiez le sens de la feuille et l'ordre de lecture, et que ce fichier est bien celui de cette mire. » ;
+  - `profil.coherence.decalage` : « Les mesures semblent décalées de {n} plages. » ;
+  - `profil.coherence.critere.*` (une clé par critère), `profil.coherence.accepte`, `profil.coherence.non_fait` et `profil.coherence.non_controle` pour la provenance.
+- Page (`calcul-profil.js`) : le refus remplace le bouton « Calculer » par son message, comme les autres refus de plages. La provenance d'un profil calculé dit « Mesures contrôlées : cohérentes », puis la liste des critères non faits s'il y en a.
+
+- [ ] **Step 1 : Tests en échec**
+
+```rust
+// profilage/tests/coherence.rs
+// Mesure synthétique de 840 plages :
+//  - grille RVB 9 × 9 × 9 (729 plages, dont 9 gris, le blanc et le noir) ;
+//  - 100 plages tirées par splitmix64 (graine fixe) ;
+//  - 11 doublons de plages de la grille.
+// L'ordre du fichier est mélangé (graine fixe), comme une mire de targen.
+// Lab : RVB lu comme du sRGB, puis papier simulé (L* = 15 + 0,8 × L*, a* et b* × 0,85), plus un bruit fixe de ±0,3.
+fn mesure_saine() -> PlagesProfil { /* … */ }
+#[test] fn une_mesure_saine_de_840_plages_passe_sans_alerte() {}            // accepte(), faits == les 4 critères, decalage == None
+#[test] fn des_mesures_decalees_d_une_plage_sont_refusees_et_le_decalage_est_dit() {}  // Lab de la plage i donné à la plage i + 1 → refus, decalage == Some(1)
+#[test] fn des_mesures_melangees_sont_refusees_avec_les_plages_en_cause() {} // Lab mélangés → refus, decalage == None, suspectes non vide
+#[test] fn un_gris_qui_recule_est_signale() {}                              // L* du gris 50 % mis à celui du gris 25 %
+#[test] fn un_blanc_papier_trop_sombre_est_signale() {}                     // cas du ticket : RVB 0 au L* d'un gris moyen
+#[test] fn des_doublons_trop_differents_sont_signales() {}
+#[test] fn une_plage_isolee_est_signalee_par_son_rang() {}                  // une seule plage faussée de 30 ΔE00 → une suspecte, de ce rang
+#[test] fn sans_gris_le_critere_est_dit_non_fait() {}                       // mesure sans gris : DegradeGris dans non_faits, pas de refus pour autant
+#[test] fn le_controle_de_2520_plages_tient_en_2_secondes() {}
+#[test] #[ignore] fn la_mesure_reelle_du_26_octobre_passe() {}             // variable MESURE_REELLE : export CGATS local, non versionné ; cgats::lire → preparer_plages (M1) → accepte()
+// app/tests/profiler.rs (MoteurSimule)
+#[test] fn des_mesures_incoherentes_ne_lancent_pas_argyll() {}             // aucune demande au moteur, Err(cle "profil.refus.incoherent"), aucun profil rangé, profil actuel inchangé
+#[test] fn le_refus_nomme_les_plages_du_fichier() {}                       // identifiants SAMPLE_ID, 10 au plus, « autres » compte le reste
+#[test] fn un_profil_calcule_garde_son_controle_dans_sa_provenance() {}
+#[test] fn un_profil_calcule_avant_le_controle_se_lit_encore() {}          // paramètres sans "coherence" → coherence == None
+// app/tests/page.rs
+#[test] fn toutes_les_cles_de_coherence_existent_en_deux_langues() {}
+```
+
+- [ ] **Step 2 : Lancer, constater l'échec**
+
+Run: `cargo test -p profilage --test coherence && cargo test -p app --test profiler`
+Expected: échec de compilation.
+
+- [ ] **Step 3 : Implémenter `coherence.rs`**, puis le branchement dans `app/src/profiler.rs`, les textes et la page.
+
+- [ ] **Step 4 : Vérifier**
+
+Run: `cargo test -p profilage -p app && cargo clippy --all-targets -- -D warnings`, puis, avec la mesure réelle posée sur le poste, `cargo test -p profilage --test coherence -- --ignored --nocapture`
+Expected: PASS. Si la mesure réelle déclenche une alerte, ne pas relever un seuil au hasard : noter la plage et l'écart dans la PR et en parler au mainteneur.
+
+- [ ] **Step 5 : Commit**
+
+```bash
+git add crates/profilage app
+git commit -m "Profil : mesures contrôlées avant le calcul, refus en clair si elles ne correspondent pas aux plages (#1)"
+```
+
+---
+
+### Tâche 9 : Installateur, documentation et essai avec le mainteneur
+
+**Files:**
+- Modify: `outils/preparer_installateur.py` (ajouter `argyll/bin/targen.exe` à la liste des ressources du plan 3), `CLAUDE.md` (crate `mires`, module `mires` de l'application, contrôle de cohérence de `profilage`), `GLOSSARY.md`, `docs/blog/<jour>.md`, `docs/references/icc-gamut-maximal.md` (section « Ce qu'on en tire » : contrôle fait, renvoi au code)
 
 - [ ] **Step 1 : Installateur**
 
@@ -646,7 +760,8 @@ Expected: OK.
 Ajouter les termes suivants, sans collision avec « Feuille » ni « Tirage » :
 - **Taille de mire** : rapide, standard, approfondi ;
 - **Gabarit** : mise en page propre à un instrument et à un format ;
-- **Plan de lecture** : ordre et place de chaque plage, page par page.
+- **Plan de lecture** : ordre et place de chaque plage, page par page ;
+- **Contrôle de cohérence** : vérification, avant un calcul de profil, que les mesures correspondent aux plages.
 
 « Tirage » reste l'objet imprimé. Le tirage rangé à la préparation est sa trace.
 
@@ -658,6 +773,7 @@ Ajouter les termes suivants, sans collision avec « Feuille » ni « Tirage » :
 4. Lire le QR code avec un téléphone : le texte commence par `MYIRO-LIBRE:T`.
 5. Vérifier que le texte lisible est net et que les accents sont justes.
 6. Passer une bande au MYIRO-1 dans un logiciel officiel, si le mainteneur le souhaite. La mesure au FD-9 vient au plan 5.
+7. Contrôle de cohérence : relancer le calcul sur la mesure du 26 octobre (2 520 plages, HFA Mat 200g) ; aucune alerte attendue, et la provenance dit « Mesures contrôlées : cohérentes ». Si le mainteneur a encore les mesures faussées de 2021, les importer : le calcul doit être refusé, avec les plages en cause.
 
 Consigner les résultats dans le ticket #33, sans identifiant matériel.
 
@@ -669,7 +785,7 @@ git commit -am "Documentation : mires de profilage RVB, gabarits et essai d'impr
 
 - [ ] **Step 5 : PR vers `dev`**
 
-PR `ticket/33-mires-rvb` → `dev`, avec les « Choix de l'assistant » et les résultats de l'essai. Le ticket #33 reste ouvert : il manque encore l'import des mires existantes, la fiche d'impression, le PDF, le CMJN et la lecture des pages au FD-9 (plan 5).
+PR `ticket/33-mires-rvb` → `dev`, avec les « Choix de l'assistant » et les résultats de l'essai. La PR ferme #1 (« Closes #1 ») si ses quatre critères sont couverts. Le ticket #33 reste ouvert : il manque encore l'import des mires existantes, la fiche d'impression, le PDF, le CMJN et la lecture des pages au FD-9 (plan 5).
 
 ## Questions ouvertes (ne bloquent pas le plan)
 
