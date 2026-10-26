@@ -173,13 +173,26 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .steps button.done .label { color: var(--conforme); }
 .steps button[aria-current="step"] { border-color: var(--accent); background: var(--selection); color: var(--encre); font-weight: 600; }
 .steps button[disabled] { cursor: default; }
-/* Barre d'avancement d'un calcul (calcul-profil.js) : une case par étape, faite, en cours ou à
-   venir. Seule la case en cours se remplit, et seulement d'un pourcentage écrit par l'outil. */
-.progression { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-1); margin-top: var(--space-2); }
-.progression__etape { height: var(--space-2); border: var(--rule) solid var(--filet); background: var(--carte); }
-.progression__etape[data-etat="faite"] { background: var(--accent); border-color: var(--accent); }
-.progression__etape[data-etat="en-cours"] { border-color: var(--accent); }
-.progression__remplissage { display: block; height: 100%; background: var(--accent); }
+/* ---- Barre d'avancement d'un calcul (calcul-profil.js) ----
+   Continue, par étapes : chaque étape en occupe une part égale. Le remplissage glisse (300 ms) et ne
+   recule jamais ; dans une étape, il ne suit qu'un pourcentage écrit par l'outil. Sinon un reflet,
+   bande pleine qui glisse sur la part en cours, dit que le calcul travaille sans faire avancer la
+   barre (pas de dégradé dans le système). Fin : réussi (vert) ou erreur (rouge). Valeurs passées par
+   propriétés personnalisées sur la piste : --position, --debut, --part. */
+.progression { margin-top: var(--space-2); }
+.progression__piste { position: relative; height: var(--space-2); overflow: hidden; background: var(--carte); border: var(--rule) solid var(--filet); }
+.progression__remplissage { position: absolute; top: 0; bottom: 0; left: 0; width: var(--position, 0%); background: var(--accent); transition: width 300ms ease-out, background-color 300ms ease-out; }
+.progression__reflet { position: absolute; top: 0; bottom: 0; left: var(--debut, 0%); width: var(--part, 0%); overflow: hidden; }
+.progression__reflet::after { content: ""; position: absolute; top: 0; bottom: 0; left: -30%; width: 30%; background: var(--selection); animation: progression-reflet 1.6s ease-in-out infinite; }
+@keyframes progression-reflet { from { left: -30%; } to { left: 100%; } }
+.progression__piste[data-etat="reussi"]>.progression__remplissage { background: var(--conforme); }
+.progression__piste[data-etat="erreur"]>.progression__remplissage { background: var(--hors); }
+.progression__detail { margin-top: var(--space-1); font-size: var(--text-xs); color: var(--attenue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  .progression__remplissage { transition: none; }
+  .progression__reflet { visibility: hidden; }
+  .progression__reflet::after { animation: none; }
+}
 
 /* ---- Puces : choix parmi quelques valeurs ---- */
 .puces { display: flex; flex-wrap: wrap; gap: var(--space-2); }
@@ -199,7 +212,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .btn--primary { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); font-weight: 600; }
 .btn[disabled] { color: var(--attenue); cursor: not-allowed; }
 .btn--primary[disabled] { background: transparent; border-color: var(--filet); }
-.why { font-size: var(--text-sm); color: var(--attenue); margin-top: var(--space-2); white-space: pre-line; }
+.why { font-size: var(--text-sm); color: var(--attenue); margin-top: var(--space-2); }
 .actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin: var(--space-4) 0; }
 
 /* ---- État : carré de couleur et mot (jamais la couleur seule) ---- */

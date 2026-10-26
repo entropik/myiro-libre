@@ -662,7 +662,7 @@ fn le_bouton_calculer_inactif_dit_pourquoi() {
         "raison loin du bouton"
     );
     assert!(script.contains("if (choix.mesure === null) calculer.dataset.inactif = \"\";"));
-    assert!(script.contains("calculEnCours ? texteEnCours()"));
+    assert!(script.contains("calculEnCours ? ligneEtape()"));
     assert!(script.contains(
         ": erreurCalcul || erreurCommandes || (choix.mesure === null ? t(\"profil.calculer.raison\") : \"\")"
     ));
@@ -723,17 +723,18 @@ fn la_commande_et_le_journal_restent_consultables() {
     );
 }
 
-/// Pendant le calcul, le message « en cours » dit l'étape, le temps écoulé
-/// (redessiné chaque seconde) et ce qu'ArgyllCMS a écrit en dernier, reçus
-/// par l'événement `profil-avancement`. Une seule minuterie, arrêtée à la
-/// fin du calcul, réussi ou non.
+/// Pendant le calcul, une seule ligne courte sous la barre : l'étape en mots
+/// simples, le temps écoulé (redessiné chaque seconde) et, s'il existe, le
+/// temps restant « estimé ». La dernière ligne d'ArgyllCMS, reçue par
+/// l'événement `profil-avancement`, passe en texte discret dessous. Une
+/// seule minuterie, arrêtée à la fin du calcul, réussi ou non.
 #[test]
 fn pendant_un_calcul_l_avancement_se_voit() {
     use app::textes::{texte, Langue};
     let script = lire("interface/calcul-profil.js");
     assert!(script.contains("listen(\"profil-avancement\""));
-    assert!(script.contains("calculEnCours ? texteEnCours()"));
-    assert!(script.contains("t(\"profil.en_cours\")"));
+    assert!(script.contains("calculEnCours ? ligneEtape()"));
+    assert!(script.contains("detail.textContent = ligneArgyll();"));
     assert!(script.contains("setInterval(dessinerRaison, 1000)"));
     assert_eq!(script.matches("setInterval(").count(), 1);
     assert!(script.contains("clearInterval(minuterie)"));
@@ -742,6 +743,7 @@ fn pendant_un_calcul_l_avancement_se_voit() {
         "minuterie arrêtée même en cas d'erreur"
     );
     for cle in [
+        "profil.en_cours",
         "profil.etape.preparation",
         "profil.etape.profil",
         "profil.etape.controle",
@@ -762,10 +764,13 @@ fn pendant_un_calcul_l_avancement_se_voit() {
     assert!(texte(Langue::Anglais, "profil.argyll.pourcentage").contains("part"));
 }
 
-/// Barre d'avancement par étapes, dans l'ordre des étapes du moteur. Elle
-/// est accessible (progressbar) : sa valeur est le nombre d'étapes faites,
-/// une valeur réelle ; seule la case en cours se remplit, et seulement d'un
-/// pourcentage écrit par ArgyllCMS. La durée restante n'est qu'une
+/// Barre d'avancement continue, par étapes, dans l'ordre des étapes du
+/// moteur. Accessible : sa valeur est le nombre d'étapes faites (une valeur
+/// réelle) et son texte « Calcul du profil, étape 2 sur 7 ». Elle avance par
+/// étapes et ne recule jamais ; dans une étape, elle ne suit qu'un
+/// pourcentage écrit par ArgyllCMS ; sinon un reflet dit que le calcul
+/// travaille, sans faire avancer la barre. À la fin : état réussi, ou état
+/// erreur sans animation de réussite. La durée restante n'est qu'une
 /// estimation, dite « estimé », et rien sans historique.
 #[test]
 fn pendant_un_calcul_une_barre_avance_par_etapes() {
@@ -786,26 +791,45 @@ fn pendant_un_calcul_une_barre_avance_par_etapes() {
         "setAttribute(\"aria-valuemax\", String(ETAPES.length))",
         "setAttribute(\"aria-valuenow\", String(faites))",
         "setAttribute(\"aria-valuetext\"",
-        "\"progression__etape\"",
+        "t(\"profil.progression.etape\")",
         "\"progression__remplissage\"",
+        "\"progression__reflet\"",
+        "\"progression__detail\"",
+        // Ne recule jamais : la position retenue est la plus grande.
+        "position = Math.max(position,",
+        // Dans une étape, seul un pourcentage écrit par ArgyllCMS fait avancer.
         "avancement.pourcentage !== null",
+        "reflet.hidden = avancement.pourcentage !== null;",
+        // Fin : réussi, ou erreur.
+        "piste.dataset.etat = \"reussi\";",
+        "piste.dataset.etat = \"erreur\";",
+        // Une étape ne recule jamais.
+        "ETAPES.indexOf(a.etape) > ETAPES.indexOf(avancement.etape)",
+        // Estimation : seulement si la page en a reçu une.
+        "estimationCalcul = estimation;",
+        "if (estimationCalcul !== null)",
     ] {
         assert!(script.contains(attendu), "{attendu}");
     }
-    // Le remplissage ne vient que du pourcentage écrit par ArgyllCMS.
-    assert_eq!(script.matches(".style.width").count(), 1);
-    assert!(script.contains(".style.width = `${avancement.pourcentage}%`"));
-    // Une étape ne recule jamais.
-    assert!(script.contains("ETAPES.indexOf(a.etape) > ETAPES.indexOf(avancement.etape)"));
-    // Estimation : seulement si la page en a reçu une.
-    assert!(script.contains("estimationCalcul = estimation;"));
-    assert!(script.contains("if (estimationCalcul !== null)"));
+    // La largeur de la barre ne vient que de la position par étapes, passée
+    // par une propriété personnalisée (pas de style en ligne).
+    assert_eq!(
+        script
+            .matches("setProperty(\"--position\", `${position}%`)")
+            .count(),
+        1
+    );
+    assert!(!script.contains(".style.width"));
+    // Les éléments sont gardés d'une mise à jour à l'autre : la transition
+    // CSS reste fluide.
+    assert!(!script.contains("barre.replaceChildren("));
     for cle in [
         "profil.etape.table",
         "profil.etape.gamut",
         "profil.etape.inverses",
         "profil.etape.limite",
         "profil.progression",
+        "profil.progression.etape",
         "profil.estimation.restante",
         "profil.estimation.depassee",
     ] {
@@ -817,15 +841,65 @@ fn pendant_un_calcul_une_barre_avance_par_etapes() {
             assert_ne!(texte(langue, cle), cle, "{cle} absente du catalogue");
         }
     }
+    assert_eq!(
+        texte(Langue::Francais, "profil.progression.etape"),
+        "Calcul du profil, étape {n} sur {total}"
+    );
+    assert_eq!(
+        texte(Langue::Anglais, "profil.progression.etape"),
+        "Computing the profile, step {n} of {total}"
+    );
     for cle in ["profil.estimation.restante", "profil.estimation.depassee"] {
         assert!(texte(Langue::Francais, cle).contains("estimé"), "{cle}");
         assert!(texte(Langue::Anglais, cle).contains("estimated"), "{cle}");
     }
-    // Dessin : jetons du système graphique, angles droits (tests plus haut).
+}
+
+/// La barre est un composant du système graphique : jetons seulement,
+/// hauteur de 8 px (`--space-2`), largeur animée en 300 ms ease-out, reflet
+/// fait d'une bande pleine qui glisse (le système n'a pas de dégradé), état
+/// réussi et état erreur ; rien d'animé si l'utilisateur réduit les
+/// animations. Une page d'exemple la montre.
+#[test]
+fn la_barre_d_avancement_est_un_composant_du_systeme() {
     let css = composants();
-    assert!(!regle(&css, ".progression").is_empty());
-    assert!(!regle(&css, ".progression__etape").is_empty());
-    assert!(!regle(&css, ".progression__remplissage").is_empty());
+    let piste = regle(&css, ".progression__piste").join(";");
+    assert!(piste.contains("height:var(--space-2)"), "{piste}");
+    let remplissage = regle(&css, ".progression__remplissage").join(";");
+    assert!(
+        remplissage.contains("transition:width300msease-out"),
+        "{remplissage}"
+    );
+    assert!(
+        remplissage.contains("background:var(--accent)"),
+        "{remplissage}"
+    );
+    let reflet = regle(&css, ".progression__reflet::after").join(";");
+    assert!(reflet.contains("animation:"), "{reflet}");
+    assert!(!regle(
+        &css,
+        ".progression__piste[data-etat=\"reussi\"]>.progression__remplissage"
+    )
+    .is_empty());
+    assert!(!regle(
+        &css,
+        ".progression__piste[data-etat=\"erreur\"]>.progression__remplissage"
+    )
+    .is_empty());
+    let brut = lire("../design-system/components.css");
+    assert!(brut.contains("@keyframes progression-reflet"));
+    let reduit = brut
+        .split("@media (prefers-reduced-motion: reduce)")
+        .nth(1)
+        .expect("règle prefers-reduced-motion absente");
+    let reduit = &reduit[..reduit.find("\n}").unwrap_or(reduit.len())];
+    assert!(reduit.contains(".progression__remplissage") && reduit.contains("transition: none"));
+    assert!(reduit.contains(".progression__reflet") && reduit.contains("animation: none"));
+    let exemple = lire("../design-system/ui-kit.html");
+    assert!(exemple.contains("class=\"progression__piste\""));
+    assert!(exemple.contains("role=\"progressbar\""));
+    assert!(exemple.contains("data-etat=\"reussi\""));
+    assert!(exemple.contains("data-etat=\"erreur\""));
 }
 
 /// Pendant un calcul, le message général ne se cache que si la raison du

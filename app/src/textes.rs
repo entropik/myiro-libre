@@ -258,6 +258,10 @@ const FRANCAIS: Catalogue = &[
         "Avancement du calcul",
     ),
     (
+        "profil.progression.etape",
+        "Calcul du profil, étape {n} sur {total}",
+    ),
+    (
         "profil.estimation.restante",
         "environ {duree} restantes (estimé)",
     ),
@@ -1233,6 +1237,10 @@ const ANGLAIS: Catalogue = &[
     (
         "profil.progression",
         "Calculation progress",
+    ),
+    (
+        "profil.progression.etape",
+        "Computing the profile, step {n} of {total}",
     ),
     (
         "profil.estimation.restante",
