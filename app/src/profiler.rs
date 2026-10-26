@@ -17,8 +17,8 @@ use bibliotheque::{
 use pont_protocole::ConditionMesure;
 use profilage::{
     chercher_argyll, conditions_utilisables, ecrire_ti3, lignes_commandes, preparer_plages,
-    ArgyllCms, Avancement, DemandeProfil, ErreurMoteur, EtapeCalcul, MoteurProfil, PlagesProfil,
-    Recette, RefusPlages,
+    ArgyllCms, Avancement, DemandeProfil, ErreurMoteur, EtapeCalcul, EtatAvancement, MoteurProfil,
+    PlagesProfil, Recette, RefusPlages, SuiviAvancement,
 };
 use serde::{Deserialize, Serialize};
 
@@ -535,11 +535,45 @@ pub fn profiler_commandes(
 /// Événement qui porte l'avancement d'un calcul vers la page.
 pub const EVENEMENT_AVANCEMENT: &str = "profil-avancement";
 
+/// Ce que l'événement [`EVENEMENT_AVANCEMENT`] porte : le numéro du calcul,
+/// donné par la page, et ce que la barre montre.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct EvenementAvancement<'a> {
+    pub calcul: u64,
+    #[serde(flatten)]
+    pub etat: &'a EtatAvancement,
+}
+
+/// Suit un calcul lancé par la page : chaque annonce du moteur devient un
+/// événement à son numéro. La page ignore les événements d'un autre calcul.
+pub struct SuiviCalcul {
+    calcul: u64,
+    suivi: SuiviAvancement,
+}
+
+impl SuiviCalcul {
+    pub fn new(calcul: u64) -> Self {
+        SuiviCalcul {
+            calcul,
+            suivi: SuiviAvancement::new(),
+        }
+    }
+
+    pub fn recevoir(&mut self, annonce: &Avancement) -> EvenementAvancement<'_> {
+        EvenementAvancement {
+            calcul: self.calcul,
+            etat: self.suivi.recevoir(annonce),
+        }
+    }
+}
+
 /// Calcule et range le profil. Hors du fil de la fenêtre : le calcul peut
 /// durer plusieurs minutes. Son avancement part vers la page par
-/// l'événement [`EVENEMENT_AVANCEMENT`] ; la durée d'un calcul réussi est
+/// l'événement [`EVENEMENT_AVANCEMENT`], au numéro `calcul` donné par la
+/// page ; la durée d'un calcul réussi est
 /// retenue pour estimer le suivant.
 #[tauri::command(async)]
+#[allow(clippy::too_many_arguments)]
 pub fn profiler_calculer(
     app: tauri::AppHandle,
     ouverte: tauri::State<'_, BibliothequeOuverte>,
@@ -548,9 +582,11 @@ pub fn profiler_calculer(
     mesure: i64,
     mesure_condition: ConditionMesure,
     recette: Recette,
+    calcul: u64,
 ) -> Result<ResultatProfil, ErreurProfil> {
     use tauri::Emitter;
     let debut = std::time::Instant::now();
+    let mut suivi = SuiviCalcul::new(calcul);
     let resultat = ouverte.calculer_profil(
         IdCondition(condition),
         IdMesure(mesure),
@@ -560,7 +596,7 @@ pub fn profiler_calculer(
         SystemTime::now(),
         // Une page fermée ne reçoit rien : le calcul continue.
         &mut |a| {
-            let _ = app.emit(EVENEMENT_AVANCEMENT, a);
+            let _ = app.emit(EVENEMENT_AVANCEMENT, suivi.recevoir(&a));
         },
     )?;
     if let Some(fichier) = fichier_durees(&app) {

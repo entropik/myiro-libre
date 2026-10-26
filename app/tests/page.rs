@@ -725,14 +725,13 @@ fn la_commande_et_le_journal_restent_consultables() {
 
 /// Pendant le calcul, une seule ligne courte sous la barre : l'étape en mots
 /// simples, le temps écoulé (redessiné chaque seconde) et, s'il existe, le
-/// temps restant « estimé ». La dernière ligne d'ArgyllCMS, reçue par
-/// l'événement `profil-avancement`, passe en texte discret dessous. Une
-/// seule minuterie, arrêtée à la fin du calcul, réussi ou non.
+/// temps restant « estimé ». La dernière ligne d'ArgyllCMS passe en texte
+/// discret dessous. Une seule minuterie, arrêtée à la fin du calcul, réussi
+/// ou non.
 #[test]
 fn pendant_un_calcul_l_avancement_se_voit() {
     use app::textes::{texte, Langue};
     let script = lire("interface/calcul-profil.js");
-    assert!(script.contains("listen(\"profil-avancement\""));
     assert!(script.contains("calculEnCours ? ligneEtape()"));
     assert!(script.contains("detail.textContent = ligneArgyll();"));
     assert!(script.contains("setInterval(dessinerRaison, 1000)"));
@@ -744,9 +743,6 @@ fn pendant_un_calcul_l_avancement_se_voit() {
     );
     for cle in [
         "profil.en_cours",
-        "profil.etape.preparation",
-        "profil.etape.profil",
-        "profil.etape.controle",
         "profil.ecoule",
         "profil.argyll.ligne",
         "profil.argyll.pourcentage",
@@ -764,70 +760,81 @@ fn pendant_un_calcul_l_avancement_se_voit() {
     assert!(texte(Langue::Anglais, "profil.argyll.pourcentage").contains("part"));
 }
 
-/// Barre d'avancement continue, par étapes, dans l'ordre des étapes du
-/// moteur. Accessible : sa valeur est le nombre d'étapes faites (une valeur
-/// réelle) et son texte « Calcul du profil, étape 2 sur 7 ». Elle avance par
-/// étapes et ne recule jamais ; dans une étape, elle ne suit qu'un
-/// pourcentage écrit par ArgyllCMS ; sinon un reflet dit que le calcul
-/// travaille, sans faire avancer la barre. À la fin : état réussi, ou état
-/// erreur sans animation de réussite. La durée restante n'est qu'une
-/// estimation, dite « estimé », et rien sans historique.
+/// L'avancement arrive par l'événement `profil-avancement`, au numéro du
+/// calcul lancé : la page écoute pendant ce calcul seulement, ignore les
+/// événements d'un autre calcul et détache l'écouteur à la fin, réussie ou
+/// non.
+#[test]
+fn l_avancement_ne_vaut_que_pour_le_calcul_lance() {
+    let script = lire("interface/calcul-profil.js");
+    let calcul = script
+        .split("async function calculerProfil(d) {")
+        .nth(1)
+        .expect("calculerProfil absent");
+    assert_eq!(script.matches("listen(\"profil-avancement\"").count(), 1);
+    assert!(calcul.contains("const numero = ++dernierCalcul;"));
+    assert!(calcul
+        .contains("const detacher = await window.__TAURI__.event.listen(\"profil-avancement\""));
+    assert!(calcul.contains("if (evenement.payload?.calcul !== numero) return;"));
+    assert!(calcul.contains("invoke(\"profiler_calculer\", { ...parametres(d), calcul: numero })"));
+    let fin = calcul.split("finally {").nth(1).unwrap_or_default();
+    assert!(
+        fin[..fin.find('}').unwrap_or(0)].contains("detacher();"),
+        "écouteur détaché dans finally"
+    );
+}
+
+/// Ce que la barre montre vient du module `profiler` (étape, étapes faites,
+/// position, reflet), qui ne la fait jamais reculer : la page dessine l'état
+/// reçu. Accessible : valeur = étapes faites, texte « Calcul du profil,
+/// étape 2 sur 7 ». La durée restante n'est qu'une estimation, dite
+/// « estimé », et rien sans historique.
 #[test]
 fn pendant_un_calcul_une_barre_avance_par_etapes() {
     use app::textes::{texte, Langue};
     use profilage::EtapeCalcul;
     let script = lire("interface/calcul-profil.js");
-    let etapes: Vec<String> = EtapeCalcul::TOUTES
-        .iter()
-        .map(|e| serde_json::to_string(e).unwrap())
-        .collect();
-    assert!(
-        script.contains(&format!("const ETAPES = [{}];", etapes.join(", "))),
-        "ordre des étapes du moteur"
-    );
+    for e in EtapeCalcul::TOUTES {
+        let nom = serde_json::to_string(&e).unwrap();
+        let nom = nom.trim_matches('"');
+        assert!(
+            script.contains(&format!("{nom}: \"profil.etape.{nom}\",")),
+            "étape {nom} sans texte"
+        );
+        let cle = format!("profil.etape.{nom}");
+        for langue in [Langue::Francais, Langue::Anglais] {
+            assert_ne!(texte(langue, &cle), cle, "{cle} absente du catalogue");
+        }
+    }
     for attendu in [
         "setAttribute(\"role\", \"progressbar\")",
         "setAttribute(\"aria-valuemin\", \"0\")",
-        "setAttribute(\"aria-valuemax\", String(ETAPES.length))",
-        "setAttribute(\"aria-valuenow\", String(faites))",
+        "setAttribute(\"aria-valuemax\", String(etat.total))",
+        "setAttribute(\"aria-valuenow\", String(etat.faites))",
         "setAttribute(\"aria-valuetext\"",
         "t(\"profil.progression.etape\")",
         "\"progression__remplissage\"",
         "\"progression__reflet\"",
         "\"progression__detail\"",
-        // Ne recule jamais : la position retenue est la plus grande.
-        "position = Math.max(position,",
-        // Dans une étape, seul un pourcentage écrit par ArgyllCMS fait avancer.
-        "avancement.pourcentage !== null",
-        "reflet.hidden = avancement.pourcentage !== null;",
-        // Fin : réussi, ou erreur.
+        "reflet.hidden = !etat.reflet;",
         "piste.dataset.etat = \"reussi\";",
         "piste.dataset.etat = \"erreur\";",
-        // Une étape ne recule jamais.
-        "ETAPES.indexOf(a.etape) > ETAPES.indexOf(avancement.etape)",
-        // Estimation : seulement si la page en a reçu une.
         "estimationCalcul = estimation;",
         "if (estimationCalcul !== null)",
     ] {
         assert!(script.contains(attendu), "{attendu}");
     }
-    // La largeur de la barre ne vient que de la position par étapes, passée
-    // par une propriété personnalisée (pas de style en ligne).
+    // La position vient du module ; la page ne la recalcule pas.
     assert_eq!(
         script
-            .matches("setProperty(\"--position\", `${position}%`)")
+            .matches("setProperty(\"--position\", `${etat.position * 100}%`)")
             .count(),
         1
     );
+    assert!(!script.contains("Math.max(position"));
     assert!(!script.contains(".style.width"));
-    // Les éléments sont gardés d'une mise à jour à l'autre : la transition
-    // CSS reste fluide.
     assert!(!script.contains("barre.replaceChildren("));
     for cle in [
-        "profil.etape.table",
-        "profil.etape.gamut",
-        "profil.etape.inverses",
-        "profil.etape.limite",
         "profil.progression",
         "profil.progression.etape",
         "profil.estimation.restante",
@@ -853,6 +860,34 @@ fn pendant_un_calcul_une_barre_avance_par_etapes() {
         assert!(texte(Langue::Francais, cle).contains("estimé"), "{cle}");
         assert!(texte(Langue::Anglais, cle).contains("estimated"), "{cle}");
     }
+}
+
+/// Le temps écoulé change chaque seconde : la ligne « en cours » ne doit pas
+/// être lue en continu par un lecteur d'écran. Pendant le calcul, elle n'est
+/// plus une zone annoncée ; une zone séparée, lue seulement par les lecteurs
+/// d'écran, ne reçoit que l'étape, quand elle change.
+#[test]
+fn seul_un_changement_d_etape_est_annonce() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains(
+        "raisonCalcul.setAttribute(\"aria-live\", calculEnCours ? \"off\" : \"polite\");"
+    ));
+    assert!(script.contains("annonceEtape = el(\"p\", \"lecteur-ecran\");"));
+    assert!(script.contains("annonceEtape.setAttribute(\"aria-live\", \"polite\");"));
+    assert!(script.contains(
+        "if (annonceEtape.textContent !== nomEtape) annonceEtape.textContent = nomEtape;"
+    ));
+    let css = composants();
+    let masque = regle(&css, ".lecteur-ecran").join(";");
+    for attendu in [
+        "position:absolute",
+        "width:1px",
+        "height:1px",
+        "overflow:hidden",
+    ] {
+        assert!(masque.contains(attendu), "{attendu} : {masque}");
+    }
+    assert!(lire("../design-system/ui-kit.html").contains("lecteur-ecran"));
 }
 
 /// La barre est un composant du système graphique : jetons seulement,

@@ -7,7 +7,9 @@ use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use app::colonne::{emplacement, BibliothequeOuverte};
-use app::profiler::{journal_court, ErreurProfil, HistoriqueDurees, Moteur, ProvenanceProfil};
+use app::profiler::{
+    journal_court, ErreurProfil, HistoriqueDurees, Moteur, ProvenanceProfil, SuiviCalcul,
+};
 use bibliotheque::{nom_profil_propose, EtatVerification, IdCondition, IdMesure};
 use pont_protocole::ConditionMesure;
 use profilage::{Avancement, ErreurMoteur, Etape, EtapeCalcul, MoteurSimule, Recette};
@@ -892,4 +894,32 @@ fn sans_argyll_la_page_sait_pourquoi_avant_le_clic() {
         Moteur(Some(profilage::ArgyllCms::new("argyll".into()))).indisponible(),
         None
     );
+}
+
+/// L'événement d'avancement porte le numéro du calcul que la page a lancé :
+/// elle ignore ceux d'un autre calcul. Il porte aussi ce que la barre montre
+/// (étape, étapes faites, position…), tiré des annonces du moteur.
+#[test]
+fn l_evenement_d_avancement_porte_le_numero_du_calcul() {
+    let b = banc();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
+    let mut suivi = SuiviCalcul::new(42);
+    let mut evenements = Vec::new();
+    b.ouverte
+        .calculer_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M1,
+            Recette::Standard,
+            &MoteurSimule::reussit(icc()),
+            maintenant(),
+            &mut |a| evenements.push(serde_json::to_value(suivi.recevoir(&a)).unwrap()),
+        )
+        .unwrap();
+    assert_eq!(evenements.len(), 3);
+    assert!(evenements.iter().all(|e| e["calcul"] == 42));
+    let etapes: Vec<_> = evenements.iter().map(|e| e["etape"].clone()).collect();
+    assert_eq!(etapes, ["preparation", "profil", "controle"]);
+    assert_eq!(evenements[2]["faites"], 6);
+    assert_eq!(evenements[2]["total"], 7);
 }

@@ -13,6 +13,7 @@
 mod argyll;
 mod moteur;
 mod plages;
+mod suivi;
 mod ti3;
 
 pub use argyll::{
@@ -25,4 +26,5 @@ pub use moteur::{
 };
 
 pub use plages::{conditions_utilisables, preparer_plages, PlageProfil, PlagesProfil, RefusPlages};
+pub use suivi::{EtatAvancement, SuiviAvancement};
 pub use ti3::ecrire_ti3;

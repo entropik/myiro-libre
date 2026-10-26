@@ -188,6 +188,9 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .progression__piste[data-etat="reussi"]>.progression__remplissage { background: var(--conforme); }
 .progression__piste[data-etat="erreur"]>.progression__remplissage { background: var(--hors); }
 .progression__detail { margin-top: var(--space-1); font-size: var(--text-xs); color: var(--attenue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Texte lu par les lecteurs d'écran seulement (par exemple l'étape d'un calcul, annoncée quand
+   elle change). */
+.lecteur-ecran { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) {
   .progression__remplissage { transition: none; }
   .progression__reflet { visibility: hidden; }

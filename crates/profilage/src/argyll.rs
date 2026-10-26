@@ -74,9 +74,8 @@ impl ArgyllCms {
         })
     }
 
-    /// Lance un outil dans le dossier de travail et ajoute sa sortie au
-    /// journal. Chaque ligne écrite est annoncée à `avancement` dès qu'elle
-    /// arrive (voir [`lire_avancement`]). Rend stdout et stderr réunis.
+    /// Lance un outil d'ArgyllCMS dans le dossier de travail (voir
+    /// [`executer`]).
     fn lancer(
         &self,
         nom: &str,
@@ -86,53 +85,153 @@ impl ArgyllCms {
         journal: &mut String,
         avancement: &mut dyn FnMut(Avancement),
     ) -> Result<String, ErreurMoteur> {
-        let echec = |e: io::Error| ErreurMoteur::Echec {
+        executer(
+            &self.outil(nom),
+            nom,
+            arguments,
+            dossier,
             etape,
-            cause: format!("{nom} : {e}"),
-        };
-        let mut enfant = commande(&self.outil(nom))
-            .args(arguments)
-            .current_dir(dossier)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(echec)?;
-        let (sortie, erreurs) = (enfant.stdout.take(), enfant.stderr.take());
-        // Un fil par flux : un flux plein ne bloque pas l'outil. Les lignes
-        // reviennent ici, sur le fil de l'appelant, dans l'ordre d'arrivée.
-        let (envoi, reception) = mpsc::channel();
-        let (stdout, stderr) = thread::scope(|s| {
-            let envoi_sortie = envoi.clone();
-            let lecteur_sortie = s.spawn(move || lire_flux(sortie, &envoi_sortie));
-            let lecteur_erreurs = s.spawn(move || lire_flux(erreurs, &envoi));
-            for l in reception {
-                // Une ligne qui ouvre une partie de colprof l'annonce d'abord.
-                if let Some(e) = etape_colprof(&l) {
-                    avancement(Avancement::Etape(e));
-                }
-                if let Some(a) = lire_avancement(&l) {
-                    avancement(a);
-                }
-            }
-            (
-                lecteur_sortie.join().unwrap_or_default(),
-                lecteur_erreurs.join().unwrap_or_default(),
-            )
-        });
-        let statut = enfant.wait().map_err(echec)?;
-        let stdout = String::from_utf8_lossy(&stdout);
-        let stderr = String::from_utf8_lossy(&stderr);
-        journal.push_str(&format!("$ {}\n{stdout}{stderr}", ligne(nom, arguments)));
-        if !statut.success() {
-            let cause = if stderr.trim().is_empty() {
-                derniere_ligne(&stdout)
-            } else {
-                derniere_ligne(&stderr)
-            };
-            return Err(ErreurMoteur::Echec { etape, cause });
+            journal,
+            avancement,
+        )
+    }
+}
+
+/// Lance `programme` dans `dossier` et ajoute sa sortie au journal, sous la
+/// ligne de commande `nom …`. Chaque ligne écrite est annoncée à
+/// `avancement` dès qu'elle arrive (voir [`lire_avancement`]). Une lecture
+/// interrompue est dite dans le journal. Rend stdout et stderr réunis.
+fn executer(
+    programme: &Path,
+    nom: &str,
+    arguments: &[OsString],
+    dossier: &Path,
+    etape: Etape,
+    journal: &mut String,
+    avancement: &mut dyn FnMut(Avancement),
+) -> Result<String, ErreurMoteur> {
+    let echec = |cause: String| ErreurMoteur::Echec {
+        etape,
+        cause: format!("{nom} : {cause}"),
+    };
+    let mut enfant = commande(programme)
+        .args(arguments)
+        .current_dir(dossier)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| echec(e.to_string()))?;
+    let lu = lire_sorties(enfant.stdout.take(), enfant.stderr.take(), avancement);
+    let (sortie, erreurs) = match lu {
+        Ok(lu) => lu,
+        Err(cause) => {
+            // Plus personne ne lit l'outil : il est arrêté.
+            let _ = enfant.kill();
+            let _ = enfant.wait();
+            journal.push_str(&format!("$ {}\n{cause}\n", ligne(nom, arguments)));
+            return Err(echec(cause));
         }
-        Ok(format!("{stdout}{stderr}"))
+    };
+    let statut = enfant.wait().map_err(|e| echec(e.to_string()))?;
+    let stdout = String::from_utf8_lossy(&sortie.octets);
+    let stderr = String::from_utf8_lossy(&erreurs.octets);
+    journal.push_str(&format!("$ {}\n{stdout}{stderr}", ligne(nom, arguments)));
+    for (flux, lu) in [("sortie standard", &sortie), ("sortie d'erreur", &erreurs)] {
+        if let Some(e) = &lu.erreur {
+            journal.push_str(&format!("\nlecture interrompue ({flux}) : {e}\n"));
+        }
+    }
+    if !statut.success() {
+        let cause = if stderr.trim().is_empty() {
+            derniere_ligne(&stdout)
+        } else {
+            derniere_ligne(&stderr)
+        };
+        return Err(ErreurMoteur::Echec { etape, cause });
+    }
+    Ok(format!("{stdout}{stderr}"))
+}
+
+/// Lit stdout et stderr d'un outil jusqu'au bout, un fil par flux : un flux
+/// plein ne bloque pas l'outil. Les lignes reviennent sur le fil de
+/// l'appelant, dans l'ordre d'arrivée, et sont annoncées à `avancement`. Un
+/// fil de lecture qui panique donne une erreur, pas une sortie vide.
+fn lire_sorties(
+    sortie: Option<impl Read + Send>,
+    erreurs: Option<impl Read + Send>,
+    avancement: &mut dyn FnMut(Avancement),
+) -> Result<(FluxLu, FluxLu), String> {
+    let (envoi, reception) = mpsc::channel();
+    thread::scope(|s| {
+        let envoi_sortie = envoi.clone();
+        let lecteur_sortie = s.spawn(move || lire_flux(sortie, &envoi_sortie));
+        let lecteur_erreurs = s.spawn(move || lire_flux(erreurs, &envoi));
+        for l in reception {
+            // Une ligne qui ouvre une partie de colprof l'annonce d'abord.
+            if let Some(e) = etape_colprof(&l) {
+                avancement(Avancement::Etape(e));
+            }
+            if let Some(a) = lire_avancement(&l) {
+                avancement(a);
+            }
+        }
+        let arrete =
+            |flux: &str| format!("lecture de la {flux} arrêtée net (fil de lecture en panique)");
+        let sortie = lecteur_sortie
+            .join()
+            .map_err(|_| arrete("sortie standard"))?;
+        let erreurs = lecteur_erreurs
+            .join()
+            .map_err(|_| arrete("sortie d'erreur"))?;
+        Ok((sortie, erreurs))
+    })
+}
+
+/// Ce qu'un flux a donné : tous ses octets, et l'erreur qui a arrêté sa
+/// lecture s'il y en a eu une.
+#[derive(Debug)]
+struct FluxLu {
+    octets: Vec<u8>,
+    erreur: Option<String>,
+}
+
+/// Lit un flux jusqu'au bout et le rend en entier (journal), avec l'erreur
+/// qui a arrêté la lecture s'il y en a eu une. Chaque ligne, coupée sur `\r`
+/// ou `\n`, est envoyée dès qu'elle est complète : un outil qui réécrit sa
+/// ligne (« 45% » puis « 46% ») est suivi pas à pas.
+fn lire_flux(flux: Option<impl Read>, envoi: &Sender<String>) -> FluxLu {
+    let mut tout = Vec::new();
+    let mut erreur = None;
+    let Some(mut flux) = flux else {
+        return FluxLu {
+            octets: tout,
+            erreur,
+        };
+    };
+    let mut debut = 0;
+    let mut tampon = [0u8; 4096];
+    loop {
+        match flux.read(&mut tampon) {
+            Ok(0) => break,
+            Ok(n) => tout.extend_from_slice(&tampon[..n]),
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => {
+                erreur = Some(e.to_string());
+                break;
+            }
+        }
+        while let Some(i) = tout[debut..].iter().position(|&c| c == b'\r' || c == b'\n') {
+            let _ = envoi.send(String::from_utf8_lossy(&tout[debut..debut + i]).into_owned());
+            debut += i + 1;
+        }
+    }
+    if debut < tout.len() {
+        let _ = envoi.send(String::from_utf8_lossy(&tout[debut..]).into_owned());
+    }
+    FluxLu {
+        octets: tout,
+        erreur,
     }
 }
 
@@ -197,34 +296,6 @@ impl MoteurProfil for ArgyllCms {
             precision,
         })
     }
-}
-
-/// Lit un flux jusqu'au bout et le rend en entier (journal). Chaque ligne,
-/// coupée sur `\r` ou `\n`, est envoyée dès qu'elle est complète : un outil
-/// qui réécrit sa ligne (« 45% » puis « 46% ») est suivi pas à pas.
-fn lire_flux(flux: Option<impl Read>, envoi: &Sender<String>) -> Vec<u8> {
-    let mut tout = Vec::new();
-    let Some(mut flux) = flux else {
-        return tout;
-    };
-    let mut debut = 0;
-    let mut tampon = [0u8; 4096];
-    loop {
-        match flux.read(&mut tampon) {
-            Ok(0) => break,
-            Ok(n) => tout.extend_from_slice(&tampon[..n]),
-            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-            Err(_) => break,
-        }
-        while let Some(i) = tout[debut..].iter().position(|&c| c == b'\r' || c == b'\n') {
-            let _ = envoi.send(String::from_utf8_lossy(&tout[debut..debut + i]).into_owned());
-            debut += i + 1;
-        }
-    }
-    if debut < tout.len() {
-        let _ = envoi.send(String::from_utf8_lossy(&tout[debut..]).into_owned());
-    }
-    tout
 }
 
 /// Commande sans fenêtre de console sous Windows.
@@ -511,7 +582,9 @@ mod tests {
     fn un_flux_se_lit_ligne_a_ligne_et_reste_entier() {
         let (envoi, reception) = std::sync::mpsc::channel();
         let texte = b"Creating B to A tables\r\n 45%\r 46%\rfin sans retour";
-        let tout = lire_flux(Some(&texte[..]), &envoi);
+        let lu = lire_flux(Some(&texte[..]), &envoi);
+        assert_eq!(lu.erreur, None);
+        let tout = lu.octets;
         drop(envoi);
         assert_eq!(tout, texte);
         let lignes: Vec<String> = reception.iter().collect();
@@ -525,6 +598,145 @@ mod tests {
                 "fin sans retour"
             ]
         );
+    }
+
+    /// Un flux qui rend quelques octets puis une erreur de lecture.
+    struct FluxCoupe(Option<&'static [u8]>);
+
+    impl Read for FluxCoupe {
+        fn read(&mut self, tampon: &mut [u8]) -> io::Result<usize> {
+            match self.0.take() {
+                Some(octets) => {
+                    tampon[..octets.len()].copy_from_slice(octets);
+                    Ok(octets.len())
+                }
+                None => Err(io::Error::other("tuyau rompu")),
+            }
+        }
+    }
+
+    /// Une erreur de lecture n'est pas avalée : elle est rendue avec ce qui a
+    /// été lu avant elle, pour le journal.
+    #[test]
+    fn une_erreur_de_lecture_est_gardee() {
+        let (envoi, reception) = std::sync::mpsc::channel();
+        let lu = lire_flux(Some(FluxCoupe(Some(b"debut\r\n"))), &envoi);
+        drop(envoi);
+        assert_eq!(lu.octets, b"debut\r\n");
+        assert_eq!(lu.erreur.as_deref(), Some("tuyau rompu"));
+        assert_eq!(reception.iter().collect::<Vec<_>>(), ["debut", ""]);
+    }
+
+    /// Un flux qui fait paniquer son fil de lecture.
+    struct FluxQuiPanique;
+
+    impl Read for FluxQuiPanique {
+        fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+            panic!("lecteur en panique (essai)")
+        }
+    }
+
+    /// Un fil de lecture qui panique ne passe pas pour une sortie vide : la
+    /// lecture rend une erreur claire.
+    #[test]
+    fn un_fil_de_lecture_en_panique_donne_une_erreur() {
+        let resultat = lire_sorties(Some(FluxQuiPanique), Some(&b"ok\n"[..]), &mut |_| {});
+        let erreur = resultat.unwrap_err();
+        assert!(erreur.contains("sortie standard"), "{erreur}");
+        let resultat = lire_sorties(Some(&b"ok\n"[..]), Some(FluxQuiPanique), &mut |_| {});
+        assert!(resultat.unwrap_err().contains("sortie d'erreur"));
+    }
+
+    /// Script `cmd` écrit dans un dossier temporaire.
+    #[cfg(windows)]
+    fn script(dossier: &Path, nom: &str, lignes: &[&str]) {
+        let texte: String = lignes.iter().map(|l| format!("{l}\r\n")).collect();
+        std::fs::write(dossier.join(nom), texte).unwrap();
+    }
+
+    /// Un vrai processus court, sans ArgyllCMS, qui écrit beaucoup sur ses
+    /// deux sorties à la fois (bien plus qu'un tuyau n'en tient) : rien ne
+    /// bloque, le journal est complet et chaque ligne est annoncée.
+    #[cfg(windows)]
+    #[test]
+    fn un_outil_bavard_sur_ses_deux_sorties_ne_bloque_pas() {
+        let dossier = tempfile::tempdir().unwrap();
+        script(
+            dossier.path(),
+            "bavard.cmd",
+            &[
+                "@echo off",
+                "for /L %%i in (1,1,3000) do (",
+                "  echo ligne %%i",
+                "  echo erreur %%i 1>&2",
+                ")",
+            ],
+        );
+        let mut journal = String::new();
+        let mut lignes = 0;
+        let sortie = executer(
+            Path::new("cmd"),
+            "bavard",
+            &["/c".into(), r".\bavard.cmd".into()],
+            dossier.path(),
+            Etape::Profil,
+            &mut journal,
+            &mut |a| {
+                if matches!(a, Avancement::Ligne(_)) {
+                    lignes += 1;
+                }
+            },
+        )
+        .unwrap();
+        assert_eq!(lignes, 6000);
+        assert_eq!(sortie.matches("ligne ").count(), 3000);
+        assert_eq!(sortie.matches("erreur ").count(), 3000);
+        assert!(
+            journal.starts_with("$ bavard /c .\\bavard.cmd\n"),
+            "{}",
+            &journal[..40]
+        );
+        for i in [1, 1500, 3000] {
+            assert!(journal.contains(&format!("ligne {i}\r\n")), "ligne {i}");
+            assert!(journal.contains(&format!("erreur {i} ")), "erreur {i}");
+        }
+    }
+
+    /// Un outil qui échoue : la cause est sa dernière ligne d'erreur, et le
+    /// journal garde tout ce qu'il a écrit.
+    #[cfg(windows)]
+    #[test]
+    fn un_outil_qui_echoue_donne_sa_derniere_ligne_d_erreur() {
+        let dossier = tempfile::tempdir().unwrap();
+        script(
+            dossier.path(),
+            "echec.cmd",
+            &[
+                "@echo off",
+                "echo debut du calcul",
+                "echo trop peu de plages 1>&2",
+                "exit /b 3",
+            ],
+        );
+        let mut journal = String::new();
+        let erreur = executer(
+            Path::new("cmd"),
+            "echec",
+            &["/c".into(), r".\echec.cmd".into()],
+            dossier.path(),
+            Etape::Profil,
+            &mut journal,
+            &mut |_| {},
+        )
+        .unwrap_err();
+        assert_eq!(
+            erreur,
+            ErreurMoteur::Echec {
+                etape: Etape::Profil,
+                cause: "trop peu de plages".into()
+            }
+        );
+        assert!(journal.contains("debut du calcul") && journal.contains("trop peu de plages"));
     }
 
     #[test]
