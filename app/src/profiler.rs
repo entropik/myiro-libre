@@ -17,7 +17,8 @@ use bibliotheque::{
 use pont_protocole::ConditionMesure;
 use profilage::{
     chercher_argyll, conditions_utilisables, ecrire_ti3, lignes_commandes, preparer_plages,
-    ArgyllCms, DemandeProfil, ErreurMoteur, MoteurProfil, PlagesProfil, Recette, RefusPlages,
+    ArgyllCms, Avancement, DemandeProfil, ErreurMoteur, EtapeCalcul, MoteurProfil, PlagesProfil,
+    Recette, RefusPlages,
 };
 use serde::{Deserialize, Serialize};
 
@@ -304,7 +305,9 @@ impl BibliothequeOuverte {
     /// et le range : il devient le profil actuel, « non vérifié », sous le
     /// nom proposé. La commande, la version du moteur, le journal et la
     /// précision sont conservés avec lui. En cas d'erreur, rien n'est rangé
-    /// et le profil actuel reste le même.
+    /// et le profil actuel reste le même. L'avancement (étapes, lignes et
+    /// pourcentages d'ArgyllCMS) est annoncé à `avancement` en route.
+    #[allow(clippy::too_many_arguments)]
     pub fn calculer_profil(
         &self,
         condition: IdCondition,
@@ -313,15 +316,20 @@ impl BibliothequeOuverte {
         recette: Recette,
         moteur: &dyn MoteurProfil,
         maintenant: SystemTime,
+        avancement: &mut dyn FnMut(Avancement),
     ) -> Result<ResultatProfil, ErreurProfil> {
+        avancement(Avancement::Etape(EtapeCalcul::Preparation));
         let p = self.preparer_profil(condition, mesure, mesure_condition, maintenant)?;
         // Hors du verrou : la page et l'arbre restent utilisables.
         let calcule = moteur
-            .calculer(&DemandeProfil {
-                ti3: &p.ti3,
-                description: &p.description,
-                recette,
-            })
+            .calculer(
+                &DemandeProfil {
+                    ti3: &p.ti3,
+                    description: &p.description,
+                    recette,
+                },
+                avancement,
+            )
             .map_err(|e| {
                 eprintln!("{e}");
                 ErreurProfil::du_moteur(&e)
@@ -389,10 +397,15 @@ pub fn profiler_commandes(
     })
 }
 
+/// Événement qui porte l'avancement d'un calcul vers la page.
+pub const EVENEMENT_AVANCEMENT: &str = "profil-avancement";
+
 /// Calcule et range le profil. Hors du fil de la fenêtre : le calcul peut
-/// durer plusieurs minutes.
+/// durer plusieurs minutes. Son avancement part vers la page par
+/// l'événement [`EVENEMENT_AVANCEMENT`].
 #[tauri::command(async)]
 pub fn profiler_calculer(
+    app: tauri::AppHandle,
     ouverte: tauri::State<'_, BibliothequeOuverte>,
     moteur: tauri::State<'_, Moteur>,
     condition: i64,
@@ -400,6 +413,7 @@ pub fn profiler_calculer(
     mesure_condition: ConditionMesure,
     recette: Recette,
 ) -> Result<ResultatProfil, ErreurProfil> {
+    use tauri::Emitter;
     ouverte.calculer_profil(
         IdCondition(condition),
         IdMesure(mesure),
@@ -407,5 +421,9 @@ pub fn profiler_calculer(
         recette,
         moteur.moteur()?,
         SystemTime::now(),
+        // Une page fermée ne reçoit rien : le calcul continue.
+        &mut |a| {
+            let _ = app.emit(EVENEMENT_AVANCEMENT, a);
+        },
     )
 }

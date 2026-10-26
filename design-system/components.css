@@ -192,7 +192,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .btn--primary { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); font-weight: 600; }
 .btn[disabled] { color: var(--attenue); cursor: not-allowed; }
 .btn--primary[disabled] { background: transparent; border-color: var(--filet); }
-.why { font-size: var(--text-sm); color: var(--attenue); margin-top: var(--space-2); }
+.why { font-size: var(--text-sm); color: var(--attenue); margin-top: var(--space-2); white-space: pre-line; }
 .actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin: var(--space-4) 0; }
 
 /* ---- État : carré de couleur et mot (jamais la couleur seule) ---- */

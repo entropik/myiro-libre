@@ -7,15 +7,17 @@
 
 use std::ffi::OsString;
 use std::fs;
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, Sender};
+use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::moteur::{
-    DemandeProfil, ErreurMoteur, Etape, MoteurProfil, Precision, ProfilCalcule, Recette,
-    VERSION_ARGYLL,
+    lire_avancement, Avancement, DemandeProfil, ErreurMoteur, Etape, EtapeCalcul, MoteurProfil,
+    Precision, ProfilCalcule, Recette, VERSION_ARGYLL,
 };
 
 /// Noms des fichiers dans le dossier de travail.
@@ -73,7 +75,8 @@ impl ArgyllCms {
     }
 
     /// Lance un outil dans le dossier de travail et ajoute sa sortie au
-    /// journal. Rend stdout et stderr réunis.
+    /// journal. Chaque ligne écrite est annoncée à `avancement` dès qu'elle
+    /// arrive (voir [`lire_avancement`]). Rend stdout et stderr réunis.
     fn lancer(
         &self,
         nom: &str,
@@ -81,19 +84,43 @@ impl ArgyllCms {
         dossier: &Path,
         etape: Etape,
         journal: &mut String,
+        avancement: &mut dyn FnMut(Avancement),
     ) -> Result<String, ErreurMoteur> {
-        let sortie = commande(&self.outil(nom))
+        let echec = |e: io::Error| ErreurMoteur::Echec {
+            etape,
+            cause: format!("{nom} : {e}"),
+        };
+        let mut enfant = commande(&self.outil(nom))
             .args(arguments)
             .current_dir(dossier)
-            .output()
-            .map_err(|e| ErreurMoteur::Echec {
-                etape,
-                cause: format!("{nom} : {e}"),
-            })?;
-        let stdout = String::from_utf8_lossy(&sortie.stdout);
-        let stderr = String::from_utf8_lossy(&sortie.stderr);
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(echec)?;
+        let (sortie, erreurs) = (enfant.stdout.take(), enfant.stderr.take());
+        // Un fil par flux : un flux plein ne bloque pas l'outil. Les lignes
+        // reviennent ici, sur le fil de l'appelant, dans l'ordre d'arrivée.
+        let (envoi, reception) = mpsc::channel();
+        let (stdout, stderr) = thread::scope(|s| {
+            let envoi_sortie = envoi.clone();
+            let lecteur_sortie = s.spawn(move || lire_flux(sortie, &envoi_sortie));
+            let lecteur_erreurs = s.spawn(move || lire_flux(erreurs, &envoi));
+            for l in reception {
+                if let Some(a) = lire_avancement(&l) {
+                    avancement(a);
+                }
+            }
+            (
+                lecteur_sortie.join().unwrap_or_default(),
+                lecteur_erreurs.join().unwrap_or_default(),
+            )
+        });
+        let statut = enfant.wait().map_err(echec)?;
+        let stdout = String::from_utf8_lossy(&stdout);
+        let stderr = String::from_utf8_lossy(&stderr);
         journal.push_str(&format!("$ {}\n{stdout}{stderr}", ligne(nom, arguments)));
-        if !sortie.status.success() {
+        if !statut.success() {
             let cause = if stderr.trim().is_empty() {
                 derniere_ligne(&stdout)
             } else {
@@ -110,7 +137,11 @@ impl MoteurProfil for ArgyllCms {
         lignes_commandes(demande.recette, demande.description)
     }
 
-    fn calculer(&self, demande: &DemandeProfil) -> Result<ProfilCalcule, ErreurMoteur> {
+    fn calculer(
+        &self,
+        demande: &DemandeProfil,
+        avancement: &mut dyn FnMut(Avancement),
+    ) -> Result<ProfilCalcule, ErreurMoteur> {
         let version = self.version()?;
         controler_version(&version)?;
 
@@ -129,13 +160,23 @@ impl MoteurProfil for ArgyllCms {
             Path::new(PROFIL),
             Path::new(BASE),
         );
-        self.lancer("colprof", &colprof, chemin, Etape::Profil, &mut journal)?;
+        avancement(Avancement::Etape(EtapeCalcul::Profil));
+        self.lancer(
+            "colprof",
+            &colprof,
+            chemin,
+            Etape::Profil,
+            &mut journal,
+            avancement,
+        )?;
+        avancement(Avancement::Etape(EtapeCalcul::Controle));
         let controle = self.lancer(
             "profcheck",
             &arguments_profcheck(),
             chemin,
             Etape::Controle,
             &mut journal,
+            avancement,
         )?;
         // Un profil sans précision n'est pas présenté comme terminé.
         let precision = lire_precision(&controle).ok_or_else(|| ErreurMoteur::Echec {
@@ -152,6 +193,34 @@ impl MoteurProfil for ArgyllCms {
             precision,
         })
     }
+}
+
+/// Lit un flux jusqu'au bout et le rend en entier (journal). Chaque ligne,
+/// coupée sur `\r` ou `\n`, est envoyée dès qu'elle est complète : un outil
+/// qui réécrit sa ligne (« 45% » puis « 46% ») est suivi pas à pas.
+fn lire_flux(flux: Option<impl Read>, envoi: &Sender<String>) -> Vec<u8> {
+    let mut tout = Vec::new();
+    let Some(mut flux) = flux else {
+        return tout;
+    };
+    let mut debut = 0;
+    let mut tampon = [0u8; 4096];
+    loop {
+        match flux.read(&mut tampon) {
+            Ok(0) => break,
+            Ok(n) => tout.extend_from_slice(&tampon[..n]),
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(_) => break,
+        }
+        while let Some(i) = tout[debut..].iter().position(|&c| c == b'\r' || c == b'\n') {
+            let _ = envoi.send(String::from_utf8_lossy(&tout[debut..debut + i]).into_owned());
+            debut += i + 1;
+        }
+    }
+    if debut < tout.len() {
+        let _ = envoi.send(String::from_utf8_lossy(&tout[debut..]).into_owned());
+    }
+    tout
 }
 
 /// Commande sans fenêtre de console sous Windows.
@@ -426,7 +495,32 @@ mod tests {
             description: "Essai",
             recette: Recette::Standard,
         };
-        assert_eq!(moteur.calculer(&demande), Err(ErreurMoteur::Introuvable));
+        assert_eq!(
+            moteur.calculer(&demande, &mut |_| {}),
+            Err(ErreurMoteur::Introuvable)
+        );
+    }
+
+    /// Un flux est rendu en entier pour le journal, et chaque ligne, coupée
+    /// sur `\r` ou `\n`, est envoyée dès qu'elle est complète.
+    #[test]
+    fn un_flux_se_lit_ligne_a_ligne_et_reste_entier() {
+        let (envoi, reception) = std::sync::mpsc::channel();
+        let texte = b"Creating B to A tables\r\n 45%\r 46%\rfin sans retour";
+        let tout = lire_flux(Some(&texte[..]), &envoi);
+        drop(envoi);
+        assert_eq!(tout, texte);
+        let lignes: Vec<String> = reception.iter().collect();
+        assert_eq!(
+            lignes,
+            [
+                "Creating B to A tables",
+                "",
+                " 45%",
+                " 46%",
+                "fin sans retour"
+            ]
+        );
     }
 
     #[test]

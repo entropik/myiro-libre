@@ -10,7 +10,7 @@ use app::colonne::{emplacement, BibliothequeOuverte};
 use app::profiler::{ErreurProfil, Moteur, ProvenanceProfil};
 use bibliotheque::{nom_profil_propose, EtatVerification, IdCondition, IdMesure};
 use pont_protocole::ConditionMesure;
-use profilage::{ErreurMoteur, Etape, MoteurSimule, Recette};
+use profilage::{Avancement, ErreurMoteur, Etape, EtapeCalcul, MoteurSimule, Recette};
 use tempfile::TempDir;
 
 /// En-tête ICC RVB minimal de 132 octets : taille, `RGB `, `acsp`.
@@ -113,6 +113,7 @@ fn un_profil_calcule_devient_actif_et_non_verifie() {
             Recette::Standard,
             &moteur,
             maintenant(),
+            &mut |_| {},
         )
         .unwrap();
 
@@ -148,6 +149,7 @@ fn les_parametres_gardent_commande_version_recette_et_precision() {
             Recette::Rapide,
             &moteur,
             maintenant(),
+            &mut |_| {},
         )
         .unwrap();
 
@@ -190,6 +192,7 @@ fn le_nom_du_profil_est_celui_propose() {
             Recette::Standard,
             &MoteurSimule::reussit(icc()),
             maintenant(),
+            &mut |_| {},
         )
         .unwrap();
     let profil = b.ouverte.profil(resultat.profil).unwrap();
@@ -224,6 +227,7 @@ fn un_echec_du_moteur_laisse_le_profil_actif_inchange() {
             Recette::Standard,
             &moteur,
             maintenant(),
+            &mut |_| {},
         )
         .unwrap_err();
 
@@ -268,6 +272,7 @@ fn argyll_introuvable_ne_range_rien() {
             Recette::Standard,
             &MoteurSimule::echoue(ErreurMoteur::Introuvable),
             maintenant(),
+            &mut |_| {},
         )
         .unwrap_err();
     assert_eq!(erreur.cle, "profil.erreur.argyll_introuvable");
@@ -307,6 +312,7 @@ fn une_mesure_sans_rvb_ne_peut_pas_servir_de_source() {
             Recette::Standard,
             &moteur,
             maintenant(),
+            &mut |_| {},
         )
         .unwrap_err();
     assert_eq!(erreur.cle, "profil.refus.rvb_inconnus");
@@ -365,6 +371,7 @@ fn une_condition_absente_de_la_mesure_est_refusee() {
             Recette::Standard,
             &MoteurSimule::reussit(icc()),
             maintenant(),
+            &mut |_| {},
         )
         .unwrap_err();
     assert_eq!(erreur.cle, "profil.refus.condition_absente");
@@ -397,6 +404,7 @@ fn une_mesure_d_une_autre_resolution_est_refusee() {
                 Recette::Standard,
                 &moteur,
                 maintenant(),
+                &mut |_| {},
             )
             .unwrap_err(),
         b.ouverte
@@ -491,6 +499,56 @@ fn les_textes_du_calcul_existent() {
     }
 }
 
+/// Pendant le calcul, l'écran apprend l'étape en cours : préparation des
+/// mesures, puis calcul du profil, puis contrôle de précision.
+#[test]
+fn le_calcul_annonce_ses_etapes_dans_l_ordre() {
+    let b = banc();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
+    let mut annonces = Vec::new();
+    b.ouverte
+        .calculer_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M1,
+            Recette::Standard,
+            &MoteurSimule::reussit(icc()),
+            maintenant(),
+            &mut |a| annonces.push(a),
+        )
+        .unwrap();
+    assert_eq!(
+        annonces,
+        [
+            Avancement::Etape(EtapeCalcul::Preparation),
+            Avancement::Etape(EtapeCalcul::Profil),
+            Avancement::Etape(EtapeCalcul::Controle),
+        ]
+    );
+}
+
+/// Une mesure refusée avant le moteur n'annonce que la préparation.
+#[test]
+fn une_mesure_refusee_n_annonce_que_la_preparation() {
+    let b = banc();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
+    let mut annonces = Vec::new();
+    let moteur = MoteurSimule::reussit(icc());
+    b.ouverte
+        .calculer_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M0,
+            Recette::Standard,
+            &moteur,
+            maintenant(),
+            &mut |a| annonces.push(a),
+        )
+        .unwrap_err();
+    assert_eq!(annonces, [Avancement::Etape(EtapeCalcul::Preparation)]);
+    assert!(moteur.demandes().is_empty());
+}
+
 /// Les exports RVB de FD-S2w et de MYIROtools sont tous deux acceptés : les
 /// textes qui invitent à importer les nomment tous les deux.
 #[test]
@@ -524,6 +582,7 @@ fn une_autre_version_d_argyll_donne_la_version_trouvee() {
             Recette::Standard,
             &moteur,
             maintenant(),
+            &mut |_| {},
         )
         .unwrap_err();
     assert_eq!(
@@ -560,6 +619,7 @@ fn une_version_illisible_a_sa_propre_cle() {
             Recette::Standard,
             &moteur,
             maintenant(),
+            &mut |_| {},
         )
         .unwrap_err();
     assert_eq!(
@@ -589,6 +649,7 @@ fn un_fichier_de_travail_garde_sa_cause() {
             Recette::Standard,
             &moteur,
             maintenant(),
+            &mut |_| {},
         )
         .unwrap_err();
     assert_eq!(
@@ -655,6 +716,7 @@ fn la_provenance_d_un_profil_calcule_est_donnee_a_la_page() {
             Recette::Standard,
             &MoteurSimule::reussit(icc()),
             maintenant(),
+            &mut |_| {},
         )
         .unwrap();
     let texte = b.ouverte.parametres_profil(resultat.profil).unwrap();

@@ -11,8 +11,8 @@ use std::process::Command;
 use bibliotheque::{espace_icc, EspaceProfil};
 use pont_protocole::ConditionMesure;
 use profilage::{
-    chercher_argyll, ecrire_ti3, ArgyllCms, DemandeProfil, MoteurProfil, PlageProfil, PlagesProfil,
-    Recette, VERSION_ARGYLL,
+    chercher_argyll, ecrire_ti3, ArgyllCms, Avancement, DemandeProfil, EtapeCalcul, MoteurProfil,
+    PlageProfil, PlagesProfil, Recette, VERSION_ARGYLL,
 };
 
 fn racine_argyll() -> PathBuf {
@@ -54,19 +54,32 @@ fn mire_synthetique() -> PlagesProfil {
 }
 
 fn calculer(description: &str, recette: Recette) -> profilage::ProfilCalcule {
+    calculer_avec_avancement(description, recette).0
+}
+
+/// Calcule et rend aussi tout ce que le moteur a annoncé en route.
+fn calculer_avec_avancement(
+    description: &str,
+    recette: Recette,
+) -> (profilage::ProfilCalcule, Vec<Avancement>) {
+    let mut annonces = Vec::new();
     let ti3 = ecrire_ti3(&mire_synthetique(), description, "2026-10-23T09:00:00Z");
     let moteur = ArgyllCms::new(racine_argyll());
     let profil = moteur
-        .calculer(&DemandeProfil {
-            ti3: &ti3,
-            description,
-            recette,
-        })
+        .calculer(
+            &DemandeProfil {
+                ti3: &ti3,
+                description,
+                recette,
+            },
+            &mut |a| annonces.push(a),
+        )
         .unwrap_or_else(|e| panic!("{e}"));
+    println!("avancement : {} annonces", annonces.len());
     println!("{}", profil.journal);
     println!("commandes : {:#?}", profil.commandes);
     println!("précision : {:?}", profil.precision);
-    profil
+    (profil, annonces)
 }
 
 /// Description d'un profil ICC v2 (`desc`, textDescriptionType) : partie
@@ -107,7 +120,22 @@ fn argyll_du_depot_est_en_version_3_5_0() {
 #[test]
 #[ignore = "demande ArgyllCMS 3.5.0"]
 fn un_profil_se_calcule_sur_une_mire_synthetique() {
-    let profil = calculer("Essai synthétique 2026-10-23", Recette::Standard);
+    let (profil, annonces) =
+        calculer_avec_avancement("Essai synthétique 2026-10-23", Recette::Standard);
+    // colprof annonce ses étapes, ses lignes et des pourcentages à lui.
+    let profil_puis_controle: Vec<_> = annonces
+        .iter()
+        .filter(|a| matches!(a, Avancement::Etape(_)))
+        .collect();
+    assert_eq!(
+        profil_puis_controle,
+        [
+            &Avancement::Etape(EtapeCalcul::Profil),
+            &Avancement::Etape(EtapeCalcul::Controle)
+        ]
+    );
+    assert!(annonces.contains(&Avancement::Ligne("Creating B to A tables".into())));
+    assert!(annonces.contains(&Avancement::Pourcentage(50)));
     assert_eq!(espace_icc(&profil.icc), Ok(EspaceProfil::Rvb));
     assert!(
         profil.precision.moyenne_de00 < 1.0,

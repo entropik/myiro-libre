@@ -126,12 +126,62 @@ impl fmt::Display for ErreurMoteur {
 
 impl std::error::Error for ErreurMoteur {}
 
+/// Étape d'un calcul, annoncée à l'écran pendant qu'il tourne.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EtapeCalcul {
+    /// Lecture et contrôle des mesures, écriture du `.ti3` (application).
+    Preparation,
+    /// Calcul du profil (`colprof`).
+    Profil,
+    /// Contrôle de précision (`profcheck`).
+    Controle,
+}
+
+/// Ce que le calcul annonce pendant qu'il tourne.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Avancement {
+    /// Une étape commence.
+    Etape(EtapeCalcul),
+    /// Une ligne de texte écrite par l'outil (`colprof -v`), sans ses espaces
+    /// de bord.
+    Ligne(String),
+    /// Un pourcentage écrit par l'outil lui-même, seul sur sa ligne
+    /// (« 45% ») : il vaut pour la partie en cours, jamais pour tout le
+    /// calcul. Rien n'est estimé.
+    Pourcentage(u8),
+}
+
+/// Ce qu'une ligne d'un outil annonce : un pourcentage écrit seul sur sa
+/// ligne (de 0 à 100), sinon la ligne elle-même ; rien pour une ligne vide.
+pub fn lire_avancement(ligne: &str) -> Option<Avancement> {
+    let ligne = ligne.trim();
+    if ligne.is_empty() {
+        return None;
+    }
+    let pourcentage = ligne
+        .strip_suffix('%')
+        .filter(|n| !n.is_empty() && n.len() <= 3 && n.bytes().all(|c| c.is_ascii_digit()))
+        .and_then(|n| n.parse::<u8>().ok())
+        .filter(|n| *n <= 100);
+    Some(match pourcentage {
+        Some(p) => Avancement::Pourcentage(p),
+        None => Avancement::Ligne(ligne.to_string()),
+    })
+}
+
 /// Un moteur de calcul de profil ICC.
 pub trait MoteurProfil: Send + Sync {
     /// Commandes équivalentes, sans rien lancer (section « Avancé »).
     fn commandes(&self, demande: &DemandeProfil) -> Vec<String>;
-    /// Calcule le profil. En cas d'erreur, rien n'est rendu.
-    fn calculer(&self, demande: &DemandeProfil) -> Result<ProfilCalcule, ErreurMoteur>;
+    /// Calcule le profil en annonçant son avancement à `avancement` (sur le
+    /// fil de l'appelant). En cas d'erreur, rien n'est rendu.
+    fn calculer(
+        &self,
+        demande: &DemandeProfil,
+        avancement: &mut dyn FnMut(Avancement),
+    ) -> Result<ProfilCalcule, ErreurMoteur>;
 }
 
 /// Moteur des tests : rend toujours le même résultat et garde les demandes
@@ -172,12 +222,19 @@ impl MoteurProfil for MoteurSimule {
         lignes_commandes(demande.recette, demande.description)
     }
 
-    fn calculer(&self, demande: &DemandeProfil) -> Result<ProfilCalcule, ErreurMoteur> {
+    /// Annonce le calcul puis le contrôle, comme ArgyllCMS, sans ligne d'outil.
+    fn calculer(
+        &self,
+        demande: &DemandeProfil,
+        avancement: &mut dyn FnMut(Avancement),
+    ) -> Result<ProfilCalcule, ErreurMoteur> {
         self.demandes
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .push((demande.ti3.to_string(), demande.recette));
+        avancement(Avancement::Etape(EtapeCalcul::Profil));
         let icc = self.resultat.clone()?;
+        avancement(Avancement::Etape(EtapeCalcul::Controle));
         Ok(ProfilCalcule {
             icc,
             version: VERSION_ARGYLL.to_string(),

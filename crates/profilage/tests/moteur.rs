@@ -7,8 +7,9 @@ use std::path::{Path, PathBuf};
 
 use profilage::{
     arguments_colprof, chercher_argyll, controler_version, description_argyll, lignes_commandes,
-    lire_precision, lire_version, ArgyllCms, DemandeProfil, ErreurMoteur, Etape, MoteurProfil,
-    MoteurSimule, Precision, Recette, VERSION_ARGYLL,
+    lire_avancement, lire_precision, lire_version, ArgyllCms, Avancement, DemandeProfil,
+    ErreurMoteur, Etape, EtapeCalcul, MoteurProfil, MoteurSimule, Precision, Recette,
+    VERSION_ARGYLL,
 };
 
 fn textes(recette: Recette, description: &str) -> Vec<String> {
@@ -315,7 +316,7 @@ fn le_moteur_simule_rend_son_resultat_et_garde_les_demandes() {
         commandes[1]
     );
 
-    let profil = moteur.calculer(&demande).unwrap();
+    let profil = moteur.calculer(&demande, &mut |_| {}).unwrap();
     assert_eq!(profil.icc, [1, 2, 3]);
     assert_eq!(profil.version, VERSION_ARGYLL);
     assert_eq!(profil.commandes, commandes);
@@ -337,7 +338,7 @@ fn le_moteur_simule_peut_echouer() {
         description: "Essai",
         recette: Recette::Standard,
     };
-    assert_eq!(moteur.calculer(&demande), Err(erreur));
+    assert_eq!(moteur.calculer(&demande, &mut |_| {}), Err(erreur));
     assert_eq!(moteur.demandes().len(), 1);
 }
 
@@ -376,4 +377,69 @@ fn les_commandes_se_construisent_sans_argyll() {
     );
     let absent = ArgyllCms::new(PathBuf::from("dossier-qui-n-existe-pas"));
     assert_eq!(absent.commandes(&demande), commandes);
+}
+
+/// Lignes réelles de `colprof -v` (ArgyllCMS 3.5.0, 26 octobre 2026) : un
+/// pourcentage écrit seul sur sa ligne devient un pourcentage, tout autre
+/// texte une ligne ; rien n'est estimé.
+#[test]
+fn l_avancement_se_lit_dans_les_lignes_de_colprof() {
+    assert_eq!(lire_avancement("  0%"), Some(Avancement::Pourcentage(0)));
+    assert_eq!(lire_avancement(" 45%"), Some(Avancement::Pourcentage(45)));
+    assert_eq!(lire_avancement("100%"), Some(Avancement::Pourcentage(100)));
+    assert_eq!(
+        lire_avancement("Creating B to A tables"),
+        Some(Avancement::Ligne("Creating B to A tables".into()))
+    );
+    assert_eq!(
+        lire_avancement("  Finding Destination Gamut "),
+        Some(Avancement::Ligne("Finding Destination Gamut".into()))
+    );
+    assert_eq!(lire_avancement(""), None);
+    assert_eq!(lire_avancement("   "), None);
+    // Pas un pourcentage de colprof : gardé comme ligne.
+    assert_eq!(
+        lire_avancement("150%"),
+        Some(Avancement::Ligne("150%".into()))
+    );
+}
+
+#[test]
+fn le_moteur_simule_annonce_le_calcul_puis_le_controle() {
+    let moteur = MoteurSimule::reussit(vec![1]);
+    let demande = DemandeProfil {
+        ti3: "CTI3
+",
+        description: "Essai",
+        recette: Recette::Rapide,
+    };
+    let mut annonces = Vec::new();
+    moteur
+        .calculer(&demande, &mut |a| annonces.push(a))
+        .unwrap();
+    assert_eq!(
+        annonces,
+        [
+            Avancement::Etape(EtapeCalcul::Profil),
+            Avancement::Etape(EtapeCalcul::Controle)
+        ]
+    );
+}
+
+/// La page reçoit l'avancement en JSON : `{"etape": "profil"}`,
+/// `{"ligne": "…"}` ou `{"pourcentage": 45}`.
+#[test]
+fn l_avancement_s_envoie_en_json() {
+    assert_eq!(
+        serde_json::to_string(&Avancement::Etape(EtapeCalcul::Preparation)).unwrap(),
+        r#"{"etape":"preparation"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&Avancement::Ligne("Creating B to A tables".into())).unwrap(),
+        r#"{"ligne":"Creating B to A tables"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&Avancement::Pourcentage(45)).unwrap(),
+        r#"{"pourcentage":45}"#
+    );
 }

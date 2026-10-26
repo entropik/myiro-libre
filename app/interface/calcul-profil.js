@@ -33,6 +33,50 @@ window.CalculProfil = (() => {
   let commandes = "";
   let demande = 0; // dernière demande de commandes : une réponse plus ancienne est ignorée
 
+  // Avancement du calcul en cours, reçu du module `profiler` (événement « profil-avancement ») :
+  // l'étape, puis la dernière ligne écrite par ArgyllCMS et le pourcentage qu'il a écrit lui-même
+  // pour la partie en cours. Rien n'est estimé. Le temps écoulé est redessiné chaque seconde.
+  const ETAPES = {
+    preparation: "profil.etape.preparation",
+    profil: "profil.etape.profil",
+    controle: "profil.etape.controle",
+  };
+  let avancement = { etape: "preparation", ligne: "", pourcentage: null, debut: 0 };
+  let minuterie = null;
+
+  const duree = (ms) => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const m = Math.floor(s / 60);
+    return m ? `${m} min ${String(s % 60).padStart(2, "0")} s` : `${s} s`;
+  };
+
+  // Le seul message « en cours » : la phrase d'attente, l'étape et le temps écoulé, puis ce
+  // qu'ArgyllCMS a écrit en dernier.
+  function texteEnCours() {
+    const ecoule = t("profil.ecoule").replace("{duree}", () => duree(Date.now() - avancement.debut));
+    const lignes = [t("profil.en_cours"), `${t(ETAPES[avancement.etape])} · ${ecoule}`];
+    if (avancement.ligne) {
+      lignes.push(avancement.pourcentage === null
+        ? t("profil.argyll.ligne").replace("{ligne}", () => avancement.ligne)
+        : t("profil.argyll.pourcentage").replace("{ligne}", () => avancement.ligne)
+          .replace("{pourcentage}", () => String(avancement.pourcentage)));
+    }
+    return lignes.join("\n");
+  }
+
+  window.__TAURI__.event.listen("profil-avancement", (evenement) => {
+    if (!calculEnCours) return;
+    const a = evenement.payload || {};
+    if (a.etape in ETAPES) {
+      avancement = { ...avancement, etape: a.etape, ligne: "", pourcentage: null };
+    } else if (typeof a.ligne === "string") {
+      avancement = { ...avancement, ligne: a.ligne, pourcentage: null };
+    } else if (typeof a.pourcentage === "number") {
+      avancement = { ...avancement, pourcentage: a.pourcentage };
+    }
+    dessinerRaison();
+  });
+
   // Une erreur arrive en clé du catalogue, ou en objet {cle, cause, version} (calcul d'un
   // profil) : le texte de la clé, avec la version refusée à sa place, puis ce qu'a dit ArgyllCMS,
   // inséré tel quel. Tout le reste (objet sans clé, exception de la page) est une erreur
@@ -54,7 +98,7 @@ window.CalculProfil = (() => {
 
   function dessinerRaison() {
     if (!raisonCalcul) return;
-    const texte = calculEnCours ? t("profil.en_cours")
+    const texte = calculEnCours ? texteEnCours()
       : erreurCalcul || erreurCommandes || (choix.mesure === null ? t("profil.calculer.raison") : "");
     raisonCalcul.textContent = texte;
     raisonCalcul.hidden = !texte;
@@ -217,7 +261,11 @@ window.CalculProfil = (() => {
     const condition = d.condition.id;
     const ici = () => parc.reglage()?.condition.id === condition;
     erreurCalcul = "";
+    avancement = { etape: "preparation", ligne: "", pourcentage: null, debut: Date.now() };
     calculEnCours = true;
+    clearInterval(minuterie);
+    minuterie = setInterval(dessinerRaison, 1000);
+    dessinerRaison();
     parc.occupation();
     let r;
     try {
@@ -226,6 +274,9 @@ window.CalculProfil = (() => {
       calculEnCours = false;
       if (ici()) erreurCalcul = texteErreur(erreur);
       return;
+    } finally {
+      clearInterval(minuterie);
+      minuterie = null;
     }
     calculEnCours = false;
     if (ici()) ouvert = false;

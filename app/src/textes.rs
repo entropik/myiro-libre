@@ -230,6 +230,30 @@ const FRANCAIS: Catalogue = &[
         "Calcul du profil en cours. Cela peut prendre plusieurs minutes.",
     ),
     (
+        "profil.etape.preparation",
+        "Préparation des mesures",
+    ),
+    (
+        "profil.etape.profil",
+        "Calcul du profil (colprof)",
+    ),
+    (
+        "profil.etape.controle",
+        "Contrôle de précision (profcheck)",
+    ),
+    (
+        "profil.ecoule",
+        "temps écoulé\u{202f}: {duree}",
+    ),
+    (
+        "profil.argyll.ligne",
+        "Dernière ligne d’ArgyllCMS\u{202f}: {ligne}",
+    ),
+    (
+        "profil.argyll.pourcentage",
+        "Dernière ligne d’ArgyllCMS\u{202f}: {ligne} — {pourcentage}\u{202f}% de cette partie",
+    ),
+    (
         "profil.fait",
         "Profil calculé. Écart moyen {moyenne} ΔE00, maximum {max}. Il n’est pas encore vérifié.",
     ),
@@ -1153,6 +1177,30 @@ const ANGLAIS: Catalogue = &[
     (
         "profil.en_cours",
         "Computing the profile. This may take several minutes.",
+    ),
+    (
+        "profil.etape.preparation",
+        "Preparing the measurements",
+    ),
+    (
+        "profil.etape.profil",
+        "Computing the profile (colprof)",
+    ),
+    (
+        "profil.etape.controle",
+        "Checking accuracy (profcheck)",
+    ),
+    (
+        "profil.ecoule",
+        "elapsed time: {duree}",
+    ),
+    (
+        "profil.argyll.ligne",
+        "Last line from ArgyllCMS: {ligne}",
+    ),
+    (
+        "profil.argyll.pourcentage",
+        "Last line from ArgyllCMS: {ligne} — {pourcentage}% of this part",
     ),
     (
         "profil.fait",

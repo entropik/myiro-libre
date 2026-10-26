@@ -662,7 +662,7 @@ fn le_bouton_calculer_inactif_dit_pourquoi() {
         "raison loin du bouton"
     );
     assert!(script.contains("if (choix.mesure === null) calculer.dataset.inactif = \"\";"));
-    assert!(script.contains("calculEnCours ? t(\"profil.en_cours\")"));
+    assert!(script.contains("calculEnCours ? texteEnCours()"));
     assert!(script.contains(
         ": erreurCalcul || erreurCommandes || (choix.mesure === null ? t(\"profil.calculer.raison\") : \"\")"
     ));
@@ -721,6 +721,45 @@ fn la_commande_et_le_journal_restent_consultables() {
         texte(Langue::Anglais, "profil.precision"),
         "Calculation accuracy"
     );
+}
+
+/// Pendant le calcul, le message « en cours » dit l'étape, le temps écoulé
+/// (redessiné chaque seconde) et ce qu'ArgyllCMS a écrit en dernier, reçus
+/// par l'événement `profil-avancement`. Une seule minuterie, arrêtée à la
+/// fin du calcul, réussi ou non.
+#[test]
+fn pendant_un_calcul_l_avancement_se_voit() {
+    use app::textes::{texte, Langue};
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains("listen(\"profil-avancement\""));
+    assert!(script.contains("calculEnCours ? texteEnCours()"));
+    assert!(script.contains("t(\"profil.en_cours\")"));
+    assert!(script.contains("setInterval(dessinerRaison, 1000)"));
+    assert_eq!(script.matches("setInterval(").count(), 1);
+    assert!(script.contains("clearInterval(minuterie)"));
+    assert!(
+        script.contains("finally {"),
+        "minuterie arrêtée même en cas d'erreur"
+    );
+    for cle in [
+        "profil.etape.preparation",
+        "profil.etape.profil",
+        "profil.etape.controle",
+        "profil.ecoule",
+        "profil.argyll.ligne",
+        "profil.argyll.pourcentage",
+    ] {
+        assert!(
+            script.contains(&format!("\"{cle}\"")),
+            "{cle} absente de la page"
+        );
+        for langue in [Langue::Francais, Langue::Anglais] {
+            assert_ne!(texte(langue, cle), cle, "{cle} absente du catalogue");
+        }
+    }
+    // Le pourcentage est celui d'une partie du calcul, pas du tout.
+    assert!(texte(Langue::Francais, "profil.argyll.pourcentage").contains("partie"));
+    assert!(texte(Langue::Anglais, "profil.argyll.pourcentage").contains("part"));
 }
 
 /// Pendant un calcul, le message général ne se cache que si la raison du
