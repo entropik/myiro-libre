@@ -271,6 +271,13 @@ pub(crate) fn provenance_profil(
     Ok(provenance_depuis_parametres(&texte))
 }
 
+/// Durée d'un calcul arrondie au dixième de seconde, telle qu'elle est rangée
+/// (provenance du profil et `durees-calcul.json`) : elle se relit à
+/// l'identique.
+pub fn arrondir_duree(secondes: f64) -> f64 {
+    (secondes * 10.0).round() / 10.0
+}
+
 /// Provenance lue dans les paramètres conservés d'un profil ; rien pour un
 /// profil rangé tel quel ou des paramètres illisibles.
 pub fn provenance_depuis_parametres(texte: &str) -> Option<ProvenanceProfil> {
@@ -467,7 +474,7 @@ impl BibliothequeOuverte {
                 ErreurProfil::du_moteur(&e)
             })?;
         // De la préparation à la fin du contrôle de précision.
-        let duree_s = debut.elapsed().as_secs_f64();
+        let duree_s = arrondir_duree(debut.elapsed().as_secs_f64());
         let parametres = serde_json::json!({
             "origine": "calcul",
             "moteur": "ArgyllCMS",

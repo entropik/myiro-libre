@@ -8,8 +8,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use app::colonne::{emplacement, BibliothequeOuverte};
 use app::profiler::{
-    journal_court, provenance_depuis_parametres, ErreurProfil, HistoriqueDurees, Moteur,
-    ProvenanceProfil, SuiviCalcul,
+    arrondir_duree, journal_court, provenance_depuis_parametres, ErreurProfil, HistoriqueDurees,
+    Moteur, ProvenanceProfil, SuiviCalcul,
 };
 use bibliotheque::{nom_profil_propose, EtatVerification, IdCondition, IdMesure};
 use pont_protocole::ConditionMesure;
@@ -875,8 +875,23 @@ fn la_provenance_d_un_profil_calcule_est_donnee_a_la_page() {
             duree_s: Some(resultat.duree_s),
         })
     );
+    // Durée rangée au dixième de seconde : elle se relit à l'identique.
     assert!(resultat.duree_s >= 0.0 && resultat.duree_s.is_finite());
+    assert_eq!(
+        resultat.duree_s,
+        (resultat.duree_s * 10.0).round() / 10.0,
+        "durée non arrondie au dixième"
+    );
     assert_eq!(parametres["duree_s"].as_f64(), Some(resultat.duree_s));
+}
+
+/// La durée est arrondie au dixième de seconde avant d'être rangée.
+#[test]
+fn la_duree_est_arrondie_au_dixieme() {
+    assert_eq!(arrondir_duree(182.96), 183.0);
+    assert_eq!(arrondir_duree(58.04), 58.0);
+    assert_eq!(arrondir_duree(0.0004), 0.0);
+    assert_eq!(arrondir_duree(3.25), 3.3);
 }
 
 /// Un profil calculé avant que la durée soit gardée n'en a pas : rien
