@@ -215,6 +215,14 @@ _Éviter_ : ink limit, saturation
 Évaluation d'un tirage d'une seconde mire imprimée à travers un profil : elle distingue la fidélité aux couleurs demandées de l'accord entre les mesures et la prédiction du profil. Les deux résultats conservent leurs références et leurs tolérances.
 _Éviter_ : validation de profil, test de profil
 
+**Recette de calcul** :
+Qualité demandée au calcul d'un profil : rapide (pour un essai), standard (par défaut, en production) ou approfondie (la plus longue). Elle est conservée avec le profil, avec la version d'ArgyllCMS et la commande lancée.
+_Éviter_ : preset, mode, qualité seule
+
+**Précision du calcul** :
+Écart ΔE00 moyen et maximal entre les mesures qui ont servi au calcul et ce que le profil prédit pour elles. Elle dit si le calcul a bien suivi les mesures, pas si le profil est bon : un profil calculé reste « à vérifier » (« Profil calculé, à vérifier ») jusqu'à la vérification de profil.
+_Éviter_ : qualité du profil, vérification
+
 ### Densitométrie et contrôle
 
 **Densité** :
@@ -242,6 +250,14 @@ _Éviter_ : base de données (au sens technique), dossier de mesures, catalogue
 **Pastille de l'instrument** :
 Petit rond de couleur dans la barre du haut, devant le nom et l'état de l'instrument actif : non détecté, connecté, étalonnage requis, étalonné, en mesure. Le texte dit toujours l'état : la couleur n'est jamais seule. Un clic ouvre la liste des instruments du poste.
 _Éviter_ : voyant, LED, indicateur
+
+**Barre d'avancement** :
+Barre qui montre où en est le calcul d'un profil : chaque étape (préparation, parties du calcul de colprof, contrôle de précision) en occupe une part égale, et elle ne recule jamais. Dans une étape, elle n'avance que d'un pourcentage écrit par ArgyllCMS ; une lumière spectrale qui la traverse dit que le calcul travaille. Dessous : l'étape, le temps écoulé et, s'il y a eu un calcul avec la même recette, le temps restant « estimé ».
+_Éviter_ : jauge, pourcentage global, temps restant (sans « estimé »)
+
+**À vérifier** :
+État d'un profil qui n'a pas encore passé la vérification de profil : « Profil calculé, à vérifier » pour un profil calculé par myiro-libre, « Profil importé, à vérifier » pour un profil rangé tel quel. L'état enregistré reste `non_verifie`.
+_Éviter_ : non vérifié, non validé
 
 **Ranger un profil existant** :
 Mettre dans une résolution de la bibliothèque un profil ICC RVB ou CMJN déjà fait ailleurs (fichier `.icc` ou `.icm`). Il devient le profil actif, sous le nom proposé (imprimante, papier, résolution, date) ; sa provenance dit « profil existant », et l'instrument et la mire qui l'ont produit restent « inconnus ».

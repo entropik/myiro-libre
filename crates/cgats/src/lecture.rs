@@ -65,6 +65,8 @@ fn jetons(ligne: &str, numero: usize) -> Result<Vec<Jeton>, ErreurCgats> {
 /// Un tableau du fichier, tel qu'écrit.
 #[derive(Default)]
 struct Tableau {
+    /// Identifiant de la première ligne du tableau (`CGATS.17`, `CTI3`…).
+    identifiant: Option<String>,
     mots_cles: Vec<(String, String)>,
     champs: Vec<String>,
     valeurs: Vec<String>,
@@ -112,7 +114,10 @@ fn tableaux(texte: &str) -> Result<Vec<Tableau>, ErreurCgats> {
                     etat = Etat::Donnees;
                 }
                 // Identifiant du fichier (CGATS.17, IT8.7/2…) en tête d'un tableau.
-                _ if !commence && jetons.len() == 1 => commence = true,
+                _ if !commence && jetons.len() == 1 => {
+                    commence = true;
+                    courant.identifiant = Some(premier.to_string());
+                }
                 "KEYWORD" => commence = true,
                 "NUMBER_OF_SETS" => {
                     commence = true;
@@ -180,6 +185,50 @@ fn nombre(texte: &str, quoi: &str) -> Result<f32, ErreurCgats> {
         .ok_or_else(|| ErreurCgats(format!("{quoi} : « {texte} » n'est pas un nombre")))
 }
 
+/// Nombre lu en double précision, pour une valeur ramenée ensuite à une échelle.
+fn nombre_f64(texte: &str, quoi: &str) -> Result<f64, ErreurCgats> {
+    texte
+        .parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite())
+        .ok_or_else(|| ErreurCgats(format!("{quoi} : « {texte} » n'est pas un nombre")))
+}
+
+/// Échelle des valeurs RVB d'un fichier, décidée par le logiciel qui l'a
+/// écrit, jamais devinée (`docs/formats/cgats.md`).
+enum EchelleRvb {
+    /// Fichier `CTI3` d'ArgyllCMS : 0 à 100, établi par la description du format.
+    Confirmee(f64),
+    /// Export FD-S2w ou MYIROtools : 0 à 255, observé sur des exports réels
+    /// de FD-S2w et de MYIROtools, sans document du fabricant qui l'affirme.
+    Supposee(f64),
+    Inconnue,
+}
+
+impl EchelleRvb {
+    fn du_fichier(premier: &Tableau) -> Self {
+        if premier.identifiant.as_deref() == Some("CTI3") {
+            EchelleRvb::Confirmee(100.0)
+        } else if premier.mot_cle("FILE_DESCRIPTOR") == Some("FD-S2w")
+            || premier.mot_cle("ORIGINATOR") == Some("MYIROtools")
+        {
+            EchelleRvb::Supposee(255.0)
+        } else {
+            EchelleRvb::Inconnue
+        }
+    }
+
+    /// Valeurs du fichier ramenées de 0 à 1, gardées telles quelles hors échelle.
+    fn qualifier(&self, brut: Option<[f64; 3]>) -> Info<[f32; 3]> {
+        let ramener = |v: [f64; 3], maximum: f64| v.map(|c| (c / maximum) as f32);
+        match (self, brut) {
+            (EchelleRvb::Confirmee(m), Some(v)) => Info::Confirmee(ramener(v, *m)),
+            (EchelleRvb::Supposee(m), Some(v)) => Info::Supposee(ramener(v, *m)),
+            _ => Info::Inconnue,
+        }
+    }
+}
+
 /// Pourcentage ramené à une réflectance de 0 à 1. Calculé en f64 : une valeur
 /// écrite par [`crate::ecrire`] (f32 × 100, en f64) se relit à l'identique.
 fn pourcent(texte: &str, quoi: &str) -> Result<f32, ErreurCgats> {
@@ -199,6 +248,8 @@ struct Lu {
     identifiants: Vec<String>,
     spectres: Vec<Info<Spectre>>,
     lab: Vec<Info<Lab>>,
+    /// Valeurs RVB telles qu'écrites, sans échelle ; `None` sans colonnes RVB.
+    rvb: Vec<Option<[f64; 3]>>,
 }
 
 /// Emplacement et condition d'un tableau, sans rien deviner : mot-clé de
@@ -212,6 +263,16 @@ fn emplacement(t: &Tableau, rang: usize) -> Result<(usize, Info<ConditionMesure>
         })?),
         None => None,
     };
+    let source = t.mot_cle("MEASUREMENT_SOURCE");
+    // Une condition écrite en clair (MYIROtools, par exemple) comme source.
+    let source_en_clair = source.and_then(condition_depuis);
+    if let (Some(c), Some(s)) = (ecrite, source_en_clair) {
+        if c != s {
+            return erreur(format!(
+                "tableau {rang} : MEASUREMENT_CONDITION « {c:?} » et MEASUREMENT_SOURCE « {s:?} » se contredisent ; rien n'est deviné"
+            ));
+        }
+    }
     if let Some(e) = t.mot_cle(&format!("{PREFIXE}SPECTRE")) {
         let n = EMPLACEMENTS.iter().position(|x| *x == e).ok_or_else(|| {
             ErreurCgats(format!("tableau {rang} : {PREFIXE}SPECTRE « {e} » inconnu"))
@@ -221,7 +282,10 @@ fn emplacement(t: &Tableau, rang: usize) -> Result<(usize, Info<ConditionMesure>
     if let Some(c) = ecrite {
         return Ok((c as usize, Info::Confirmee(c)));
     }
-    let source = t.mot_cle("MEASUREMENT_SOURCE");
+    // Condition écrite en clair (MYIROtools, par exemple) : confirmée.
+    if let Some(c) = source_en_clair {
+        return Ok((c as usize, Info::Confirmee(c)));
+    }
     let deduite = match source {
         Some("A") => Some(ConditionMesure::M0),
         Some("D50") => Some(ConditionMesure::M1),
@@ -231,7 +295,7 @@ fn emplacement(t: &Tableau, rang: usize) -> Result<(usize, Info<ConditionMesure>
     match deduite {
         Some(c) => Ok((c as usize, Info::Supposee(c))),
         None => erreur(format!(
-            "tableau {rang} : condition de mesure introuvable (ni MEASUREMENT_CONDITION, ni MEASUREMENT_SOURCE A, D50 ou UVCUT) ; rien n'est deviné"
+            "tableau {rang} : condition de mesure introuvable (ni MEASUREMENT_CONDITION, ni MEASUREMENT_SOURCE M0, M1, M2, A, D50 ou UVCUT) ; rien n'est deviné"
         )),
     }
 }
@@ -241,6 +305,11 @@ fn lire_tableau(t: &Tableau, rang: usize) -> Result<Lu, ErreurCgats> {
     let colonne = |nom: &str| t.champs.iter().position(|c| c.eq_ignore_ascii_case(nom));
     let id = colonne("SAMPLE_ID");
     let lab = [colonne("LAB_L"), colonne("LAB_A"), colonne("LAB_B")];
+    let rvb = match [colonne("RGB_R"), colonne("RGB_G"), colonne("RGB_B")] {
+        [Some(r), Some(g), Some(b)] => Some([r, g, b]),
+        [None, None, None] => None,
+        _ => return erreur(format!("tableau {rang} : colonnes RVB incomplètes")),
+    };
 
     // Colonnes de spectre, chacune avec son échelle, jamais devinée :
     // `nm380` du fabricant (réflectance de 0 à 1), `SPEC_380` d'ArgyllCMS
@@ -316,6 +385,7 @@ fn lire_tableau(t: &Tableau, rang: usize) -> Result<Lu, ErreurCgats> {
         identifiants: Vec::new(),
         spectres: Vec::new(),
         lab: Vec::new(),
+        rvb: Vec::new(),
     };
     for (n, ligne) in t.lignes().enumerate() {
         let quoi = |champ: &str| format!("tableau {rang}, plage {}, {champ}", n + 1);
@@ -332,6 +402,16 @@ fn lire_tableau(t: &Tableau, rang: usize) -> Result<Lu, ErreurCgats> {
                 )
             }
             _ => Info::Inconnue,
+        });
+        lu.rvb.push(match rvb {
+            Some(colonnes) => {
+                let mut v = [0.0; 3];
+                for (k, colonne) in colonnes.into_iter().enumerate() {
+                    v[k] = nombre_f64(&ligne[colonne], &quoi(&t.champs[colonne]))?;
+                }
+                Some(v)
+            }
+            None => None,
         });
         lu.spectres.push(if colonnes_spectre.is_empty() {
             Info::Inconnue
@@ -387,6 +467,7 @@ pub fn lire(texte: &str) -> Result<MesureImportee, ErreurCgats> {
     let mut longueurs_onde = Info::Inconnue;
     let mut plages: Vec<PlageImportee> = Vec::new();
     let mut vus = [false; 3];
+    let mut rvb: Vec<Option<[f64; 3]>> = Vec::new();
     for (i, t) in tableaux.iter().enumerate() {
         let lu = lire_tableau(t, i + 1)?;
         let e = lu.emplacement;
@@ -412,8 +493,10 @@ pub fn lire(texte: &str) -> Result<MesureImportee, ErreurCgats> {
                     identifiant: id.clone(),
                     spectres: [Info::Inconnue, Info::Inconnue, Info::Inconnue],
                     lab: [Info::Inconnue, Info::Inconnue, Info::Inconnue],
+                    rvb: Info::Inconnue,
                 })
                 .collect();
+            rvb = lu.rvb;
         } else if lu.identifiants.len() != plages.len()
             || lu
                 .identifiants
@@ -425,11 +508,21 @@ pub fn lire(texte: &str) -> Result<MesureImportee, ErreurCgats> {
                 "tableau {} : pas les mêmes plages que le premier tableau",
                 i + 1
             ));
+        } else if lu.rvb != rvb {
+            return erreur(format!(
+                "tableau {} : pas les mêmes valeurs RVB que le premier tableau",
+                i + 1
+            ));
         }
         for ((plage, spectre), lab) in plages.iter_mut().zip(lu.spectres).zip(lu.lab) {
             plage.spectres[e] = spectre;
             plage.lab[e] = lab;
         }
+    }
+
+    let echelle = EchelleRvb::du_fichier(premier);
+    for (plage, brut) in plages.iter_mut().zip(rvb) {
+        plage.rvb = echelle.qualifier(brut);
     }
 
     Ok(MesureImportee {

@@ -1,7 +1,8 @@
 // Vue d'une résolution d'impression, choisie dans l'arbre (parc.js) : au centre, le profil actif
 // (verdict couleur + icône + mot), le seul bouton principal « Installer dans Windows », exporter,
-// ranger un profil existant, l'historique et les mesures ; à droite, la provenance du profil.
-// Les actions passent par le module Rust `parc` ; les textes, par le catalogue (app.js).
+// ranger un profil existant, calculer un profil (calcul-profil.js), l'historique et les mesures ;
+// à droite, la provenance du profil. Les actions passent par le module Rust `parc` ; les textes,
+// par le catalogue (app.js).
 "use strict";
 
 window.Reglage = (() => {
@@ -35,17 +36,24 @@ window.Reglage = (() => {
     annonce.hidden = !texte;
   }
 
-  // Pendant une action (fenêtre de Windows ouverte, installation), les trois boutons sont
-  // inactifs et la raison « en cours » est dite juste à côté : un double clic ne fait rien.
-  const BOUTONS = "[data-installer], [data-exporter-profil], [data-ranger-profil]";
+  // Calcul d'un profil : section, calcul et provenance (calcul-profil.js).
+  const calcul = window.CalculProfil;
+  const { texteErreur } = calcul;
+
+  // Pendant une action (fenêtre de Windows ouverte, installation, calcul), tous les boutons de
+  // la vue sont inactifs et la raison « en cours » est dite juste à côté : un double clic ne
+  // fait rien. Pendant un calcul, seule sa raison à lui est dite, sous son bouton. Un bouton
+  // marqué data-inactif l'est aussi hors de toute action.
+  const BOUTONS = "[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-calcul-profil] button, [data-calcul-profil] input";
   const occupe = vue.querySelector("[data-reglage-occupe]");
   let enCours = false;
 
   function dessinerOccupation(sansProfil) {
     for (const b of vue.querySelectorAll(BOUTONS)) {
-      b.disabled = enCours || (sansProfil && b.hasAttribute("data-installer"));
+      b.disabled = enCours || b.hasAttribute("data-inactif") || (sansProfil && b.hasAttribute("data-installer"));
     }
-    occupe.hidden = !enCours;
+    occupe.hidden = !enCours || calcul.raisonVisible();
+    calcul.dessinerRaison();
   }
 
   function remplirVue(d, lignesMesures) {
@@ -53,8 +61,10 @@ window.Reglage = (() => {
     titre.textContent = `${d.papier} · ${d.resolution}`;
     titre.title = `${d.imprimante} · ${titre.textContent}`;
     const actif = d.actif;
-    // Un état que la page ne connaît pas encore est montré comme « non vérifié », sans rien casser.
-    const [classe, mot] = actif ? VERDICTS[actif.etat] || VERDICTS.non_verifie : ["aucun", "parc.verdict.aucun"];
+    // Un état que la page ne connaît pas encore est montré comme « à vérifier », sans rien casser.
+    // Le mot vient du module `parc` : un profil à vérifier dit s'il est calculé ou importé.
+    const [classe, repli] = actif ? VERDICTS[actif.etat] || VERDICTS.non_verifie : ["aucun", "parc.verdict.aucun"];
+    const mot = textes[d.verdict] ? d.verdict : repli;
     vue.querySelector("[data-reglage-verdict]").className = "carte carte--verdict verdict--" + classe;
     vue.querySelector("[data-verdict-trace]").setAttribute("d", TRACES[classe]);
     vue.querySelector("[data-verdict-mot]").textContent = t(mot);
@@ -66,6 +76,7 @@ window.Reglage = (() => {
     // Un seul bouton principal ; sans profil, il est inactif et dit pourquoi, juste à côté.
     vue.querySelector("[data-installer-raison]").hidden = Boolean(actif) || enCours;
     vue.querySelector("[data-exporter-profil]").hidden = !actif;
+    calcul.dessiner(d);
     dessinerOccupation(!actif);
 
     const historique = vue.querySelector("[data-historique]");
@@ -73,7 +84,7 @@ window.Reglage = (() => {
       const ligne = el("div", "cle-valeur mute");
       const quand = el("span", "", `${date(p.horodatage)} · ${t(p.actif ? "parc.historique.actuel" : "parc.historique.remplace")}`);
       quand.title = p.nom;
-      const etat = textes["parc.etat." + p.etat] ? "parc.etat." + p.etat : "parc.etat.non_verifie";
+      const etat = textes[p.libelle] ? p.libelle : "parc.etat.non_verifie";
       ligne.append(quand, el("span", "", t(etat)));
       return ligne;
     }));
@@ -104,6 +115,14 @@ window.Reglage = (() => {
     return l;
   }
 
+  // Instrument d'un profil calculé : celui que déclare le fichier de la mesure source.
+  function instrumentDeclare(d) {
+    const source = d.provenance && d.importees.find((m) => m.id === d.provenance.mesure);
+    const info = source ? source.instrument : null;
+    if (!info || info.statut === "inconnue") return t("parc.inconnu");
+    return info.statut === "supposee" ? `${info.valeur} (${t("details.a_confirmer")})` : info.valeur;
+  }
+
   // Provenance du profil à droite : ce qui n'est pas connu est écrit « inconnu » en toutes lettres.
   function remplirDetails(d) {
     const a = d.actif;
@@ -112,8 +131,9 @@ window.Reglage = (() => {
         cleValeur("parc.origine", t("parc.origine." + d.origine)),
         cleValeur("parc.nom", a.nom),
         cleValeur("parc.empreinte", a.empreinte.slice(0, 12)),
-        cleValeur("parc.instrument", t("parc.inconnu")),
+        cleValeur("parc.instrument", instrumentDeclare(d)),
         cleValeur("parc.mire", t("parc.inconnue")),
+        ...calcul.provenance(d, cleValeur),
       ]
       : [el("p", "", t("parc.verdict.aucun"))];
     details.replaceChildren(
@@ -133,8 +153,8 @@ window.Reglage = (() => {
     annoncer("");
     try {
       await faire(d);
-    } catch (cle) {
-      annoncer(t(String(cle)));
+    } catch (erreur) {
+      annoncer(texteErreur(erreur));
     }
     enCours = false;
     dessinerOccupation(!d.actif);
@@ -155,6 +175,15 @@ window.Reglage = (() => {
     const etat = await invoke("parc_installer_profil", { profil: d.actif.id });
     annoncer(t(etat === "deja_installe" ? "parc.deja_installe" : "installation.installe"));
   }));
+
+  // Le calcul agit sur la résolution affichée, avec le même mécanisme que les autres actions.
+  calcul.brancher({
+    reglage: () => parc.reglage(),
+    recharger: () => parc.recharger(),
+    annoncer,
+    agir,
+    occupation: () => dessinerOccupation(!(parc.reglage() || {}).actif),
+  });
 
   return {
     brancher: (fonctions) => { parc = fonctions; },

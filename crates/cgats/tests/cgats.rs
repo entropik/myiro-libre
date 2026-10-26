@@ -341,6 +341,13 @@ fn sans_condition_de_mesure_le_fichier_est_refuse_plutot_que_devine() {
         erreur.0.contains("condition de mesure introuvable"),
         "{erreur}"
     );
+    // Le message dit aussi les conditions écrites en clair qu'il accepte.
+    assert!(
+        erreur
+            .0
+            .contains("MEASUREMENT_SOURCE M0, M1, M2, A, D50 ou UVCUT"),
+        "{erreur}"
+    );
 }
 
 #[test]
@@ -462,4 +469,173 @@ fn un_guillemet_se_relit_et_un_retour_a_la_ligne_est_refuse() {
     p.calcul.libelle = "deux\nlignes".into();
     let mesure = Mesure::new(bande().plages().to_vec(), p).unwrap();
     assert!(ecrire(&mesure).is_err());
+}
+
+/// Fichier fictif d'un seul tableau : `en_tete` après l'identifiant, puis
+/// les colonnes `champs` et les lignes `lignes` (une par plage).
+fn fichier_rvb(identifiant: &str, en_tete: &str, champs: &str, lignes: &[&str]) -> String {
+    let donnees: String = lignes.iter().map(|l| format!("{l}\r\n")).collect();
+    format!(
+        "{identifiant}\r\n{en_tete}BEGIN_DATA_FORMAT\r\n{champs}\r\nEND_DATA_FORMAT\r\n\
+         NUMBER_OF_SETS\t{}\r\nBEGIN_DATA\r\n{donnees}END_DATA\r\n",
+        lignes.len()
+    )
+}
+
+/// En-tête fictif à la manière d'un export FD-S2w (M1 seul), RVB de 0 à 255.
+fn fichier_fd_s2w_rvb() -> String {
+    fichier_rvb(
+        "CGATS.17",
+        "ORIGINATOR\t\"Fabricant fictif\"\r\nFILE_DESCRIPTOR\t\"FD-S2w\"\r\n\
+         MEASUREMENT_SOURCE\t\"D50\"\r\n",
+        "SAMPLE_ID\tRGB_R\tRGB_G\tRGB_B\tLAB_L\tLAB_A\tLAB_B",
+        &[
+            "1\t255\t255\t255\t95\t0\t2",
+            "2\t0\t117.61\t199.05\t42.09\t-28\t-60.57",
+        ],
+    )
+}
+
+#[test]
+fn un_export_fd_s2w_donne_des_rvb_supposes_sur_255() {
+    let m = lire(&fichier_fd_s2w_rvb()).unwrap();
+    assert_eq!(m.plages[0].rvb, Info::Supposee([1.0, 1.0, 1.0]));
+    let Info::Supposee(v) = m.plages[1].rvb else {
+        panic!("RVB supposés attendus : {:?}", m.plages[1].rvb);
+    };
+    assert_eq!(v[0], 0.0);
+    assert!((v[1] - 117.61 / 255.0).abs() < 1e-6);
+    assert!((v[2] - 199.05 / 255.0).abs() < 1e-6);
+}
+
+/// En-tête fictif à la manière d'un export RVB de MYIROtools : condition
+/// écrite en clair (`MEASUREMENT_SOURCE "M1"`), colonnes XYZ et Lab, RVB de
+/// 0.00 à 255.00, numéro de série fictif.
+fn fichier_myirotools_rvb() -> String {
+    fichier_rvb(
+        "CGATS.17",
+        "ORIGINATOR\t\"MYIROtools\"\r\nDESCRIPTOR\t\"MYIROtools CGATS export file\"\r\n\
+         MEASUREMENT_SOURCE\t\"M1\"\r\nSERIAL\t\"00000000\"\r\n",
+        "SAMPLE_ID\tRGB_R\tRGB_G\tRGB_B\tXYZ_X\tXYZ_Y\tXYZ_Z\tLAB_L\tLAB_A\tLAB_B",
+        &[
+            "1\t255.00\t255.00\t255.00\t87.00\t90.00\t74.00\t95.00\t0.00\t2.00",
+            "2\t0.00\t127.50\t51.00\t10.00\t15.00\t8.00\t45.00\t-40.00\t20.00",
+        ],
+    )
+}
+
+#[test]
+fn un_export_myirotools_donne_des_rvb_supposes_sur_255() {
+    let m = lire(&fichier_myirotools_rvb()).unwrap();
+    assert_eq!(m.plages.len(), 2);
+    assert_eq!(m.plages[0].rvb, Info::Supposee([1.0, 1.0, 1.0]));
+    assert_eq!(m.plages[1].rvb, Info::Supposee([0.0, 0.5, 0.2]));
+}
+
+#[test]
+fn un_export_myirotools_ecrit_sa_condition_en_clair() {
+    let m = lire(&fichier_myirotools_rvb()).unwrap();
+    assert_eq!(m.conditions[1], Info::Confirmee(ConditionMesure::M1));
+    assert_eq!(m.conditions[0], Info::Inconnue);
+    assert_eq!(m.conditions[2], Info::Inconnue);
+    assert!(m.plages.iter().all(|p| p.lab[1] != Info::Inconnue));
+    for (source, rang, condition) in [
+        ("M0", 0, ConditionMesure::M0),
+        ("M2", 2, ConditionMesure::M2),
+    ] {
+        let texte = fichier_myirotools_rvb().replace("\"M1\"", &format!("\"{source}\""));
+        let m = lire(&texte).unwrap();
+        assert_eq!(m.conditions[rang], Info::Confirmee(condition));
+    }
+}
+
+/// Deux conditions écrites qui se contredisent : refusé plutôt que deviné.
+#[test]
+fn une_condition_et_une_source_contradictoires_sont_refusees() {
+    let texte = fichier_myirotools_rvb().replace(
+        "MEASUREMENT_SOURCE\t\"M1\"",
+        "MEASUREMENT_CONDITION\t\"M2\"\r\nMEASUREMENT_SOURCE\t\"M1\"",
+    );
+    let e = lire(&texte).unwrap_err();
+    assert!(
+        e.0.contains("MEASUREMENT_CONDITION « M2 »") && e.0.contains("MEASUREMENT_SOURCE « M1 »"),
+        "{e}"
+    );
+}
+
+#[test]
+fn une_condition_et_une_source_concordantes_sont_acceptees() {
+    let texte = fichier_myirotools_rvb().replace(
+        "MEASUREMENT_SOURCE\t\"M1\"",
+        "MEASUREMENT_CONDITION\t\"M1\"\r\nMEASUREMENT_SOURCE\t\"M1\"",
+    );
+    let m = lire(&texte).unwrap();
+    assert_eq!(m.conditions[1], Info::Confirmee(ConditionMesure::M1));
+}
+
+#[test]
+fn un_ti3_d_argyll_donne_des_rvb_confirmes_sur_100() {
+    let texte = fichier_rvb(
+        "CTI3",
+        "DESCRIPTOR\t\"Argyll Calibration Target chart information 3\"\r\n\
+         ORIGINATOR\t\"Argyll target\"\r\nMEASUREMENT_CONDITION\t\"M1\"\r\n",
+        "SAMPLE_ID\tRGB_R\tRGB_G\tRGB_B\tLAB_L\tLAB_A\tLAB_B",
+        &["1\t50\t100\t0\t60\t1\t2"],
+    );
+    let m = lire(&texte).unwrap();
+    assert_eq!(m.plages[0].rvb, Info::Confirmee([0.5, 1.0, 0.0]));
+}
+
+#[test]
+fn sans_colonnes_rvb_les_rvb_sont_inconnus() {
+    let m = lire(&fichier_spectre("nm400", "0.5")).unwrap();
+    assert_eq!(m.plages[0].rvb, Info::Inconnue);
+    // Une mesure de myiro-libre n'a pas de RVB non plus.
+    let m = lire(&ecrire(&bande()).unwrap()).unwrap();
+    assert!(m.plages.iter().all(|p| p.rvb == Info::Inconnue));
+}
+
+#[test]
+fn un_autre_logiciel_avec_rvb_donne_une_echelle_inconnue() {
+    let texte = fichier_fd_s2w_rvb().replace("FD-S2w", "autre");
+    let m = lire(&texte).unwrap();
+    assert!(m.plages.iter().all(|p| p.rvb == Info::Inconnue));
+    // L'export fictif du fabricant porte des RVB, sans échelle établie.
+    let m = lire(&export_tiers("D50", true)).unwrap();
+    assert!(m.plages.iter().all(|p| p.rvb == Info::Inconnue));
+}
+
+#[test]
+fn deux_colonnes_rvb_sur_trois_sont_refusees() {
+    let texte = fichier_fd_s2w_rvb().replace("\tRGB_B\t", "\tD_VIS\t");
+    let e = lire(&texte).unwrap_err();
+    assert_eq!(e.0, "tableau 1 : colonnes RVB incomplètes");
+}
+
+#[test]
+fn une_valeur_rvb_illisible_est_refusee() {
+    let texte = fichier_fd_s2w_rvb().replace("117.61", "11x.61");
+    assert!(lire(&texte).unwrap_err().0.contains("« 11x.61 »"));
+}
+
+#[test]
+fn une_valeur_rvb_hors_echelle_est_gardee_telle_quelle() {
+    let texte = fichier_fd_s2w_rvb().replace("\t255\t255\t255\t", "\t510\t255\t255\t");
+    let m = lire(&texte).unwrap();
+    assert_eq!(m.plages[0].rvb, Info::Supposee([2.0, 1.0, 1.0]));
+}
+
+#[test]
+fn deux_tableaux_aux_rvb_differents_sont_refuses() {
+    let premier = fichier_fd_s2w_rvb();
+    let second = premier.replace("\"D50\"", "\"A\"");
+    // Mêmes RVB : les deux tableaux se lisent.
+    let m = lire(&format!("{premier}{second}")).unwrap();
+    assert!(matches!(m.plages[1].rvb, Info::Supposee(_)));
+    let autre = second.replace("117.61", "117.62");
+    let e = lire(&format!("{premier}{autre}")).unwrap_err();
+    assert_eq!(
+        e.0,
+        "tableau 2 : pas les mêmes valeurs RVB que le premier tableau"
+    );
 }

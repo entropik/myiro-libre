@@ -1,6 +1,6 @@
 /* Composants de myiro-libre : thème bleu nuit, cartes, accent bleu. Dépend uniquement de tokens.css.
    Aucun style en ligne : les seules valeurs dynamiques passent par des propriétés personnalisées
-   (--c, --ref, --mes, --n). Ni ombre, ni dégradé ; angles droits, sauf la pastille de l'instrument. */
+   (--c, --ref, --mes, --n). Ni ombre, ni dégradé (sauf la lumière de la barre de calcul) ; angles droits, sauf la pastille de l'instrument. */
 
 /* ---- Base ---- */
 html { font-optical-sizing: auto; -webkit-text-size-adjust: 100%; }
@@ -173,6 +173,34 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .steps button.done .label { color: var(--conforme); }
 .steps button[aria-current="step"] { border-color: var(--accent); background: var(--selection); color: var(--encre); font-weight: 600; }
 .steps button[disabled] { cursor: default; }
+/* ---- Barre d'avancement d'un calcul (calcul-profil.js), rendu « Spectre » ----
+   Continue, par étapes : chaque étape en occupe une part égale. Le remplissage glisse (300 ms) et ne
+   recule jamais ; dans une étape, il ne suit qu'un pourcentage écrit par l'outil. Une lumière
+   spectrale traverse toute la piste en boucle : le calcul travaille. C'est le seul dégradé du
+   système. Fin : réussi (vert) ou erreur (rouge), et la lumière s'éteint en 300 ms. Position passée
+   par la propriété personnalisée --position sur la piste. */
+.progression { margin-top: var(--space-2); }
+.progression__piste { position: relative; height: var(--space-4); overflow: hidden; background: var(--carte); border: var(--rule) solid var(--filet); }
+.progression__remplissage { position: absolute; top: 0; bottom: 0; left: 0; width: var(--position, 0%); background: var(--accent); transition: width 300ms ease-out, background-color 300ms ease-out; }
+.progression__reflet { position: absolute; inset: 0; pointer-events: none; overflow: hidden; transition: opacity 300ms ease-out; }
+.progression__reflet::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -40%; opacity: var(--lumiere-force);
+  background: linear-gradient(90deg, transparent, var(--spectre-1) 15%, var(--spectre-2) 30%, var(--spectre-3) 45%, var(--spectre-4) 55%, var(--spectre-5) 70%, var(--spectre-6) 85%, transparent);
+  mix-blend-mode: var(--lumiere-melange); animation: progression-spectre 2.6s ease-in-out infinite;
+}
+@keyframes progression-spectre { from { left: -40%; } to { left: 110%; } }
+.progression__piste[data-etat="reussi"]>.progression__remplissage { background: var(--conforme); }
+.progression__piste[data-etat="erreur"]>.progression__remplissage { background: var(--hors); }
+.progression__piste[data-etat]>.progression__reflet { opacity: 0; }
+.progression__detail { margin-top: var(--space-1); font-size: var(--text-xs); color: var(--attenue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Texte lu par les lecteurs d'écran seulement (par exemple l'étape d'un calcul, annoncée quand
+   elle change). */
+.lecteur-ecran { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  .progression__remplissage { transition: none; }
+  .progression__reflet { visibility: hidden; transition: none; }
+  .progression__reflet::after { animation: none; }
+}
 
 /* ---- Puces : choix parmi quelques valeurs ---- */
 .puces { display: flex; flex-wrap: wrap; gap: var(--space-2); }

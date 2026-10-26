@@ -16,11 +16,14 @@ Ce plan est le **plan 1**. Les suivants seront écrits un par un, chacun livrant
 
 1. **Bibliothèque : parc et profils** (ce plan, crate seule).
 2. **Nouveau cadre d'interface** : système graphique refait d'après le prototype validé (bleu nuit, bascule clair/sombre, cartes, accent bleu), cadre à trois zones, cinq tâches, bibliothèque en arbre branchée sur le plan 1, installation d'un profil dans Windows. S'appuie sur le registre des actions (tickets #54 à #58) s'il est livré, sinon le prévoit.
-3. **Mires de profilage** : génération RVB et CMJN par ArgyllCMS, TIFF sans gestion couleur, QR code et texte lisible (#33).
-4. **Mesure d'une feuille au FD-9** (#34), selon les paliers de sécurité ; lecture du QR à étudier.
-5. **Calcul et vérification du profil** : ArgyllCMS, parcours en 4 étapes, enregistrement en un clic (#40, #41).
-6. **Séchage et reprise** : file « en attente de mesure », durée par papier, mise en avant à la réouverture.
-7. **Reprise de l'existant** : profils épars, papiers du RIP des pigmentaires, fichiers MYIROtools.
+3. **Calcul d'un profil RVB à partir d'une mesure importée** (export CGATS de FD-S2w), par ArgyllCMS (#40, première partie) : [plan 3](2026-10-23-profil-rvb-import-fd-s2w.md).
+4. **Mires de profilage** : génération RVB et CMJN par ArgyllCMS, TIFF sans gestion couleur, QR code et texte lisible (#33).
+5. **Mesure d'une feuille au FD-9** (#34), selon les paliers de sécurité ; lecture du QR à étudier ; guidage, reprise et moyenne (#35).
+6. **Vérification du profil** et parcours en 4 étapes, enregistrement en un clic (#41).
+7. **Séchage et reprise** : file « en attente de mesure », durée par papier, mise en avant à la réouverture.
+8. **Reprise de l'existant** : profils épars, papiers du RIP des pigmentaires, fichiers MYIROtools.
+
+Mise à jour du 23 octobre 2026 : le calcul de profil passe avant les mires, à la demande du mainteneur. Il part des exports FD-S2w faits chaque jour, sans attendre #33 ni #34.
 
 ## Global Constraints
 

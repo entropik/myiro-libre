@@ -77,6 +77,14 @@ pub struct PlageImportee {
     pub spectres: [Info<Spectre>; 3],
     /// Lab des emplacements `m0`, `m1`, `m2`.
     pub lab: [Info<Lab>; 3],
+    /// Valeurs RVB envoyées à l'imprimante (`RGB_R`, `RGB_G`, `RGB_B`),
+    /// ramenées de 0 à 1 (1 = 100 % de la composante). L'échelle n'est jamais
+    /// devinée : `Confirmee` pour un fichier `CTI3` d'ArgyllCMS (0 à 100),
+    /// `Supposee` pour un export FD-S2w ou MYIROtools (0 à 255, observé sur
+    /// des exports réels de FD-S2w et de MYIROtools), `Inconnue` sans
+    /// colonnes RVB ou pour un autre logiciel. Une
+    /// valeur hors de l'échelle est gardée telle quelle.
+    pub rvb: Info<[f32; 3]>,
 }
 
 /// Texte d'un fichier : UTF-8 s'il en est, sinon Windows-1252 (Latin-1 de
