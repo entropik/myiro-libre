@@ -93,15 +93,14 @@ fn main() -> ExitCode {
     };
     let mut session = Session::new(dll, arguments.plafond)
         .avec_delais(arguments.delais)
-        .avec_reconnaissance(arguments.reconnaissance);
+        .avec_reconnaissance(arguments.reconnaissance)
+        // Au fil de l'eau : un pont arrêté de force a déjà tout écrit.
+        .avec_echo_journal(|ligne| eprintln!("pont-fd9 : {ligne}"));
     let resultat = servir(
         &mut session,
         std::io::BufReader::new(std::io::stdin()),
         &mut std::io::stdout(),
     );
-    for ligne in session.journal() {
-        eprintln!("pont-fd9 : {ligne}");
-    }
     let orphelins = session.rappels_orphelins();
     if orphelins > 0 {
         eprintln!("pont-fd9 : {orphelins} rappel(s) de la DLL reçu(s) sans session, ignoré(s)");

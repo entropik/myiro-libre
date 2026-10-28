@@ -153,11 +153,32 @@ pub enum Fermeture {
     Incertaine { remise_au_repos: RemiseAuRepos },
 }
 
+/// Destinataire de chaque ligne du journal.
+type Echo = Box<dyn FnMut(&str)>;
+
+/// Journal de la session : chaque ligne est gardée en mémoire et, si un écho
+/// est branché, lui est donnée au moment où elle est écrite. Un pont arrêté de
+/// force ne perd ainsi rien de ce qu'il a déjà noté.
+#[derive(Default)]
+struct Journal {
+    lignes: Vec<String>,
+    echo: Option<Echo>,
+}
+
+impl Journal {
+    fn push(&mut self, ligne: String) {
+        if let Some(echo) = &mut self.echo {
+            echo(&ligne);
+        }
+        self.lignes.push(ligne);
+    }
+}
+
 pub struct Session<S: SdkFd9> {
     sdk: S,
     plafond: Palier,
     progression: Option<Palier>,
-    journal: Vec<String>,
+    journal: Journal,
     fermee: bool,
     fermeture: Option<Fermeture>,
     /// Instruments de la dernière détection.
@@ -193,7 +214,7 @@ impl<S: SdkFd9> Session<S> {
             sdk,
             plafond: plafond.min(PALIER_MAX),
             progression: None,
-            journal: Vec::new(),
+            journal: Journal::default(),
             fermee: false,
             fermeture: None,
             detectes: Vec::new(),
@@ -223,6 +244,13 @@ impl<S: SdkFd9> Session<S> {
         self
     }
 
+    /// Donne chaque ligne du journal à `echo` dès qu'elle est écrite
+    /// (l'exécutable l'écrit sur la sortie d'erreur).
+    pub fn avec_echo_journal(mut self, echo: impl FnMut(&str) + 'static) -> Self {
+        self.journal.echo = Some(Box::new(echo));
+        self
+    }
+
     /// Poignée d'annulation de la requête en cours, à donner au fil qui lit
     /// les requêtes.
     pub fn annulation(&self) -> Annulation {
@@ -240,7 +268,7 @@ impl<S: SdkFd9> Session<S> {
 
     /// Appels à la DLL, codes rendus et événements reçus, dans l'ordre.
     pub fn journal(&self) -> &[String] {
-        &self.journal
+        &self.journal.lignes
     }
 
     /// Plus haut palier franchi avec succès depuis le lancement.

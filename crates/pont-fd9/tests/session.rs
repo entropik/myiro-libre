@@ -163,3 +163,21 @@ fn apres_la_fermeture_plus_rien_n_atteint_la_dll() {
     assert_eq!(session.detecter(), Err(ErreurPont::SessionFermee {}));
     assert!(session.sdk().appels.is_empty());
 }
+
+#[test]
+fn chaque_ligne_du_journal_part_au_moment_ou_elle_est_ecrite() {
+    let envoyees = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let copie = envoyees.clone();
+    let mut session = Session::new(Fd9Simule::avec_un_fd9(), Palier::Detection)
+        .avec_echo_journal(move |ligne| copie.lock().unwrap().push(ligne.to_string()));
+
+    session.version().unwrap();
+    // Avant toute fermeture : la ligne est déjà partie.
+    assert_eq!(*envoyees.lock().unwrap(), ["FD9_GetLastError : 0"]);
+
+    session.detecter().unwrap();
+    session.fermer();
+    // Chaque ligne une seule fois, dans l'ordre, et toujours lisible en mémoire.
+    assert_eq!(*envoyees.lock().unwrap(), session.journal());
+    assert!(session.journal().len() > 2, "{:?}", session.journal());
+}
