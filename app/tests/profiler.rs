@@ -9,11 +9,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use app::colonne::{emplacement, BibliothequeOuverte};
 use app::profiler::{
     arrondir_duree, journal_court, provenance_depuis_parametres, ErreurProfil, HistoriqueDurees,
-    Moteur, ProvenanceProfil, SuiviCalcul,
+    Moteur, ProvenanceProfil, RefusCoherence, SuiviCalcul,
 };
 use bibliotheque::{nom_profil_propose, EtatVerification, IdCondition, IdMesure};
 use pont_protocole::ConditionMesure;
-use profilage::{Avancement, ErreurMoteur, Etape, EtapeCalcul, MoteurSimule, Recette};
+use profilage::{
+    Avancement, ControleCoherence, Critere, ErreurMoteur, Etape, EtapeCalcul, MoteurSimule, Recette,
+};
 use tempfile::TempDir;
 
 /// En-tête ICC RVB minimal de 132 octets : taille, `RGB `, `acsp`.
@@ -248,6 +250,7 @@ fn un_echec_du_moteur_laisse_le_profil_actif_inchange() {
             cle: "profil.erreur.calcul",
             cause: Some("Not enough patches".to_string()),
             version: None,
+            coherence: None,
         }
     );
     assert!(est_au_catalogue(erreur.cle));
@@ -316,6 +319,7 @@ fn un_calcul_interrompu_le_dit_sans_cause() {
             cle: "profil.erreur.interrompu",
             cause: None,
             version: None,
+            coherence: None,
         }
     );
     assert!(est_au_catalogue(erreur.cle));
@@ -347,6 +351,7 @@ fn argyll_introuvable_ne_range_rien() {
             cle: "profil.erreur.argyll_introuvable",
             cause: None,
             version: None,
+            coherence: None,
         })
     );
     assert!(est_au_catalogue("profil.erreur.argyll_introuvable"));
@@ -508,6 +513,7 @@ fn une_mesure_d_une_autre_resolution_est_refusee() {
                 cle: "profil.erreur.mesure_ailleurs",
                 cause: None,
                 version: None,
+                coherence: None,
             }
         );
     }
@@ -780,6 +786,7 @@ fn une_autre_version_d_argyll_donne_la_version_trouvee() {
             cle: "profil.erreur.argyll_version",
             cause: None,
             version: Some("3.4.1".to_string()),
+            coherence: None,
         }
     );
     use app::textes::{texte, Langue};
@@ -817,6 +824,7 @@ fn une_version_illisible_a_sa_propre_cle() {
             cle: "profil.erreur.argyll_illisible",
             cause: Some("colprof: Error - usage".to_string()),
             version: None,
+            coherence: None,
         }
     );
     assert!(est_au_catalogue(erreur.cle));
@@ -847,6 +855,7 @@ fn un_fichier_de_travail_garde_sa_cause() {
             cle: "profil.erreur.fichier",
             cause: Some("accès refusé".to_string()),
             version: None,
+            coherence: None,
         }
     );
     use app::textes::{texte, Langue};
@@ -951,6 +960,13 @@ fn la_provenance_d_un_profil_calcule_est_donnee_a_la_page() {
             // La durée mesurée du calcul, la même que celle retenue pour
             // estimer le suivant.
             duree_s: Some(resultat.duree_s),
+            // Trois plages : seuls le blanc et le noir se contrôlent.
+            coherence: Some(ControleCoherence {
+                faits: vec![Critere::BlancNoir],
+                non_faits: vec![Critere::DegradeGris, Critere::Doublons, Critere::Voisines],
+                suspectes: Vec::new(),
+                decalage: None,
+            }),
         })
     );
     // Durée rangée au dixième de seconde : elle se relit à l'identique.
@@ -1027,6 +1043,7 @@ fn sans_argyll_la_page_sait_pourquoi_avant_le_clic() {
             cle: "profil.erreur.argyll_introuvable",
             cause: None,
             version: None,
+            coherence: None,
         })
     );
     assert_eq!(
@@ -1061,4 +1078,164 @@ fn l_evenement_d_avancement_porte_le_numero_du_calcul() {
     assert_eq!(etapes, ["preparation", "profil", "controle"]);
     assert_eq!(evenements[2]["faites"], 6);
     assert_eq!(evenements[2]["total"], 7);
+}
+
+// ---- Contrôle de cohérence des mesures (ticket #1) ----
+
+/// Mesures mélangées, comme dans le cas du ticket : la plage RVB 0 a la
+/// clarté d'un gris moyen, et le gris moyen est presque noir. Aucun décalage
+/// ne les rend cohérentes.
+fn export_incoherent() -> String {
+    export(
+        "D50",
+        "SAMPLE_ID\tRGB_R\tRGB_G\tRGB_B\tLAB_L\tLAB_A\tLAB_B",
+        &[
+            "A1\t255\t255\t255\t95\t0\t2",
+            "A2\t0\t0\t0\t50\t0\t0",
+            "A3\t128\t128\t128\t20\t0\t0",
+            "A4\t0\t117.61\t199.05\t10\t-28\t-60.57",
+        ],
+    )
+}
+
+/// Dégradé gris de 15 plages, à l'envers : du clair au foncé.
+fn export_gris_a_l_envers() -> String {
+    let lignes: Vec<String> = (0..15)
+        .map(|k| {
+            let v = k as f64 * 255.0 / 14.0;
+            format!("A{}\t{v}\t{v}\t{v}\t{}\t0\t0", k + 1, 95 - 5 * k)
+        })
+        .collect();
+    let lignes: Vec<&str> = lignes.iter().map(String::as_str).collect();
+    export(
+        "D50",
+        "SAMPLE_ID\tRGB_R\tRGB_G\tRGB_B\tLAB_L\tLAB_A\tLAB_B",
+        &lignes,
+    )
+}
+
+#[test]
+fn des_mesures_incoherentes_ne_lancent_pas_argyll() {
+    let b = banc();
+    let ancien = b.ranger_un_profil_existant();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_incoherent());
+    let moteur = MoteurSimule::reussit(icc());
+
+    let erreur = b
+        .ouverte
+        .calculer_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M1,
+            Recette::Standard,
+            &moteur,
+            maintenant(),
+            &mut |_| {},
+        )
+        .unwrap_err();
+
+    assert_eq!(erreur.cle, "profil.refus.incoherent");
+    assert!(est_au_catalogue(erreur.cle));
+    assert!(moteur.demandes().is_empty(), "ArgyllCMS lancé");
+    let detail = b.ouverte.detail_reglage(b.condition).unwrap();
+    assert_eq!(detail.actif.map(|p| p.id), Some(ancien));
+    assert_eq!(detail.historique.len(), 1);
+    // Les commandes et l'estimation refusent aussi : la page montre le refus
+    // dès le choix de la mesure, avant le clic.
+    let commandes = b
+        .ouverte
+        .commandes_profil(b.condition, mesure, ConditionMesure::M1, Recette::Standard)
+        .unwrap_err();
+    assert_eq!(commandes, erreur);
+    let estimation = b
+        .ouverte
+        .estimation_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M1,
+            Recette::Standard,
+            &HistoriqueDurees::default(),
+        )
+        .unwrap_err();
+    assert_eq!(estimation, erreur);
+}
+
+#[test]
+fn le_refus_nomme_les_plages_du_fichier() {
+    let b = banc();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_incoherent());
+    let erreur = b
+        .ouverte
+        .commandes_profil(b.condition, mesure, ConditionMesure::M1, Recette::Standard)
+        .unwrap_err();
+    assert_eq!(
+        erreur.coherence.as_deref(),
+        Some(&RefusCoherence {
+            plages: vec!["A2".to_string(), "A3".to_string()],
+            autres: 0,
+            criteres: vec![Critere::DegradeGris, Critere::BlancNoir],
+            decalage: None,
+        })
+    );
+
+    // Au-delà de 10 plages en cause, les suivantes sont comptées.
+    let mesure = b.importer(b.condition, "gris.txt", &export_gris_a_l_envers());
+    let refus = b
+        .ouverte
+        .commandes_profil(b.condition, mesure, ConditionMesure::M1, Recette::Standard)
+        .unwrap_err()
+        .coherence
+        .expect("refus de cohérence");
+    let attendues: Vec<String> = (1..=10).map(|k| format!("A{k}")).collect();
+    assert_eq!(refus.plages, attendues);
+    assert_eq!(refus.autres, 5);
+}
+
+#[test]
+fn un_profil_calcule_garde_son_controle_dans_sa_provenance() {
+    let b = banc();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
+    let resultat = b
+        .ouverte
+        .calculer_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M1,
+            Recette::Standard,
+            &MoteurSimule::reussit(icc()),
+            maintenant(),
+            &mut |_| {},
+        )
+        .unwrap();
+    // Trois plages : seuls le blanc et le noir se contrôlent.
+    let attendu = ControleCoherence {
+        faits: vec![Critere::BlancNoir],
+        non_faits: vec![Critere::DegradeGris, Critere::Doublons, Critere::Voisines],
+        suspectes: Vec::new(),
+        decalage: None,
+    };
+    let texte = b.ouverte.parametres_profil(resultat.profil).unwrap();
+    let p: serde_json::Value = serde_json::from_str(&texte).unwrap();
+    assert_eq!(p["coherence"]["faits"], serde_json::json!(["blanc_noir"]));
+    let provenance = b.ouverte.detail_reglage(b.condition).unwrap().provenance;
+    assert_eq!(provenance.and_then(|p| p.coherence), Some(attendu));
+}
+
+#[test]
+fn un_profil_calcule_avant_le_controle_se_lit_encore() {
+    let ancien = r#"{"origine":"calcul","moteur":"ArgyllCMS","version":"3.5.0","recette":"standard","condition":"M1","condition_supposee":false,"rvb_supposes":true,"mesure":3,"fichier":"mesure.txt","commandes":["colprof"],"precision":{"moyenne_de00":0.22,"max_de00":3.53},"ti3":"CTI3","journal":"j"}"#;
+    let p = provenance_depuis_parametres(ancien).expect("provenance lue");
+    assert_eq!(p.coherence, None);
+}
+
+#[test]
+fn les_textes_de_coherence_existent_en_deux_langues() {
+    use app::textes::{texte, Langue};
+    for langue in [Langue::Francais, Langue::Anglais] {
+        let refus = texte(langue, "profil.refus.incoherent");
+        assert!(refus.contains("{plages}"), "{refus}");
+        assert!(texte(langue, "profil.coherence.decalage").contains("{n}"));
+        assert!(texte(langue, "profil.coherence.autres").contains("{n}"));
+    }
+    assert!(texte(Langue::Francais, "profil.refus.incoherent").contains("Relisez la mire"));
 }
