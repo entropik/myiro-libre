@@ -1119,7 +1119,7 @@ fn pendant_une_action_sur_le_profil_les_boutons_disent_pourquoi() {
     let script = lire("interface/reglage.js");
     assert!(
         script.contains(
-            "const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-calcul-profil] button, [data-calcul-profil] input\";"
+            "const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-calcul-profil] button, [data-calcul-profil] input, [data-verif-ouvrir], [data-verification] button, [data-verification] input\";"
         ),
         "les boutons de la vue"
     );
@@ -1281,4 +1281,156 @@ fn une_seule_autre_plage_se_dit_au_singulier() {
     );
     let script = lire("interface/calcul-profil.js");
     assert!(script.contains("c.autres === 1 ? t(\"profil.coherence.autre\")"));
+}
+
+// ---- Vérification d'un profil sur une seconde mire (ticket #41) ----
+
+#[test]
+fn la_vue_d_une_resolution_appelle_la_verification() {
+    let script = lire("interface/verification.js") + &lire("interface/tolerances.js");
+    for attendu in [
+        "invoke(\"verifier_lancer\"",
+        "invoke(\"verifier_sources\"",
+        "invoke(\"verifier_commandes\"",
+        "invoke(\"verifier_fiche\"",
+        "invoke(\"verifier_recalculer\"",
+        "invoke(\"verifier_historique\"",
+        "invoke(\"tolerances_lister\"",
+        "invoke(\"tolerances_enregistrer\"",
+        "\"verifier_exporter_rapport\"",
+        "\"verifier_exporter_profil\"",
+        // La demande est une structure : ses champs restent en snake_case.
+        "mesure_condition:",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+    let page = lire("interface/index.html");
+    let vue = element(&page, "data-vue-reglage");
+    let ouvrir = vue
+        .split('<')
+        .find(|b| b.contains("data-verif-ouvrir"))
+        .and_then(|b| b.split('>').next())
+        .expect("bouton « Vérifier le profil »");
+    assert!(ouvrir.starts_with("button class=\"btn\""), "{ouvrir}");
+    assert!(ouvrir.contains("data-t=\"verif.titre\""), "{ouvrir}");
+    assert!(vue.contains("data-verification"), "section absente");
+    // Inactif sans profil RVB actif : il dit pourquoi, juste à côté.
+    assert!(vue.contains("data-verif-raison data-t=\"verif.indisponible.sans_profil\""));
+    assert!(lire("interface/reglage.js").contains("[data-verification] button"));
+}
+
+#[test]
+fn verification_js_est_charge_avant_reglage_js() {
+    let page = lire("interface/index.html");
+    let position = |nom: &str| page.find(&format!("<script src=\"{nom}\" defer>"));
+    let ordre = [
+        position("arbre.js"),
+        position("tolerances.js"),
+        position("verification.js"),
+        position("reglage.js"),
+    ];
+    assert!(ordre.iter().all(Option::is_some), "{ordre:?}");
+    assert!(ordre.windows(2).all(|p| p[0] < p[1]), "ordre des scripts");
+    assert!(lire("interface/reglage.js").contains("window.Verification"));
+}
+
+/// Chaque clé lue par la vérification existe en français et en anglais ;
+/// les clés complétées à l'écran existent pour chaque suite.
+#[test]
+fn toutes_les_cles_verif_de_la_page_existent_en_deux_langues() {
+    use app::textes::{texte, Langue};
+    let script = lire("interface/verification.js")
+        + &lire("interface/tolerances.js")
+        + &lire("interface/index.html");
+    let suites: &[(&str, &[&str])] = &[
+        (
+            "verif.etat.",
+            &["accepte", "hors_tolerance", "incomplet", "non_verifie"],
+        ),
+        (
+            "verif.fiche.",
+            &[
+                "logiciel",
+                "support_pilote",
+                "qualite",
+                "encres",
+                "remarques",
+            ],
+        ),
+        (
+            "verif.fiche.impression.",
+            &["a_travers_le_profil", "sans_gestion"],
+        ),
+        ("verif.critere.", &["moyenne", "p95", "max"]),
+        ("verif.", &["fidelite", "prediction"]),
+    ];
+    let mut demandees: Vec<String> = Vec::new();
+    for prefixe in ["\"verif.", "\"rapport.", "\"parc.", "\"export."] {
+        for (i, _) in script.match_indices(prefixe) {
+            // `"parc.js"` est un nom de script, pas une clé.
+            if let Some(cle) = script[i + 1..]
+                .split('"')
+                .next()
+                .filter(|c| !c.ends_with(".js"))
+            {
+                demandees.push(cle.to_string());
+            }
+        }
+    }
+    assert!(demandees.len() > 30, "clés lues : {demandees:?}");
+    let mut completes = Vec::new();
+    for cle in &demandees {
+        if cle.ends_with('.') {
+            let (_, fins) = suites
+                .iter()
+                .find(|(p, _)| p == cle)
+                .unwrap_or_else(|| panic!("suite inconnue : {cle}"));
+            completes.extend(fins.iter().map(|f| format!("{cle}{f}")));
+        } else {
+            completes.push(cle.clone());
+        }
+    }
+    let absentes: Vec<_> = completes
+        .iter()
+        .filter(|c| {
+            [Langue::Francais, Langue::Anglais]
+                .iter()
+                .any(|l| texte(*l, c) == c.as_str())
+        })
+        .collect();
+    assert!(absentes.is_empty(), "clés absentes : {absentes:?}");
+}
+
+#[test]
+fn verification_js_n_a_pas_de_couleur_en_dur() {
+    for fichier in ["interface/verification.js", "interface/tolerances.js"] {
+        let script = lire(fichier);
+        assert!(!script.contains("rgb("), "{fichier}");
+        let hexa = script.match_indices('#').any(|(i, _)| {
+            let n = script[i + 1..]
+                .chars()
+                .take_while(char::is_ascii_hexdigit)
+                .count();
+            n == 3 || n == 6
+        });
+        assert!(!hexa, "{fichier} : couleur en dur");
+    }
+}
+
+/// Le rouge est réservé au hors tolérance : une vérification incomplète est
+/// dite comme « à la limite », jamais en rouge, et toujours avec son mot.
+#[test]
+fn seul_le_hors_tolerance_est_en_rouge() {
+    let script = lire("interface/verification.js");
+    assert!(script.contains("hors_tolerance: \"hors\""));
+    assert!(script.contains("incomplet: \"limite\""));
+    assert!(script.contains("verdict__mot"));
+}
+
+#[test]
+fn les_fichiers_de_la_verification_restent_courts() {
+    for fichier in ["interface/verification.js", "interface/tolerances.js"] {
+        let lignes = lire(fichier).lines().count();
+        assert!(lignes < 400, "{fichier} : {lignes} lignes");
+    }
 }

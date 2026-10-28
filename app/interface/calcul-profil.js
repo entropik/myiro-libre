@@ -286,7 +286,7 @@ window.CalculProfil = (() => {
     ouvrir.setAttribute("aria-expanded", String(ouvert));
     calcul.hidden = !ouvert;
     // Section ouverte : « Calculer le profil » est le seul bouton principal de la vue.
-    installer.classList.toggle("btn--primary", !ouvert);
+    installer.classList.toggle("btn--primary", !ouvert && !window.Verification?.ouverte());
     raisonCalcul = null;
     boutonCalculer = null;
     commandesBloc = null;
@@ -466,6 +466,7 @@ window.CalculProfil = (() => {
     dessinerRaison,
     // La raison « en cours » du calcul est à l'écran, sous son bouton : le message général se tait.
     raisonVisible: () => calculEnCours && raisonCalcul !== null,
+    ouvert: () => ouvert,
     texteErreur,
     provenance,
   };

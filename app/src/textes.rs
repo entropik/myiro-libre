@@ -1114,6 +1114,15 @@ const FRANCAIS: Catalogue = &[
     ("verif.respecte", "respecté"),
     ("verif.depasse", "dépassé"),
     ("verif.calculee", "calculée par ArgyllCMS"),
+    (
+        "verif.appareil.calculee",
+        "Valeur après transformation\u{202f}: calculée par ArgyllCMS avec ce profil, donc approchée.",
+    ),
+    (
+        "verif.raison.mesure",
+        "Importez dans cette résolution la mesure d’une seconde mire, imprimée à travers ce profil.",
+    ),
+    ("verif.filtre.html", "Page HTML"),
     ("verif.demande", "Couleur demandée"),
     ("verif.appareil", "Valeur après transformation"),
     ("verif.predite", "Prédiction du profil"),
@@ -2286,6 +2295,15 @@ const ANGLAIS: Catalogue = &[
     ("verif.respecte", "met"),
     ("verif.depasse", "exceeded"),
     ("verif.calculee", "computed by ArgyllCMS"),
+    (
+        "verif.appareil.calculee",
+        "Value after transform: computed by ArgyllCMS with this profile, hence approximate.",
+    ),
+    (
+        "verif.raison.mesure",
+        "Import into this resolution the measurement of a second chart, printed through this profile.",
+    ),
+    ("verif.filtre.html", "HTML page"),
     ("verif.demande", "Requested colour"),
     ("verif.appareil", "Value after transform"),
     ("verif.predite", "Profile prediction"),

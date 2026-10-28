@@ -44,7 +44,9 @@ window.Reglage = (() => {
   // la vue sont inactifs et la raison « en cours » est dite juste à côté : un double clic ne
   // fait rien. Pendant un calcul, seule sa raison à lui est dite, sous son bouton. Un bouton
   // marqué data-inactif l'est aussi hors de toute action.
-  const BOUTONS = "[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-calcul-profil] button, [data-calcul-profil] input";
+  const BOUTONS = "[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-calcul-profil] button, [data-calcul-profil] input, [data-verif-ouvrir], [data-verification] button, [data-verification] input";
+  // Vérification d'un profil : section, résultat et provenance (verification.js).
+  const verification = window.Verification;
   const occupe = vue.querySelector("[data-reglage-occupe]");
   let enCours = false;
 
@@ -77,6 +79,7 @@ window.Reglage = (() => {
     vue.querySelector("[data-installer-raison]").hidden = Boolean(actif) || enCours;
     vue.querySelector("[data-exporter-profil]").hidden = !actif;
     calcul.dessiner(d);
+    verification.dessiner(d);
     dessinerOccupation(!actif);
 
     const historique = vue.querySelector("[data-historique]");
@@ -138,6 +141,7 @@ window.Reglage = (() => {
       : [el("p", "", t("parc.verdict.aucun"))];
     details.replaceChildren(
       section("parc.provenance", provenance),
+      section("verif.titre", a ? verification.provenance(d, cleValeur) : [el("p", "", t("parc.verdict.aucun"))]),
       section("parc.fiche", [cleValeur("parc.fiche.reglages", t("parc.inconnue"))]),
       section("parc.windows", [cleValeur("parc.windows.etat",
         t(!a ? "parc.windows.sans_profil" : d.installe ? "installation.installe" : "parc.windows.non_installe"))]),
@@ -183,6 +187,14 @@ window.Reglage = (() => {
     annoncer,
     agir,
     occupation: () => dessinerOccupation(!(parc.reglage() || {}).actif),
+  });
+  verification.brancher({
+    reglage: () => parc.reglage(),
+    recharger: () => parc.recharger(),
+    annoncer,
+    agir,
+    occupation: () => dessinerOccupation(!(parc.reglage() || {}).actif),
+    texteErreur,
   });
 
   return {
