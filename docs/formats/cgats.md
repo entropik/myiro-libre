@@ -70,6 +70,8 @@ Un tableau qui porte `MEASUREMENT_CONDITION` et une `MEASUREMENT_SOURCE` `M0`, `
 
 Sans aucun de ces mots-clés, le fichier est **refusé** avec une phrase claire : on ne range pas des valeurs sous une condition devinée.
 
+Une seule exception, hors de l'import : les mesures qu'un profil embarque (balise `targ`), relues pour comparer des profils. ArgyllCMS y réécrit le `.ti3` reçu, sans condition de mesure (constaté le 28 octobre 2026 avec ArgyllCMS 3.5.0 : fins de ligne LF, `KEYWORD` retirés, cinq décimales, mêmes valeurs). `lire_sans_condition` les lit quand même, sous une condition **inconnue** : la fidélité d'un profil et la reconnaissance de mêmes mesures n'ont besoin que des RVB et des Lab. Rien n'est rangé de cette façon.
+
 Dans les colonnes : `SAMPLE_ID` donne l'identifiant de la plage (sinon son rang), `LAB_L`, `LAB_A`, `LAB_B` le Lab, et le spectre vient de l'une de ces familles de colonnes, chacune avec son échelle, jamais devinée :
 
 | Colonnes | Écrites par | Échelle |

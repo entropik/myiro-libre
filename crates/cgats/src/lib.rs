@@ -20,7 +20,7 @@ use std::fmt;
 use pont_protocole::{ConditionMesure, Echantillonnage, Info, Lab, Provenance, Spectre};
 
 pub use ecriture::ecrire;
-pub use lecture::lire;
+pub use lecture::{lire, lire_sans_condition};
 
 /// Version du CGATS écrit par myiro-libre (mot-clé `MYIRO_LIBRE_FORMAT`).
 pub const FORMAT_CGATS: &str = "myiro-libre/cgats/1";

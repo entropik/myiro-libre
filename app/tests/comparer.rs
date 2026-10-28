@@ -17,7 +17,10 @@ use app::textes::{texte, Langue};
 use bibliotheque::{IdCondition, IdProfil};
 use gamut::{ErreurIcc, Famille, ProfilEssai, Statistiques, Zone};
 use pont_protocole::ConditionMesure;
-use profilage::{ErreurMoteur, Etape, LimiteCalculee, MoteurGamut, MoteurGamutSimule};
+use profilage::{
+    ecrire_ti3, ErreurMoteur, Etape, LimiteCalculee, MoteurGamut, MoteurGamutSimule, PlageProfil,
+    PlagesProfil,
+};
 use tempfile::TempDir;
 
 /// Profil d'essai linéaire : L = 25 + 75·(r+g+b)/3, a = 60·(r−g), b = 60·(g−b).
@@ -318,7 +321,7 @@ fn des_mesures_lab_donnent_la_fidelite_et_la_repetabilite() {
         } => {
             assert_eq!(*plages, 7);
             assert!(statistiques.max < 0.05, "{statistiques:?}");
-            assert_eq!(*condition, ConditionMesure::M1);
+            assert_eq!(*condition, Some(ConditionMesure::M1));
             assert!(!condition_supposee);
             assert!(rvb_supposes);
             assert!(!lab_calcule);
@@ -355,7 +358,7 @@ fn des_mesures_spectrales_seules_donnent_un_lab_calcule() {
     let mesures = mesures_embarquees(targ.as_bytes()).unwrap();
     assert!(mesures.lab_calcule);
     assert!(mesures.rvb_supposes);
-    assert_eq!(mesures.condition, ConditionMesure::M1);
+    assert_eq!(mesures.condition, Some(ConditionMesure::M1));
     assert!(!mesures.condition_supposee);
     assert_eq!(mesures.mesures.len(), 2);
     // Réflectance de 0,9 : L* = 116·0,9^(1/3) − 16, gris neutre.
@@ -404,6 +407,85 @@ fn des_mesures_sans_rvb_ni_lab_sont_dites_inconnues() {
     assert_eq!(
         mesures_embarquees(b"pas du CGATS").unwrap_err(),
         "comparer.fidelite.illisible"
+    );
+}
+
+/// Le `.ti3` que l'application passe à colprof, qui l'embarque tel quel
+/// (balise `targ`) : RVB de 0 à 100, Lab du profil d'essai linéaire, sans
+/// condition de mesure.
+fn targ_ti3(rvb: &[[u8; 3]]) -> String {
+    let plages = PlagesProfil {
+        plages: rvb
+            .iter()
+            .map(|c| {
+                let rvb = c.map(|v| f64::from(v) / 255.0);
+                PlageProfil {
+                    rvb: rvb.map(|v| v * 100.0),
+                    lab: lineaire(rvb),
+                    spectre: None,
+                }
+            })
+            .collect(),
+        condition: ConditionMesure::M1,
+        condition_supposee: false,
+        rvb_supposes: false,
+        longueurs_onde: None,
+    };
+    ecrire_ti3(
+        &plages,
+        "Canon PRO-4100, Photo Rag 308, 720 dpi",
+        "2026-10-28T09:00:00Z",
+    )
+}
+
+/// Cas principal du ticket : notre profil face à celui du logiciel du
+/// fabricant, faits de la même mesure. Notre `.ti3` ne dit pas la condition
+/// de mesure : la fidélité et « mêmes mesures » n'en ont pas besoin.
+#[test]
+fn le_ti3_de_myiro_libre_donne_la_fidelite_et_les_memes_mesures() {
+    let b = banc();
+    let nous = b.ouvrir("libre.icc", &essai(lineaire, 9, Some(targ_ti3(&PLAGES))));
+    let eux = b.ouvrir(
+        "autre.icc",
+        &essai(lineaire, 17, Some(targ_myirotools(&PLAGES))),
+    );
+    let c = b.ouverte.comparer(&[nous, eux], &b.fichiers, None).unwrap();
+    let EtatProfil::Analyse { fidelite, .. } = &c.profils[0].etat else {
+        panic!("{:?}", c.profils[0].etat);
+    };
+    match fidelite {
+        EtatFidelite::Connue {
+            statistiques,
+            plages,
+            condition,
+            condition_supposee,
+            rvb_supposes,
+            lab_calcule,
+        } => {
+            assert_eq!(*plages, PLAGES.len());
+            assert!(statistiques.max < 0.05, "{statistiques:?}");
+            assert_eq!(*condition, None);
+            assert!(!condition_supposee);
+            assert!(!rvb_supposes, "échelle 0–100 du .ti3, confirmée");
+            assert!(!lab_calcule);
+        }
+        autre => panic!("{autre:?}"),
+    }
+    assert_eq!(c.memes_mesures, vec![false, true]);
+}
+
+#[test]
+fn des_mesures_embarquees_hors_echelle_restent_refusees() {
+    let ti3 = targ_ti3(&PLAGES).replace(
+        "
+1 100 100 100 ",
+        "
+1 180 100 100 ",
+    );
+    assert_ne!(ti3, targ_ti3(&PLAGES), "plage blanche réécrite");
+    assert_eq!(
+        mesures_embarquees(ti3.as_bytes()).unwrap_err(),
+        "comparer.fidelite.rvb_hors_echelle"
     );
 }
 
@@ -669,7 +751,7 @@ fn un_chiffre_incalculable_part_en_null() {
             part_sup_2: 0.0,
         },
         plages: 1,
-        condition: ConditionMesure::M1,
+        condition: Some(ConditionMesure::M1),
         condition_supposee: false,
         rvb_supposes: true,
         lab_calcule: false,

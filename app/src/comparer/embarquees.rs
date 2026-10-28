@@ -32,7 +32,9 @@ const SPECTRE_CALCULABLE: Echantillonnage = Echantillonnage {
 #[derive(Clone, Debug, PartialEq)]
 pub struct MesuresProfil {
     pub mesures: Vec<gamut::Mesure>,
-    pub condition: ConditionMesure,
+    /// Condition de mesure ; inconnue quand le fichier ne la dit pas (mesures
+    /// qu'ArgyllCMS embarque, venues du `.ti3` de myiro-libre).
+    pub condition: Option<ConditionMesure>,
     /// La condition est déduite d'une convention du fabricant.
     pub condition_supposee: bool,
     /// L'échelle des RVB est déduite d'une convention de logiciel.
@@ -42,12 +44,15 @@ pub struct MesuresProfil {
     pub lab_calcule: bool,
 }
 
-/// Lit les mesures embarquées `targ` d'un profil. La condition est la seule
-/// présente, ou M1 si le fichier en donne plusieurs. Le Lab est pris dans
+/// Lit les mesures embarquées `targ` d'un profil. La fidélité et « mêmes
+/// mesures » n'ont besoin que des RVB et des Lab : un fichier sans condition
+/// de mesure est lu, sous une condition inconnue ([`cgats::lire_sans_condition`]).
+/// Sinon, la condition est la seule présente, ou M1 si le fichier en donne
+/// plusieurs. Les RVB suivent l'échelle du fichier. Le Lab est pris dans
 /// le fichier ; à défaut, il est calculé depuis le spectre. Les erreurs
 /// sont des clés du catalogue de textes.
 pub fn mesures_embarquees(targ: &[u8]) -> Result<MesuresProfil, &'static str> {
-    let mesure = cgats::lire(&cgats::decoder(targ)).map_err(|e| {
+    let mesure = cgats::lire_sans_condition(&cgats::decoder(targ)).map_err(|e| {
         eprintln!("mesures embarquées : {e}");
         ILLISIBLE
     })?;
@@ -62,8 +67,9 @@ pub fn mesures_embarquees(targ: &[u8]) -> Result<MesuresProfil, &'static str> {
         .copied()
         .find(|&e| mesure.conditions[e].valeur() == Some(&ConditionMesure::M1))
         .or(presentes.first().copied())
-        .ok_or(ILLISIBLE)?;
-    let condition = *mesure.conditions[e].valeur().ok_or(ILLISIBLE)?;
+        // Sans condition écrite, les plages sont dans l'emplacement `m0`.
+        .unwrap_or(0);
+    let condition = mesure.conditions[e].valeur().copied();
 
     let mut lab_calcule = false;
     let mut mesures = Vec::with_capacity(mesure.plages.len());

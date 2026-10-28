@@ -254,7 +254,14 @@ struct Lu {
 
 /// Emplacement et condition d'un tableau, sans rien deviner : mot-clé de
 /// myiro-libre, condition ISO 13655 écrite, ou source lumineuse du fabricant.
-fn emplacement(t: &Tableau, rang: usize) -> Result<(usize, Info<ConditionMesure>), ErreurCgats> {
+///
+/// Sans condition écrite, le tableau est refusé si `condition_exigee` ; sinon
+/// il prend l'emplacement `m0` avec une condition inconnue.
+fn emplacement(
+    t: &Tableau,
+    rang: usize,
+    condition_exigee: bool,
+) -> Result<(usize, Info<ConditionMesure>), ErreurCgats> {
     let ecrite = match t.mot_cle("MEASUREMENT_CONDITION") {
         Some(c) => Some(condition_depuis(c).ok_or_else(|| {
             ErreurCgats(format!(
@@ -294,14 +301,15 @@ fn emplacement(t: &Tableau, rang: usize) -> Result<(usize, Info<ConditionMesure>
     };
     match deduite {
         Some(c) => Ok((c as usize, Info::Supposee(c))),
+        None if !condition_exigee => Ok((0, Info::Inconnue)),
         None => erreur(format!(
             "tableau {rang} : condition de mesure introuvable (ni MEASUREMENT_CONDITION, ni MEASUREMENT_SOURCE M0, M1, M2, A, D50 ou UVCUT) ; rien n'est deviné"
         )),
     }
 }
 
-fn lire_tableau(t: &Tableau, rang: usize) -> Result<Lu, ErreurCgats> {
-    let (emplacement, condition) = emplacement(t, rang)?;
+fn lire_tableau(t: &Tableau, rang: usize, condition_exigee: bool) -> Result<Lu, ErreurCgats> {
+    let (emplacement, condition) = emplacement(t, rang, condition_exigee)?;
     let colonne = |nom: &str| t.champs.iter().position(|c| c.eq_ignore_ascii_case(nom));
     let id = colonne("SAMPLE_ID");
     let lab = [colonne("LAB_L"), colonne("LAB_A"), colonne("LAB_B")];
@@ -450,6 +458,19 @@ fn declare(t: &Tableau, nom: &str) -> Info<String> {
 /// introuvable, tableaux qui ne portent pas les mêmes plages, fichier de
 /// myiro-libre d'une autre version ou à la provenance incomplète.
 pub fn lire(texte: &str) -> Result<MesureImportee, ErreurCgats> {
+    lire_avec(texte, true)
+}
+
+/// Comme [`lire`], mais un tableau sans condition de mesure écrite est lu
+/// quand même : ses plages vont dans l'emplacement `m0`, sous une condition
+/// **inconnue**. C'est le cas des mesures qu'ArgyllCMS embarque dans un profil
+/// (balise `targ`) : RVB et Lab suffisent pour juger le profil. À l'import
+/// dans la bibliothèque, c'est [`lire`] qui sert : la condition y est exigée.
+pub fn lire_sans_condition(texte: &str) -> Result<MesureImportee, ErreurCgats> {
+    lire_avec(texte, false)
+}
+
+fn lire_avec(texte: &str, condition_exigee: bool) -> Result<MesureImportee, ErreurCgats> {
     let tableaux = tableaux(texte)?;
     let premier = &tableaux[0];
     let mots_cles: HashMap<String, String> = premier.mots_cles.iter().cloned().collect();
@@ -469,7 +490,7 @@ pub fn lire(texte: &str) -> Result<MesureImportee, ErreurCgats> {
     let mut vus = [false; 3];
     let mut rvb: Vec<Option<[f64; 3]>> = Vec::new();
     for (i, t) in tableaux.iter().enumerate() {
-        let lu = lire_tableau(t, i + 1)?;
+        let lu = lire_tableau(t, i + 1, condition_exigee)?;
         let e = lu.emplacement;
         if std::mem::replace(&mut vus[e], true) {
             return erreur(format!(

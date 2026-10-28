@@ -1,7 +1,7 @@
 //! Export et import CGATS.17, vus par l'API publique de la crate. Toutes les
 //! mesures et tous les fichiers sont fictifs (n° 12345678), écrits ici.
 
-use cgats::{ecrire, lire, MesureImportee};
+use cgats::{ecrire, lire, lire_sans_condition, MesureImportee};
 use pont_protocole::{
     Calcul, ConditionMesure, ConditionsCalcul, DonneesBrutes, Echantillonnage, Empreinte,
     Geometrie, Horodatage, Illuminant, Info, InstrumentMesurant, Lab, Mesure, Observateur, Plage,
@@ -348,6 +348,35 @@ fn sans_condition_de_mesure_le_fichier_est_refuse_plutot_que_devine() {
             .contains("MEASUREMENT_SOURCE M0, M1, M2, A, D50 ou UVCUT"),
         "{erreur}"
     );
+}
+
+#[test]
+fn un_ti3_sans_condition_se_lit_sans_condition_mais_pas_a_l_import() {
+    // Tel que colprof le réécrit dans la balise `targ` d'un profil.
+    let ti3 = "CTI3   \n\nORIGINATOR \"myiro-libre\"\nCOLOR_REP \"iRGB_LAB\"\n\n\
+               NUMBER_OF_FIELDS 7\nBEGIN_DATA_FORMAT\n\
+               SAMPLE_ID RGB_R RGB_G RGB_B LAB_L LAB_A LAB_B \nEND_DATA_FORMAT\n\n\
+               NUMBER_OF_SETS 1\nBEGIN_DATA\n\
+               1 100.0000 50.00000 0.00000 60.00000 20.00000 70.00000 \nEND_DATA\n";
+    assert!(lire(ti3).is_err());
+    let relue = lire_sans_condition(ti3).unwrap();
+    assert_eq!(
+        relue.conditions,
+        [Info::Inconnue, Info::Inconnue, Info::Inconnue]
+    );
+    let plage = &relue.plages[0];
+    assert_eq!(plage.rvb, Info::Confirmee([1.0, 0.5, 0.0]));
+    assert_eq!(
+        plage
+            .lab
+            .iter()
+            .filter_map(Info::valeur)
+            .collect::<Vec<_>>(),
+        vec![&Lab::new([60.0, 20.0, 70.0]).unwrap()]
+    );
+    // Une condition écrite se lit comme avec `lire`.
+    let tiers = export_tiers("D50", true);
+    assert_eq!(lire_sans_condition(&tiers), lire(&tiers));
 }
 
 #[test]

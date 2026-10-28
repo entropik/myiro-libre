@@ -101,7 +101,8 @@ pub enum EtatFidelite {
     Connue {
         statistiques: Statistiques,
         plages: usize,
-        condition: ConditionMesure,
+        /// Inconnue quand les mesures embarquées ne la disent pas.
+        condition: Option<ConditionMesure>,
         condition_supposee: bool,
         rvb_supposes: bool,
         lab_calcule: bool,
