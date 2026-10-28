@@ -82,6 +82,7 @@ window.Vue3d = (() => {
       return {
         nom: f.nom || "",
         volume: f.volume ?? null,
+        blanc: Array.isArray(f.blanc) && Number.isFinite(f.blanc[0]) ? f.blanc[0] : null,
         serie: Math.min(Math.max(Number(f.serie) || 1, 1), 4),
         sommets,
         indices: indices.subarray(0, gardes * 3),
@@ -214,6 +215,28 @@ window.Vue3d = (() => {
       }
     }
 
+    // Blanc du papier de chaque forme : un trait sur l'axe L*, dans sa couleur de série, et son étiquette
+    // à gauche de l'axe (les graduations sont à droite) ; une étiquette trop proche descend d'une ligne.
+    function dessinerBlancs(ctx, r, k) {
+      const ligne = jetons.texte + jetons.ecart;
+      let bas = -Infinity;
+      const marques = formes.filter((f) => f.blanc !== null)
+        .map((f) => ({ f, q: versEcran(tourner([f.blanc, 0, 0], r), k) }))
+        .sort((u, v) => u.q[1] - v.q[1]);
+      ctx.lineWidth = 2 * (window.devicePixelRatio || 1);
+      [ctx.textAlign, ctx.textBaseline] = ["right", "middle"];
+      for (const { f, q } of marques) {
+        ctx.strokeStyle = ctx.fillStyle = rvb(jetons.series[f.serie - 1]);
+        ctx.beginPath();
+        ctx.moveTo(q[0] - jetons.marge, q[1]);
+        ctx.lineTo(q[0] + jetons.marge, q[1]);
+        ctx.stroke();
+        bas = Math.max(q[1], bas + ligne);
+        ctx.fillText(t("comparer.vue3d.blanc").replace("{l}", () => nombre(f.blanc, 1)), q[0] - jetons.marge - jetons.ecart, bas);
+      }
+      [ctx.textAlign, ctx.textBaseline] = ["start", "alphabetic"];
+    }
+
     // Sommet le plus proche de la souris, toutes formes confondues.
     function plusProche(k) {
       if (!survol) return null;
@@ -266,6 +289,7 @@ window.Vue3d = (() => {
       dessinerAxes(ctx, r, k, false);
       dessinerTriangles(ctx, k);
       dessinerAxes(ctx, r, k, true);
+      dessinerBlancs(ctx, r, k);
       dessinerBulle(ctx, k);
     }
 
@@ -277,7 +301,8 @@ window.Vue3d = (() => {
     function decrire() {
       if (formes.length === 0) return canvas.setAttribute("aria-label", t("comparer.vue3d.aria.vide"));
       const profils = formes
-        .map((f) => t("comparer.vue3d.aria.profil").replace("{nom}", () => f.nom).replace("{volume}", () => nombre(f.volume, 0)))
+        .map((f) => t("comparer.vue3d.aria.profil").replace("{nom}", () => f.nom).replace("{volume}", () => nombre(f.volume, 0))
+          .replace("{blanc}", () => nombre(f.blanc, 1)))
         .join(" ; ");
       canvas.setAttribute("aria-label", t("comparer.vue3d.aria").replace("{profils}", () => profils));
     }
@@ -317,11 +342,7 @@ window.Vue3d = (() => {
       redessiner();
     }
     const ecouteurs = {
-      pointerdown: (e) => {
-        glisser = position(e);
-        survol = null;
-        canvas.setPointerCapture(e.pointerId);
-      },
+      pointerdown: (e) => { glisser = position(e); survol = null; canvas.setPointerCapture(e.pointerId); },
       pointermove: (e) => {
         const p = position(e);
         if (glisser) {
@@ -333,18 +354,9 @@ window.Vue3d = (() => {
           redessiner();
         }
       },
-      pointerup: (e) => {
-        glisser = null;
-        if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
-      },
-      pointerleave: () => {
-        survol = null;
-        redessiner();
-      },
-      wheel: (e) => {
-        e.preventDefault();
-        zoome(e.deltaY < 0 ? PAS_ZOOM : 1 / PAS_ZOOM);
-      },
+      pointerup: (e) => { glisser = null; if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId); },
+      pointerleave: () => { survol = null; redessiner(); },
+      wheel: (e) => { e.preventDefault(); zoome(e.deltaY < 0 ? PAS_ZOOM : 1 / PAS_ZOOM); },
     };
     for (const [nom, f] of Object.entries(ecouteurs)) {
       canvas.addEventListener(nom, f, nom === "wheel" ? { passive: false } : undefined);
@@ -367,15 +379,8 @@ window.Vue3d = (() => {
     decrire();
 
     return {
-      afficher(nouvelles) {
-        formes = (nouvelles || []).map(preparer);
-        decrire();
-        redessiner();
-      },
-      regler(nouveaux) {
-        reglages = { ...reglages, ...nouveaux };
-        redessiner();
-      },
+      afficher(nouvelles) { formes = (nouvelles || []).map(preparer); decrire(); redessiner(); },
+      regler(nouveaux) { reglages = { ...reglages, ...nouveaux }; redessiner(); },
       detruire() {
         if (image) cancelAnimationFrame(image);
         image = 0;

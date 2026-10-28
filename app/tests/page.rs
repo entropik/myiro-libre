@@ -1950,3 +1950,68 @@ fn une_seule_autre_plage_se_dit_au_singulier() {
     let script = lire("interface/calcul-profil.js");
     assert!(script.contains("c.autres === 1 ? t(\"profil.coherence.autre\")"));
 }
+
+/// La vue 3D marque sur l'axe L* le blanc du papier de chaque profil
+/// affiché (`analyse.blanc`, envoyé par la page), dans sa couleur de série,
+/// avec son étiquette et sa valeur écrite par `Graphiques.nombre` (virgule en
+/// français). Les étiquettes trop proches sont écartées l'une de l'autre ; un
+/// blanc inconnu (`null`) ne donne aucune marque. Le texte de remplacement dit
+/// aussi chaque blanc. Le fichier reste sous 400 lignes.
+#[test]
+fn la_vue_3d_marque_le_blanc_du_papier_de_chaque_profil() {
+    use app::textes::{texte, Langue};
+    let comparer = lire("interface/comparer.js");
+    let formes = comparer
+        .split("function formes(liste) {")
+        .nth(1)
+        .expect("formes absent");
+    let formes = &formes[..formes.find("\n  }").unwrap_or(formes.len())];
+    assert!(formes.contains("blanc: p.analyse.blanc"), "{formes}");
+
+    let script = lire("interface/vue3d.js");
+    assert!(script.lines().count() < 400, "vue3d.js dépasse 400 lignes");
+    assert!(
+        script.contains(
+            "blanc: Array.isArray(f.blanc) && Number.isFinite(f.blanc[0]) ? f.blanc[0] : null,"
+        ),
+        "un blanc inconnu doit rester inconnu"
+    );
+    let dessiner = script
+        .split("function dessiner() {")
+        .nth(1)
+        .expect("dessiner absent");
+    let dessiner = &dessiner[..dessiner.find("\n    }").unwrap_or(dessiner.len())];
+    assert!(
+        dessiner.contains("dessinerAxes(ctx, r, k, true);\n      dessinerBlancs(ctx, r, k);"),
+        "{dessiner}"
+    );
+    let blancs = script
+        .split("function dessinerBlancs(ctx, r, k) {")
+        .nth(1)
+        .expect("dessinerBlancs absent");
+    let blancs = &blancs[..blancs.find("\n    }").unwrap_or(blancs.len())];
+    for attendu in [
+        "formes.filter((f) => f.blanc !== null)",
+        "tourner([f.blanc, 0, 0], r)",
+        // Rangées de haut en bas, chacune au moins une ligne sous la précédente.
+        ".sort((u, v) => u.q[1] - v.q[1])",
+        "Math.max(q[1], bas + ligne)",
+        "jetons.series[f.serie - 1]",
+        "t(\"comparer.vue3d.blanc\").replace(\"{l}\", () => nombre(f.blanc, 1))",
+    ] {
+        assert!(blancs.contains(attendu), "{attendu} :\n{blancs}");
+    }
+    assert!(script.contains(".replace(\"{blanc}\", () => nombre(f.blanc, 1))"));
+
+    assert_eq!(
+        texte(Langue::Francais, "comparer.vue3d.blanc"),
+        "Blanc du papier L* {l}"
+    );
+    assert_eq!(
+        texte(Langue::Anglais, "comparer.vue3d.blanc"),
+        "Paper white L* {l}"
+    );
+    for langue in [Langue::Francais, Langue::Anglais] {
+        assert!(texte(langue, "comparer.vue3d.aria.profil").contains("{blanc}"));
+    }
+}

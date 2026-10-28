@@ -553,7 +553,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "comparer.vue3d.aria.profil",
-        "{nom}, volume {volume} unités L*a*b* au cube",
+        "{nom}, volume {volume} unités L*a*b* au cube, blanc du papier L* {blanc}",
     ),
     (
         "comparer.vue3d.aria.vide",
@@ -562,6 +562,10 @@ const FRANCAIS: Catalogue = &[
     (
         "comparer.vue3d.bulle",
         "{nom}\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "comparer.vue3d.blanc",
+        "Blanc du papier L* {l}",
     ),
     (
         "comparer.graphique.teinte",
@@ -2290,7 +2294,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "comparer.vue3d.aria.profil",
-        "{nom}, volume {volume} cubic L*a*b* units",
+        "{nom}, volume {volume} cubic L*a*b* units, paper white L* {blanc}",
     ),
     (
         "comparer.vue3d.aria.vide",
@@ -2299,6 +2303,10 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.vue3d.bulle",
         "{nom}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "comparer.vue3d.blanc",
+        "Paper white L* {l}",
     ),
     (
         "comparer.graphique.teinte",

@@ -215,7 +215,7 @@ window.Comparer = (() => {
     return liste.filter((p) => !masques.has(p.rang)).map((p) => {
       const limite = reglages.forme === "limite" && p.limite.etat === "calculee";
       const m = limite ? p.limite.maillage : p.analyse.affichage;
-      return { ...m, serie: p.serie, nom: p.nom, volume: limite ? p.limite.volume : p.analyse.volume_surface };
+      return { ...m, serie: p.serie, nom: p.nom, volume: limite ? p.limite.volume : p.analyse.volume_surface, blanc: p.analyse.blanc };
     });
   }
 
