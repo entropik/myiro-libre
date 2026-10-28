@@ -14,11 +14,13 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// Délai laissé à la fermeture (`FD9_Disconnect` puis désinscription du
-/// rappel) pour rendre la main. À l'essai E2, `FD9_Disconnect` est resté
-/// bloqué environ 5 min. Plus court que les 30 s pendant lesquelles
-/// l'application attend la réponse à `fermer` : elle la reçoit avant de
-/// couper le pont elle-même.
+/// Délai laissé à la fermeture (sortie de la feuille, `FD9_Disconnect`,
+/// attente de la fin de session, désinscription du rappel) pour rendre la
+/// main. À l'essai E2, `FD9_Disconnect` est resté bloqué environ 5 min. Plus
+/// court que les 30 s pendant lesquelles l'application attend la réponse à
+/// `fermer` : elle la reçoit avant de couper le pont elle-même. L'attente de
+/// la fin de session (10 s au plus) finit d'ordinaire à la première lecture,
+/// qui rend 1102 une fois la session fermée.
 pub const DELAI_FERMETURE: Duration = Duration::from_secs(15);
 
 /// Chien de garde de la fermeture : un fil à part, qui n'appelle jamais la
@@ -56,7 +58,7 @@ impl Garde {
                 let _ = sortie.flush();
             }
             eprintln!(
-                "pont-fd9 : la fermeture n'a pas rendu la main en {} ms (FD9_Disconnect ou désinscription du rappel) : arrêt du pont, code {CODE_FERMETURE_BLOQUEE}",
+                "pont-fd9 : la fermeture n'a pas rendu la main en {} ms (FD9_ExitMeasurement, FD9_Disconnect, FD9_GetStatus ou désinscription du rappel) : arrêt du pont, code {CODE_FERMETURE_BLOQUEE}",
                 delai.as_millis()
             );
             terminer(CODE_FERMETURE_BLOQUEE)

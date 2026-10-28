@@ -312,7 +312,12 @@ fn la_feuille_est_refusee_au_plafond_connexion_sans_appel_a_la_dll() {
     );
     assert_eq!(
         session.sdk().appels_dll()[5..],
-        ["FD9_Disconnect", "FD9_RegisterDeviceEventHandler nul"]
+        [
+            "FD9_ExitMeasurement 0 nul",
+            "FD9_Disconnect",
+            "FD9_GetStatus",
+            "FD9_RegisterDeviceEventHandler nul"
+        ]
     );
 }
 
@@ -410,9 +415,15 @@ fn annuler_interrompt_l_attente_de_la_feuille() {
             },
         ]
     );
+    // État 1 relu : ni arrêt ni sortie pour la feuille ; la seule sortie est
+    // celle de la fermeture, juste avant la déconnexion.
     let appels = session.sdk().appels_dll();
-    assert!(appels.contains(&"FD9_StopMeasurement faux"));
-    assert!(appels.contains(&"FD9_ExitMeasurement 0 nul"));
+    assert!(!appels.iter().any(|a| a.starts_with("FD9_StopMeasurement")));
+    let sortie = appels
+        .iter()
+        .position(|a| *a == "FD9_ExitMeasurement 0 nul")
+        .unwrap();
+    assert_eq!(appels[sortie + 1], "FD9_Disconnect");
 }
 
 #[test]

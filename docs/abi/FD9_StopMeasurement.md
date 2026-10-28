@@ -47,7 +47,8 @@ Sa **déconnexion** (`0x1403eb7f0`) : `FD9_ExitMeasurement(&0, NULL)` sans lire 
 
 ## Pour le pont
 
-- Ne l'appeler que pour **annuler** pendant les états 1 à 8 (délai de la feuille dépassé, autre mire, mire non reconnue, annulation de l'opérateur), avec `faux`.
+- Ne l'appeler que pour **annuler** une feuille engagée, avec `faux` : autre mire, mire non reconnue, échec d'une étape, annulation de l'opérateur ou délai pendant une étape.
+- **Attente de la feuille finie sans feuille** (délai ou annulation) : comme MYIROtools, relire l'état par [FD9_GetStatus](FD9_GetStatus.md) (+0x10). Aux états 0 et 1, rien n'est engagé : n'appeler **ni `FD9_StopMeasurement` ni [FD9_ExitMeasurement](FD9_ExitMeasurement.md)**, et rendre `feuille_absente` (délai) ou `mesure_annulee` avec `au_repos` (annulation). Aux états 2 à 8, arrêter comme ci-dessous. Une lecture refusée rend son erreur, sans arrêt. C'est la leçon de l'essai E2.
 - Après un arrêt admis, **attendre l'événement 10** avant [FD9_ExitMeasurement](FD9_ExitMeasurement.md) : appelée plus tôt, celle-ci est refusée. Sans événement 10 dans le délai, rendre `Delai` sans inventer d'état.
 - À l'événement 9, ne pas compter sur `FD9_StopMeasurement` : un 1104 à cet endroit est journalisé, pas traité comme une panne.
 - Un arrêt peut croiser la fin de la mesure (supposé, rien ne l'exclut dans le code lu) :

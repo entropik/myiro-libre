@@ -85,6 +85,12 @@ pub struct Fd9Simule {
     /// DLL est restée bloquée dans l'appel). 10 s au plus, pour ne jamais
     /// bloquer un test.
     pub deconnexion_retenue: Option<std::sync::mpsc::Receiver<()>>,
+    /// Codes rendus par les prochains `FD9_GetStatus`, dans l'ordre ; puis
+    /// le code ordinaire.
+    pub codes_statut: VecDeque<i32>,
+    /// Après `FD9_Disconnect`, la DLL rend encore cet état avec le code 0, au
+    /// lieu de 1102 (hors connexion).
+    pub etat_apres_deconnexion: Option<u32>,
 }
 
 /// Motif répété 32 fois : empreinte SHA-256 fictive de la DLL simulée.
@@ -294,6 +300,18 @@ impl SdkFd9 for Fd9Simule {
     }
 
     fn statut(&mut self, tampon: &mut [u32; 8]) -> i32 {
+        match self.codes_statut.pop_front() {
+            Some(code) if code != 0 => {
+                self.appels.push("FD9_GetStatus".into());
+                return code;
+            }
+            _ => {}
+        }
+        // Comme la DLL : hors connexion, 1102 (fiche FD9_GetStatus).
+        if !self.connecte && self.etat_apres_deconnexion.is_none() {
+            self.appels.push("FD9_GetStatus".into());
+            return 1102;
+        }
         let code = self.appel("FD9_GetStatus", String::new());
         if code == 0 {
             *tampon = self.statut;
@@ -310,6 +328,9 @@ impl SdkFd9 for Fd9Simule {
         // 1004 : la DLL n'avait plus de session (fiche FD9_Disconnect).
         if code == 0 || code == 1004 {
             self.connecte = false;
+            if let Some(etat) = self.etat_apres_deconnexion {
+                self.etat = etat;
+            }
         }
         code
     }

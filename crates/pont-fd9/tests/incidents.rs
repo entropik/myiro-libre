@@ -32,6 +32,7 @@ const COURTS: Delais = Delais {
     feuille: Duration::from_millis(50),
     etape: Duration::from_millis(50),
     mesure: Duration::from_millis(50),
+    deconnexion: Duration::from_millis(50),
 };
 
 fn connectee(sdk: Fd9Simule) -> (Session<Fd9Simule>, usize) {
@@ -242,8 +243,13 @@ fn apres_un_incident_la_session_reste_fermable() {
     assert_eq!(session.fermer(), Fermeture::Confirmee);
     let appels = appels(&session, depuis);
     assert_eq!(
-        appels[appels.len() - 2..],
-        ["FD9_Disconnect", "FD9_RegisterDeviceEventHandler nul"]
+        appels[appels.len() - 4..],
+        [
+            "FD9_ExitMeasurement 0 nul",
+            "FD9_Disconnect",
+            "FD9_GetStatus",
+            "FD9_RegisterDeviceEventHandler nul"
+        ]
     );
 }
 
@@ -272,6 +278,7 @@ fn connectee_annulable(sdk: Fd9Simule) -> (Session<Fd9Simule>, usize) {
         feuille: Duration::from_secs(5),
         etape: Duration::from_secs(5),
         mesure: Duration::from_secs(5),
+        deconnexion: Duration::from_millis(50),
     });
     session.version().unwrap();
     session

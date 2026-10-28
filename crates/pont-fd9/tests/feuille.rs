@@ -5,7 +5,7 @@
 mod commun;
 
 use commun::Fd9Simule;
-use pont_fd9::{Delais, Session};
+use pont_fd9::{Delais, Fermeture, Session};
 use pont_protocole::{
     AdresseReseau, DefinitionFeuille, ErreurPont, Info, LectureFeuille, Palier, RemiseAuRepos,
     ZoneFeuille,
@@ -36,6 +36,7 @@ const COURTS: Delais = Delais {
     feuille: Duration::from_millis(50),
     etape: Duration::from_millis(50),
     mesure: Duration::from_millis(50),
+    deconnexion: Duration::from_millis(50),
 };
 
 /// Session connectée au plafond donné ; rend aussi le nombre d'appels faits
@@ -113,7 +114,10 @@ fn la_capture_est_lue_en_deux_appels() {
 }
 
 #[test]
-fn sans_feuille_le_delai_rend_feuille_absente() {
+fn sans_feuille_le_delai_rend_feuille_absente_sans_arreter() {
+    // Essai E2 : état 1, aucune feuille glissée. Comme MYIROtools, l'état est
+    // relu et rien n'est arrêté : l'arrêt depuis l'état 1 n'a jamais été
+    // suivi de l'événement 10, et la déconnexion est restée bloquée.
     let mut sdk = Fd9Simule::avec_une_rgb2520();
     sdk.a_venir.clear();
     let (mut session, depuis) = connectee(sdk, Palier::Prenumerisation);
@@ -122,8 +126,58 @@ fn sans_feuille_le_delai_rend_feuille_absente() {
         session.prenumeriser(&rgb2520()),
         Err(ErreurPont::FeuilleAbsente {})
     );
-    // Arrêt, événement 10, puis sortie : l'instrument revient au repos.
-    assert_eq!(appels_de_la_feuille(&session, depuis), ARRET);
+    assert_eq!(appels_de_la_feuille(&session, depuis), ["FD9_GetStatus"]);
+
+    // La fermeture rend la main : sortie, déconnexion, état relu, puis
+    // désinscription.
+    let avant = session.sdk().appels.len();
+    assert_eq!(session.fermer(), Fermeture::Confirmee);
+    assert_eq!(
+        session.sdk().appels_dll()[avant..],
+        [
+            "FD9_ExitMeasurement 0 nul",
+            "FD9_Disconnect",
+            "FD9_GetStatus",
+            "FD9_RegisterDeviceEventHandler nul",
+        ]
+    );
+    assert!(!session
+        .sdk()
+        .appels_dll()
+        .iter()
+        .any(|a| a.starts_with("FD9_StopMeasurement")));
+}
+
+#[test]
+fn une_feuille_engagee_au_delai_est_arretee_puis_close() {
+    // État 2 : la feuille s'engage mais ne finit pas de s'engager.
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.a_venir = [2].into();
+    let (mut session, depuis) = connectee(sdk, Palier::Prenumerisation);
+
+    assert_eq!(
+        session.prenumeriser(&rgb2520()),
+        Err(ErreurPont::FeuilleAbsente {})
+    );
+    assert_eq!(
+        appels_de_la_feuille(&session, depuis),
+        ["FD9_GetStatus", ARRET[0], ARRET[1]]
+    );
+}
+
+#[test]
+fn un_etat_illisible_au_delai_rend_son_erreur_sans_arret() {
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.a_venir.clear();
+    let (mut session, depuis) = connectee(sdk, Palier::Prenumerisation);
+    // Le premier GetStatus ouvre la feuille ; le second, au délai, échoue.
+    session.sdk_mut().codes_statut = [0, 1102].into();
+
+    assert_eq!(
+        session.prenumeriser(&rgb2520()),
+        Err(ErreurPont::Sdk { code: 1102 })
+    );
+    assert_eq!(appels_de_la_feuille(&session, depuis), ["FD9_GetStatus"]);
 }
 
 #[test]
@@ -270,13 +324,14 @@ fn un_nombre_de_plages_different_refuse_la_feuille() {
 }
 
 #[test]
-fn annuler_pendant_l_attente_arrete_et_sort() {
+fn annuler_pendant_l_attente_ne_touche_pas_a_l_instrument() {
     let mut sdk = Fd9Simule::avec_une_rgb2520();
     sdk.a_venir.clear();
     let mut session = Session::new(sdk, Palier::Prenumerisation).avec_delais(Delais {
         feuille: Duration::from_secs(30),
         etape: Duration::from_secs(5),
         mesure: Duration::from_secs(5),
+        deconnexion: Duration::from_millis(50),
     });
     session.version().unwrap();
     session
@@ -293,18 +348,23 @@ fn annuler_pendant_l_attente_arrete_et_sort() {
             remise_au_repos: RemiseAuRepos::AuRepos {}
         })
     );
-    assert_eq!(appels_de_la_feuille(&session, depuis), ARRET);
+    // Comme MYIROtools à l'état 1 : ni arrêt ni sortie.
+    assert_eq!(appels_de_la_feuille(&session, depuis), ["FD9_GetStatus"]);
 }
 
 #[test]
 fn sans_evenement_10_l_arret_rend_delai_sans_sortir() {
+    // Feuille en cours d'engagement (état 2) : l'arrêt est admis.
     let mut sdk = Fd9Simule::avec_une_rgb2520();
-    sdk.a_venir.clear();
+    sdk.a_venir = [2].into();
     sdk.reactions.remove("FD9_StopMeasurement");
     let (mut session, depuis) = connectee(sdk, Palier::Prenumerisation);
 
     assert_eq!(session.prenumeriser(&rgb2520()), Err(ErreurPont::Delai {}));
-    assert_eq!(appels_de_la_feuille(&session, depuis), [ARRET[0]]);
+    assert_eq!(
+        appels_de_la_feuille(&session, depuis),
+        ["FD9_GetStatus", ARRET[0]]
+    );
 }
 
 #[test]
@@ -416,7 +476,7 @@ fn deux_feuilles_se_suivent_dans_la_meme_connexion() {
 }
 
 #[test]
-fn sans_la_main_une_annulation_dit_l_arret_refuse() {
+fn sans_la_main_une_annulation_n_arrete_rien() {
     // Un autre logiciel prend la main (état 0) pendant l'attente : rien à
     // arrêter, rien à clore.
     let mut sdk = Fd9Simule::avec_une_rgb2520();
@@ -425,6 +485,7 @@ fn sans_la_main_une_annulation_dit_l_arret_refuse() {
         feuille: Duration::from_secs(30),
         etape: Duration::from_secs(5),
         mesure: Duration::from_secs(5),
+        deconnexion: Duration::from_millis(50),
     });
     session.version().unwrap();
     session
@@ -437,14 +498,11 @@ fn sans_la_main_une_annulation_dit_l_arret_refuse() {
     assert_eq!(
         session.prenumeriser(&rgb2520()),
         Err(ErreurPont::MesureAnnulee {
-            remise_au_repos: RemiseAuRepos::ArretRefuse { code: 1104 }
+            remise_au_repos: RemiseAuRepos::AuRepos {}
         })
     );
-    // Arrêt refusé (1104) : son code interne au journal, et pas de sortie.
-    assert_eq!(
-        appels_de_la_feuille(&session, depuis),
-        [ARRET[0], "FD9_GetLastError"]
-    );
+    // État 0 relu : comme MYIROtools, ni arrêt ni sortie.
+    assert_eq!(appels_de_la_feuille(&session, depuis), ["FD9_GetStatus"]);
     assert!(session
         .journal()
         .iter()
@@ -461,11 +519,7 @@ fn sans_la_main_le_delai_rend_feuille_absente() {
         session.prenumeriser(&rgb2520()),
         Err(ErreurPont::FeuilleAbsente {})
     );
-    // Arrêt refusé (1104) : son code interne au journal, et pas de sortie.
-    assert_eq!(
-        appels_de_la_feuille(&session, depuis),
-        [ARRET[0], "FD9_GetLastError"]
-    );
+    assert_eq!(appels_de_la_feuille(&session, depuis), ["FD9_GetStatus"]);
 }
 
 #[test]

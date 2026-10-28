@@ -9,10 +9,16 @@ use fd9_sys::{
     CODE_RECERTIFICATION_DUE,
 };
 use pont_protocole::{AdresseReseau, ErreurPont, Identite, Palier, RemiseAuRepos};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Code de `FD9_Disconnect` sans session ouverte dans la DLL.
 const CODE_AUCUNE_SESSION: i32 = 1004;
+
+/// Code de `FD9_GetStatus` hors connexion (fiche `FD9_GetStatus`).
+const CODE_HORS_CONNEXION: i32 = 1102;
+
+/// Après la déconnexion, l'état est relu à ce rythme, comme MYIROtools.
+const PAS_APRES_DECONNEXION: Duration = Duration::from_millis(100);
 
 impl<S: SdkFd9> Session<S> {
     /// Connexion à l'instrument n° `instrument` de la dernière détection.
@@ -154,8 +160,10 @@ impl<S: SdkFd9> Session<S> {
         }
     }
 
-    /// Déconnecte puis désinscrit le rappel. Ensuite, plus rien n'atteint la
-    /// DLL. Une déconnexion refusée n'est pas retentée.
+    /// Comme MYIROtools : sort de la feuille sans tenir compte du retour,
+    /// déconnecte, attend que la session soit finie, puis désinscrit le
+    /// rappel. Ensuite, plus rien n'atteint la DLL. Une déconnexion refusée
+    /// n'est pas retentée.
     pub fn fermer(&mut self) -> Fermeture {
         if let Some(fermeture) = &self.fermeture {
             return fermeture.clone();
@@ -163,12 +171,17 @@ impl<S: SdkFd9> Session<S> {
         self.fermee = true;
         self.vider_hors_requete();
         let fermeture = if self.connecte {
+            // Refusée (1104) s'il n'y a rien à clore : sans effet.
+            let code = self.sdk.sortir();
+            self.journal
+                .push(format!("FD9_ExitMeasurement(0, NULL) : {code}"));
             let code = self.sdk.deconnecter();
             self.journal.push(format!("FD9_Disconnect : {code}"));
             // 1004 : la DLL n'a plus de session, par exemple après une perte
             // de liaison ; ce n'est pas une anomalie (fiche FD9_Disconnect).
             if code == 0 || code == CODE_AUCUNE_SESSION {
                 self.connecte = false;
+                self.attendre_fin_de_session();
                 self.desinscrire();
                 Fermeture::Confirmee
             } else {
@@ -186,6 +199,38 @@ impl<S: SdkFd9> Session<S> {
             .push(format!("résultat de la fermeture : {fermeture:?}"));
         self.fermeture = Some(fermeture.clone());
         fermeture
+    }
+}
+
+impl<S: SdkFd9> Session<S> {
+    /// Relit l'état toutes les 100 ms jusqu'à l'état 1 (code 0) ou au code
+    /// 1102 (plus de session), comme MYIROtools, mais au plus
+    /// `delais.deconnexion`. Un dépassement est dit au journal ; la
+    /// déconnexion faite reste faite.
+    fn attendre_fin_de_session(&mut self) {
+        let fin = Instant::now() + self.delais.deconnexion;
+        let mut lectures = 0;
+        loop {
+            let mut statut = [0u32; 8];
+            let code = self.sdk.statut(&mut statut);
+            lectures += 1;
+            if code == CODE_HORS_CONNEXION || (code == 0 && statut[4] == 1) {
+                self.journal.push(format!(
+                    "après la déconnexion : FD9_GetStatus code {code}, état {}, {lectures} lecture(s)",
+                    statut[4]
+                ));
+                return;
+            }
+            let reste = fin.saturating_duration_since(Instant::now());
+            if reste.is_zero() {
+                self.journal.push(format!(
+                    "après la déconnexion : état 1 non revu en {} ms (FD9_GetStatus code {code}, {statut:?}, {lectures} lecture(s))",
+                    self.delais.deconnexion.as_millis()
+                ));
+                return;
+            }
+            std::thread::sleep(reste.min(PAS_APRES_DECONNEXION));
+        }
     }
 }
 

@@ -44,6 +44,7 @@ const COURTS: Delais = Delais {
     feuille: Duration::from_millis(50),
     etape: Duration::from_millis(50),
     mesure: Duration::from_millis(50),
+    deconnexion: Duration::from_millis(50),
 };
 
 fn connectee(sdk: Fd9Simule, plafond: Palier) -> (Session<Fd9Simule>, usize) {

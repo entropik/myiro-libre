@@ -20,7 +20,7 @@ mod plages;
 pub mod serveur;
 
 pub use arret::ATTENTE_APRES_ARRET_REFUSE;
-pub use attente::{Annulation, Delais};
+pub use attente::{Annulation, Delais, ATTENTE_APRES_DECONNEXION};
 pub use feuille::{ECART_ADMIS, TAILLE_IMAGE_MAX};
 
 pub use plages::{CONDITIONS, LONGUEUR_SPECTRE};

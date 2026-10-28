@@ -139,7 +139,9 @@ fn l_executable_refuse_feuille_au_plafond_connexion() {
             "FD9_Connect 192.0.2.40 myiro-libre",
             "FD9_GetSystemInfo",
             "FD9_GetStatus",
+            "FD9_ExitMeasurement 0 nul",
             "FD9_Disconnect",
+            "FD9_GetStatus",
             "FD9_RegisterDeviceEventHandler nul",
         ]
     );

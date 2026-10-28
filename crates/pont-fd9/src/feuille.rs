@@ -5,8 +5,10 @@
 //!
 //! Un **arrêt** est `FD9_StopMeasurement(faux)` (états 1 à 8), puis l'attente
 //! de l'événement 10, puis `FD9_ExitMeasurement(0, NULL)`. Un événement
-//! d'erreur sort sans arrêter. La session n'avance que sur un événement reçu
-//! ou un code de retour lu.
+//! d'erreur sort sans arrêter. Une attente de la feuille finie sans feuille
+//! (délai, annulation) n'arrête rien si l'état relu est 0 ou 1, comme
+//! MYIROtools (essai E2). La session n'avance que sur un événement reçu ou
+//! un code de retour lu.
 
 use crate::arret::EchecArret;
 use crate::attente::{Attente, Fin};
@@ -218,17 +220,50 @@ impl<S: SdkFd9> Session<S> {
         voulu: EtatSdk,
         attente: Attente,
     ) -> Result<(), ErreurPont> {
+        let annulee = ErreurPont::MesureAnnulee {
+            remise_au_repos: RemiseAuRepos::AuRepos {},
+        };
         match self.attendre(voulu, attente) {
             Ok(()) => Ok(()),
             Err(Fin::Delai) if attente == Attente::Feuille => {
-                Err(self.abandonner(ErreurPont::FeuilleAbsente {}))
+                Err(self.conclure_sans_feuille(ErreurPont::FeuilleAbsente {}))
+            }
+            Err(Fin::Annulee) if attente == Attente::Feuille => {
+                Err(self.conclure_sans_feuille(annulee))
             }
             Err(Fin::Delai) => Err(self.abandonner(ErreurPont::Delai {})),
-            Err(Fin::Annulee) => Err(self.abandonner(ErreurPont::MesureAnnulee {
-                remise_au_repos: RemiseAuRepos::AuRepos {},
-            })),
+            Err(Fin::Annulee) => Err(self.abandonner(annulee)),
             Err(Fin::Incident(etat)) => Err(self.incident(etat)),
             Err(Fin::Inconnu(code)) => Err(self.etat_inconnu(code)),
+        }
+    }
+}
+
+impl<S: SdkFd9> Session<S> {
+    /// L'attente de la feuille a fini sans elle (délai ou annulation). Comme
+    /// MYIROtools, l'état est relu (`FD9_GetStatus`, +0x10) : à l'état 0 ou
+    /// 1, rien n'est engagé, et ni `FD9_StopMeasurement` ni
+    /// `FD9_ExitMeasurement` ne sont appelés. À l'essai E2, un arrêt depuis
+    /// l'état 1 n'a jamais été suivi de l'événement 10. Aux autres états, la
+    /// feuille est arrêtée comme avant. Une lecture refusée rend son erreur,
+    /// sans arrêt.
+    fn conclure_sans_feuille(&mut self, raison: ErreurPont) -> ErreurPont {
+        let mut statut = [0u32; 8];
+        let code = self.sdk.statut(&mut statut);
+        self.journal
+            .push(format!("FD9_GetStatus : code {code}, {statut:?}"));
+        if code != 0 {
+            return erreur_sdk(code);
+        }
+        match statut[4] {
+            etat @ (0 | 1) => {
+                self.dernier_etat = Some(EtatSdk::depuis(etat));
+                self.journal.push(format!(
+                    "aucune feuille engagée (état {etat}) : ni arrêt ni sortie"
+                ));
+                raison
+            }
+            _ => self.abandonner(raison),
         }
     }
 }

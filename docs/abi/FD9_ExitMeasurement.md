@@ -42,6 +42,8 @@ Lu dans le gestionnaire d'événements de MYIROtools (`fd9-feuille.md` § 3), to
 - L'appeler **seulement après avoir reçu** l'événement 9, 10 ou un événement d'erreur ; après un `FD9_StopMeasurement`, attendre d'abord l'événement 10.
 - Lire toutes les plages **avant** cet appel.
 - Un refus (1104) est rendu tel quel avec l'état reçu en dernier ; la session reste fermable par `FD9_Disconnect`.
+- Après une attente de feuille finie sans feuille aux états 0 ou 1, ne pas l'appeler (voir [FD9_StopMeasurement](FD9_StopMeasurement.md)).
+- **À la fermeture**, comme MYIROtools : l'appeler une fois avant [FD9_Disconnect](FD9_Disconnect.md), **sans tenir compte du retour** (journalisé). Sans feuille à clore, elle est refusée (1104) et n'a pas d'effet.
 
 ## À vérifier sur l'instrument
 

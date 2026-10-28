@@ -5,8 +5,9 @@
 mod commun;
 
 use commun::{infos_fictives, Fd9Simule};
-use pont_fd9::{Fermeture, Session, PALIER_MAX};
+use pont_fd9::{Delais, Fermeture, Session, PALIER_MAX};
 use pont_protocole::{AdresseReseau, ErreurPont, Palier, RemiseAuRepos};
+use std::time::{Duration, Instant};
 
 /// Session au plafond donné, version et détection faites.
 fn detectee(sdk: Fd9Simule, plafond: Palier) -> Session<Fd9Simule> {
@@ -186,20 +187,86 @@ fn une_seconde_connexion_n_appelle_pas_connect() {
 }
 
 #[test]
-fn la_fermeture_deconnecte_puis_desinscrit() {
+fn la_fermeture_sort_deconnecte_attend_puis_desinscrit() {
     let mut session = detectee(Fd9Simule::avec_un_fd9(), Palier::Connexion);
     session.connecter(0).unwrap();
 
     assert_eq!(session.fermer(), Fermeture::Confirmee);
 
+    // Comme MYIROtools : sortie sans lire son retour (ici refusée, aucune
+    // feuille en cours), déconnexion, état relu jusqu'au 1102.
     assert_eq!(
         session.sdk().appels_dll()[6..],
-        ["FD9_Disconnect", "FD9_RegisterDeviceEventHandler nul"]
+        [
+            "FD9_ExitMeasurement 0 nul",
+            "FD9_Disconnect",
+            "FD9_GetStatus",
+            "FD9_RegisterDeviceEventHandler nul"
+        ]
     );
+    assert!(session
+        .journal()
+        .iter()
+        .any(|l| l == "FD9_ExitMeasurement(0, NULL) : 1104"));
     assert_eq!(session.detecter(), Err(ErreurPont::SessionFermee {}));
     // Refermer ne refait rien.
     assert_eq!(session.fermer(), Fermeture::Confirmee);
-    assert_eq!(session.sdk().appels.len(), 8);
+    assert_eq!(session.sdk().appels.len(), 10);
+}
+
+#[test]
+fn apres_la_deconnexion_l_etat_1_suffit() {
+    let mut sdk = Fd9Simule::avec_un_fd9();
+    sdk.etat_apres_deconnexion = Some(1);
+    let mut session = detectee(sdk, Palier::Connexion);
+    session.connecter(0).unwrap();
+
+    assert_eq!(session.fermer(), Fermeture::Confirmee);
+    assert_eq!(
+        session.sdk().appels_dll()[7..],
+        [
+            "FD9_Disconnect",
+            "FD9_GetStatus",
+            "FD9_RegisterDeviceEventHandler nul"
+        ]
+    );
+}
+
+#[test]
+fn l_attente_apres_la_deconnexion_est_bornee() {
+    // La DLL rend encore l'état 5 : l'attente s'arrête au délai, le journal
+    // le dit, et la fermeture faite reste confirmée.
+    let mut sdk = Fd9Simule::avec_un_fd9();
+    sdk.etat_apres_deconnexion = Some(5);
+    let mut session = Session::new(sdk, Palier::Connexion).avec_delais(Delais {
+        deconnexion: Duration::from_millis(250),
+        ..Delais::default()
+    });
+    session.version().unwrap();
+    session.detecter().unwrap();
+    session.connecter(0).unwrap();
+
+    let debut = Instant::now();
+    assert_eq!(session.fermer(), Fermeture::Confirmee);
+    assert!(debut.elapsed() < Duration::from_secs(2));
+    let lectures = session.sdk().appels_dll()[8..]
+        .iter()
+        .take_while(|a| **a == "FD9_GetStatus")
+        .count();
+    // Une lecture toutes les 100 ms environ.
+    assert!((2..=5).contains(&lectures), "{lectures}");
+    assert_eq!(
+        session.sdk().appels_dll().last(),
+        Some(&"FD9_RegisterDeviceEventHandler nul")
+    );
+    assert!(
+        session
+            .journal()
+            .iter()
+            .any(|l| l.contains("état 1 non revu")),
+        "{:?}",
+        session.journal()
+    );
 }
 
 #[test]
@@ -214,7 +281,8 @@ fn une_deconnexion_refusee_rend_fermeture_incertaine() {
             remise_au_repos: RemiseAuRepos::ArretRefuse { code: 1104 }
         }
     );
-    // Ni désinscription (refusée pendant une connexion), ni nouvel essai.
+    // Ni attente de l'état, ni désinscription (refusée pendant une
+    // connexion), ni nouvel essai.
     assert_eq!(session.sdk().appels_dll().last(), Some(&"FD9_Disconnect"));
     let appels = session.sdk().appels.len();
     session.fermer();
@@ -245,7 +313,8 @@ fn un_evenement_recu_entre_deux_requetes_est_journalise_sans_effet() {
 
     assert_eq!(session.fermer(), Fermeture::Confirmee);
 
-    assert_eq!(session.sdk().appels.len(), appels + 2);
+    // Sortie, déconnexion, état relu, désinscription.
+    assert_eq!(session.sdk().appels.len(), appels + 4);
     assert!(
         session
             .journal()

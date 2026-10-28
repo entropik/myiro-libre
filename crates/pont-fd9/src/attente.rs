@@ -12,7 +12,11 @@ use std::time::{Duration, Instant};
 /// l'annulation est demandée.
 const PAS_ATTENTE: Duration = Duration::from_millis(100);
 
-/// Délais d'une feuille.
+/// Après `FD9_Disconnect`, attente de l'état 1 ou du code 1102. MYIROtools
+/// attend sans limite ; le pont s'arrête là.
+pub const ATTENTE_APRES_DECONNEXION: Duration = Duration::from_secs(10);
+
+/// Délais d'une feuille, et de la fin d'une déconnexion.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Delais {
     /// Attente de la feuille après la requête (`--attente-feuille`).
@@ -21,6 +25,9 @@ pub struct Delais {
     pub etape: Duration,
     /// Attente de la fin de la mesure de toutes les plages.
     pub mesure: Duration,
+    /// Attente, après la déconnexion, de l'état 1 ou du code 1102
+    /// ([`ATTENTE_APRES_DECONNEXION`]).
+    pub deconnexion: Duration,
 }
 
 impl Default for Delais {
@@ -30,6 +37,7 @@ impl Default for Delais {
             etape: Duration::from_secs(30),
             // Supposé : une RGB-2520 se mesure en quelques minutes (essai E4).
             mesure: Duration::from_secs(600),
+            deconnexion: ATTENTE_APRES_DECONNEXION,
         }
     }
 }
