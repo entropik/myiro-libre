@@ -150,3 +150,24 @@ fn un_chemin_a_256_points_du_depart_a_l_arrivee() {
         (points[255][0] - arrivee[0]).abs() < 1e-9 && (points[255][1] - arrivee[1]).abs() < 1e-9
     );
 }
+
+#[test]
+fn chaque_carre_du_cube_est_coupe_par_la_diagonale_du_prototype() {
+    // Sur une surface courbe, le volume dépend de la diagonale choisie : le
+    // prototype coupe chaque carré entre ses deux coins où une seule des
+    // deux coordonnées libres de la face vaut 1.
+    let (sommets, triangles) = surface_cube(2);
+    assert_eq!(triangles.len(), 12);
+    for t in &triangles {
+        let coins = t.map(|i| sommets[i as usize]);
+        let fixe = (0..3)
+            .find(|&k| coins.iter().all(|c| c[k] == coins[0][k]))
+            .expect("triangle posé sur une face");
+        let libres: Vec<usize> = (0..3).filter(|&k| k != fixe).collect();
+        let mixtes = coins
+            .iter()
+            .filter(|c| c[libres[0]] != c[libres[1]])
+            .count();
+        assert_eq!(mixtes, 2, "triangle {coins:?} coupé par l'autre diagonale");
+    }
+}

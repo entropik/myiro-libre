@@ -259,3 +259,20 @@ fn un_fichier_gam_se_lit_et_un_indice_faux_est_refuse() {
     )
     .is_err());
 }
+
+#[test]
+fn des_plages_repetees_listees_dans_un_autre_ordre_sont_les_memes_mesures() {
+    // Deux mesures du même RVB, assez différentes pour ne pas s'apparier
+    // l'une à l'autre (ΔE00 bien au-delà de 0,1).
+    let gris = |l: f64| Mesure {
+        rvb: [0.5, 0.5, 0.5],
+        lab: [l, 0.0, 0.0],
+    };
+    let mut a = mire();
+    a.push(gris(60.0));
+    a.push(gris(62.0));
+    let mut b = mire();
+    b.push(gris(62.0));
+    b.push(gris(60.0));
+    assert!(memes_mesures(&a, &b));
+}

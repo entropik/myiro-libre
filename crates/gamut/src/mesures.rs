@@ -64,7 +64,8 @@ pub fn repetabilite(mesures: &[Mesure]) -> Option<Repetabilite> {
     })
 }
 
-/// Écart relatif au-delà duquel deux RVB diffèrent (0,01 %).
+/// Écart absolu, sur l'échelle RVB de 0 à 1, au-delà duquel deux RVB
+/// diffèrent (0,01 % de l'échelle).
 const RVB_MEME: f64 = 1e-4;
 /// Écart ΔE00 au-delà duquel deux plages ne sont plus la même mesure.
 const ECART_MEME: f64 = 0.1;
@@ -82,12 +83,16 @@ pub fn memes_mesures(a: &[Mesure], b: &[Mesure]) -> bool {
     })
 }
 
-/// Plages triées par RVB.
+/// Plages triées par RVB, puis par Lab : les plages répétées d'un même RVB
+/// se rangent de la même façon, quel que soit l'ordre du fichier.
 fn triees(m: &[Mesure]) -> Vec<&Mesure> {
     let mut v: Vec<&Mesure> = m.iter().collect();
     v.sort_by(|x, y| {
-        (0..3)
-            .map(|k| x.rvb[k].total_cmp(&y.rvb[k]))
+        x.rvb
+            .iter()
+            .chain(&x.lab)
+            .zip(y.rvb.iter().chain(&y.lab))
+            .map(|(p, q)| p.total_cmp(q))
             .find(|o| o.is_ne())
             .unwrap_or(std::cmp::Ordering::Equal)
     });
