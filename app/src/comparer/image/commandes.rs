@@ -4,7 +4,7 @@
 use tauri::ipc::Response;
 use tauri_plugin_dialog::DialogExt;
 
-use super::{AnalyseEnCours, AnalyseProfil, ImageOuverte, ImageResume};
+use super::{Analyses, ImageOuverte, ImageResume};
 use crate::colonne::BibliothequeOuverte;
 use crate::comparer::{FichiersOuverts, SourceComparaison};
 use crate::parc::si_choisi;
@@ -44,31 +44,30 @@ pub fn image_apercu(image: tauri::State<'_, ImageOuverte>) -> Result<Response, S
     image.apercu().map(Response::new)
 }
 
-/// Analyse l'image face aux profils affichés. Hors du fil de la fenêtre ;
-/// une demande d'annulation antérieure est oubliée.
+/// Analyse l'image face aux profils affichés, à la place de l'analyse en
+/// cours. Hors du fil de la fenêtre.
 #[tauri::command(async)]
 pub fn image_analyser(
     ouverte: tauri::State<'_, BibliothequeOuverte>,
     image: tauri::State<'_, ImageOuverte>,
     fichiers: tauri::State<'_, FichiersOuverts>,
-    annuler: tauri::State<'_, AnalyseEnCours>,
     sources: Vec<SourceComparaison>,
-) -> Result<Vec<AnalyseProfil>, String> {
-    annuler.reprendre();
-    ouverte.analyser_image(&image, &sources, &fichiers, &annuler)
+) -> Result<Analyses, String> {
+    ouverte.analyser_image(&image, &sources, &fichiers)
 }
 
-/// Codes d'écart du profil `index` de la dernière analyse, un octet par
-/// pixel, en binaire.
+/// Codes d'écart du profil `index` de l'analyse `analyse` (la dernière
+/// terminée), un octet par pixel, en binaire.
 #[tauri::command(async)]
 pub fn image_ecarts(
     image: tauri::State<'_, ImageOuverte>,
+    analyse: u64,
     index: usize,
 ) -> Result<Response, String> {
-    image.ecarts(index).map(Response::new)
+    image.ecarts(analyse, index).map(Response::new)
 }
 
 #[tauri::command]
-pub fn image_annuler(annuler: tauri::State<'_, AnalyseEnCours>) {
-    annuler.annuler();
+pub fn image_annuler(image: tauri::State<'_, ImageOuverte>) {
+    image.annuler_analyse();
 }

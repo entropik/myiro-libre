@@ -7,7 +7,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 use app::colonne::{emplacement, BibliothequeOuverte};
-use app::comparer::image::{AnalyseEnCours, EtatAnalyse, EtatProfilImage, ImageOuverte};
+use app::comparer::image::{Analyses, EtatAnalyse, EtatProfilImage, ImageOuverte};
 use app::comparer::{FichiersOuverts, SourceComparaison};
 use bibliotheque::IdCondition;
 use gamut::ProfilEssai;
@@ -73,7 +73,6 @@ struct Banc {
     fichiers: FichiersOuverts,
     canon: IdCondition,
     image: ImageOuverte,
-    annuler: AnalyseEnCours,
 }
 
 fn banc() -> Banc {
@@ -90,7 +89,6 @@ fn banc() -> Banc {
         fichiers: FichiersOuverts::default(),
         canon,
         image: ImageOuverte::default(),
-        annuler: AnalyseEnCours::default(),
     }
 }
 
@@ -118,12 +116,9 @@ impl Banc {
         }
     }
 
-    fn analyser(
-        &self,
-        sources: &[SourceComparaison],
-    ) -> Result<Vec<app::comparer::image::AnalyseProfil>, String> {
+    fn analyser(&self, sources: &[SourceComparaison]) -> Result<Analyses, String> {
         self.ouverte
-            .analyser_image(&self.image, sources, &self.fichiers, &self.annuler)
+            .analyser_image(&self.image, sources, &self.fichiers)
     }
 }
 
@@ -164,17 +159,21 @@ fn chaque_profil_affiche_a_son_analyse() {
         .unwrap();
     let analyses = b.analyser(&[fichier, rangee]).unwrap();
     assert_eq!(
-        analyses.iter().map(|a| a.source).collect::<Vec<_>>(),
+        analyses
+            .profils
+            .iter()
+            .map(|a| a.source)
+            .collect::<Vec<_>>(),
         vec![fichier, rangee]
     );
-    for (i, a) in analyses.iter().enumerate() {
+    for (i, a) in analyses.profils.iter().enumerate() {
         let EtatAnalyse::Calculee { analyse } = &a.etat else {
             panic!("profil {i} non calculé : {:?}", a.etat);
         };
         assert_eq!(analyse.pixels_comptes, 24);
-        assert_eq!(b.image.ecarts(i).unwrap().len(), 24);
+        assert_eq!(b.image.ecarts(analyses.numero, i).unwrap().len(), 24);
     }
-    assert!(b.image.ecarts(2).is_err());
+    assert!(b.image.ecarts(analyses.numero, 2).is_err());
 }
 
 #[test]
@@ -186,17 +185,21 @@ fn un_profil_sans_b2a1_est_inconnu_sans_bloquer_les_autres() {
         .ouvrir_octets("photo.png", &png(4, 4, None))
         .unwrap();
     let analyses = b.analyser(&[sans, avec]).unwrap();
-    assert_eq!(analyses.len(), 2);
-    match &analyses[0].etat {
+    assert_eq!(analyses.profils.len(), 2);
+    match &analyses.profils[0].etat {
         EtatAnalyse::Inconnue { cle, detail } => {
             assert_eq!(*cle, "comparer.refus.sans_table_inverse");
             assert_eq!(*detail, None);
         }
         autre => panic!("profil sans B2A1 calculé : {autre:?}"),
     }
-    assert!(matches!(analyses[1].etat, EtatAnalyse::Calculee { .. }));
-    assert_eq!(b.image.ecarts(0).unwrap_err(), "image.refus.sans_ecarts");
-    assert_eq!(b.image.ecarts(1).unwrap().len(), 16);
+    assert!(matches!(
+        analyses.profils[1].etat,
+        EtatAnalyse::Calculee { .. }
+    ));
+    let n = analyses.numero;
+    assert_eq!(b.image.ecarts(n, 0).unwrap_err(), "image.refus.sans_ecarts");
+    assert_eq!(b.image.ecarts(n, 1).unwrap().len(), 16);
 }
 
 #[test]
@@ -218,7 +221,7 @@ fn un_profil_embarque_illisible_n_est_jamais_remplace_en_silence() {
     let resume = b.image.traiter_comme_srvb().unwrap();
     assert_eq!(resume.profil, EtatProfilImage::Srvb { suppose: true });
     assert!(matches!(
-        b.analyser(&[source]).unwrap()[0].etat,
+        b.analyser(&[source]).unwrap().profils[0].etat,
         EtatAnalyse::Calculee { .. }
     ));
 }
@@ -236,20 +239,6 @@ fn un_profil_embarque_lisible_n_est_pas_remplace_par_srvb() {
     };
     assert_eq!(resume.profil, attendu);
     assert_eq!(b.image.traiter_comme_srvb().unwrap().profil, attendu);
-}
-
-#[test]
-fn annuler_arrete_l_analyse_et_le_dit() {
-    let b = banc();
-    let source = b.ranger("avec.icc", &essai(Some(lineaire_inverse)));
-    b.image
-        .ouvrir_octets("photo.png", &png(4, 4, None))
-        .unwrap();
-    b.annuler.annuler();
-    assert_eq!(b.analyser(&[source]).unwrap_err(), "image.annulee");
-    assert_eq!(b.image.ecarts(0).unwrap_err(), "image.refus.sans_ecarts");
-    // L'annulation ne vaut que pour l'analyse en cours.
-    assert!(b.analyser(&[source]).is_ok());
 }
 
 /// Tous les fichiers sous `dossier`, avec leur taille.
@@ -289,12 +278,15 @@ fn ouvrir_une_image_remplace_la_precedente() {
     let b = banc();
     let source = b.ranger("avec.icc", &essai(Some(lineaire_inverse)));
     b.image.ouvrir_octets("une.png", &png(4, 4, None)).unwrap();
-    b.analyser(&[source]).unwrap();
+    let premiere = b.analyser(&[source]).unwrap();
     let resume = b.image.ouvrir_octets("deux.png", &png(3, 2, None)).unwrap();
     assert_eq!(resume.nom, "deux.png");
     assert_eq!(b.image.apercu().unwrap().len(), 3 * 2 * 4);
     // Les écarts de la première image ne valent pas pour la seconde.
-    assert_eq!(b.image.ecarts(0).unwrap_err(), "image.refus.sans_ecarts");
+    assert_eq!(
+        b.image.ecarts(premiere.numero, 0).unwrap_err(),
+        "image.refus.sans_ecarts"
+    );
 }
 
 #[test]
@@ -405,7 +397,121 @@ fn un_profil_embarque_que_le_decodeur_ne_lit_pas_est_refuse_et_non_pris_pour_srv
     let resume = b.image.traiter_comme_srvb().unwrap();
     assert_eq!(resume.profil, EtatProfilImage::Srvb { suppose: true });
     assert!(matches!(
-        b.analyser(&[source]).unwrap()[0].etat,
+        b.analyser(&[source]).unwrap().profils[0].etat,
         EtatAnalyse::Calculee { .. }
     ));
+}
+
+/// PNG de `cote` × `cote` pixels tous de couleurs différentes : l'analyse
+/// passe plusieurs fois par le contrôle d'annulation (toutes les 65 536
+/// couleurs distinctes) et dure assez pour être interrompue.
+fn png_varie(cote: u32) -> Vec<u8> {
+    let pixels: Vec<u8> = (0..cote * cote)
+        .flat_map(|i| [(i & 0xff) as u8, (i >> 8 & 0xff) as u8, (i >> 16) as u8])
+        .collect();
+    let mut octets = Vec::new();
+    PngEncoder::new(Cursor::new(&mut octets))
+        .write_image(&pixels, cote, cote, ExtendedColorType::Rgb8)
+        .unwrap();
+    octets
+}
+
+/// Lance `analyse` dans un autre fil et répète `pendant` tant qu'elle
+/// tourne : au moins une répétition tombe pendant le calcul.
+fn pendant_l_analyse<T: Send>(analyse: impl FnOnce() -> T + Send, pendant: impl Fn()) -> T {
+    std::thread::scope(|s| {
+        let fil = s.spawn(analyse);
+        while !fil.is_finished() {
+            pendant();
+            std::thread::yield_now();
+        }
+        fil.join().unwrap()
+    })
+}
+
+#[test]
+fn annuler_pendant_le_calcul_arrete_l_analyse_et_le_dit() {
+    let b = banc();
+    let source = b.ranger("avec.icc", &essai(Some(lineaire_inverse)));
+    b.image
+        .ouvrir_octets("grande.png", &png_varie(512))
+        .unwrap();
+    let resultat = pendant_l_analyse(|| b.analyser(&[source]), || b.image.annuler_analyse());
+    assert_eq!(resultat.unwrap_err(), "image.annulee");
+    // L'annulation ne valait que pour cette analyse-là.
+    let suivante = b.analyser(&[source]).unwrap();
+    assert_eq!(b.image.ecarts(suivante.numero, 0).unwrap().len(), 512 * 512);
+}
+
+#[test]
+fn une_nouvelle_analyse_annule_la_precedente() {
+    let b = banc();
+    let a = b.ranger("a.icc", &essai(Some(lineaire_inverse)));
+    let autre = b.ouvrir_fichier("autre.icc", &essai(Some(lineaire_inverse)));
+    b.image
+        .ouvrir_octets("grande.png", &png_varie(512))
+        .unwrap();
+    let derniere = std::sync::Mutex::new(None);
+    let premiere = pendant_l_analyse(
+        || b.analyser(&[a]),
+        || {
+            if let Ok(r) = b.analyser(&[a, autre]) {
+                *derniere.lock().unwrap() = Some(r);
+            }
+        },
+    );
+    assert_eq!(premiere.unwrap_err(), "image.annulee");
+    let derniere = derniere
+        .into_inner()
+        .unwrap()
+        .expect("une analyse menée à terme");
+    assert_eq!(derniere.profils.len(), 2);
+    // Les écarts rangés sont ceux de la dernière analyse, et d'elle seule.
+    assert_eq!(b.image.ecarts(derniere.numero, 1).unwrap().len(), 512 * 512);
+    assert_eq!(
+        b.image.ecarts(derniere.numero + 1, 0).unwrap_err(),
+        "image.refus.sans_ecarts"
+    );
+}
+
+#[test]
+fn une_nouvelle_image_pendant_l_analyse_la_rend_caduque() {
+    let b = banc();
+    let source = b.ranger("avec.icc", &essai(Some(lineaire_inverse)));
+    let grande = png_varie(512);
+    b.image.ouvrir_octets("une.png", &grande).unwrap();
+    let resultat = pendant_l_analyse(
+        || b.analyser(&[source]),
+        || {
+            b.image.ouvrir_octets("deux.png", &grande).unwrap();
+        },
+    );
+    assert_eq!(resultat.unwrap_err(), "image.annulee");
+}
+
+#[test]
+fn fermer_pendant_l_analyse_la_rend_caduque() {
+    let b = banc();
+    let source = b.ranger("avec.icc", &essai(Some(lineaire_inverse)));
+    let grande = png_varie(512);
+    b.image.ouvrir_octets("une.png", &grande).unwrap();
+    let resultat = pendant_l_analyse(|| b.analyser(&[source]), || b.image.fermer());
+    assert!(["image.annulee", "image.refus.aucune"].contains(&resultat.unwrap_err().as_str()),);
+}
+
+#[test]
+fn un_fichier_de_plus_de_1_gio_est_refuse_sans_etre_lu() {
+    use app::comparer::image::OCTETS_MAX_IMAGE;
+    let b = banc();
+    let chemin = b.dossier.path().join("enorme.tif");
+    // Taille posée sans rien écrire : le fichier n'a pas de contenu.
+    std::fs::File::create(&chemin)
+        .unwrap()
+        .set_len(OCTETS_MAX_IMAGE + 1)
+        .unwrap();
+    assert_eq!(
+        b.image.ouvrir(&chemin).unwrap_err(),
+        "image.refus.trop_grande"
+    );
+    std::fs::remove_file(&chemin).unwrap();
 }

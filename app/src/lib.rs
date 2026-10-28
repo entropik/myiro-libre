@@ -582,7 +582,6 @@ pub fn lancer() {
         .manage(profiler::Moteur::au_lancement())
         .manage(comparer::FichiersOuverts::default())
         .manage(comparer::image::ImageOuverte::default())
-        .manage(comparer::image::AnalyseEnCours::default())
         .setup(ouvrir_bibliotheque)
         .manage(GesteEnAttente::default())
         .invoke_handler(tauri::generate_handler![

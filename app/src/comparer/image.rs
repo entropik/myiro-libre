@@ -1,19 +1,20 @@
 //! Une photo de client ouverte pour la comparaison (ticket #80) : une seule
 //! à la fois, en mémoire le temps de la séance, jamais rangée, copiée ni
 //! écrite sur le disque. Elle est analysée face à chaque profil affiché,
-//! hors de tout verrou, et l'analyse s'annule.
+//! hors de tout verrou. Une seule analyse vit à la fois : en lancer une
+//! autre, ouvrir une autre image, fermer ou annuler arrête la précédente.
 
 use std::io::Read;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use gamut::{AnalyseImage, ErreurIcc, ProfilIcc, ProfilSource};
+use gamut::{AnalyseImage, ErreurIcc, ProfilSource};
 use serde::Serialize;
 
-use super::{detail_refus, FichiersOuverts, SourceComparaison};
-use crate::colonne::BibliothequeOuverte;
+use super::{detail_refus, SourceComparaison};
 
+mod analyse;
 pub mod commandes;
 
 /// Taille d'un fichier image lu au plus : au-delà, rien n'est lu.
@@ -44,9 +45,30 @@ pub const CLES_IMAGE: [&str; 8] = [
     CALCUL_INTERROMPU,
 ];
 
-/// L'image ouverte pour la séance (une à la fois), en mémoire seulement.
+/// L'image ouverte pour la séance (une à la fois), en mémoire seulement, et
+/// l'analyse qui la calcule.
 #[derive(Default)]
-pub struct ImageOuverte(Mutex<Option<ImageEnMemoire>>);
+pub struct ImageOuverte(Mutex<Etat>);
+
+#[derive(Default)]
+struct Etat {
+    image: Option<ImageEnMemoire>,
+    /// Dernier numéro d'image donné.
+    images: u64,
+    /// Dernier numéro d'analyse donné.
+    analyses: u64,
+    /// Jeton de l'analyse en cours : le poser l'arrête.
+    en_cours: Option<Arc<AtomicBool>>,
+}
+
+impl Etat {
+    /// Arrête l'analyse en cours, s'il y en a une.
+    fn arreter(&mut self) {
+        if let Some(jeton) = self.en_cours.take() {
+            jeton.store(true, Ordering::Relaxed);
+        }
+    }
+}
 
 struct ImageEnMemoire {
     /// Change à chaque ouverture : l'analyse d'une image remplacée entre-temps
@@ -57,28 +79,15 @@ struct ImageEnMemoire {
     /// Profil de l'image ; `None` quand celui qu'elle embarque est refusé
     /// (la raison est dans `resume.profil`).
     profil: Option<Arc<ProfilSource>>,
-    /// Codes d'écart de la dernière analyse, profil par profil (`None` pour
-    /// un profil inconnu).
-    ecarts: Vec<Option<Vec<u8>>>,
+    /// Codes d'écart de la dernière analyse terminée.
+    ecarts: Option<EcartsRanges>,
 }
 
-/// Drapeau d'annulation de l'analyse en cours.
-#[derive(Default)]
-pub struct AnalyseEnCours(AtomicBool);
-
-impl AnalyseEnCours {
-    /// Demande l'arrêt de l'analyse en cours.
-    pub fn annuler(&self) {
-        self.0.store(true, Ordering::Relaxed);
-    }
-
-    fn reprendre(&self) {
-        self.0.store(false, Ordering::Relaxed);
-    }
-
-    fn demande(&self) -> bool {
-        self.0.load(Ordering::Relaxed)
-    }
+struct EcartsRanges {
+    /// Numéro de l'analyse ([`Analyses::numero`]).
+    analyse: u64,
+    /// Un octet par pixel, profil par profil (`None` pour un profil inconnu).
+    par_profil: Vec<Option<Vec<u8>>>,
 }
 
 /// Une conversion du profil de l'image écartée parce qu'illisible.
@@ -145,6 +154,14 @@ pub struct AnalyseProfil {
     pub etat: EtatAnalyse,
 }
 
+/// Une analyse menée à terme : ses codes d'écart se demandent par `numero`.
+#[derive(Clone, Debug, Serialize)]
+pub struct Analyses {
+    pub numero: u64,
+    /// Dans l'ordre des profils demandés.
+    pub profils: Vec<AnalyseProfil>,
+}
+
 fn etat_profil(icc: Option<&[u8]>, profil: &Result<ProfilSource, ErreurIcc>) -> EtatProfilImage {
     match (icc, profil) {
         (_, Err(e)) => EtatProfilImage::Refuse {
@@ -168,7 +185,7 @@ fn etat_profil(icc: Option<&[u8]>, profil: &Result<ProfilSource, ErreurIcc>) -> 
 }
 
 impl ImageOuverte {
-    fn verrou(&self) -> MutexGuard<'_, Option<ImageEnMemoire>> {
+    fn verrou(&self) -> MutexGuard<'_, Etat> {
         self.0.lock().unwrap_or_else(|e| e.into_inner())
     }
 
@@ -228,14 +245,15 @@ impl ImageOuverte {
             seize_bits: photo.seize_bits,
             profil: etat,
         };
-        let mut image = self.verrou();
-        let numero = image.as_ref().map_or(0, |i| i.numero) + 1;
-        *image = Some(ImageEnMemoire {
-            numero,
+        let mut etat = self.verrou();
+        etat.arreter();
+        etat.images += 1;
+        etat.image = Some(ImageEnMemoire {
+            numero: etat.images,
             resume: resume.clone(),
             pixels: Arc::new(photo.rvba),
             profil,
-            ecarts: Vec::new(),
+            ecarts: None,
         });
         Ok(resume)
     }
@@ -244,147 +262,53 @@ impl ImageOuverte {
     /// l'opérateur : la page l'affiche alors « supposé ». Un profil lisible
     /// n'est jamais remplacé.
     pub fn traiter_comme_srvb(&self) -> Result<ImageResume, String> {
-        let mut image = self.verrou();
-        let image = image.as_mut().ok_or_else(|| AUCUNE.to_string())?;
+        let mut etat = self.verrou();
+        let image = etat.image.as_mut().ok_or_else(|| AUCUNE.to_string())?;
         if image.profil.is_none() {
             image.profil = Some(Arc::new(ProfilSource::srvb()));
             image.resume.profil = EtatProfilImage::Srvb { suppose: true };
-            image.ecarts.clear();
+            image.ecarts = None;
         }
         Ok(image.resume.clone())
     }
 
-    /// Oublie l'image et ses écarts.
+    /// Oublie l'image et ses écarts, et arrête l'analyse en cours.
     pub fn fermer(&self) {
-        *self.verrou() = None;
+        let mut etat = self.verrou();
+        etat.arreter();
+        etat.image = None;
+    }
+
+    /// Arrête l'analyse en cours : elle rend `image.annulee`. Sans analyse
+    /// en cours, rien ne change.
+    pub fn annuler_analyse(&self) {
+        self.verrou().arreter();
     }
 
     /// Pixels RVBA de l'image d'analyse, ligne par ligne :
     /// `largeur` × `hauteur` × 4 octets.
     pub fn apercu(&self) -> Result<Vec<u8>, String> {
-        let image = self.verrou();
-        let image = image.as_ref().ok_or_else(|| AUCUNE.to_string())?;
-        Ok(image.pixels.iter().flatten().copied().collect())
+        let pixels = self
+            .verrou()
+            .image
+            .as_ref()
+            .map(|i| Arc::clone(&i.pixels))
+            .ok_or_else(|| AUCUNE.to_string())?;
+        Ok(pixels.iter().flatten().copied().collect())
     }
 
     /// Codes d'écart (un octet par pixel de l'image d'analyse, ligne par
-    /// ligne) du profil `index` de la dernière analyse.
-    pub fn ecarts(&self, index: usize) -> Result<Vec<u8>, String> {
-        let image = self.verrou();
-        let image = image.as_ref().ok_or_else(|| AUCUNE.to_string())?;
+    /// ligne) du profil `index` de l'analyse `analyse`, si c'est la dernière
+    /// terminée sur cette image.
+    pub fn ecarts(&self, analyse: u64, index: usize) -> Result<Vec<u8>, String> {
+        let etat = self.verrou();
+        let image = etat.image.as_ref().ok_or_else(|| AUCUNE.to_string())?;
         image
             .ecarts
-            .get(index)
+            .as_ref()
+            .filter(|e| e.analyse == analyse)
+            .and_then(|e| e.par_profil.get(index))
             .and_then(Clone::clone)
             .ok_or_else(|| SANS_ECARTS.to_string())
-    }
-
-    fn ranger_ecarts(&self, numero: u64, ecarts: Vec<Option<Vec<u8>>>) {
-        if let Some(image) = self.verrou().as_mut().filter(|i| i.numero == numero) {
-            image.ecarts = ecarts;
-        }
-    }
-}
-
-/// Résultat d'une analyse face à un profil : `Err(())` si elle a été annulée.
-type Resultat = Result<(EtatAnalyse, Option<Vec<u8>>), ()>;
-
-fn analyser_un(
-    icc: &[u8],
-    pixels: &[[u8; 4]],
-    source: &ProfilSource,
-    annuler: &AnalyseEnCours,
-) -> Resultat {
-    let inconnue = |e: &ErreurIcc| EtatAnalyse::Inconnue {
-        cle: e.cle(),
-        detail: detail_refus(e),
-    };
-    let sortie = match ProfilIcc::lire(icc) {
-        Ok(p) => p,
-        Err(e) => return Ok((inconnue(&e), None)),
-    };
-    match gamut::analyser_pixels(pixels, source, &sortie, &|| annuler.demande()) {
-        Err(gamut::Annulee) => Err(()),
-        Ok(Err(e)) => Ok((inconnue(&e), None)),
-        Ok(Ok(mut analyse)) => {
-            let ecarts = std::mem::take(&mut analyse.ecarts);
-            Ok((EtatAnalyse::Calculee { analyse }, Some(ecarts)))
-        }
-    }
-}
-
-impl BibliothequeOuverte {
-    /// Écarts de l'image ouverte à chaque profil de `sources`, dans leur
-    /// ordre. Pixels et octets des profils sont copiés sous les verrous,
-    /// puis chaque profil est calculé à part, en parallèle. Un profil
-    /// illisible ou sans table inverse est « inconnu » sans empêcher les
-    /// autres. Les codes d'écart restent avec l'image ([`ImageOuverte::ecarts`]).
-    pub fn analyser_image(
-        &self,
-        image: &ImageOuverte,
-        sources: &[SourceComparaison],
-        fichiers: &FichiersOuverts,
-        annuler: &AnalyseEnCours,
-    ) -> Result<Vec<AnalyseProfil>, String> {
-        let resultat = self.analyser_image_sans_remise(image, sources, fichiers, annuler);
-        annuler.reprendre();
-        resultat
-    }
-
-    fn analyser_image_sans_remise(
-        &self,
-        image: &ImageOuverte,
-        sources: &[SourceComparaison],
-        fichiers: &FichiersOuverts,
-        annuler: &AnalyseEnCours,
-    ) -> Result<Vec<AnalyseProfil>, String> {
-        let (numero, pixels, profil) = {
-            let image = image.verrou();
-            let image = image.as_ref().ok_or_else(|| AUCUNE.to_string())?;
-            let profil = image
-                .profil
-                .as_ref()
-                .ok_or_else(|| PROFIL_REFUSE.to_string())?;
-            (image.numero, Arc::clone(&image.pixels), Arc::clone(profil))
-        };
-        let lus = self.lire_sources(sources, fichiers)?;
-        // Hors de tout verrou à partir d'ici.
-        if annuler.demande() {
-            return Err(ANNULEE.to_string());
-        }
-        let resultats: Vec<Resultat> = std::thread::scope(|s| {
-            let fils: Vec<_> = lus
-                .iter()
-                .map(|l| s.spawn(|| analyser_un(&l.icc, &pixels, &profil, annuler)))
-                .collect();
-            fils.into_iter()
-                .map(|f| {
-                    f.join().unwrap_or(Ok((
-                        EtatAnalyse::Inconnue {
-                            cle: CALCUL_INTERROMPU,
-                            detail: None,
-                        },
-                        None,
-                    )))
-                })
-                .collect()
-        });
-        let resultats: Vec<_> = resultats
-            .into_iter()
-            .collect::<Result<_, ()>>()
-            .map_err(|()| {
-                image.ranger_ecarts(numero, Vec::new());
-                ANNULEE.to_string()
-            })?;
-        let (etats, ecarts): (Vec<_>, Vec<_>) = resultats.into_iter().unzip();
-        image.ranger_ecarts(numero, ecarts);
-        Ok(lus
-            .iter()
-            .zip(etats)
-            .map(|(l, etat)| AnalyseProfil {
-                source: l.source,
-                etat,
-            })
-            .collect())
     }
 }
