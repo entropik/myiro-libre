@@ -17,9 +17,10 @@ mod suivi;
 mod ti3;
 
 pub use argyll::{
-    arguments_colprof, chercher_argyll, controler_version, description_argyll, lignes_commandes,
-    lire_precision, lire_version, ArgyllCms,
+    arguments_colprof, arguments_targen, chercher_argyll, controler_version, description_argyll,
+    lignes_commandes, lire_precision, lire_version, ArgyllCms,
 };
+pub use moteur::PlagesGenerees;
 pub use moteur::{
     etape_colprof, lire_avancement, Avancement, DemandeProfil, ErreurMoteur, Etape, EtapeCalcul,
     MoteurProfil, MoteurSimule, Precision, ProfilCalcule, Recette, VERSION_ARGYLL,

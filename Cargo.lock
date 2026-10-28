@@ -2541,6 +2541,7 @@ version = "0.1.0"
 dependencies = [
  "bibliotheque",
  "cgats",
+ "mires",
  "pont-protocole",
  "serde",
  "serde_json",

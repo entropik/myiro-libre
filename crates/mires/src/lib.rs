@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 
 mod gabarit;
 mod rgb2520;
+mod ti1;
 
 pub use gabarit::{
     Gabarit, Rectangle, CONTRASTE_MIN_DE76, DISTANCE_TEXTE_MM, MYIRO1_BANDEAU_MM,
@@ -26,6 +27,7 @@ pub use rgb2520::{
     lire_mire_fd9, lire_mire_fd9_sans_empreinte, GeometrieFd9, MireFd9, RGB2520_EMPREINTE,
     RGB2520_FICHIER, RGB2520_GEOMETRIE, RGB2520_NOM,
 };
+pub use ti1::lire_ti1;
 
 /// Instrument qui lira la mire.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
