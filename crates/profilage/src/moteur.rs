@@ -21,8 +21,29 @@ pub enum Recette {
     Rapide,
     /// `-qh`, conseillée en production.
     Standard,
-    /// `-qu`, la plus longue.
+    /// En cours de réglage, pas encore disponible. Il lançait `-qu`, que la
+    /// documentation de `colprof` donne pour un mode d'essai à ne pas
+    /// utiliser (essai du 28 octobre 2026 : plus de 12 minutes sur un seul
+    /// cœur, sans finir). Son contenu sera choisi par un essai sur des
+    /// mesures réelles ; `-qu` n'est jamais lancé.
     Approfondi,
+}
+
+impl Recette {
+    /// Option de qualité de `colprof`, ou rien pour une recette en cours de
+    /// réglage.
+    pub fn qualite(self) -> Option<&'static str> {
+        match self {
+            Recette::Rapide => Some("-qm"),
+            Recette::Standard => Some("-qh"),
+            Recette::Approfondi => None,
+        }
+    }
+
+    /// La recette peut être calculée.
+    pub fn disponible(self) -> bool {
+        self.qualite().is_some()
+    }
 }
 
 /// Ce qu'on demande au moteur : les plages au format `.ti3`, la description
@@ -78,6 +99,13 @@ pub enum ErreurMoteur {
     Echec { etape: Etape, cause: String },
     /// Lecture ou écriture d'un fichier de travail impossible.
     Fichier(String),
+    /// Recette en cours de réglage ([`Recette::disponible`]) : rien n'est
+    /// lancé.
+    RecetteEnReglage,
+    /// Un outil s'est arrêté en échec sans écrire d'erreur d'ArgyllCMS
+    /// (« … Error - … ») : il a été arrêté de l'extérieur (programme fermé,
+    /// poste en veille) ou s'est arrêté brutalement.
+    Interrompu { etape: Etape },
 }
 
 impl ErreurMoteur {
@@ -99,6 +127,8 @@ impl ErreurMoteur {
                 ..
             } => "profil.erreur.controle",
             ErreurMoteur::Fichier(_) => "profil.erreur.fichier",
+            ErreurMoteur::RecetteEnReglage => "profil.erreur.recette_en_reglage",
+            ErreurMoteur::Interrompu { .. } => "profil.erreur.interrompu",
         }
     }
 }
@@ -112,19 +142,30 @@ impl fmt::Display for ErreurMoteur {
                 "ArgyllCMS est en version {trouvee}, seule la version {VERSION_ARGYLL} est validée"
             ),
             ErreurMoteur::Echec { etape, cause } => {
-                let etape = match etape {
-                    Etape::Version => "lecture de la version",
-                    Etape::Profil => "calcul du profil",
-                    Etape::Controle => "contrôle du profil",
-                };
-                write!(f, "échec à l'étape {etape} : {cause}")
+                write!(f, "échec à l'étape {} : {cause}", nom_etape(*etape))
             }
             ErreurMoteur::Fichier(cause) => write!(f, "fichier de travail : {cause}"),
+            ErreurMoteur::RecetteEnReglage => {
+                f.write_str("recette en cours de réglage, rien n'est lancé")
+            }
+            ErreurMoteur::Interrompu { etape } => write!(
+                f,
+                "arrêt sans erreur d'ArgyllCMS à l'étape {} : calcul interrompu",
+                nom_etape(*etape)
+            ),
         }
     }
 }
 
 impl std::error::Error for ErreurMoteur {}
+
+fn nom_etape(etape: Etape) -> &'static str {
+    match etape {
+        Etape::Version => "lecture de la version",
+        Etape::Profil => "calcul du profil",
+        Etape::Controle => "contrôle du profil",
+    }
+}
 
 /// Étape d'un calcul, annoncée à l'écran pendant qu'il tourne. Les parties
 /// de `colprof` sont repérées dans ses lignes ([`etape_colprof`]).
@@ -266,6 +307,9 @@ impl MoteurProfil for MoteurSimule {
         demande: &DemandeProfil,
         avancement: &mut dyn FnMut(Avancement),
     ) -> Result<ProfilCalcule, ErreurMoteur> {
+        if !demande.recette.disponible() {
+            return Err(ErreurMoteur::RecetteEnReglage);
+        }
         self.demandes
             .lock()
             .unwrap_or_else(|e| e.into_inner())

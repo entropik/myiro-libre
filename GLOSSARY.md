@@ -216,7 +216,7 @@ _Éviter_ : ink limit, saturation
 _Éviter_ : validation de profil, test de profil
 
 **Recette de calcul** :
-Qualité demandée au calcul d'un profil : rapide (pour un essai), standard (par défaut, en production) ou approfondie (la plus longue). Elle est conservée avec le profil, avec la version d'ArgyllCMS et la commande lancée.
+Qualité demandée au calcul d'un profil : rapide (pour un essai), standard (par défaut, en production) ou approfondie (en cours de réglage depuis le 28 octobre 2026, pas encore disponible). Elle est conservée avec le profil, avec la version d'ArgyllCMS et la commande lancée.
 _Éviter_ : preset, mode, qualité seule
 
 **Précision du calcul** :

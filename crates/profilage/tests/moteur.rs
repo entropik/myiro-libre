@@ -20,6 +20,7 @@ fn textes(recette: Recette, description: &str) -> Vec<String> {
         Path::new("p.icc"),
         Path::new("mesure"),
     )
+    .expect("recette disponible")
     .iter()
     .map(|s| s.to_string_lossy().into_owned())
     .collect()
@@ -46,13 +47,75 @@ fn la_recette_standard_demande_la_qualite_haute() {
 }
 
 #[test]
-fn rapide_et_approfondi_changent_seulement_la_qualite() {
-    let standard = textes(Recette::Standard, "Essai");
-    for (recette, qualite) in [(Recette::Rapide, "-qm"), (Recette::Approfondi, "-qu")] {
-        let mut attendu = standard.clone();
-        attendu[1] = qualite.to_string();
-        assert_eq!(textes(recette, "Essai"), attendu);
+fn rapide_change_seulement_la_qualite() {
+    let mut attendu = textes(Recette::Standard, "Essai");
+    attendu[1] = "-qm".to_string();
+    assert_eq!(textes(Recette::Rapide, "Essai"), attendu);
+}
+
+/// `-qu` est un mode d'essai selon la documentation de `colprof` (« shouldn't
+/// be used, except to prove that it is not worth using ») : 12 minutes sur
+/// un seul cœur sans finir, le 28 octobre 2026. Approfondi est en cours de
+/// réglage : aucune commande ne se construit, rien ne se lance.
+#[test]
+fn approfondi_ne_lance_jamais_la_qualite_ultra() {
+    assert!(Recette::Rapide.disponible() && Recette::Standard.disponible());
+    assert!(!Recette::Approfondi.disponible());
+    assert!(arguments_colprof(
+        Recette::Approfondi,
+        "Essai",
+        Path::new("ref/sRGB.icm"),
+        Path::new("p.icc"),
+        Path::new("mesure"),
+    )
+    .is_none());
+    assert!(lignes_commandes(Recette::Approfondi, "Essai").is_empty());
+    for recette in [Recette::Rapide, Recette::Standard] {
+        assert!(lignes_commandes(recette, "Essai")
+            .iter()
+            .all(|l| !l.contains("-qu")));
     }
+}
+
+#[test]
+fn le_moteur_simule_refuse_approfondi_sans_rien_lancer() {
+    let moteur = MoteurSimule::reussit(b"icc".to_vec());
+    let demande = DemandeProfil {
+        ti3: "CTI3",
+        description: "Essai",
+        recette: Recette::Approfondi,
+    };
+    let erreur = moteur.calculer(&demande, &mut |_| {}).unwrap_err();
+    assert_eq!(erreur, ErreurMoteur::RecetteEnReglage);
+    assert_eq!(erreur.cle(), "profil.erreur.recette_en_reglage");
+    assert!(moteur.demandes().is_empty());
+}
+
+/// La recette est refusée avant toute recherche de version ou de fichier :
+/// même un ArgyllCMS absent ne change pas la réponse.
+#[test]
+fn argyll_refuse_approfondi_avant_de_rien_chercher() {
+    let absent = ArgyllCms::new(PathBuf::from("dossier-qui-n-existe-pas"));
+    let demande = DemandeProfil {
+        ti3: "CTI3",
+        description: "Essai",
+        recette: Recette::Approfondi,
+    };
+    assert_eq!(
+        absent.calculer(&demande, &mut |_| {}).unwrap_err(),
+        ErreurMoteur::RecetteEnReglage
+    );
+}
+
+#[test]
+fn un_calcul_interrompu_a_sa_propre_cle() {
+    assert_eq!(
+        ErreurMoteur::Interrompu {
+            etape: Etape::Profil
+        }
+        .cle(),
+        "profil.erreur.interrompu"
+    );
 }
 
 /// `-D` reçoit le nom sans accents (colprof n'écrit que de l'ASCII), en un
