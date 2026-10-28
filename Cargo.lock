@@ -2513,10 +2513,12 @@ version = "0.1.0"
 dependencies = [
  "bibliotheque",
  "cgats",
+ "colorimetrie",
  "pont-protocole",
  "serde",
  "serde_json",
  "tempfile",
+ "verification",
 ]
 
 [[package]]

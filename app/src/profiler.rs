@@ -85,6 +85,7 @@ impl ErreurProfil {
                 e.cause = Some(cause.clone());
             }
             ErreurMoteur::VersionNonValidee { trouvee } => e.version = Some(trouvee.clone()),
+            ErreurMoteur::OutilManquant { outil } => e.cause = Some(outil.clone()),
             ErreurMoteur::Introuvable
             | ErreurMoteur::RecetteEnReglage
             | ErreurMoteur::Interrompu { .. } => {}
