@@ -146,7 +146,9 @@ impl BibliothequeOuverte {
                 Ok(ApercuMire {
                     plages: g.colonnes * g.rangees,
                     pages: 1,
-                    cote_mm: (g.pas_px as f64 * 25.4 / 300.0 * 100.0).round() / 100.0,
+                    cote_mm: (g.pas_px as f64 * 25.4 / mires::RESOLUTION_PPP as f64 * 100.0)
+                        .round()
+                        / 100.0,
                     limites_cote: (COTE_FD9_MM.0, Some(COTE_FD9_MM.1)),
                     commande: String::new(),
                     mire_fd9_attendue: None,
