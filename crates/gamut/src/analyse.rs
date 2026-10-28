@@ -1,10 +1,10 @@
 //! Analyse d'un profil : blanc et noir, densité du noir, volume, couleurs de
 //! base, table de chroma par clarté et teinte, chemins du cube RVB.
 
-use colorimetrie::{lab_vers_lch, Lab};
+use colorimetrie::lab_vers_lch;
 use serde::Serialize;
 
-use crate::icc::{lab_vers_xyz, ProfilIcc};
+use crate::icc::{lab_vers_xyz, vers_lab, ProfilIcc};
 use crate::surface::{couleur_ecran, maillage_affiche, maillage_profil, volume, MaillageAffiche};
 
 /// Points par arête de la surface qui sert au volume.
@@ -21,7 +21,7 @@ const TEINTES: usize = 180;
 const CHROMA_GRIS: f64 = 0.01;
 
 /// Couleurs de base, dans l'ordre de la page.
-const PRIMAIRES: [(&str, [u8; 3]); 8] = [
+pub(crate) const PRIMAIRES: [(&str, [u8; 3]); 8] = [
     ("blanc", [255, 255, 255]),
     ("noir", [0, 0, 0]),
     ("rouge", [255, 0, 0]),
@@ -114,11 +114,7 @@ pub fn chemin(p: &ProfilIcc, depart: [u8; 3], arrivee: [u8; 3]) -> Vec<[f64; 2]>
 
 /// Chroma et teinte d'un L\*, a\*, b\* ; teinte inconnue pour un gris.
 fn chroma_teinte(lab: [f64; 3]) -> (f64, Option<f64>) {
-    match lab_vers_lch(Lab {
-        l: lab[0],
-        a: lab[1],
-        b: lab[2],
-    }) {
+    match lab_vers_lch(vers_lab(lab)) {
         Ok(lch) if lch.c >= CHROMA_GRIS => (lch.c, lch.h.ok()),
         Ok(lch) => (lch.c, None),
         Err(_) => (f64::NAN, None),

@@ -1,9 +1,9 @@
 //! Surface du cube RVB, maillage en Lab et volume qu'il enferme.
 
-use colorimetrie::{lab_vers_srgb, Lab};
+use colorimetrie::lab_vers_srgb;
 use serde::Serialize;
 
-use crate::icc::ProfilIcc;
+use crate::icc::{vers_lab, ProfilIcc};
 
 /// Maillage fermé, sommets en L\*, a\*, b\*.
 #[derive(Debug, Clone, PartialEq)]
@@ -52,13 +52,16 @@ pub fn surface_cube(n: usize) -> (Vec<[f64; 3]>, Vec<[u32; 3]>) {
                         indice(i + 1, j + 1),
                         indice(i, j + 1),
                     );
+                    // Chaque carré est coupé par la diagonale b–d, comme
+                    // `faces()` du prototype : sur une surface courbe, le
+                    // volume dépend de la diagonale choisie.
                     // Face du haut : normale +e_k ; face du bas : sens inverse.
                     if cote == 1.0 {
-                        triangles.push([a, b, c]);
-                        triangles.push([a, c, d]);
+                        triangles.push([a, b, d]);
+                        triangles.push([b, c, d]);
                     } else {
-                        triangles.push([a, c, b]);
-                        triangles.push([a, d, c]);
+                        triangles.push([a, d, b]);
+                        triangles.push([b, d, c]);
                     }
                 }
             }
@@ -103,11 +106,7 @@ pub fn volume(m: &Maillage) -> f64 {
 /// Couleur écran `#rrggbb` d'un L\*, a\*, b\*, et si elle a été ramenée dans
 /// l'écran. Une valeur non finie donne le noir, dit ramené.
 pub(crate) fn couleur_ecran(lab: [f64; 3]) -> (String, bool) {
-    match lab_vers_srgb(Lab {
-        l: lab[0],
-        a: lab[1],
-        b: lab[2],
-    }) {
+    match lab_vers_srgb(vers_lab(lab)) {
         Ok(srgb) => (srgb.hexadecimal(), srgb.ramenee),
         Err(_) => ("#000000".into(), true),
     }

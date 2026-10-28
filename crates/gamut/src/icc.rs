@@ -1,7 +1,7 @@
 //! Lecture d'un profil ICC RVB : en-tête, table des balises, `wtpt`, `desc`,
 //! `targ` et table A2B1 de type `mft2` (lut16).
 
-use colorimetrie::{xyz_vers_lab, Xyz};
+use colorimetrie::{xyz_vers_lab, Lab, Xyz};
 
 use crate::table::{lire_mft2, Lut};
 
@@ -278,6 +278,15 @@ pub(crate) fn u16_at(d: &[u8], position: usize) -> Option<u16> {
 /// s15Fixed16 ; zéro si hors du fichier (la longueur est contrôlée avant).
 fn s15(d: &[u8], position: usize) -> f64 {
     f64::from(u32_at(d, position).unwrap_or(0) as i32) / 65536.0
+}
+
+/// Un L\*, a\*, b\* en tableau, vu comme un `Lab` de `colorimetrie`.
+pub(crate) fn vers_lab(lab: [f64; 3]) -> Lab {
+    Lab {
+        l: lab[0],
+        a: lab[1],
+        b: lab[2],
+    }
 }
 
 /// L\*, a\*, b\* vers XYZ, rapporté au blanc donné (même échelle que lui).
