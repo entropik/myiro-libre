@@ -74,6 +74,7 @@ window.ComparerImage = (() => {
       if (!r) return; // annulé : rien ne change
       demande++;
       [resume, apercu, analyses, ecarts] = [r, null, null, []];
+      window.NuageImage.oublier(); // nouvelle image : nuage libéré, case recochée
       apercu = new Uint8ClampedArray(await invoke("image_apercu"));
     } catch (cle) {
       message = t(String(cle));
@@ -143,6 +144,7 @@ window.ComparerImage = (() => {
     [sources, profils, seuil, affichage] = [[], [], 2, "les_deux"];
     racine.replaceChildren();
     imageCalque = canvas = legende = tableauChiffres = avisInconnu = null;
+    window.NuageImage.oublier();
     if (ouverte) invoke("image_fermer").catch(() => {});
   }
 

@@ -4,8 +4,8 @@
 // peintre) : c'est ce tri qui évite les fausses facettes en transparence. Ombrage plat. Les couleurs
 // de série sont des jetons (`--serie-1` à `--serie-4`), relus au changement de thème. Les chiffres
 // passent par Graphiques.nombre : un chiffre inconnu s'écrit « inconnu ». Les axes et le blanc du
-// papier de chaque profil sont peints par vue3d-axes.js (Vue3dAxes), les couleurs de l'image
-// (ticket #80), au-dessus des triangles, par nuage-image.js (NuageImage).
+// papier de chaque profil sont peints par vue3d-axes.js (Vue3dAxes). Les couleurs de l'image
+// (ticket #80, nuage-image.js) entrent dans le même tri que les triangles.
 "use strict";
 
 window.Vue3d = (() => {
@@ -121,20 +121,25 @@ window.Vue3d = (() => {
       });
     }
 
-    function dessinerTriangles(ctx, k) {
+    // Triangles et points de l'image (`places` : x, y, z par point, repère de la vue) dans un seul
+    // tri : en opaque, un point derrière une face est caché.
+    function dessinerTriangles(ctx, k, places) {
       const liste = [];
       formes.forEach((f, numero) => {
         for (let i = 0; i < f.nombre; i++) liste.push(numero, i);
       });
+      for (let i = 0; i < nuage.length; i++) liste.push(-1, i);
       const total = liste.length / 2;
       const profondeurs = new Float64Array(total);
       const ordre = new Uint32Array(total);
       for (let j = 0; j < total; j++) {
+        ordre[j] = j;
+        // Un point pèse comme un triangle : la somme de trois profondeurs.
+        if (liste[j * 2] < 0) { const i = liste[j * 2 + 1]; profondeurs[j] = 3 * places[i * 3 + 2]; continue; }
         const f = formes[liste[j * 2]];
         const p = projetes[liste[j * 2]];
         const i = liste[j * 2 + 1] * 3;
         profondeurs[j] = p[f.indices[i] * 3 + 2] + p[f.indices[i + 1] * 3 + 2] + p[f.indices[i + 2] * 3 + 2];
-        ordre[j] = j;
       }
       // Du plus loin (z grand) au plus proche.
       ordre.sort((u, v) => profondeurs[v] - profondeurs[u]);
@@ -144,6 +149,11 @@ window.Vue3d = (() => {
       const cx = canvas.width / 2;
       const cy = canvas.height / 2;
       for (const j of ordre) {
+        if (liste[j * 2] < 0) {
+          const i = liste[j * 2 + 1] * 3;
+          window.NuageImage.peindrePoint(ctx, jetons, cx + places[i] * k, cy - places[i + 1] * k, nuage[i / 3]);
+          continue;
+        }
         const f = formes[liste[j * 2]];
         const p = projetes[liste[j * 2]];
         const i = liste[j * 2 + 1];
@@ -239,11 +249,9 @@ window.Vue3d = (() => {
       projeter(r);
       const ecran = (s) => versEcran(tourner(s, r), k);
       window.Vue3dAxes.axes(ctx, jetons, ecran, false);
-      dessinerTriangles(ctx, k);
-      window.NuageImage.peindre(ctx, jetons, (s) => {
-        const p = tourner(s, r);
-        return [...versEcran(p, k), p[2]];
-      }, nuage);
+      const places = new Float64Array(nuage.length * 3);
+      nuage.forEach((p, i) => places.set(tourner(p.lab, r), i * 3));
+      dessinerTriangles(ctx, k, places);
       window.Vue3dAxes.axes(ctx, jetons, ecran, true);
       window.Vue3dAxes.blancs(ctx, jetons, ecran, formes);
       dessinerBulle(ctx, k);

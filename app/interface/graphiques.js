@@ -225,12 +225,21 @@ window.Graphiques = (() => {
     }
     const lignes = [];
     for (let h = 0; h < 360; h += 30) lignes.push([nombre(h, 0), ...series.map((s) => nombre((s.valeurs || [])[h / 2], 1))]);
-    // Les couleurs de l'image de la coupe, comptées dans la première colonne de profil.
-    if (points.length) {
-      const vides = series.slice(1).map(() => "");
-      lignes.push([t("nuage.valeurs"), nombre(proches.length, 0), ...vides], [t("nuage.valeurs.alerte"), nombre(alertes, 0), ...vides]);
-    }
     valeurs(svg, [t("comparer.graphique.teinte"), ...series.map((s) => `${s.nom} (C*)`)], lignes);
+    // Les couleurs de l'image de la coupe sont comptées dans une phrase sous « Valeurs », lue par le
+    // lecteur d'écran ; sans nuage, la phrase disparaît.
+    const details = svg.nextElementSibling;
+    let phrase = details && details.nextElementSibling;
+    if (phrase && !phrase.hasAttribute("data-nuage")) phrase = null;
+    if (!points.length || !details) { if (phrase) phrase.remove(); return; }
+    if (!phrase) {
+      phrase = document.createElement("p");
+      phrase.className = "why";
+      phrase.setAttribute("data-nuage", "");
+      details.after(phrase);
+    }
+    phrase.textContent = t("nuage.compte").replace("{l}", () => nombre(l, 0)).replace("{d}", () => nombre(DEMI_TRANCHE, 1))
+      .replace("{n}", () => nombre(proches.length, 0)).replace("{a}", () => nombre(alertes, 0));
   }
 
   // L* et C* le long d'un chemin du cube RVB : 256 points (L*, C*) par profil, de 0 à 255, et les

@@ -1510,7 +1510,7 @@ fn la_vue_3d_trie_par_profondeur_et_suit_le_theme() {
         .expect("dessiner absent");
     let dessiner = &dessiner[..dessiner.find("\n    }").unwrap_or(dessiner.len())];
     assert!(
-        dessiner.contains("dessinerTriangles(ctx, k);"),
+        dessiner.contains("dessinerTriangles(ctx, k, places);"),
         "{dessiner}"
     );
     assert!(dessiner.contains("projeter(r);"), "{dessiner}");

@@ -19,12 +19,21 @@ window.NuageImage = (() => {
   let rappel = () => {};
   let bascule = null; // { caseACocher, aide } du champ affiché
 
-  // L'image, son analyse, le profil ou le seuil a changé (comparer-image.js).
+  // L'analyse, le profil ou le seuil a changé (comparer-image.js). La case garde le choix de
+  // l'opérateur.
   function changer(nouvelle, nouveauSeuil, nouveauNom) {
-    if (nouvelle && !analyse) montre = true; // une image vient d'être analysée : nuage montré
     analyse = nouvelle;
     seuil = nouveauSeuil;
     nom = nouveauNom;
+    ecrireChamp();
+    rappel();
+  }
+
+  // Une nouvelle image, ou la comparaison fermée : le nuage est libéré, et la case sera cochée
+  // pour la prochaine image.
+  function oublier() {
+    analyse = null;
+    montre = true;
     ecrireChamp();
     rappel();
   }
@@ -71,22 +80,18 @@ window.NuageImage = (() => {
   // ---- Vue 3D ----
   const couleur = (p, jetons) => (/^#[0-9a-fA-F]{6}$/.test(String(p.couleur)) ? p.couleur : jetons.attenue);
 
-  // Petits carrés de 3 px × devicePixelRatio, après les triangles, du plus loin au plus proche.
-  // `projeter(lab)` rend [x, y, profondeur] dans le canvas. Le contour à l'encre du thème garde
-  // lisible un point sombre sur fond sombre comme un point clair sur fond clair.
-  function peindre(ctx, jetons, projeter, points) {
-    if (!points.length) return;
+  // Un point, petit carré de 3 px × devicePixelRatio centré en (x, y) du canvas. vue3d.js le peint
+  // à son rang dans le tri des triangles : derrière une face opaque, il est caché. Le contour à
+  // l'encre du thème garde lisible un point sombre sur fond sombre comme un point clair sur fond clair.
+  function peindrePoint(ctx, jetons, x, y, p) {
     const ratio = window.devicePixelRatio || 1;
     const cote = 3 * ratio;
-    const places = points.map((p) => ({ p, e: projeter(p.lab) })).sort((u, v) => v.e[2] - u.e[2]);
     ctx.globalAlpha = 1;
     ctx.lineWidth = 0.5 * ratio;
     ctx.strokeStyle = jetons.encre;
-    for (const { p, e } of places) {
-      ctx.fillStyle = p.alerte ? jetons.alerte : couleur(p, jetons);
-      ctx.fillRect(e[0] - cote / 2, e[1] - cote / 2, cote, cote);
-      ctx.strokeRect(e[0] - cote / 2, e[1] - cote / 2, cote, cote);
-    }
+    ctx.fillStyle = p.alerte ? jetons.alerte : couleur(p, jetons);
+    ctx.fillRect(x - cote / 2, y - cote / 2, cote, cote);
+    ctx.strokeRect(x - cote / 2, y - cote / 2, cote, cote);
   }
 
   // Phrase du texte de remplacement : nombre de points, dont en alerte ; vide sans nuage.
@@ -101,5 +106,5 @@ window.NuageImage = (() => {
     rappel = f;
   }
 
-  return { changer, points, champ, peindre, decrire, suivre };
+  return { changer, oublier, points, champ, peindrePoint, decrire, suivre };
 })();

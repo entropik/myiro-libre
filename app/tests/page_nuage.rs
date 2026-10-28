@@ -69,20 +69,35 @@ fn nuage_image_js_est_charge_avant_ses_utilisateurs_et_sans_couleur_en_dur() {
     }
 }
 
-/// Dans la vue 3D, les points de l'image sont peints après les triangles
-/// (au-dessus de la surface), triés du plus loin au plus proche, en carrés
-/// de 3 px × devicePixelRatio. Chacun a sa couleur réelle, ou la couleur
-/// d'alerte au-delà du seuil, et un contour à l'encre du thème. Le texte de
-/// remplacement compte les points et ceux en alerte.
+/// Dans la vue 3D, les points de l'image entrent dans le même tri que les
+/// triangles, du plus loin au plus proche (un seul tri par image) : en rendu
+/// opaque, un point situé derrière une face est caché, et l'on voit les
+/// couleurs qui sortent du volume. Carrés de 3 px × devicePixelRatio, de leur
+/// couleur réelle ou de la couleur d'alerte au-delà du seuil, avec un contour
+/// à l'encre du thème. Le texte de remplacement compte les points et ceux en
+/// alerte.
 #[test]
-fn la_vue_3d_peint_le_nuage_au_dessus_des_triangles() {
+fn la_vue_3d_trie_les_points_avec_les_triangles() {
     let vue = lire("interface/vue3d.js");
     let dessiner = corps(&vue, "function dessiner() {", 4);
     assert!(
-        dessiner
-            .contains("dessinerTriangles(ctx, k);\n      window.NuageImage.peindre(ctx, jetons, "),
-        "{dessiner}"
+        !dessiner.contains("NuageImage.peindre"),
+        "plus de calque peint à part :\n{dessiner}"
     );
+    let triangles = corps(&vue, "function dessinerTriangles(ctx, k, places) {", 4);
+    for attendu in [
+        // Un point est une entrée de la liste commune, de forme -1.
+        "for (let i = 0; i < nuage.length; i++) liste.push(-1, i);",
+        // Sa profondeur est comparable à celle d'un triangle (somme de trois z).
+        "3 * places[i * 3 + 2]",
+        "window.NuageImage.peindrePoint(ctx, jetons, ",
+    ] {
+        assert!(triangles.contains(attendu), "{attendu} :\n{triangles}");
+    }
+    assert_eq!(triangles.matches(".sort(").count(), 1, "un seul tri");
+    let tri = triangles.find(".sort(").unwrap_or(usize::MAX);
+    let point = triangles.find("peindrePoint(").unwrap_or(0);
+    assert!(tri < point, "les points sont peints dans l'ordre du tri");
     assert!(vue.contains("points(liste) {"), "Vue3d sans points(liste)");
     let decrire = corps(&vue, "function decrire() {", 4);
     assert!(
@@ -91,16 +106,12 @@ fn la_vue_3d_peint_le_nuage_au_dessus_des_triangles() {
     );
 
     let script = lire("interface/nuage-image.js");
-    let peindre = corps(
-        &script,
-        "function peindre(ctx, jetons, projeter, points) {",
-        2,
-    );
+    let peindre = corps(&script, "function peindrePoint(ctx, jetons, x, y, p) {", 2);
     for attendu in [
-        ".sort((u, v) => v.e[2] - u.e[2])",
         "3 * ratio",
         "p.alerte ? jetons.alerte : ",
         "ctx.strokeStyle = jetons.encre;",
+        "ctx.globalAlpha = 1;",
         "ctx.fillRect(",
         "ctx.strokeRect(",
     ] {
@@ -115,7 +126,8 @@ fn la_vue_3d_peint_le_nuage_au_dessus_des_triangles() {
 /// La coupe reçoit les points en quatrième paramètre, facultatif : sans
 /// eux, elle ne change pas. Elle ne garde que ceux dont la clarté est à
 /// ± une demi-tranche (2,5 L*) de la clarté choisie, en petits cercles
-/// au-dessus des contours, légendés et comptés dans « Valeurs ».
+/// au-dessus des contours, légendés. Leur comptage est une phrase à part,
+/// sous le tableau « Valeurs », jamais une ligne de la colonne C*.
 #[test]
 fn la_coupe_montre_les_couleurs_de_l_image_proches_de_la_clarte() {
     let graphiques = lire("interface/graphiques.js");
@@ -130,12 +142,19 @@ fn la_coupe_montre_les_couleurs_de_l_image_proches_de_la_clarte() {
         "noeud(\"circle\"",
         "graphique__nuage",
         "t(\"nuage.legende\")",
-        "t(\"nuage.valeurs\")",
-        "t(\"nuage.valeurs.alerte\")",
+        "t(\"nuage.compte\")",
         "t(\"nuage.aria\")",
     ] {
         assert!(coupe.contains(attendu), "{attendu} :\n{coupe}");
     }
+    assert!(
+        !coupe.contains("nuage.valeurs"),
+        "comptage dans la colonne C*"
+    );
+    let tableau = coupe.find("valeurs(svg, ").unwrap_or(usize::MAX);
+    let phrase = coupe.find("t(\"nuage.compte\")").unwrap_or(0);
+    assert!(tableau < phrase, "la phrase suit le tableau « Valeurs »");
+    assert!(coupe.contains("details.after(phrase)"), "{coupe}");
     let traces = coupe
         .find("trace(svg, points, s, true)")
         .unwrap_or(usize::MAX);
@@ -163,8 +182,10 @@ fn la_coupe_montre_les_couleurs_de_l_image_proches_de_la_clarte() {
 /// seuil sans nouveau calcul : un point est en alerte si son plus grand
 /// écart, en code d'écart (dixièmes arrondis vers le bas, bornés à 254),
 /// atteint `round(10 × seuil)`, la règle des pixels de la surimpression.
-/// La bascule « Couleurs de l'image » est cochée à l'ouverture d'une image ;
-/// sans nuage, elle est inactive et dit pourquoi.
+/// La bascule « Couleurs de l'image » n'est recochée d'office qu'à
+/// l'ouverture d'une nouvelle image, jamais après une décision de
+/// l'opérateur ; sans nuage, elle est inactive et dit pourquoi. Fermer la
+/// comparaison libère le nuage.
 #[test]
 fn le_nuage_suit_le_seuil_et_le_profil_de_la_surimpression() {
     let image = lire("interface/comparer-image.js");
@@ -183,10 +204,15 @@ fn le_nuage_suit_le_seuil_et_le_profil_de_la_surimpression() {
         script.contains("Math.min(Math.floor(p.ecart_max * 10), 254) >= Math.round(seuil * 10)")
     );
     let changer = corps(&script, "function changer(", 2);
-    assert!(
-        changer.contains("montre = true;"),
-        "cochée à l'ouverture :\n{changer}"
-    );
+    assert!(!changer.contains("montre"), "recochée seule :\n{changer}");
+    let oublier = corps(&script, "function oublier() {", 2);
+    for attendu in ["analyse = null;", "montre = true;", "rappel();"] {
+        assert!(oublier.contains(attendu), "{attendu} :\n{oublier}");
+    }
+    let ouvrir = corps(&image, "async function ouvrir() {", 2);
+    assert!(ouvrir.contains("window.NuageImage.oublier();"), "{ouvrir}");
+    let fermer = corps(&image, "function fermer() {", 2);
+    assert!(fermer.contains("window.NuageImage.oublier();"), "{fermer}");
     let champ = corps(&script, "function champ() {", 2);
     for attendu in ["type = \"checkbox\"", "t(\"nuage.bascule\")"] {
         assert!(champ.contains(attendu), "{attendu} :\n{champ}");
@@ -220,8 +246,13 @@ fn les_textes_du_nuage_existent_en_deux_langues() {
         })
         .collect();
     assert!(absentes.is_empty(), "clés absentes : {absentes:?}");
+    assert!(texte(Langue::Francais, "nuage.aide").contains("moyenne"));
+    assert!(texte(Langue::Anglais, "nuage.aide").contains("average"));
     for langue in [Langue::Francais, Langue::Anglais] {
+        assert!(!texte(langue, "nuage.aide").contains("fluo"));
+        assert!(!texte(langue, "nuage.aide").contains("fluorescent"));
         assert!(texte(langue, "nuage.aide").contains("{profil}"));
+        assert!(texte(langue, "nuage.compte").contains("{a}"));
         assert!(texte(langue, "nuage.legende").contains("{l}"));
     }
 }

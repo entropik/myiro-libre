@@ -589,7 +589,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "nuage.aide",
-        "Chaque point est une couleur de l’image, placée sur le blanc du papier de {profil}. En vert fluo\u{202f}: au-delà de {s}\u{202f}ΔE00.",
+        "Chaque point est la moyenne d’un groupe de couleurs proches de l’image, placée sur le blanc du papier de {profil}. Il passe dans la couleur d’alerte dès qu’une de ses couleurs dépasse {s}\u{202f}ΔE00.",
     ),
     (
         "nuage.indisponible",
@@ -600,20 +600,16 @@ const FRANCAIS: Catalogue = &[
         "Couleurs de l’image\u{202f}: {n} points, dont {a} au-delà du seuil d’alerte.",
     ),
     (
+        "nuage.compte",
+        "Couleurs de l’image dans la coupe (L* {l} ± {d})\u{202f}: {n} points, dont {a} au-delà du seuil d’alerte.",
+    ),
+    (
         "nuage.legende",
         "Couleurs de l’image, L* {l} ± {d}",
     ),
     (
         "nuage.legende.alerte",
         "Couleur de l’image au-delà du seuil d’alerte",
-    ),
-    (
-        "nuage.valeurs",
-        "Couleurs de l’image dans la coupe (points)",
-    ),
-    (
-        "nuage.valeurs.alerte",
-        "dont au-delà du seuil d’alerte",
     ),
     (
         "image.legende",
@@ -2618,7 +2614,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "nuage.aide",
-        "Each point is a colour of the image, placed on the paper white of {profil}. In fluorescent green: beyond {s} ΔE00.",
+        "Each point is the average of a group of close colours of the image, placed on the paper white of {profil}. It takes the alert colour as soon as one of its colours exceeds {s} ΔE00.",
     ),
     (
         "nuage.indisponible",
@@ -2629,20 +2625,16 @@ const ANGLAIS: Catalogue = &[
         "Image colours: {n} points, {a} of them beyond the alert threshold.",
     ),
     (
+        "nuage.compte",
+        "Image colours in the slice (L* {l} ± {d}): {n} points, {a} of them beyond the alert threshold.",
+    ),
+    (
         "nuage.legende",
         "Image colours, L* {l} ± {d}",
     ),
     (
         "nuage.legende.alerte",
         "Image colour beyond the alert threshold",
-    ),
-    (
-        "nuage.valeurs",
-        "Image colours in the slice (points)",
-    ),
-    (
-        "nuage.valeurs.alerte",
-        "of which beyond the alert threshold",
     ),
     (
         "image.legende",
