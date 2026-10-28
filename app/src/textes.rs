@@ -396,6 +396,22 @@ const FRANCAIS: Catalogue = &[
         "Ce fichier n’est plus ouvert. Ouvrez-le de nouveau.",
     ),
     (
+        "comparer.refus.aucun_profil",
+        "Choisissez au moins un profil à comparer.",
+    ),
+    (
+        "comparer.refus.profil_inconnu",
+        "Ce profil n’est plus dans la bibliothèque. Choisissez-en un autre dans la liste.",
+    ),
+    (
+        "comparer.refus.fichier_illisible",
+        "Ce fichier ne peut pas être lu. Vérifiez qu’il existe toujours, puis ouvrez-le de nouveau.",
+    ),
+    (
+        "comparer.refus.fichier_trop_grand",
+        "Ce fichier est bien trop grand pour un profil ICC\u{202f}: il n’est pas ouvert.",
+    ),
+    (
         "comparer.zone.gris",
         "Gris",
     ),
@@ -1529,6 +1545,22 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.refus.fichier_ferme",
         "This file is no longer open. Open it again.",
+    ),
+    (
+        "comparer.refus.aucun_profil",
+        "Choose at least one profile to compare.",
+    ),
+    (
+        "comparer.refus.profil_inconnu",
+        "This profile is no longer in the library. Choose another one from the list.",
+    ),
+    (
+        "comparer.refus.fichier_illisible",
+        "This file cannot be read. Check that it still exists, then open it again.",
+    ),
+    (
+        "comparer.refus.fichier_trop_grand",
+        "This file is far too large for an ICC profile: it is not opened.",
     ),
     (
         "comparer.zone.gris",

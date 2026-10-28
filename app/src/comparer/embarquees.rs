@@ -1,5 +1,5 @@
 //! Mesures embarquées dans un profil (balise `targ`), lues pour la fidélité
-//! et la répétabilité. Elles sont lues par `cgats::lire`, qui suit ses règles
+//! et la répétabilité. Elles sont lues par `cgats::lire_sans_condition`, qui suit ses règles
 //! d'échelle RVB : rien n'est deviné.
 
 use cgats::MesureImportee;

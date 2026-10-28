@@ -14,6 +14,10 @@ use crate::parc::lire_profil;
 pub const MAX_PROFILS: usize = 4;
 pub(crate) const TROP_DE_PROFILS: &str = "comparer.refus.trop_de_profils";
 pub(crate) const FICHIER_FERME: &str = "comparer.refus.fichier_ferme";
+pub(crate) const AUCUN_PROFIL: &str = "comparer.refus.aucun_profil";
+pub(crate) const PROFIL_INCONNU: &str = "comparer.refus.profil_inconnu";
+pub(crate) const FICHIER_ILLISIBLE: &str = "comparer.refus.fichier_illisible";
+pub(crate) const FICHIER_TROP_GRAND: &str = "comparer.refus.fichier_trop_grand";
 
 /// Un profil choisi par la page : rangé dans la bibliothèque, ou fichier
 /// ouvert pour la séance ([`FichiersOuverts`]).
@@ -48,7 +52,16 @@ impl FichiersOuverts {
     /// mémoire sous un nouveau jeton. Rien n'est écrit, rien n'est rangé ;
     /// le verrou n'est pris qu'une fois le fichier lu.
     pub fn ouvrir(&self, chemin: &Path) -> Result<FichierOuvertResume, String> {
-        let icc = Arc::new(lire_profil(chemin)?);
+        // Les refus de la lecture deviennent des textes de la comparaison :
+        // rien n'est rangé ici.
+        let icc = Arc::new(lire_profil(chemin).map_err(|cle| {
+            if cle == "parc.erreur.profil_illisible" {
+                FICHIER_TROP_GRAND
+            } else {
+                FICHIER_ILLISIBLE
+            }
+            .to_string()
+        })?);
         let nom = chemin
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -141,12 +154,15 @@ impl BibliothequeOuverte {
 
     /// Lit les octets des profils choisis : la bibliothèque n'est verrouillée
     /// que le temps de cette lecture. Au-delà de [`MAX_PROFILS`], un profil
-    /// inconnu ou un fichier fermé, rien n'est lu.
+    /// inconnu, un fichier fermé ou aucun profil, rien n'est lu.
     pub(crate) fn lire_sources(
         &self,
         sources: &[SourceComparaison],
         fichiers: &FichiersOuverts,
     ) -> Result<Vec<ProfilLu>, String> {
+        if sources.is_empty() {
+            return Err(AUCUN_PROFIL.to_string());
+        }
         if sources.len() > MAX_PROFILS {
             return Err(TROP_DE_PROFILS.to_string());
         }
@@ -174,7 +190,7 @@ impl BibliothequeOuverte {
                     let (p, icc) = ranges
                         .next()
                         .flatten()
-                        .ok_or_else(|| "parc.erreur.profil_inconnu".to_string())?;
+                        .ok_or_else(|| PROFIL_INCONNU.to_string())?;
                     Ok(ProfilLu {
                         source,
                         origine: format!("{} › {} › {}", p.imprimante, p.papier, p.resolution),

@@ -21,7 +21,10 @@ use crate::colonne::BibliothequeOuverte;
 use crate::parc::si_choisi;
 use crate::profiler::Moteur;
 use embarquees::{mesures_embarquees, MesuresProfil, LAB_INCONNU, SANS_MESURES};
-use sources::{ProfilLu, FICHIER_FERME, TROP_DE_PROFILS};
+use sources::{
+    ProfilLu, AUCUN_PROFIL, FICHIER_FERME, FICHIER_ILLISIBLE, FICHIER_TROP_GRAND, PROFIL_INCONNU,
+    TROP_DE_PROFILS,
+};
 
 pub use sources::{
     FichierOuvertResume, FichiersOuverts, ProfilComparable, SourceComparaison, MAX_PROFILS,
@@ -37,9 +40,13 @@ const LIMITE_ILLISIBLE: &str = "comparer.limite.illisible";
 const ERREUR_LIMITE: &str = "comparer.erreur.limite";
 
 /// Clés des refus et des limites indisponibles de la comparaison.
-pub const CLES_COMPARAISON: [&str; 9] = [
+pub const CLES_COMPARAISON: [&str; 13] = [
+    AUCUN_PROFIL,
     TROP_DE_PROFILS,
+    PROFIL_INCONNU,
     FICHIER_FERME,
+    FICHIER_ILLISIBLE,
+    FICHIER_TROP_GRAND,
     SANS_ARGYLL,
     SANS_ICCGAMUT,
     ARGYLL_VERSION,
@@ -325,12 +332,6 @@ impl BibliothequeOuverte {
 
 // ---- Commandes de la page ----
 
-/// Le moteur de la limite du gamut : le même ArgyllCMS que le calcul des
-/// profils ; rien s'il est introuvable.
-fn moteur_gamut(moteur: &Moteur) -> Option<&dyn MoteurGamut> {
-    moteur.0.as_ref().map(|a| a as &dyn MoteurGamut)
-}
-
 #[tauri::command(async)]
 pub fn comparer_profils_comparables(
     ouverte: tauri::State<'_, BibliothequeOuverte>,
@@ -364,7 +365,7 @@ pub fn comparer_analyser(
     moteur: tauri::State<'_, Moteur>,
     sources: Vec<SourceComparaison>,
 ) -> Result<Comparaison, String> {
-    ouverte.comparer(&sources, &fichiers, moteur_gamut(&moteur))
+    ouverte.comparer(&sources, &fichiers, moteur.gamut())
 }
 
 #[tauri::command(async)]

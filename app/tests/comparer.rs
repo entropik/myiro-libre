@@ -224,6 +224,86 @@ fn un_fichier_ouvert_n_est_jamais_range() {
 }
 
 #[test]
+fn aucun_profil_est_refuse() {
+    let b = banc();
+    let erreur = b.ouverte.comparer(&[], &b.fichiers, None).unwrap_err();
+    assert_eq!(erreur, "comparer.refus.aucun_profil");
+    let erreur = b
+        .ouverte
+        .chemin_comparaison(&[], &b.fichiers, [0, 0, 255], [0, 255, 255])
+        .unwrap_err();
+    assert_eq!(erreur, "comparer.refus.aucun_profil");
+}
+
+#[test]
+fn un_profil_inconnu_de_la_bibliotheque_est_refuse() {
+    let b = banc();
+    let erreur = b
+        .ouverte
+        .comparer(&[bibliotheque(IdProfil(999))], &b.fichiers, None)
+        .unwrap_err();
+    assert_eq!(erreur, "comparer.refus.profil_inconnu");
+}
+
+#[test]
+fn un_fichier_absent_ou_trop_grand_est_refuse_a_l_ouverture() {
+    let b = banc();
+    let erreur = b
+        .fichiers
+        .ouvrir(&b.dossier.path().join("absent.icc"))
+        .unwrap_err();
+    assert_eq!(erreur, "comparer.refus.fichier_illisible");
+    let gros = b.dossier.path().join("gros.icc");
+    let fichier = std::fs::File::create(&gros).unwrap();
+    fichier.set_len(app::parc::TAILLE_MAX_PROFIL + 1).unwrap();
+    assert_eq!(
+        b.fichiers.ouvrir(&gros).unwrap_err(),
+        "comparer.refus.fichier_trop_grand"
+    );
+}
+
+/// Remplace la structure des tables A2B0 et A2B1 du profil d'essai.
+fn avec_structure(mut icc: Vec<u8>, structure: &[u8; 4]) -> Vec<u8> {
+    for i in 0..icc.len() - 4 {
+        if &icc[i..i + 4] == b"mft2" {
+            icc[i..i + 4].copy_from_slice(structure);
+        }
+    }
+    icc
+}
+
+#[test]
+fn un_profil_cmjn_ou_lut8_est_refuse_en_le_nommant() {
+    let b = banc();
+    let mut cmjn = essai(lineaire, 9, None);
+    cmjn[16..20].copy_from_slice(b"CMYK");
+    let cmjn = b.ouvrir("cmjn.icc", &cmjn);
+    let lut8 = b.ouvrir(
+        "lut8.icc",
+        &avec_structure(essai(lineaire, 9, None), b"mft1"),
+    );
+    let c = b
+        .ouverte
+        .comparer(&[cmjn, lut8], &b.fichiers, None)
+        .unwrap();
+    assert_eq!(
+        c.profils[0].etat,
+        EtatProfil::Refuse {
+            cle: "comparer.refus.pas_rvb",
+            detail: Some("CMYK".into())
+        }
+    );
+    assert_eq!(
+        c.profils[1].etat,
+        EtatProfil::Refuse {
+            cle: "comparer.refus.structure",
+            detail: Some("mft1".into())
+        }
+    );
+    assert_eq!(c.ecarts, vec![None, None]);
+}
+
+#[test]
 fn un_jeton_inconnu_est_refuse() {
     let b = banc();
     let erreur = b
