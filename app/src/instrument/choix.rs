@@ -601,6 +601,13 @@ fn vue_annonce(annonce: &Annonce) -> VueAnnonce {
                 detail: Some("choix.detail.repos_suppose"),
                 ..simple("ferme_repos_suppose", *modele, None)
             },
+            // Le pont a répondu sans pouvoir déconnecter, puis s'est arrêté :
+            // c'est un échec de la fermeture, pas un simple repos non prouvé.
+            Fermeture::Incertaine(RemiseAuRepos::DeconnexionBloquee {}) => VueAnnonce {
+                alerte: true,
+                detail: Some("choix.detail.deconnexion_bloquee"),
+                ..simple("ferme_echec", *modele, None)
+            },
             Fermeture::Incertaine(repos) => {
                 let (detail, code) = match repos {
                     RemiseAuRepos::ArretRefuse { code } => {

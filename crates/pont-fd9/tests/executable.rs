@@ -144,3 +144,45 @@ fn l_executable_refuse_feuille_au_plafond_connexion() {
         ]
     );
 }
+
+#[test]
+fn une_deconnexion_bloquee_repond_a_fermer_puis_arrete_le_processus() {
+    use std::io::Write;
+    use std::process::Stdio;
+    let mut enfant = Command::new(pont_simule())
+        .args(["connexion", "--deconnexion-bloquee", "200"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut entree = enfant.stdin.take().unwrap();
+    for requete in [
+        r#"{"cmd":"version"}"#,
+        r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#,
+        r#"{"cmd":"fermer"}"#,
+    ] {
+        writeln!(entree, "{requete}").unwrap();
+    }
+    // L'entrée reste ouverte, comme dans l'application qui attend la réponse.
+    let debut = std::time::Instant::now();
+    let sortie = enfant.wait_with_output().unwrap();
+    drop(entree);
+    // Arrêté par la garde, bien avant les 10 s de la déconnexion retenue.
+    assert!(debut.elapsed() < std::time::Duration::from_secs(8));
+    assert_eq!(sortie.status.code(), Some(4), "{:?}", sortie.status);
+    let lignes: Vec<String> = String::from_utf8(sortie.stdout)
+        .unwrap()
+        .lines()
+        .map(String::from)
+        .collect();
+    assert_eq!(lignes.len(), 3, "{lignes:?}");
+    assert_eq!(
+        lignes[2],
+        r#"{"rep":"fermeture_incertaine","remise_au_repos":{"etat":"deconnexion_bloquee"}}"#
+    );
+    // Le journal est déjà parti : il ne dépend pas d'une fin normale.
+    let erreurs = String::from_utf8_lossy(&sortie.stderr);
+    assert!(erreurs.contains("pont-fd9 : FD9_Connect : 0"), "{erreurs}");
+    assert!(erreurs.contains("n'a pas rendu la main"), "{erreurs}");
+}

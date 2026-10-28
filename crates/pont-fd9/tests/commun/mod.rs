@@ -81,6 +81,10 @@ pub struct Fd9Simule {
     /// Valeurs qu'un spectre demande (`FD9_CalculateData`, 1005 au-delà de
     /// la sortie donnée).
     pub spectre_longueur: usize,
+    /// `FD9_Disconnect` ne rend la main qu'au signal reçu ici (essai E2 : la
+    /// DLL est restée bloquée dans l'appel). 10 s au plus, pour ne jamais
+    /// bloquer un test.
+    pub deconnexion_retenue: Option<std::sync::mpsc::Receiver<()>>,
 }
 
 /// Motif répété 32 fois : empreinte SHA-256 fictive de la DLL simulée.
@@ -299,6 +303,9 @@ impl SdkFd9 for Fd9Simule {
     }
 
     fn deconnecter(&mut self) -> i32 {
+        if let Some(signal) = self.deconnexion_retenue.take() {
+            let _ = signal.recv_timeout(Duration::from_secs(10));
+        }
         let code = self.appel("FD9_Disconnect", String::new());
         // 1004 : la DLL n'avait plus de session (fiche FD9_Disconnect).
         if code == 0 || code == 1004 {

@@ -5,10 +5,15 @@
 //! [--attente-feuille <secondes>] [--reconnaissance combine|coordinate]`
 //! Paliers déclarés par ce pont : version (par défaut), detection, connexion,
 //! prenumerisation, feuille. Tout autre palier est refusé au lancement.
+//!
+//! Codes de sortie : 0 fin normale, 1 erreur de lecture ou d'écriture,
+//! 2 arguments refusés, 3 DLL non chargée, 4 fermeture qui n'a pas rendu la
+//! main dans `DELAI_FERMETURE` (`CODE_FERMETURE_BLOQUEE` ; la réponse à
+//! `fermer` est donnée avant).
 
 use fd9_sys::ModeReconnaissance;
 use pont_fd9::dll::Fd9Dll;
-use pont_fd9::serveur::servir;
+use pont_fd9::serveur::{servir, Garde, DELAI_FERMETURE};
 use pont_fd9::{Delais, Session};
 use pont_protocole::Palier;
 use std::process::ExitCode;
@@ -100,6 +105,7 @@ fn main() -> ExitCode {
         &mut session,
         std::io::BufReader::new(std::io::stdin()),
         &mut std::io::stdout(),
+        Garde::processus(DELAI_FERMETURE),
     );
     let orphelins = session.rappels_orphelins();
     if orphelins > 0 {

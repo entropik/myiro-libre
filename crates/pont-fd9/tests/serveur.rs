@@ -4,12 +4,14 @@
 mod commun;
 
 use commun::{Fd9Simule, EMPREINTE_SIMULEE};
-use pont_fd9::serveur::servir;
+use pont_fd9::serveur::{servir, Garde};
 use pont_fd9::{Session, PALIER_MAX};
 use pont_protocole::{
     lire_reponse, Empreinte, ErreurPont, Info, InstrumentFd9, LectureFeuille, LiaisonFd9, Palier,
     RemiseAuRepos, Reponse,
 };
+use std::sync::mpsc;
+use std::time::Duration;
 
 /// Envoie `requetes` au pont ; rend les lignes écrites et la session.
 fn dialoguer(
@@ -24,6 +26,8 @@ fn dialoguer(
         &mut session,
         std::io::Cursor::new(entree.into_bytes()),
         &mut sortie,
+        // Ici la fermeture rend toujours la main : la garde n'agit pas.
+        Garde::new(Duration::from_secs(60), |_| {}),
     )
     .unwrap();
     let lignes = String::from_utf8(sortie)
@@ -432,4 +436,116 @@ fn la_fin_de_l_entree_abandonne_une_feuille_pas_encore_glissee() {
         }
     ));
     assert!(!session.sdk().connecte && !session.sdk().inscrit);
+}
+
+/// Dialogue où `FD9_Disconnect` reste bloqué jusqu'à ce que la garde ait
+/// agi. Rend les lignes écrites par la boucle, ce que la garde a reçu (une
+/// réponse ou rien) et la session.
+fn dialoguer_deconnexion_bloquee(
+    requetes: &[&str],
+) -> (Vec<String>, Vec<Option<Reponse>>, Session<Fd9Simule>) {
+    let (liberer, retenue) = mpsc::channel();
+    let mut sdk = Fd9Simule::avec_un_fd9();
+    sdk.deconnexion_retenue = Some(retenue);
+    let mut session = Session::new(sdk, Palier::Connexion);
+    let (envoi, recu) = mpsc::channel();
+    let garde = Garde::new(Duration::from_millis(50), move |reponse| {
+        envoi.send(reponse).unwrap();
+        // En vrai, le processus s'arrête ici ; le test laisse la DLL simulée
+        // rendre la main, pour vérifier que rien d'autre n'est écrit.
+        let _ = liberer.send(());
+    });
+    let mut sortie = Vec::new();
+    servir(
+        &mut session,
+        std::io::Cursor::new(
+            requetes
+                .join(
+                    "
+",
+                )
+                .into_bytes(),
+        ),
+        &mut sortie,
+        garde,
+    )
+    .unwrap();
+    let lignes = String::from_utf8(sortie)
+        .unwrap()
+        .lines()
+        .map(String::from)
+        .collect();
+    (lignes, recu.try_iter().collect(), session)
+}
+
+#[test]
+fn une_deconnexion_bloquee_recoit_quand_meme_une_reponse_a_fermer() {
+    let (lignes, garde, session) = dialoguer_deconnexion_bloquee(&[
+        r#"{"cmd":"version"}"#,
+        r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#,
+        r#"{"cmd":"fermer"}"#,
+    ]);
+    // La réponse à `fermer` vient de la garde, une seule fois ; la boucle
+    // n'écrit rien de plus quand la DLL finit par rendre la main.
+    assert_eq!(lignes.len(), 2, "{lignes:?}");
+    assert_eq!(
+        garde,
+        [Some(Reponse::FermetureIncertaine {
+            remise_au_repos: RemiseAuRepos::DeconnexionBloquee {},
+        })]
+    );
+    assert!(
+        session
+            .journal()
+            .iter()
+            .any(|l| l.contains("après le délai")),
+        "{:?}",
+        session.journal()
+    );
+}
+
+#[test]
+fn une_deconnexion_bloquee_a_la_fin_de_l_entree_arrete_aussi_le_pont() {
+    let (lignes, garde, _) = dialoguer_deconnexion_bloquee(&[
+        r#"{"cmd":"version"}"#,
+        r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#,
+    ]);
+    assert_eq!(lignes.len(), 2, "{lignes:?}");
+    // Personne n'a demandé la fermeture : aucune réponse à écrire.
+    assert_eq!(garde, [None]);
+}
+
+#[test]
+fn une_fermeture_rapide_ne_reveille_pas_la_garde() {
+    let (envoi, recu) = mpsc::channel();
+    let mut session = Session::new(Fd9Simule::avec_un_fd9(), Palier::Connexion);
+    let mut sortie = Vec::new();
+    servir(
+        &mut session,
+        std::io::Cursor::new(
+            [
+                r#"{"cmd":"version"}"#,
+                r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#,
+                r#"{"cmd":"fermer"}"#,
+            ]
+            .join(
+                "
+",
+            )
+            .into_bytes(),
+        ),
+        &mut sortie,
+        Garde::new(Duration::from_millis(200), move |reponse| {
+            envoi.send(reponse).unwrap()
+        }),
+    )
+    .unwrap();
+    let lignes: Vec<String> = String::from_utf8(sortie)
+        .unwrap()
+        .lines()
+        .map(String::from)
+        .collect();
+    assert_eq!(lire_reponse(&lignes[2]), Ok(Reponse::Ferme {}));
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(recu.try_recv().is_err());
 }

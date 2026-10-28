@@ -774,6 +774,10 @@ const FRANCAIS: Catalogue = &[
         "L’instrument a refusé la déconnexion (code {code})\u{202f}; la liaison a été coupée quand même.",
     ),
     (
+        "choix.detail.deconnexion_bloquee",
+        "L’instrument n’a pas répondu à la déconnexion\u{202f}; le programme qui le pilote a été arrêté.",
+    ),
+    (
         "choix.detail.fermeture_refusee",
         "L’instrument a refusé la fermeture\u{202f}; la liaison a été coupée quand même.",
     ),
@@ -1757,6 +1761,10 @@ const ANGLAIS: Catalogue = &[
     (
         "choix.detail.deconnexion_refusee",
         "The instrument refused to disconnect (code {code}); the connection was cut anyway.",
+    ),
+    (
+        "choix.detail.deconnexion_bloquee",
+        "The instrument did not answer the disconnection request; the program driving it was stopped.",
     ),
     (
         "choix.detail.fermeture_refusee",

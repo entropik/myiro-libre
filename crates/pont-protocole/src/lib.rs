@@ -323,6 +323,10 @@ pub enum RemiseAuRepos {
     ArretRefuse { code: i32 },
     /// Liaison perdue (événement 6) avant la preuve du repos.
     LiaisonPerdue {},
+    /// FD-9 : la déconnexion n'a pas rendu la main dans le délai du pont. Il
+    /// répond quand même à `fermer`, puis s'arrête ; l'état de l'instrument
+    /// et de la session de la DLL n'est pas connu.
+    DeconnexionBloquee {},
 }
 
 /// Étapes de la progression imposée sur instrument réel, dans l'ordre.
