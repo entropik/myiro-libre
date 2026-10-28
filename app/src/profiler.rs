@@ -12,7 +12,7 @@ use std::time::SystemTime;
 
 use bibliotheque::{
     nom_profil_propose, Bibliotheque, ErreurBibliotheque, IdCondition, IdMesure, IdProfil,
-    NouveauProfil, ResumeImportee, ResumeProfil,
+    MesureImporteeEnregistree, NouveauProfil, ResumeImportee, ResumeProfil,
 };
 use pont_protocole::ConditionMesure;
 use profilage::{
@@ -431,6 +431,29 @@ pub(crate) fn sources_profil(
         .collect()
 }
 
+/// Contrôle de cohérence des mesures (ticket #1), avant tout calcul : le
+/// calcul d'un profil et sa vérification refusent de même, avec les plages
+/// en cause nommées par leur identifiant dans le fichier.
+pub(crate) fn refuser_incoherence(
+    importee: &MesureImporteeEnregistree,
+    plages: &PlagesProfil,
+) -> Result<ControleCoherence, ErreurProfil> {
+    let coherence = controler_coherence(plages);
+    if coherence.accepte() {
+        return Ok(coherence);
+    }
+    eprintln!("{} : mesures incohérentes {coherence:?}", importee.fichier);
+    let identifiants: Vec<String> = importee
+        .mesure
+        .plages
+        .iter()
+        .map(|p| p.identifiant.clone())
+        .collect();
+    let mut e = ErreurProfil::sans_cause("profil.refus.incoherent");
+    e.coherence = Some(Box::new(RefusCoherence::new(&coherence, &identifiants)));
+    Err(e)
+}
+
 /// Tout ce qu'il faut pour lancer le calcul, lu dans la bibliothèque.
 struct Preparation {
     nom: String,
@@ -464,19 +487,7 @@ impl BibliothequeOuverte {
         })?;
         // Avant ArgyllCMS : des mesures qui ne correspondent pas aux plages
         // donneraient un profil faux (ticket #1).
-        let coherence = controler_coherence(&plages);
-        if !coherence.accepte() {
-            eprintln!("{} : mesures incohérentes {coherence:?}", importee.fichier);
-            let identifiants: Vec<String> = importee
-                .mesure
-                .plages
-                .iter()
-                .map(|p| p.identifiant.clone())
-                .collect();
-            let mut e = ErreurProfil::sans_cause("profil.refus.incoherent");
-            e.coherence = Some(Box::new(RefusCoherence::new(&coherence, &identifiants)));
-            return Err(e);
-        }
+        let coherence = refuser_incoherence(&importee, &plages)?;
         let horodatage = instant_utc(maintenant);
         let date = horodatage.get(..10).unwrap_or(&horodatage);
         let nom = nom_profil_propose(&detail.imprimante, &detail.papier, &detail.resolution, date);

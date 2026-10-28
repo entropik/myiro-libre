@@ -293,6 +293,47 @@ fn un_jeu_sans_seuil_est_refuse_avant_d_etre_range() {
     assert_eq!((jeux[0].nom.as_str(), jeux[0].version), ("Atelier", 1));
 }
 
+/// Mesures décalées d'un rang (ticket #1) : la plage i porte la mesure de la
+/// plage i + 1. Refusées avant tout calcul, avec la clé du contrôle et les
+/// plages en cause ; rien n'est rangé.
+#[test]
+fn des_mesures_incoherentes_bloquent_la_verification() {
+    let b = banc();
+    let n = SECONDE_MIRE.len();
+    let donnees: String = (0..n)
+        .map(|i| {
+            let mesure = ligne(i + 1, SECONDE_MIRE[(i + 1) % n], 0.0);
+            let lab: Vec<&str> = mesure.split('\t').skip(4).collect();
+            let [r, g, bb] = SECONDE_MIRE[i];
+            format!("{}\t{r}\t{g}\t{bb}\t{}\r\n", i + 1, lab.join("\t"))
+        })
+        .collect();
+    let texte = export(&SECONDE_MIRE, 0.0);
+    let debut = texte.find("BEGIN_DATA\r\n").unwrap() + "BEGIN_DATA\r\n".len();
+    let fin = texte.find("END_DATA\r\n").unwrap();
+    let decale = format!("{}{donnees}{}", &texte[..debut], &texte[fin..]);
+    let seconde = b.importer("decalee_M1.txt", &decale);
+    // Un moteur qui échouerait autrement : s'il était appelé, l'erreur serait la sienne.
+    let moteur = MoteurVerificationSimule::echoue(ErreurMoteur::Introuvable);
+    let erreur = b
+        .ouverte
+        .verifier_profil(
+            &b.demande(seconde, Impression::ATraversLeProfil),
+            &moteur,
+            a(10),
+        )
+        .unwrap_err();
+    assert_eq!(erreur.cle, "profil.refus.incoherent");
+    let coherence = erreur.coherence.expect("plages en cause");
+    assert!(!coherence.plages.is_empty());
+    assert!(b
+        .ouverte
+        .historique_verifications(b.profil)
+        .unwrap()
+        .is_empty());
+    assert_eq!(b.etat(b.profil), EtatVerification::NonVerifie);
+}
+
 #[test]
 fn les_textes_de_la_verification_existent() {
     for cle in [

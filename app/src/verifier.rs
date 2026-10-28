@@ -25,7 +25,7 @@ use verification::{
 
 use crate::colonne::BibliothequeOuverte;
 use crate::parc::instant_utc;
-use crate::profiler::ErreurProfil;
+use crate::profiler::{refuser_incoherence, ErreurProfil};
 
 /// Fiche d'impression de la seconde mire, confirmée par l'imprimeur.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -189,6 +189,8 @@ impl BibliothequeOuverte {
                 eprintln!("{fichier} : {e}");
                 ErreurProfil::sans_cause(e.cle())
             })?;
+        // Mêmes contrôles et mêmes seuils que pour le calcul d'un profil.
+        refuser_incoherence(&lu.importee, &plages)?;
         let rvb: Vec<[f64; 3]> = plages
             .plages
             .iter()
