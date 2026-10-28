@@ -103,6 +103,58 @@ pub fn volume(m: &Maillage) -> f64 {
     (somme / 6.0).abs()
 }
 
+/// Coupe d'un maillage par le plan de clarté `l` : pour chacune des
+/// `teintes` colonnes, le C\* le plus loin où le rayon issu de l'axe neutre,
+/// au milieu de la colonne, croise la section. `None` si aucun rayon de la
+/// colonne ne la croise.
+pub(crate) fn coupe_plan(m: &Maillage, l: f64, teintes: usize) -> Vec<Option<f64>> {
+    let rayons: Vec<[f64; 2]> = (0..teintes)
+        .map(|h| {
+            let t = ((h as f64 + 0.5) * 360.0 / teintes as f64).to_radians();
+            [t.cos(), t.sin()]
+        })
+        .collect();
+    let mut ligne = vec![None::<f64>; teintes];
+    for t in &m.triangles {
+        let Some(v) = t
+            .iter()
+            .map(|&i| m.sommets.get(i as usize).copied())
+            .collect::<Option<Vec<_>>>()
+        else {
+            continue;
+        };
+        // Points où les arêtes du triangle traversent le plan, en (a*, b*).
+        let traversees: Vec<[f64; 2]> = [(0, 1), (1, 2), (2, 0)]
+            .iter()
+            .filter(|&&(i, j)| (v[i][0] >= l) != (v[j][0] >= l))
+            .map(|&(i, j)| {
+                let k = (l - v[i][0]) / (v[j][0] - v[i][0]);
+                [
+                    v[i][1] + k * (v[j][1] - v[i][1]),
+                    v[i][2] + k * (v[j][2] - v[i][2]),
+                ]
+            })
+            .collect();
+        let [q, r] = traversees[..] else {
+            continue;
+        };
+        let e = [r[0] - q[0], r[1] - q[1]];
+        for (case, d) in ligne.iter_mut().zip(&rayons) {
+            // Rayon t·d et segment q + s·e : t = (q × e) / (d × e).
+            let det = d[0] * e[1] - d[1] * e[0];
+            if det.abs() < 1e-12 {
+                continue;
+            }
+            let t = (q[0] * e[1] - q[1] * e[0]) / det;
+            let s = (q[0] * d[1] - q[1] * d[0]) / det;
+            if t.is_finite() && t >= 0.0 && (0.0..=1.0).contains(&s) {
+                *case = Some(case.map_or(t, |c: f64| c.max(t)));
+            }
+        }
+    }
+    ligne
+}
+
 /// Couleur écran `#rrggbb` d'un L\*, a\*, b\*, et si elle a été ramenée dans
 /// l'écran. Une valeur non finie donne le noir, dit ramené.
 pub(crate) fn couleur_ecran(lab: [f64; 3]) -> (String, bool) {

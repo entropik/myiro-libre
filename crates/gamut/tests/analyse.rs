@@ -123,6 +123,32 @@ fn la_coupe_et_la_saturation_par_teinte_ont_leurs_dimensions() {
 }
 
 #[test]
+fn la_coupe_suit_la_section_du_gamut_sans_dents() {
+    let analyse = analyser(&profil());
+    // Ligne 50 : section par le plan L* = 50,5, soit r + g + b = 1,02. Sur
+    // le rayon de 1° (milieu de la colonne 0), le bord est l'arête r = 1 :
+    // g = (0,02 + tan 1°) / (2 + tan 1°), C* = 60·(1 − g) / cos 1° = 58,9.
+    let c = analyse.coupes[50][0];
+    assert!((c - 58.9).abs() <= 0.05, "C* à L* 50, teinte 1° : {c}");
+    // Une coupe à clarté constante est un contour lisse : aucune case ne
+    // rentre vers le centre entre ses deux voisines.
+    for l in 30..=90 {
+        let ligne = &analyse.coupes[l];
+        for h in 0..180 {
+            let voisines = ligne[(h + 179) % 180].min(ligne[(h + 1) % 180]);
+            assert!(
+                ligne[h] >= 0.9 * voisines,
+                "dent à L* {l}, teinte {} : {} entre {} et {}",
+                2 * h + 1,
+                ligne[h],
+                ligne[(h + 179) % 180],
+                ligne[(h + 1) % 180]
+            );
+        }
+    }
+}
+
+#[test]
 fn l_affichage_est_la_surface_17_avec_ses_couleurs() {
     let analyse = analyser(&profil());
     let affichage = &analyse.affichage;

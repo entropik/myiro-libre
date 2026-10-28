@@ -5,13 +5,15 @@ use colorimetrie::lab_vers_lch;
 use serde::Serialize;
 
 use crate::icc::{lab_vers_xyz, vers_lab, ProfilIcc};
-use crate::surface::{couleur_ecran, maillage_affiche, maillage_profil, volume, MaillageAffiche};
+use crate::surface::{
+    couleur_ecran, coupe_plan, maillage_affiche, maillage_profil, volume, Maillage, MaillageAffiche,
+};
 
-/// Points par arête de la surface qui sert au volume.
+/// Points par arête de la surface qui sert au volume et aux coupes.
 const ARETE_VOLUME: usize = 33;
 /// Points par arête de la surface affichée (1 734 sommets, 3 072 triangles).
 const ARETE_AFFICHAGE: usize = 17;
-/// Points par arête de la grille RVB de la table de chroma.
+/// Points par arête de la grille RVB du C* maximal par teinte.
 const GRILLE_CHROMA: usize = 33;
 /// Lignes de clarté (L\* de 0 à 99) et colonnes de teinte (2° chacune).
 const CLARTES: usize = 100;
@@ -74,9 +76,18 @@ pub fn analyser(p: &ProfilIcc) -> Analyse {
     let blanc = p.lab_absolu([1.0, 1.0, 1.0]);
     let noir = p.lab_absolu([0.0, 0.0, 0.0]);
     let y_noir = lab_vers_xyz(noir, [1.0, 1.0, 1.0])[1];
-    let coupes = coupes(p);
+    let surface = maillage_profil(p, ARETE_VOLUME);
+    let coupes = coupes(&surface);
+    // La grille de points garde le sommet de chaque teinte, même entre
+    // deux plans de coupe (le jaune culmine sur une tranche étroite de L*).
+    let points = maxima_par_teinte(p);
     let chroma_par_teinte = (0..TEINTES)
-        .map(|h| coupes.iter().map(|ligne| ligne[h]).fold(0.0, f64::max))
+        .map(|h| {
+            coupes
+                .iter()
+                .map(|ligne| ligne[h])
+                .fold(points[h], f64::max)
+        })
         .collect();
     Analyse {
         version: p.version(),
@@ -85,7 +96,7 @@ pub fn analyser(p: &ProfilIcc) -> Analyse {
         blanc,
         noir,
         dmax_approche: -y_noir.log10(),
-        volume_surface: volume(&maillage_profil(p, ARETE_VOLUME)),
+        volume_surface: volume(&surface),
         primaires: PRIMAIRES
             .iter()
             .map(|&(nom, rvb)| primaire(p, nom, rvb))
@@ -136,11 +147,28 @@ fn primaire(p: &ProfilIcc, nom: &'static str, rvb: [u8; 3]) -> Primaire {
     }
 }
 
-/// Table de chroma : grille RVB 33³, case (⌊L\*⌋, ⌊teinte / 2°⌋), C\* maximal
-/// par case, cases vides comblées, valeurs arrondies à 0,1. Une case restée
-/// vide vaut 0 : aucune couleur du profil n'y tombe.
-fn coupes(p: &ProfilIcc) -> Vec<Vec<f64>> {
-    let mut table = vec![vec![None::<f64>; TEINTES]; CLARTES];
+/// Coupes à clarté constante : la ligne L est la section de la surface du
+/// cube RVB par le plan L\* = L + 0,5, lue sur le rayon du milieu de chaque
+/// colonne de 2°. Cases vides comblées, valeurs arrondies à 0,1 ; une case
+/// restée vide vaut 0 : la section n'y passe pas.
+///
+/// Un tri de points par tranches de 1 L\* et de 2° laissait des cases
+/// touchées seulement par des points intérieurs au gamut : la coupe
+/// rentrait en dents de scie vers le centre.
+fn coupes(surface: &Maillage) -> Vec<Vec<f64>> {
+    (0..CLARTES)
+        .map(|l| {
+            let mut ligne = coupe_plan(surface, l as f64 + 0.5, TEINTES);
+            combler(&mut ligne);
+            ligne.into_iter().map(|c| c.map_or(0.0, arrondi)).collect()
+        })
+        .collect()
+}
+
+/// C\* maximal par colonne de teinte de 2° sur la grille RVB 33³, toutes
+/// clartés confondues, arrondi à 0,1.
+fn maxima_par_teinte(p: &ProfilIcc) -> Vec<f64> {
+    let mut maxima = vec![0.0f64; TEINTES];
     let pas = (GRILLE_CHROMA - 1) as f64;
     for r in 0..GRILLE_CHROMA {
         for g in 0..GRILLE_CHROMA {
@@ -149,26 +177,16 @@ fn coupes(p: &ProfilIcc) -> Vec<Vec<f64>> {
                 let (c, Some(h)) = chroma_teinte(lab) else {
                     continue;
                 };
-                if !lab[0].is_finite() {
-                    continue;
-                }
-                let l = (lab[0].floor().max(0.0) as usize).min(CLARTES - 1);
                 let colonne = ((h / 2.0).floor() as usize).min(TEINTES - 1);
-                let case = &mut table[l][colonne];
-                *case = Some(case.map_or(c, |m: f64| m.max(c)));
+                maxima[colonne] = maxima[colonne].max(c);
             }
         }
     }
-    table
-        .into_iter()
-        .map(|mut ligne| {
-            combler(&mut ligne);
-            ligne
-                .into_iter()
-                .map(|c| c.map_or(0.0, |c| (c * 10.0).round() / 10.0))
-                .collect()
-        })
-        .collect()
+    maxima.into_iter().map(arrondi).collect()
+}
+
+fn arrondi(c: f64) -> f64 {
+    (c * 10.0).round() / 10.0
 }
 
 /// Comble les cases vides d'une ligne de teintes : une case vide entre deux
