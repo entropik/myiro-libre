@@ -1,0 +1,6 @@
+interface:
+  display_name: "Capitaine MYIRO"
+  short_description: "Orchestrer les tickets MYIRO jusqu'à leur fusion"
+  default_prompt: "Utilise $capitaine pour traiter les tickets MYIRO prêts et fusionner leurs PR vers dev."
+policy:
+  allow_implicit_invocation: false
