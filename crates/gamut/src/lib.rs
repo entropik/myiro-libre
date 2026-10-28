@@ -43,6 +43,7 @@ mod mesures;
 mod source;
 mod surface;
 mod table;
+mod teinte;
 
 pub use analyse::{analyser, chemin, Analyse, Primaire};
 pub use comparaison::{
@@ -52,9 +53,10 @@ pub use essai::{profil_essai, profil_essai_xyz, ProfilEssai};
 pub use icc::{ErreurIcc, ProfilIcc};
 pub use image::{
     analyser_pixels, AnalyseImage, Annulee, PointNuage, ECART_INCONNU, PAS_HISTOGRAMME,
-    POINTS_NUAGE, SECTEURS_TEINTE,
+    POINTS_NUAGE,
 };
 pub use limite::lire_gam;
 pub use mesures::{fidelite, memes_mesures, points_du_chemin, repetabilite, Mesure, Repetabilite};
 pub use source::ProfilSource;
 pub use surface::{maillage_affiche, surface_cube, volume, Maillage, MaillageAffiche};
+pub use teinte::{familles_teinte, FamilleTeinte, FAMILLES_TEINTE, SECTEURS_TEINTE};

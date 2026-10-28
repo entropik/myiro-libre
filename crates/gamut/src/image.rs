@@ -6,12 +6,13 @@
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 
-use colorimetrie::{delta_e00, lab_vers_lch};
+use colorimetrie::delta_e00;
 use serde::Serialize;
 
 use crate::icc::{vers_lab, ErreurIcc, ProfilIcc};
 use crate::source::ProfilSource;
 use crate::surface::couleur_ecran;
+use crate::teinte::{famille, familles_teinte, SECTEURS_TEINTE};
 
 /// Code d'écart d'un pixel : dixièmes de ΔE00 arrondis vers le bas
 /// (`⌊10 × écart⌋`), bornés à 254 ; 255 = transparent ou inconnu.
@@ -26,16 +27,11 @@ pub const ECART_INCONNU: u8 = 255;
 /// d'écart (hors `ECART_INCONNU`) : au-delà du seuil, ce sont les cases à partir
 /// de `round(10 × seuil)`.
 pub const PAS_HISTOGRAMME: f64 = 0.1;
-/// Douze secteurs de teinte de 30° (le premier part de 0°), puis « gris »
-/// (C\* < 5).
-pub const SECTEURS_TEINTE: usize = 13;
 /// Points du nuage de couleurs, au plus.
 pub const POINTS_NUAGE: usize = 4_000;
 
 /// Cases de l'histogramme (codes d'écart 0 à 254).
 const CASES: usize = 255;
-/// Sous cette chroma, la couleur demandée est un gris.
-const CHROMA_GRIS: f64 = 5.0;
 /// Côté d'une cellule du nuage, en unités Lab.
 const CELLULE: f64 = 4.0;
 /// L'annulation est regardée toutes les `PAS_ANNULATION` couleurs distinctes.
@@ -70,8 +66,10 @@ pub struct AnalyseImage {
     /// dont l'écart est inconnu n'y figure pas : la somme vaut
     /// `pixels_comptes − pixels_inconnus`.
     pub histogramme: Vec<u64>,
-    /// Le même histogramme par secteur de teinte de la couleur demandée
-    /// (`SECTEURS_TEINTE` lignes, la dernière pour les gris).
+    /// Le même histogramme par famille de teinte de la couleur demandée :
+    /// `SECTEURS_TEINTE` lignes, dans l'ordre de `FAMILLES_TEINTE` (rouge,
+    /// jaune, vert, cyan, bleu, magenta, puis gris), bornes données par
+    /// `familles_teinte`.
     pub par_teinte: Vec<Vec<u64>>,
     /// Au plus `POINTS_NUAGE` cellules, les plus peuplées d'abord.
     pub nuage: Vec<PointNuage>,
@@ -125,6 +123,7 @@ fn analyser(
     // 2. Un aller-retour par couleur distincte, reporté sur ses pixels.
     let mut histogramme = vec![0u64; CASES];
     let mut par_teinte = vec![vec![0u64; CASES]; SECTEURS_TEINTE];
+    let familles = familles_teinte();
     let mut cellules: HashMap<[i32; 3], Cellule> = HashMap::new();
     let mut codes: Carte<u8> = Carte::default();
     codes.reserve(couleurs.len());
@@ -147,7 +146,7 @@ fn analyser(
         };
         let case = usize::from(code);
         histogramme[case] += u64::from(n);
-        par_teinte[secteur(demandee)][case] += u64::from(n);
+        par_teinte[famille(&familles, demandee)][case] += u64::from(n);
         cellules
             .entry(demandee.map(|v| (v / CELLULE).floor() as i32))
             .or_default()
@@ -184,17 +183,6 @@ fn cle(p: &[u8; 4]) -> u32 {
 /// flottante.
 fn code_ecart(ecart: f64) -> u8 {
     (ecart * 10.0).floor().clamp(0.0, (CASES - 1) as f64) as u8
-}
-
-/// Secteur de teinte d'une couleur demandée : 0 à 11 par 30°, 12 pour un gris.
-fn secteur(lab: [f64; 3]) -> usize {
-    match lab_vers_lch(vers_lab(lab)) {
-        Ok(lch) if lch.c >= CHROMA_GRIS => match lch.h {
-            Ok(h) => ((h / 30.0).floor() as usize).min(SECTEURS_TEINTE - 2),
-            Err(_) => SECTEURS_TEINTE - 1,
-        },
-        _ => SECTEURS_TEINTE - 1,
-    }
 }
 
 /// Pixels d'une cellule du nuage.

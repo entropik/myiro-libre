@@ -7,8 +7,8 @@
 use std::time::Instant;
 
 use gamut::{
-    analyser_pixels, profil_essai, Annulee, ErreurIcc, ProfilEssai, ProfilIcc, ProfilSource,
-    ECART_INCONNU, POINTS_NUAGE, SECTEURS_TEINTE,
+    analyser_pixels, familles_teinte, profil_essai, Annulee, ErreurIcc, ProfilEssai, ProfilIcc,
+    ProfilSource, ECART_INCONNU, FAMILLES_TEINTE, POINTS_NUAGE, SECTEURS_TEINTE,
 };
 
 /// L = 25 + 75·(r+g+b)/3, a = 60·(r−g), b = 60·(g−b).
@@ -104,12 +104,75 @@ fn une_image_saturee_sur_un_gamut_etroit_est_comptee_hors_gamut() {
     let tete = (0..SECTEURS_TEINTE)
         .max_by_key(|&k| totaux[k])
         .expect("secteurs");
-    assert!(tete <= 1, "secteur en tête : {tete}, totaux {totaux:?}");
+    assert_eq!(FAMILLES_TEINTE[tete], "rouge", "totaux {totaux:?}");
     assert_eq!(totaux[tete], 50);
     let point = &analyse.nuage[0];
     assert_eq!(point.pixels, 50);
     assert!(point.ecart_max > 10.0, "écart {}", point.ecart_max);
     assert!(point.couleur.starts_with('#') && point.couleur.len() == 7);
+}
+
+#[test]
+fn les_six_couleurs_srvb_pures_sont_rangees_dans_leur_famille() {
+    assert_eq!(SECTEURS_TEINTE, 7);
+    assert_eq!(
+        FAMILLES_TEINTE,
+        ["rouge", "jaune", "vert", "cyan", "bleu", "magenta", "gris"]
+    );
+    let pures: [([u8; 3], &str); 6] = [
+        ([255, 0, 0], "rouge"),
+        ([255, 255, 0], "jaune"),
+        ([0, 255, 0], "vert"),
+        ([0, 255, 255], "cyan"),
+        ([0, 0, 255], "bleu"),
+        ([255, 0, 255], "magenta"),
+    ];
+    for (rvb, famille) in pures {
+        let pixels = vec![[rvb[0], rvb[1], rvb[2], 255]; 3];
+        let analyse = analyser_pixels(
+            &pixels,
+            &ProfilSource::srvb(),
+            &sortie(Some(lineaire_inverse)),
+            &jamais,
+        )
+        .expect("non annulée")
+        .expect("table inverse lue");
+        let k = FAMILLES_TEINTE
+            .iter()
+            .position(|&f| f == famille)
+            .expect("famille connue");
+        let total: u64 = analyse.par_teinte[k].iter().sum();
+        assert_eq!(total, 3, "{rvb:?} hors de la famille {famille}");
+    }
+}
+
+#[test]
+fn les_bornes_des_familles_sont_a_mi_chemin_des_ancrages() {
+    let familles = familles_teinte();
+    // Valeurs approchées du général ; `ProfilSource::srvb` donne 40,9°,
+    // 99,6°, 134,4°, 196,5°, 301,4° et 327,1°.
+    let attendus = [40.0, 103.0, 136.0, 197.0, 306.0, 328.0];
+    for (f, attendu) in familles.iter().zip(attendus) {
+        assert!(
+            (f.ancrage - attendu).abs() < 5.0,
+            "{} : {}",
+            f.nom,
+            f.ancrage
+        );
+    }
+    for k in 0..6 {
+        let suivante = &familles[(k + 1) % 6];
+        let ecart = (suivante.ancrage - familles[k].ancrage).rem_euclid(360.0);
+        let milieu = (familles[k].ancrage + ecart / 2.0).rem_euclid(360.0);
+        assert!(
+            (familles[k].fin - milieu).abs() < 1e-9,
+            "{}",
+            familles[k].nom
+        );
+        assert_eq!(familles[k].fin, suivante.debut);
+    }
+    // Le magenta passe par 0° pour rejoindre le rouge.
+    assert!(familles[5].debut > familles[5].fin);
 }
 
 #[test]
