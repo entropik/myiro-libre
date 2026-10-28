@@ -25,6 +25,8 @@ Usage (à la racine du dépôt) :
    l'empreinte de la mire RGB-2520 et l'embarque telle quelle sous
    `mire-fd9/`. Une autre empreinte arrête tout. Sans `mire-fd9/`,
    l'application dira la mire FD-9 introuvable ; le MYIRO-1 reste utilisable.
+   Embarquée, la mire suit la même règle que `SDK/` : installateur local,
+   jamais publié tel quel.
 
 ArgyllCMS est sous AGPL-3.0 : chaque publication d'un installateur qui
 l'embarque fournit les sources de la version incluse, ou leur lien précis.
@@ -170,6 +172,14 @@ def mire_fd9_embarquee(racine=RACINE, empreinte=MIRE_FD9_EMPREINTE):
     return {f"../mire-fd9/{MIRE_FD9_FICHIER}": f"mire-fd9/{MIRE_FD9_FICHIER}"}
 
 
+def annonce_mire_fd9(embarquee):
+    """Une ligne sur la mire FD-9. Embarquée, elle suit la même règle que SDK/."""
+    if embarquee:
+        return ("ATTENTION : cet installateur embarque aussi la mire RGB-2520 (empreinte vérifiée) : même règle "
+                "que SDK/, installateur local, jamais publié tel quel.")
+    return "Dossier mire-fd9/ absent : mire FD-9 non embarquée, seule la mire MYIRO-1 pourra être préparée."
+
+
 def main():
     # ArgyllCMS et la mire FD-9 sont contrôlés avant la compilation des ponts, qui est longue.
     argyll = argyll_embarque()
@@ -199,10 +209,7 @@ def main():
               f"les sources d'ArgyllCMS {VERSION_ARGYLL} ou leur lien précis.")
     else:
         print("Dossier argyll/ absent : ArgyllCMS non embarqué, l'application ne pourra pas calculer de profil.")
-    if mire_fd9:
-        print("Mire FD-9 RGB-2520 embarquée telle quelle (empreinte vérifiée).")
-    else:
-        print("Dossier mire-fd9/ absent : mire FD-9 non embarquée, seule la mire MYIRO-1 pourra être préparée.")
+    print(annonce_mire_fd9(bool(mire_fd9)))
     print("Suite : cargo tauri build --config app/tauri.installateur.json")
 
 

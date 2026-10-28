@@ -121,6 +121,17 @@ class MireFd9Embarquee(unittest.TestCase):
             pi.mire_fd9_embarquee(self.racine)
         self.assertIn(pi.MIRE_FD9_FICHIER, str(arret.exception.code))
 
+    def test_l_annonce_dit_la_regle_de_sdk(self):
+        # Embarquée, la mire suit la même règle que SDK/ : installateur local, jamais publié tel quel.
+        annonce = pi.annonce_mire_fd9(True)
+        self.assertNotIn("\n", annonce)
+        self.assertIn("SDK/", annonce)
+        self.assertIn("jamais publié", annonce)
+        # Sans mire-fd9/, une ligne aussi, et le script continue.
+        absente = pi.annonce_mire_fd9(False)
+        self.assertNotIn("\n", absente)
+        self.assertIn("mire-fd9/ absent", absente)
+
     def test_l_empreinte_est_celle_de_la_crate_mires(self):
         rgb2520 = (pi.RACINE / "crates" / "mires" / "src" / "rgb2520.rs").read_text(encoding="utf-8")
         self.assertIn(pi.MIRE_FD9_EMPREINTE, rgb2520)

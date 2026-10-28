@@ -35,5 +35,5 @@ Première partie du ticket : un profil RVB calculé à partir d'une mesure impor
 ## Complété (28 octobre 2026, ticket #33)
 
 - **`targen` choisit les plages des mires MYIRO-1**, derrière le même trait `MoteurProfil` (`commande_plages`, `generer_plages`), dans un dossier de travail temporaire, avec la même version figée. Commande : `targen -v -d2 -G -f<n> mire`. Confirmé avec le vrai ArgyllCMS 3.5.0 : `-f` compte les plages blanches et noires que `targen` ajoute (4 et 4 par défaut), et le `.ti1` porte trois tableaux, dont seul le premier est celui des plages. Durée relevée sur le poste : moins d'une seconde pour 232 plages, 3 secondes pour 928.
-- **Installateur** : `bin/targen.exe` rejoint les fichiers embarqués sous `argyll/`.
+- **Installateur** : `bin/targen.exe` rejoint les fichiers embarqués sous `argyll/`. Si `mire-fd9/` existe, l'installateur embarque aussi la mire RGB-2520 : même règle que `SDK/`, installateur local, jamais publié tel quel.
 - **Plages blanches gardées (décision du 28 octobre 2026)** : les plages blanches de `targen` (RVB 100, papier nu) restent dans la mire. Au milieu d'une bande, chacune laisse un blanc de la taille d'une plage ; leur lecture au MYIRO-1 en bande est à vérifier à l'essai (la mire de comparaison évitait le papier nu en bande). Si la bande est coupée, repli sur `targen -e0`, avec un blanc papier mesuré à part.
