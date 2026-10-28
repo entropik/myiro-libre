@@ -28,23 +28,11 @@ window.Verification = (() => {
   let editeur = false;
   let erreur = "";
 
-  // Verdict : couleur, icône et mot ; le rouge seulement pour « hors tolérance ».
-  const TRACES = { conforme: "M5 12l4 4 10-10", limite: "M12 4v10M12 18v2", hors: "M6 6l12 12M18 6L6 18" };
-  const CLASSES = { accepte: "conforme", hors_tolerance: "hors", incomplet: "limite", non_verifie: "limite" };
-
-  const nombre = (v) => new Intl.NumberFormat(document.documentElement.lang, {
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(v);
-  const lab = (c) => (c ? [c.l, c.a, c.b].map((v) => v.toFixed(1)).join(" ") : t("verif.inconnu"));
-  const octets = (v) => v.map((x) => Math.round(x * 255)).join(" ");
+  const { motEtat, nomVersion } = window.ResultatVerification;
 
   function nomJeu(id) {
     const jeu = donnees.jeux.find((j) => j.id === id);
-    return jeu ? window.Tolerances.nomVersion(jeu) : "";
-  }
-
-  function motEtat(etat, tolerances) {
-    return t("verif.etat." + etat).replace("{tolerances}", () => tolerances || "");
+    return jeu ? nomVersion(jeu.nom, jeu.version) : "";
   }
 
   // Profils RVB de la résolution : l'actif d'abord, puis l'historique.
@@ -114,7 +102,7 @@ window.Verification = (() => {
     const jeux = window.Tolerances.dernieres(donnees.jeux);
     const contenu = el("div");
     if (jeux.length) {
-      contenu.append(liste("verif-tolerances", jeux.map((j) => ({ valeur: j.id, libelle: window.Tolerances.nomVersion(j) })),
+      contenu.append(liste("verif-tolerances", jeux.map((j) => ({ valeur: j.id, libelle: nomVersion(j.nom, j.version) })),
         choix.tolerances, (id) => { choix.tolerances = id; }));
     } else {
       contenu.append(el("p", "why", t("verif.tolerances.aucun")));
@@ -151,76 +139,9 @@ window.Verification = (() => {
     return null;
   }
 
-  function carteFamille(cle, stats, inconnue) {
-    const carte = el("div", "carte");
-    carte.append(el("span", "label label--ink", t(cle)));
-    if (!stats) {
-      carte.append(el("p", "why", t(inconnue)));
-      return carte;
-    }
-    const grille = el("div", "criteres");
-    for (const [nom, valeur] of [["verif.critere.moyenne", nombre(stats.moyenne)], ["verif.critere.p95", nombre(stats.p95)],
-      ["verif.critere.max", nombre(stats.max)], ["verif.plages", String(stats.plages)]]) {
-      const c = el("div", "critere");
-      c.append(el("span", "critere__nom", t(nom)), el("span", "critere__valeur", valeur));
-      grille.append(c);
-    }
-    carte.append(grille);
-    return carte;
-  }
-
-  // Les pires plages des deux familles, sans doublon : chaque valeur a sa colonne et son libellé.
-  function tableauPires(calcul) {
-    const r = calcul.resultats;
-    const ids = [...new Set([...(r.fidelite?.pires || []), ...(r.prediction?.pires || [])].map((p) => p.id))];
-    const table = el("table", "table--compact");
-    const tete = el("tr");
-    for (const cle of ["rapport.plage", "verif.demande", "verif.appareil", "verif.predite", "verif.mesuree", "rapport.ecart_fidelite", "rapport.ecart_prediction"]) {
-      tete.append(el("th", "", t(cle)));
-    }
-    table.append(tete);
-    for (const id of ids) {
-      const p = r.plages.find((x) => x.id === id);
-      if (!p) continue;
-      const ligne = el("tr");
-      for (const v of [p.id, lab(p.demande), octets(p.appareil), lab(p.prediction), lab(p.mesure),
-        p.ecart_fidelite === null ? t("verif.inconnu") : nombre(p.ecart_fidelite), nombre(p.ecart_prediction)]) {
-        ligne.append(el("td", "", v));
-      }
-      table.append(ligne);
-    }
-    return table;
-  }
-
-  function blocResultat(d) {
-    const { etat, calcul, verification } = resultat;
-    const classe = CLASSES[etat] || "limite";
-    const verdict = el("div", "carte carte--verdict verdict--" + classe);
-    verdict.innerHTML = `<svg class="verdict__icone" viewBox="0 0 24 24" aria-hidden="true"><path d="${TRACES[classe]}"/></svg>`;
-    const texte = el("div", "verdict__texte");
-    texte.append(el("span", "verdict__contexte", t("verif.titre")), el("div", "verdict__mot", motEtat(etat, resultatJeu)));
-    verdict.append(texte);
-    const sansDemande = calcul.evaluation.demande === null;
-    const corps = el("div");
-    corps.append(verdict, el("p", "why", t("verif.regle")));
-    if (calcul.memes_couleurs_que_le_profil) corps.append(el("p", "why", t("verif.memes_couleurs")));
-    corps.append(
-      carteFamille("verif.fidelite", calcul.resultats.fidelite, sansDemande ? "verif.inconnu.sans_demande" : "verif.inconnu.aucune_plage_dans_le_gamut"),
-      carteFamille("verif.hors_gamut", calcul.resultats.hors_gamut, sansDemande ? "verif.inconnu.sans_demande" : "verif.inconnu.aucune_plage"),
-      carteFamille("verif.prediction", calcul.resultats.prediction, "verif.inconnu"),
-    );
-    const controles = el("div", "carte");
-    controles.append(el("span", "label label--ink", t("rapport.controles")));
-    for (const c of calcul.controles) {
-      const l = el("div", "cle-valeur");
-      const valeur = c.valeur === null ? t("verif.inconnu") : nombre(c.valeur);
-      const respect = c.respecte === null ? t("verif.inconnu") : t(c.respecte ? "verif.respecte" : "verif.depasse");
-      l.append(el("span", "", `${t("verif." + c.famille)} · ${t("verif.critere." + c.critere)} ≤ ${nombre(c.limite)}`),
-        el("b", "", `${valeur} · ${respect}`));
-      controles.append(l);
-    }
-    corps.append(controles, champ("verif.pires", tableauPires(calcul)),
-      el("p", "why", t("verif.appareil.calculee")));
+  function blocResultat() {
+    const { verification } = resultat;
+    const corps = window.ResultatVerification.dessiner(resultat, resultatJeu);
     const actions = el("div", "actions");
     const recalculer = el("button", "btn", t("verif.recalculer"));
     recalculer.addEventListener("click", () => parc.agir(async () => {
@@ -296,7 +217,7 @@ window.Verification = (() => {
     pourquoi.setAttribute("role", "status");
     pourquoi.hidden = !pourquoi.textContent;
     corps.append(actions, pourquoi);
-    if (resultat) corps.append(blocResultat(d));
+    if (resultat) corps.append(blocResultat());
     section.replaceChildren(corps);
     parc.occupation();
   }
@@ -377,12 +298,13 @@ window.Verification = (() => {
   function provenance(d, cleValeur) {
     const v = d.verification;
     if (!v) return [cleValeur("verif.derniere", t("verif.etat.non_verifie"))];
-    const lignes = [cleValeur("verif.derniere", `${date(v.horodatage)} · ${motEtat(v.etat, v.tolerances)}`)];
+    const lignes = [cleValeur("verif.derniere", `${date(v.horodatage)} · ${motEtat(v.etat, nomVersion(v.tolerances_nom, v.tolerances_version))}`)];
     const historique = el("div");
     invoke("verifier_historique", { profil: d.actif.id }).then((liste) => {
       historique.replaceChildren(el("span", "label", t("verif.historique")), ...liste.map((h) => {
         const ligne = el("div", "cle-valeur mute");
-        ligne.append(el("span", "", date(h.horodatage)), el("span", "", `${h.tolerances} · ${motEtat(h.etat, h.tolerances)}`));
+        const jeu = nomVersion(h.tolerances_nom, h.tolerances_version);
+        ligne.append(el("span", "", date(h.horodatage)), el("span", "", `${jeu} · ${motEtat(h.etat, jeu)}`));
         return ligne;
       }));
     }).catch((e) => historique.replaceChildren(el("p", "why", parc.texteErreur(e))));

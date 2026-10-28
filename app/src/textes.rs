@@ -1236,6 +1236,31 @@ const FRANCAIS: Catalogue = &[
     ("rapport.instrument", "Instrument déclaré par le fichier"),
     ("rapport.supposee", "supposée d’après la convention du fabricant"),
     ("rapport.commandes", "Commandes ArgyllCMS"),
+    ("rapport.utc", "UTC"),
+    ("rapport.mire", "Mire mesurée"),
+    ("rapport.mire_du_profil", "la mire qui a servi à calculer le profil"),
+    ("rapport.rvb_echelle", "0 à 255"),
+    ("verif.condition.m0", "M0"),
+    ("verif.condition.m1", "M1"),
+    ("verif.condition.m2", "M2"),
+    ("verif.tolerances.nom_version", "{nom} v{version}"),
+    ("verif.tolerances.nom_propose", "Atelier"),
+    (
+        "verif.rvb_supposes",
+        "L’échelle des RVB du fichier (0 à 255) est supposée d’après la convention du logiciel qui l’a écrit.",
+    ),
+    (
+        "verif.refus.mire_desaccord",
+        "Les valeurs RVB de cette mesure ne sont pas celles de la mire pour ces plages. Vérifiez que l’export est celui de la bonne mire, puis importez-le à nouveau.",
+    ),
+    (
+        "verif.refus.mire_inconnue",
+        "Cette mesure ne correspond à aucune mire connue (mire de vérification ou mire du profil). Imprimez et mesurez la mire de vérification, puis importez son export.",
+    ),
+    (
+        "verif.erreur.mire_changee",
+        "La mire de vérification rangée ne correspond plus à celle que l’application produit pour la même version. Rien n’a été remplacé. Signalez-le aux développeurs.",
+    ),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -2427,6 +2452,31 @@ const ANGLAIS: Catalogue = &[
     ("rapport.instrument", "Instrument declared by the file"),
     ("rapport.supposee", "assumed from the manufacturer’s convention"),
     ("rapport.commandes", "ArgyllCMS commands"),
+    ("rapport.utc", "UTC"),
+    ("rapport.mire", "Measured chart"),
+    ("rapport.mire_du_profil", "the chart used to compute the profile"),
+    ("rapport.rvb_echelle", "0 to 255"),
+    ("verif.condition.m0", "M0"),
+    ("verif.condition.m1", "M1"),
+    ("verif.condition.m2", "M2"),
+    ("verif.tolerances.nom_version", "{nom} v{version}"),
+    ("verif.tolerances.nom_propose", "Workshop"),
+    (
+        "verif.rvb_supposes",
+        "The RGB scale of the file (0 to 255) is assumed from the convention of the software that wrote it.",
+    ),
+    (
+        "verif.refus.mire_desaccord",
+        "The RGB values of this measurement are not those of the chart for these patches. Check that the export is from the right chart, then import it again.",
+    ),
+    (
+        "verif.refus.mire_inconnue",
+        "This measurement matches no known chart (verification chart or the profile’s chart). Print and measure the verification chart, then import its export.",
+    ),
+    (
+        "verif.erreur.mire_changee",
+        "The saved verification chart no longer matches the one the application produces for the same version. Nothing was replaced. Report it to the developers.",
+    ),
 ];
 
 fn catalogue(langue: Langue) -> Catalogue {

@@ -14,7 +14,7 @@ use verification::{Criteres, Seuils};
 #[test]
 fn un_profil_fidele_est_accepte_selon_la_version_du_jeu() {
     let b = banc();
-    let seconde = b.importer("seconde_M1.txt", &export(&SECONDE_MIRE, 0.0));
+    let seconde = b.importer("seconde_M1.txt", &b.seconde(0.0));
     let resultat = b
         .ouverte
         .verifier_profil(
@@ -24,15 +24,24 @@ fn un_profil_fidele_est_accepte_selon_la_version_du_jeu() {
         )
         .unwrap();
     assert_eq!(resultat.etat, EtatVerification::Accepte);
-    assert_eq!(resultat.calcul.resultats.plages.len(), 6);
-    assert_eq!(resultat.calcul.resultats.plages[1].id, "2");
+    assert_eq!(resultat.calcul.resultats.plages.len(), b.mire.plages.len());
+    assert_eq!(
+        resultat.calcul.resultats.plages[1].id,
+        b.mire.plages[1].id.to_string()
+    );
     assert_eq!(resultat.calcul.instrument.as_deref(), Some("FD-9"));
     assert_eq!(resultat.calcul.fichier, "seconde_M1.txt");
     assert!(!resultat.calcul.memes_couleurs_que_le_profil);
     assert_eq!(resultat.calcul.controles.len(), 6);
     let historique = b.ouverte.historique_verifications(b.profil).unwrap();
     assert_eq!(historique.len(), 1);
-    assert_eq!(historique[0].tolerances, "Atelier v1");
+    assert_eq!(
+        (
+            historique[0].tolerances_nom.as_str(),
+            historique[0].tolerances_version
+        ),
+        ("Atelier", 1)
+    );
     assert_eq!(historique[0].etat, EtatVerification::Accepte);
     let detail = b.ouverte.detail_reglage(b.condition).unwrap();
     assert_eq!(detail.actif.unwrap().etat, EtatVerification::Accepte);
@@ -45,7 +54,7 @@ fn un_profil_fidele_est_accepte_selon_la_version_du_jeu() {
 #[test]
 fn un_profil_hors_tolerance_reste_actif_et_exportable() {
     let b = banc();
-    let seconde = b.importer("seconde_M1.txt", &export(&SECONDE_MIRE, -8.0));
+    let seconde = b.importer("seconde_M1.txt", &b.seconde(-8.0));
     let resultat = b
         .ouverte
         .verifier_profil(
@@ -69,7 +78,7 @@ fn un_profil_hors_tolerance_reste_actif_et_exportable() {
 #[test]
 fn la_mesure_du_profil_ne_peut_pas_le_verifier() {
     let b = banc();
-    let seconde = b.importer("seconde_M1.txt", &export(&SECONDE_MIRE, 0.0));
+    let seconde = b.importer("seconde_M1.txt", &b.seconde(0.0));
     let erreur = b
         .ouverte
         .verifier_profil(
@@ -96,7 +105,7 @@ fn la_mesure_du_profil_ne_peut_pas_le_verifier() {
 #[test]
 fn une_fiche_non_confirmee_est_refusee() {
     let b = banc();
-    let seconde = b.importer("seconde_M1.txt", &export(&SECONDE_MIRE, 0.0));
+    let seconde = b.importer("seconde_M1.txt", &b.seconde(0.0));
     let mut demande = b.demande(seconde, Impression::ATraversLeProfil);
     demande.fiche.confirmee = false;
     let erreur = b
@@ -110,7 +119,7 @@ fn une_fiche_non_confirmee_est_refusee() {
 #[test]
 fn sans_gestion_avec_un_critere_de_fidelite_la_verification_est_incomplete() {
     let b = banc();
-    let seconde = b.importer("seconde_M1.txt", &export(&SECONDE_MIRE, 0.0));
+    let seconde = b.importer("seconde_M1.txt", &b.seconde(0.0));
     let resultat = b
         .ouverte
         .verifier_profil(
@@ -129,7 +138,7 @@ fn sans_gestion_avec_un_critere_de_fidelite_la_verification_est_incomplete() {
 fn verifier_un_ancien_profil_ne_touche_pas_le_profil_actif() {
     let b = banc();
     let ancien = b.profil;
-    let seconde = b.importer("seconde_M1.txt", &export(&SECONDE_MIRE, -8.0));
+    let seconde = b.importer("seconde_M1.txt", &b.seconde(-8.0));
     let recent = b.calculer(b.mesure_profil, a(5));
     b.ouverte
         .verifier_profil(
@@ -151,7 +160,7 @@ fn verifier_un_ancien_profil_ne_touche_pas_le_profil_actif() {
 #[test]
 fn sans_xicclu_rien_n_est_range() {
     let b = banc();
-    let seconde = b.importer("seconde_M1.txt", &export(&SECONDE_MIRE, 0.0));
+    let seconde = b.importer("seconde_M1.txt", &b.seconde(0.0));
     let moteur = MoteurVerificationSimule::echoue(ErreurMoteur::OutilManquant {
         outil: "xicclu".into(),
     });
@@ -178,7 +187,7 @@ fn sans_xicclu_rien_n_est_range() {
 #[test]
 fn un_recalcul_avec_une_nouvelle_version_ajoute_une_verification() {
     let b = banc();
-    let seconde = b.importer("seconde_M1.txt", &export(&SECONDE_MIRE, -4.0));
+    let seconde = b.importer("seconde_M1.txt", &b.seconde(-4.0));
     let premiere = b
         .ouverte
         .verifier_profil(
@@ -217,23 +226,16 @@ fn un_recalcul_avec_une_nouvelle_version_ajoute_une_verification() {
     let historique = b.ouverte.historique_verifications(b.profil).unwrap();
     let resume: Vec<_> = historique
         .iter()
-        .map(|v| (v.verification, v.tolerances.as_str(), v.etat))
+        .map(|v| (v.verification, v.tolerances_version, v.etat))
         .collect();
     assert_eq!(
         resume,
         [
-            (
-                recalcul.verification,
-                "Atelier v2",
-                EtatVerification::Accepte
-            ),
-            (
-                premiere.verification,
-                "Atelier v1",
-                EtatVerification::HorsTolerance
-            )
+            (recalcul.verification, 2, EtatVerification::Accepte),
+            (premiere.verification, 1, EtatVerification::HorsTolerance)
         ]
     );
+    assert!(historique.iter().all(|v| v.tolerances_nom == "Atelier"));
     assert_eq!(b.etat(b.profil), EtatVerification::Accepte);
 }
 
@@ -241,7 +243,7 @@ fn un_recalcul_avec_une_nouvelle_version_ajoute_une_verification() {
 fn la_derniere_fiche_est_reprise_non_confirmee() {
     let b = banc();
     assert_eq!(b.ouverte.derniere_fiche(b.condition).unwrap(), None);
-    let seconde = b.importer("seconde_M1.txt", &export(&SECONDE_MIRE, 0.0));
+    let seconde = b.importer("seconde_M1.txt", &b.seconde(0.0));
     b.ouverte
         .verifier_profil(
             &b.demande(seconde, Impression::ATraversLeProfil),
@@ -299,20 +301,16 @@ fn un_jeu_sans_seuil_est_refuse_avant_d_etre_range() {
 #[test]
 fn des_mesures_incoherentes_bloquent_la_verification() {
     let b = banc();
-    let n = SECONDE_MIRE.len();
-    let donnees: String = (0..n)
+    let plages = &b.mire.plages;
+    let n = plages.len();
+    let lignes: Vec<String> = (0..n)
         .map(|i| {
-            let mesure = ligne(i + 1, SECONDE_MIRE[(i + 1) % n], 0.0);
-            let lab: Vec<&str> = mesure.split('\t').skip(4).collect();
-            let [r, g, bb] = SECONDE_MIRE[i];
-            format!("{}\t{r}\t{g}\t{bb}\t{}\r\n", i + 1, lab.join("\t"))
+            let rvb = plages[i].rvb.map(f64::from);
+            let suivante = plages[(i + 1) % n].rvb.map(f64::from);
+            ligne_lab(&plages[i].id.to_string(), rvb, lab_srvb(suivante))
         })
         .collect();
-    let texte = export(&SECONDE_MIRE, 0.0);
-    let debut = texte.find("BEGIN_DATA\r\n").unwrap() + "BEGIN_DATA\r\n".len();
-    let fin = texte.find("END_DATA\r\n").unwrap();
-    let decale = format!("{}{donnees}{}", &texte[..debut], &texte[fin..]);
-    let seconde = b.importer("decalee_M1.txt", &decale);
+    let seconde = b.importer("decalee_M1.txt", &export_lignes(&lignes, "FD-9"));
     // Un moteur qui échouerait autrement : s'il était appelé, l'erreur serait la sienne.
     let moteur = MoteurVerificationSimule::echoue(ErreurMoteur::Introuvable);
     let erreur = b
@@ -332,6 +330,173 @@ fn des_mesures_incoherentes_bloquent_la_verification() {
         .unwrap()
         .is_empty());
     assert_eq!(b.etat(b.profil), EtatVerification::NonVerifie);
+}
+
+/// Lab D50 d'un RVB sur 255 lu comme du sRVB (matrice de Bradford D65 vers
+/// D50, Lindbloom) : des mesures vraisemblables d'une imprimante.
+fn lab_srvb(rvb: [f64; 3]) -> [f64; 3] {
+    let lin = rvb.map(|v| {
+        let v = v / 255.0;
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    });
+    let m = [
+        [0.436_074_7, 0.385_064_9, 0.143_080_4],
+        [0.222_504_5, 0.716_878_6, 0.060_616_9],
+        [0.013_932_2, 0.097_104_5, 0.714_173_3],
+    ];
+    let [x, y, z] = m.map(|l| (l[0] * lin[0] + l[1] * lin[1] + l[2] * lin[2]) * 100.0);
+    let lab = colorimetrie::xyz_vers_lab(
+        colorimetrie::Xyz { x, y, z },
+        colorimetrie::Xyz {
+            x: 96.422,
+            y: 100.0,
+            z: 82.521,
+        },
+    )
+    .unwrap();
+    // Le papier n'est pas un blanc parfait, l'encre n'est pas un noir parfait.
+    [8.0 + lab.l * 0.87, lab.a * 0.85, lab.b * 0.85]
+}
+
+/// La mire de vérification FD-9 (210 couleurs dispersées), mesurée avec des
+/// Lab vraisemblables, passe le contrôle de cohérence (#1) sans refus à tort.
+#[test]
+fn la_mire_de_verification_fd9_passe_le_controle_de_coherence() {
+    let b = banc();
+    let mesure = export_lignes(&b.lignes_mire(lab_srvb), "FD-9");
+    let seconde = b.importer("mire-verification_M1.txt", &mesure);
+    let resultat = b.ouverte.verifier_profil(
+        &b.demande(seconde, Impression::ATraversLeProfil),
+        &MoteurVerificationSimule::fidele(),
+        a(10),
+    );
+    let erreur = resultat.as_ref().err();
+    assert!(
+        erreur.is_none_or(|e| e.cle != "profil.refus.incoherent"),
+        "{erreur:?}"
+    );
+    assert!(resultat.is_ok(), "{erreur:?}");
+}
+
+/// Le numéro de série de la ligne `INSTRUMENTATION` n'est jamais gardé :
+/// seul le modèle l'est.
+#[test]
+fn seul_le_modele_de_l_instrument_est_garde() {
+    let b = banc();
+    let mesure = export_lignes(
+        &b.lignes_mire(|c| lab_fidele(c, 0.0)),
+        INSTRUMENT_AVEC_SERIE,
+    );
+    let seconde = b.importer("seconde_M1.txt", &mesure);
+    let resultat = b
+        .ouverte
+        .verifier_profil(
+            &b.demande(seconde, Impression::ATraversLeProfil),
+            &MoteurVerificationSimule::fidele(),
+            a(10),
+        )
+        .unwrap();
+    assert_eq!(resultat.calcul.instrument.as_deref(), Some("FD-9"));
+    let range = serde_json::to_string(&resultat.calcul).unwrap();
+    assert!(!range.contains("12345678") && !range.contains("Serial"));
+}
+
+/// Les couleurs demandées viennent de la mire rangée, retrouvée par les ID
+/// de l'export : des RVB qui ne correspondent pas sont refusés, une mire
+/// inconnue aussi (association incertaine, #1).
+#[test]
+fn une_mesure_qui_ne_correspond_a_aucune_mire_rangee_est_refusee() {
+    let b = banc();
+    // Une plage dont les RVB ne sont pas ceux de la mire pour son ID.
+    let mut lignes = b.lignes_mire(|c| lab_fidele(c, 0.0));
+    let premiere = &b.mire.plages[0];
+    let autre = [1.0, 2.0, 3.0];
+    lignes[0] = ligne_lab(&premiere.id.to_string(), autre, lab_fidele(autre, 0.0));
+    let desaccord = b.importer("desaccord_M1.txt", &export_lignes(&lignes, "FD-9"));
+    let erreur = b
+        .ouverte
+        .verifier_profil(
+            &b.demande(desaccord, Impression::ATraversLeProfil),
+            &MoteurVerificationSimule::fidele(),
+            a(10),
+        )
+        .unwrap_err();
+    assert_eq!(erreur.cle, "verif.refus.mire_desaccord");
+    assert_eq!(
+        erreur.cause.as_deref(),
+        Some(premiere.id.to_string().as_str())
+    );
+
+    // Une mire qui n'est ni la mire de vérification ni celle du profil.
+    let inconnue = b.importer(
+        "inconnue_M1.txt",
+        &export(
+            &[
+                [10.0, 20.0, 30.0],
+                [200.0, 100.0, 50.0],
+                [255.0, 255.0, 255.0],
+            ],
+            0.0,
+        ),
+    );
+    let erreur = b
+        .ouverte
+        .verifier_profil(
+            &b.demande(inconnue, Impression::ATraversLeProfil),
+            &MoteurVerificationSimule::fidele(),
+            a(11),
+        )
+        .unwrap_err();
+    assert_eq!(erreur.cle, "verif.refus.mire_inconnue");
+    assert!(b
+        .ouverte
+        .historique_verifications(b.profil)
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn la_mire_et_l_echelle_supposee_des_rvb_sont_gardees() {
+    let b = banc();
+    let seconde = b.importer("seconde_M1.txt", &b.seconde(0.0));
+    let resultat = b
+        .ouverte
+        .verifier_profil(
+            &b.demande(seconde, Impression::ATraversLeProfil),
+            &MoteurVerificationSimule::fidele(),
+            a(10),
+        )
+        .unwrap();
+    assert_eq!(resultat.calcul.mire.as_deref(), Some(b.mire.nom.as_str()));
+    // FD-S2w écrit ses RVB de 0 à 255 : l'échelle est supposée.
+    assert!(resultat.calcul.rvb_supposes);
+}
+
+/// La mire rangée est relue, jamais régénérée en silence : si le générateur
+/// donne autre chose pour la même version, la mire est refusée.
+#[test]
+fn une_mire_regeneree_autrement_pour_la_meme_version_est_refusee() {
+    let dossier = tempfile::tempdir().unwrap();
+    let chemin = app::colonne::emplacement(dossier.path());
+    let b = bibliotheque::Bibliotheque::ouvrir(&chemin).unwrap();
+    b.ranger_mire_verification(
+        "myiro-libre verification FD-9 v1",
+        "fd9",
+        verification::MIRE_FD9_VERSION,
+        "<Data/>",
+        "2026-10-27T09:00:00Z",
+    )
+    .unwrap();
+    drop(b);
+    let ouverte = app::colonne::BibliothequeOuverte::ouvrir(&chemin);
+    assert_eq!(
+        ouverte.mire_verification_fd9(a(0)),
+        Err("verif.erreur.mire_changee".to_string())
+    );
 }
 
 /// La mire de vérification FD-9 est créée une fois : la demander de nouveau

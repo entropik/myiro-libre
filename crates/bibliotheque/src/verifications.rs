@@ -285,7 +285,7 @@ pub struct MireVerificationRangee {
 
 impl Bibliotheque {
     /// Range une mire de vérification une seule fois : un contenu déjà rangé
-    /// rend son numéro, sans rien changer.
+    /// est rendu tel qu'il a été rangé la première fois, sans rien changer.
     pub fn ranger_mire_verification(
         &self,
         nom: &str,
@@ -293,7 +293,7 @@ impl Bibliotheque {
         version: u32,
         contenu: &str,
         horodatage: &str,
-    ) -> Resultat<IdMireVerification> {
+    ) -> Resultat<MireVerificationRangee> {
         horodatage_valide(horodatage)?;
         let empreinte = crate::profils::empreinte(contenu.as_bytes());
         self.base.execute(
@@ -302,11 +302,25 @@ impl Bibliotheque {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![nom, instrument, version, empreinte, contenu, horodatage],
         )?;
-        Ok(IdMireVerification(self.base.query_row(
-            "SELECT id FROM mires_verification WHERE empreinte = ?1",
-            params![empreinte],
-            |l| l.get(0),
-        )?))
+        self.mires_verification()?
+            .into_iter()
+            .find(|m| m.empreinte == empreinte)
+            .ok_or_else(|| {
+                ErreurBibliotheque::Base(format!("mire {empreinte} absente après rangement"))
+            })
+    }
+
+    /// La mire de vérification rangée pour cet instrument et cette version,
+    /// s'il y en a une.
+    pub fn mire_verification(
+        &self,
+        instrument: &str,
+        version: u32,
+    ) -> Resultat<Option<MireVerificationRangee>> {
+        Ok(self
+            .mires_verification()?
+            .into_iter()
+            .find(|m| m.instrument == instrument && m.version == version))
     }
 
     /// Les mires de vérification, dans l'ordre où elles ont été rangées.

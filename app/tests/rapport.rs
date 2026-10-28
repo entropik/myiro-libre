@@ -12,7 +12,7 @@ use profilage::{Impression, MoteurVerificationSimule};
 
 /// Vérifie le profil du banc sur une seconde mire mesurée avec `decalage`.
 fn verifier(b: &Banc, impression: Impression, decalage: f64) -> IdVerification {
-    let seconde = b.importer("seconde_M1.txt", &export(&SECONDE_MIRE, decalage));
+    let seconde = b.importer("seconde_M1.txt", &b.seconde(decalage));
     b.ouverte
         .verifier_profil(
             &b.demande(seconde, impression),
@@ -78,6 +78,8 @@ fn un_rapport_est_dans_une_seule_langue() {
     assert!(html.contains("lang=\"en\""));
     let francais: Vec<&str> = cles()
         .filter(|c| c.starts_with("verif.") || c.starts_with("rapport."))
+        // Le nom proposé d'un jeu devient le nom choisi par l'imprimeur : une donnée.
+        .filter(|c| *c != "verif.tolerances.nom_propose")
         .map(|c| texte(Langue::Francais, c))
         .filter(|t| t.chars().count() > 6)
         .filter(|t| !cles().any(|c| texte(Langue::Anglais, c) == *t))
@@ -98,6 +100,41 @@ fn les_noms_sont_echappes() {
     let html = rapport(&b, v, Langue::Francais);
     assert!(html.contains("Canson &lt;Baryta&gt; &amp; co &quot;blanc&quot; l&#39;été"));
     assert!(!html.contains("<Baryta>"));
+}
+
+/// Une ligne `INSTRUMENTATION` avec numéro de série : ni le rapport, ni le
+/// profil exporté, ni rien de rangé à côté ne le transporte.
+#[test]
+fn le_numero_de_serie_ne_sort_jamais() {
+    let b = banc();
+    let mesure = export_lignes(
+        &b.lignes_mire(|c| lab_fidele(c, 0.0)),
+        INSTRUMENT_AVEC_SERIE,
+    );
+    let seconde = b.importer("seconde_M1.txt", &mesure);
+    let v = b
+        .ouverte
+        .verifier_profil(
+            &b.demande(seconde, Impression::ATraversLeProfil),
+            &MoteurVerificationSimule::fidele(),
+            a(10),
+        )
+        .unwrap()
+        .verification;
+    for langue in [Langue::Francais, Langue::Anglais] {
+        let html = rapport(&b, v, langue);
+        assert!(html.contains("FD-9"));
+        assert!(!html.contains("Serial") && !html.contains("12345678"));
+    }
+    let fichier = b.dossier.path().join("x.icc");
+    b.ouverte
+        .exporter_profil_et_rapport(v, Langue::Francais, &fichier)
+        .unwrap();
+    for f in [fichier.clone(), fichier.with_extension("html")] {
+        let octets = std::fs::read(&f).unwrap();
+        let texte = String::from_utf8_lossy(&octets);
+        assert!(!texte.contains("12345678"), "{}", f.display());
+    }
 }
 
 #[test]

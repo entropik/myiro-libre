@@ -12,7 +12,7 @@ window.Tolerances = (() => {
 
   // Valeurs de départ du jeu « Atelier » (décision du mainteneur du 28 octobre 2026).
   const PROPOSITION = {
-    nom: "Atelier",
+    nom: t("verif.tolerances.nom_propose"),
     criteres: {
       fidelite: { moyenne: 2.0, p95: 4.0, max: 6.0 },
       prediction: { moyenne: 1.5, p95: 3.0, max: 5.0 },
@@ -28,7 +28,9 @@ window.Tolerances = (() => {
     return jeux.filter((j) => !vus.has(j.nom) && vus.add(j.nom));
   }
 
-  const nomVersion = (j) => `${j.nom} v${j.version}`;
+  // « Atelier v2 », par le catalogue.
+  const nomVersion = (j) => t("verif.tolerances.nom_version")
+    .replace("{nom}", () => j.nom).replace("{version}", () => String(j.version));
 
   // Un nombre saisi : vide → aucun seuil ; virgule ou point acceptés.
   function lire(champ) {

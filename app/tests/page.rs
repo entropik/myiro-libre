@@ -1327,6 +1327,7 @@ fn verification_js_est_charge_avant_reglage_js() {
     let ordre = [
         position("arbre.js"),
         position("tolerances.js"),
+        position("resultat-verification.js"),
         position("verification.js"),
         position("reglage.js"),
     ];
@@ -1342,6 +1343,7 @@ fn toutes_les_cles_verif_de_la_page_existent_en_deux_langues() {
     use app::textes::{texte, Langue};
     let script = lire("interface/verification.js")
         + &lire("interface/tolerances.js")
+        + &lire("interface/resultat-verification.js")
         + &lire("interface/index.html");
     let suites: &[(&str, &[&str])] = &[
         (
@@ -1404,7 +1406,11 @@ fn toutes_les_cles_verif_de_la_page_existent_en_deux_langues() {
 
 #[test]
 fn verification_js_n_a_pas_de_couleur_en_dur() {
-    for fichier in ["interface/verification.js", "interface/tolerances.js"] {
+    for fichier in [
+        "interface/verification.js",
+        "interface/tolerances.js",
+        "interface/resultat-verification.js",
+    ] {
         let script = lire(fichier);
         assert!(!script.contains("rgb("), "{fichier}");
         let hexa = script.match_indices('#').any(|(i, _)| {
@@ -1422,7 +1428,7 @@ fn verification_js_n_a_pas_de_couleur_en_dur() {
 /// dite comme « à la limite », jamais en rouge, et toujours avec son mot.
 #[test]
 fn seul_le_hors_tolerance_est_en_rouge() {
-    let script = lire("interface/verification.js");
+    let script = lire("interface/resultat-verification.js");
     assert!(script.contains("hors_tolerance: \"hors\""));
     assert!(script.contains("incomplet: \"limite\""));
     assert!(script.contains("verdict__mot"));
@@ -1430,8 +1436,37 @@ fn seul_le_hors_tolerance_est_en_rouge() {
 
 #[test]
 fn les_fichiers_de_la_verification_restent_courts() {
-    for fichier in ["interface/verification.js", "interface/tolerances.js"] {
+    for fichier in [
+        "interface/verification.js",
+        "interface/tolerances.js",
+        "interface/resultat-verification.js",
+    ] {
         let lignes = lire(fichier).lines().count();
         assert!(lignes < 400, "{fichier} : {lignes} lignes");
+    }
+}
+
+/// Les pires plages hors gamut se voient aussi dans la page, avec leur
+/// écart au gamut, pas seulement dans le rapport.
+#[test]
+fn les_pires_plages_hors_gamut_se_voient_dans_la_page() {
+    let script = lire("interface/resultat-verification.js");
+    assert!(script.contains("[r.fidelite, r.hors_gamut, r.prediction]"));
+    assert!(script.contains("\"rapport.ecart_gamut\""));
+    assert!(script.contains("calcul.rvb_supposes"));
+}
+
+/// Aucun texte en dur dans les scripts de la vérification : ni nom de jeu
+/// proposé, ni préfixe de version.
+#[test]
+fn la_verification_ne_porte_aucun_texte_en_dur() {
+    for fichier in [
+        "interface/verification.js",
+        "interface/tolerances.js",
+        "interface/resultat-verification.js",
+    ] {
+        let script = lire(fichier);
+        assert!(!script.contains("\"Atelier\""), "{fichier}");
+        assert!(!script.contains(" v${"), "{fichier}");
     }
 }

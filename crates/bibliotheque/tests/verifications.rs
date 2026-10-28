@@ -350,6 +350,11 @@ fn une_mire_de_verification_se_range_une_seule_fois() {
         .ranger_mire_verification("Mire v1", "fd9", 1, xml, "2026-10-29T09:00:00Z")
         .unwrap();
     assert_eq!(premiere, encore);
+    assert_eq!(
+        banc.b.mire_verification("fd9", 1).unwrap(),
+        Some(premiere.clone())
+    );
+    assert_eq!(banc.b.mire_verification("fd9", 2).unwrap(), None);
     let mires = banc.b.mires_verification().unwrap();
     assert_eq!(mires.len(), 1);
     let m = &mires[0];

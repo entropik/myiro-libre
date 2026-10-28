@@ -5,8 +5,12 @@
 //! langue. Tout texte variable est échappé.
 
 mod donnees;
+mod style;
+
+use style::STYLE;
 
 use bibliotheque::EtatVerification;
+use pont_protocole::ConditionMesure;
 use profilage::{Impression, Recette};
 use verification::{Controle, Critere, Famille, Seuils, Statistiques};
 
@@ -14,16 +18,6 @@ use crate::textes::{texte, Langue};
 use crate::verifier::{nom_version, CalculVerification};
 
 pub use donnees::DonneesRapport;
-
-const STYLE: &str = "@page{size:A4;margin:15mm}\
-body{font-family:Georgia,'Times New Roman',serif;color:#000;background:#fff;font-size:10.5pt;line-height:1.35;margin:0 auto;max-width:180mm}\
-h1{font-size:17pt;margin:0 0 2pt}h2{font-size:12.5pt;border-bottom:1px solid #000;margin:14pt 0 4pt}\
-h3{font-size:11pt;margin:9pt 0 3pt}.sous{color:#444;margin:0 0 8pt}\
-.verdict{font-size:15pt;font-weight:bold;border:2px solid #000;padding:6pt 9pt;margin:8pt 0}\
-table{border-collapse:collapse;width:100%;margin:3pt 0}th,td{border:1px solid #888;padding:2pt 4pt;text-align:left;vertical-align:top}\
-th{background:#e6e6e6}td.n{text-align:right;font-variant-numeric:tabular-nums}\
-pre{white-space:pre-wrap;background:#f2f2f2;padding:4pt;font-size:9pt}.note{color:#444}\
-.plages{font-size:8.5pt}";
 
 /// `&`, `<`, `>`, `"` et `'` échappés.
 pub fn echapper(t: &str) -> String {
@@ -82,7 +76,8 @@ impl Page {
     }
 
     fn date(&self, horodatage: &str) -> String {
-        echapper(&horodatage.replacen('T', " ", 1).replace('Z', " UTC"))
+        let utc = format!(" {}", self.t("rapport.utc"));
+        echapper(&horodatage.replacen('T', " ", 1).replace('Z', &utc))
     }
 
     fn ecrire(&mut self, morceau: &str) {
@@ -109,12 +104,12 @@ impl Page {
     }
 }
 
-fn nom_recette(r: Recette) -> &'static str {
-    match r {
-        Recette::Rapide => "rapide",
-        Recette::Standard => "standard",
-        Recette::Approfondi => "approfondi",
-    }
+/// Nom d'une recette tel que serde l'écrit (`rapide`, `standard`…).
+fn nom_recette(r: Recette) -> String {
+    serde_json::to_value(r)
+        .ok()
+        .and_then(|v| v.as_str().map(String::from))
+        .unwrap_or_default()
 }
 
 fn cle_critere(c: Critere) -> &'static str {
@@ -249,7 +244,7 @@ pub fn rapport_html(d: &DonneesRapport, langue: Langue) -> String {
         html: String::new(),
         langue,
     };
-    let jeu = nom_version(&d.verification.tolerances);
+    let jeu = nom_version(&d.verification.tolerances, langue);
     let titre = echapper(&p.t("rapport.titre"));
     p.ecrire(&format!(
         "<!DOCTYPE html>\n<html lang=\"{}\">\n<head>\n<meta charset=\"utf-8\">\n<title>{titre}</title>\n<style>{STYLE}</style>\n</head>\n<body>\n<h1>{titre}</h1>\n<p class=\"sous\">{} — {} — {} · {}</p>\n",
@@ -343,12 +338,25 @@ pub fn rapport_html(d: &DonneesRapport, langue: Langue) -> String {
     ];
     p.couples(&lignes);
     p.titre(2, "rapport.source");
-    let mut condition = echapper(&format!("{:?}", d.calcul.condition));
-    if d.calcul.condition_supposee {
-        condition.push_str(&format!(" ({})", echapper(&p.t("rapport.supposee"))));
-    }
+    let supposee = |valeur: String, oui: bool| match oui {
+        true => format!("{valeur} ({})", echapper(&p.t("rapport.supposee"))),
+        false => valeur,
+    };
+    let c = match d.calcul.condition {
+        ConditionMesure::M0 => "verif.condition.m0",
+        ConditionMesure::M1 => "verif.condition.m1",
+        ConditionMesure::M2 => "verif.condition.m2",
+    };
+    let condition = supposee(echapper(&p.t(c)), d.calcul.condition_supposee);
+    let echelle = supposee(echapper(&p.t("rapport.rvb_echelle")), d.calcul.rvb_supposes);
+    let mire = match &d.calcul.mire {
+        Some(nom) => echapper(nom),
+        None => echapper(&p.t("rapport.mire_du_profil")),
+    };
     let lignes = [
         ("rapport.fichier", echapper(&d.calcul.fichier)),
+        ("rapport.mire", mire),
+        ("rapport.rvb", echelle),
         (
             "rapport.instrument",
             d.calcul

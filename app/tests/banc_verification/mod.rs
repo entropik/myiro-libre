@@ -1,6 +1,7 @@
 //! Banc commun aux essais de la vérification (`verifier.rs`, `rapport.rs`) :
 //! une résolution, un profil calculé par le moteur simulé, le jeu
-//! « Atelier » et des exports FD-S2w fictifs.
+//! « Atelier », la mire de vérification FD-9 rangée et des exports FD-S2w
+//! fictifs (numéros de série fictifs).
 #![allow(dead_code)]
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -11,7 +12,7 @@ use bibliotheque::{EtatVerification, IdCondition, IdMesure, IdProfil, IdToleranc
 use pont_protocole::ConditionMesure;
 use profilage::{Impression, MoteurSimule, Recette};
 use tempfile::TempDir;
-use verification::{Criteres, Seuils};
+use verification::{lire_xml_fds2w, Criteres, MireFd9, Seuils};
 
 pub fn icc() -> Vec<u8> {
     let mut octets = vec![0u8; 132];
@@ -26,17 +27,28 @@ pub fn a(minutes: u64) -> SystemTime {
     UNIX_EPOCH + Duration::from_secs(1_793_178_000 + 60 * minutes)
 }
 
-/// Une plage : RVB sur 255 et le Lab que le profil simulé fidèle prédit
+/// Le Lab que le profil simulé fidèle prédit pour des RVB sur 255
 /// (L = 20 + 75 (r + g + b) / 3, a = 40 (r − g), b = 40 (g − b)), L
 /// décalé de `decalage`.
-pub fn ligne(id: usize, rvb: [f64; 3], decalage: f64) -> String {
+pub fn lab_fidele(rvb: [f64; 3], decalage: f64) -> [f64; 3] {
     let [r, g, b] = rvb.map(|v| v / 255.0);
-    let l = 20.0 + 75.0 * (r + g + b) / 3.0 + decalage;
-    let (a, bb) = (40.0 * (r - g), 40.0 * (g - b));
+    [
+        20.0 + 75.0 * (r + g + b) / 3.0 + decalage,
+        40.0 * (r - g),
+        40.0 * (g - b),
+    ]
+}
+
+/// Une ligne de données : identifiant, RVB sur 255 et Lab.
+pub fn ligne_lab(id: &str, rvb: [f64; 3], lab: [f64; 3]) -> String {
     format!(
-        "{id}\t{}\t{}\t{}\t{l:.4}\t{a:.4}\t{bb:.4}",
-        rvb[0], rvb[1], rvb[2]
+        "{id}\t{}\t{}\t{}\t{:.4}\t{:.4}\t{:.4}",
+        rvb[0], rvb[1], rvb[2], lab[0], lab[1], lab[2]
     )
+}
+
+pub fn ligne(id: usize, rvb: [f64; 3], decalage: f64) -> String {
+    ligne_lab(&id.to_string(), rvb, lab_fidele(rvb, decalage))
 }
 
 pub const MIRE_PROFIL: [[f64; 3]; 6] = [
@@ -48,29 +60,29 @@ pub const MIRE_PROFIL: [[f64; 3]; 6] = [
     [127.5, 127.5, 127.5],
 ];
 
-pub const SECONDE_MIRE: [[f64; 3]; 6] = [
-    [255.0, 255.0, 255.0],
-    [51.0, 51.0, 51.0],
-    [204.0, 102.0, 51.0],
-    [51.0, 153.0, 102.0],
-    [102.0, 51.0, 204.0],
-    [178.5, 178.5, 178.5],
-];
+/// Ligne `INSTRUMENTATION` d'un export MYIROtools du FD-9, numéro fictif.
+pub const INSTRUMENT_AVEC_SERIE: &str = "KONICA MINOLTA, INC. MYIRO-9 (FD-9), Serial No. 12345678";
 
-/// Export fictif à la manière de FD-S2w, en M1 (source D50).
-pub fn export(rvb: &[[f64; 3]], decalage: f64) -> String {
-    let donnees: String = rvb
-        .iter()
-        .enumerate()
-        .map(|(i, c)| format!("{}\r\n", ligne(i + 1, *c, decalage)))
-        .collect();
+/// Export fictif à la manière de FD-S2w, en M1 (source D50), avec ces
+/// lignes de données et cette ligne `INSTRUMENTATION`.
+pub fn export_lignes(lignes: &[String], instrument: &str) -> String {
+    let donnees: String = lignes.iter().map(|l| format!("{l}\r\n")).collect();
     format!(
         "CGATS.17\r\nORIGINATOR\t\"Fabricant fictif\"\r\nFILE_DESCRIPTOR\t\"FD-S2w\"\r\n\
-         INSTRUMENTATION\t\"FD-9\"\r\nMEASUREMENT_SOURCE\t\"D50\"\r\nBEGIN_DATA_FORMAT\r\n\
+         INSTRUMENTATION\t\"{instrument}\"\r\nMEASUREMENT_SOURCE\t\"D50\"\r\nBEGIN_DATA_FORMAT\r\n\
          SAMPLE_ID\tRGB_R\tRGB_G\tRGB_B\tLAB_L\tLAB_A\tLAB_B\r\nEND_DATA_FORMAT\r\n\
          NUMBER_OF_SETS\t{}\r\nBEGIN_DATA\r\n{donnees}END_DATA\r\n",
-        rvb.len()
+        lignes.len()
     )
+}
+
+pub fn export(rvb: &[[f64; 3]], decalage: f64) -> String {
+    let lignes: Vec<String> = rvb
+        .iter()
+        .enumerate()
+        .map(|(i, c)| ligne(i + 1, *c, decalage))
+        .collect();
+    export_lignes(&lignes, "FD-9")
 }
 
 pub fn atelier() -> Criteres {
@@ -108,10 +120,13 @@ pub struct Banc {
     pub mesure_profil: IdMesure,
     pub profil: IdProfil,
     pub atelier: IdTolerances,
+    /// La mire de vérification FD-9, telle que la bibliothèque l'a rangée.
+    pub mire: MireFd9,
 }
 
 /// Epson SC-P5300 → Semigloss → 1440 dpi, un profil calculé (moteur
-/// simulé) depuis la mire du profil, et le jeu « Atelier ».
+/// simulé) depuis la mire du profil, le jeu « Atelier » et la mire de
+/// vérification FD-9 rangée.
 pub fn banc() -> Banc {
     banc_papier("Semigloss 250")
 }
@@ -125,6 +140,7 @@ pub fn banc_papier(papier: &str) -> Banc {
         .ajouter_papier(epson.id, papier, "1440 dpi")
         .unwrap()
         .id;
+    let rangee = ouverte.mire_verification_fd9(a(0)).unwrap();
     let mut banc = Banc {
         dossier,
         ouverte,
@@ -132,6 +148,7 @@ pub fn banc_papier(papier: &str) -> Banc {
         mesure_profil: IdMesure(0),
         profil: IdProfil(0),
         atelier: IdTolerances(0),
+        mire: lire_xml_fds2w(&rangee.contenu).unwrap(),
     };
     banc.mesure_profil = banc.importer("mire-profil_M1.txt", &export(&MIRE_PROFIL, 0.0));
     banc.profil = banc.calculer(banc.mesure_profil, a(0));
@@ -150,6 +167,25 @@ impl Banc {
         self.ouverte
             .ranger_apercu(apercu.numero, self.condition)
             .unwrap()
+    }
+
+    /// Lignes de la mire de vérification mesurée : ses ID, ses RVB, et le
+    /// Lab que donne `lab` pour chaque RVB (sur 255).
+    pub fn lignes_mire(&self, lab: impl Fn([f64; 3]) -> [f64; 3]) -> Vec<String> {
+        self.mire
+            .plages
+            .iter()
+            .map(|p| {
+                let rvb = p.rvb.map(f64::from);
+                ligne_lab(&p.id.to_string(), rvb, lab(rvb))
+            })
+            .collect()
+    }
+
+    /// Export de la mire de vérification FD-9 mesurée, Lab du profil fidèle
+    /// décalé de `decalage` en L.
+    pub fn seconde(&self, decalage: f64) -> String {
+        export_lignes(&self.lignes_mire(|c| lab_fidele(c, decalage)), "FD-9")
     }
 
     pub fn calculer(&self, mesure: IdMesure, quand: SystemTime) -> IdProfil {

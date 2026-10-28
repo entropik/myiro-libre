@@ -6,6 +6,7 @@
 //! ne range rien, et un profil hors tolérance reste actif et exportable.
 //! Les commandes de la page sont dans [`commandes`].
 
+mod association;
 pub mod commandes;
 mod lecture;
 mod mire;
@@ -27,6 +28,7 @@ use verification::{
 use crate::colonne::BibliothequeOuverte;
 use crate::parc::instant_utc;
 use crate::profiler::{refuser_incoherence, ErreurProfil};
+use crate::textes::{texte, Langue};
 
 /// Fiche d'impression de la seconde mire, confirmée par l'imprimeur.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -56,10 +58,17 @@ pub struct DemandeVerification {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CalculVerification {
     pub fichier: String,
-    /// Instrument que le fichier déclare ; rien s'il ne le dit pas.
+    /// Modèle de l'instrument que le fichier déclare (« FD-9 »), jamais son
+    /// numéro de série ; rien si le fichier ne nomme pas un modèle connu.
     pub instrument: Option<String>,
     pub condition: ConditionMesure,
     pub condition_supposee: bool,
+    /// L'échelle des RVB du fichier (0 à 255 pour FD-S2w) est supposée.
+    #[serde(default)]
+    pub rvb_supposes: bool,
+    /// La mire de vérification mesurée ; rien quand c'est la mire du profil.
+    #[serde(default)]
+    pub mire: Option<String>,
     pub memes_couleurs_que_le_profil: bool,
     pub evaluation: Evaluation,
     pub resultats: Resultats,
@@ -79,13 +88,34 @@ pub struct ResumeVerification {
     pub verification: IdVerification,
     pub horodatage: String,
     pub etat: EtatVerification,
-    /// Nom et version du jeu de tolérances : « Atelier v2 ».
-    pub tolerances: String,
+    /// Nom et version du jeu de tolérances, montrés ensemble
+    /// (`verif.tolerances.nom_version` : « Atelier v2 »).
+    pub tolerances_nom: String,
+    pub tolerances_version: u32,
 }
 
-/// « Atelier v2 ».
-pub fn nom_version(jeu: &JeuTolerances) -> String {
-    format!("{} v{}", jeu.nom, jeu.version)
+/// Nom et version d'un jeu dans la langue : « Atelier v2 ».
+pub fn nom_version(jeu: &JeuTolerances, langue: Langue) -> String {
+    texte(langue, "verif.tolerances.nom_version")
+        .replace("{nom}", &jeu.nom)
+        .replace("{version}", &jeu.version.to_string())
+}
+
+/// Modèle d'instrument nommé par une ligne `INSTRUMENTATION` : seul un
+/// modèle connu est gardé, jamais le reste de la ligne (numéro de série,
+/// adresse). « KONICA MINOLTA, INC. MYIRO-9 (FD-9), Serial No. … » → « FD-9 ».
+pub fn modele_instrument(declare: &str) -> Option<String> {
+    let haut = declare.to_uppercase();
+    [
+        ("FD-9", "FD-9"),
+        ("MYIRO-9", "FD-9"),
+        ("MYIRO-1", "MYIRO-1"),
+        ("FD-7", "FD-7"),
+        ("FD-5", "FD-5"),
+    ]
+    .into_iter()
+    .find(|(motif, _)| haut.contains(motif))
+    .map(|(_, modele)| modele.to_string())
 }
 
 pub(crate) fn resume(v: &VerificationRangee) -> ResumeVerification {
@@ -93,7 +123,8 @@ pub(crate) fn resume(v: &VerificationRangee) -> ResumeVerification {
         verification: v.id,
         horodatage: v.horodatage.clone(),
         etat: v.etat,
-        tolerances: nom_version(&v.tolerances),
+        tolerances_nom: v.tolerances.nom.clone(),
+        tolerances_version: v.tolerances.version,
     }
 }
 
@@ -192,10 +223,18 @@ impl BibliothequeOuverte {
             })?;
         // Mêmes contrôles et mêmes seuils que pour le calcul d'un profil.
         refuser_incoherence(&lu.importee, &plages)?;
+        // Les couleurs demandées sont celles de la mire retrouvée, par ID.
+        let demandes = &lu.association.demandes;
         let rvb: Vec<[f64; 3]> = plages
             .plages
             .iter()
-            .map(|p| p.rvb.map(|v| v / 100.0))
+            .zip(&lu.importee.mesure.plages)
+            .map(|(p, origine)| {
+                demandes
+                    .get(&origine.identifiant)
+                    .copied()
+                    .unwrap_or(p.rvb.map(|v| v / 100.0))
+            })
             .collect();
         // Hors du verrou : la page et l'arbre restent utilisables.
         let evaluation = moteur
@@ -236,10 +275,17 @@ impl BibliothequeOuverte {
         let (conclusion, controles) = conclure(&resultats, &lu.criteres);
         let calcul = CalculVerification {
             fichier: fichier.clone(),
-            instrument: lu.importee.mesure.instrument.valeur().cloned(),
+            instrument: lu
+                .importee
+                .mesure
+                .instrument
+                .valeur()
+                .and_then(|i| modele_instrument(i)),
             condition: plages.condition,
             condition_supposee: plages.condition_supposee,
-            memes_couleurs_que_le_profil: lu.memes_couleurs,
+            rvb_supposes: plages.rvb_supposes,
+            memes_couleurs_que_le_profil: lu.association.mire.is_none(),
+            mire: lu.association.mire.clone(),
             evaluation,
             resultats,
             controles,
