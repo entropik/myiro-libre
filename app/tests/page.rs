@@ -1194,3 +1194,75 @@ fn la_section_du_calcul_est_construite_par_calcul_profil_js() {
     let commentaire = &page[page[..section].rfind("<!--").unwrap_or(0)..section];
     assert!(commentaire.contains("calcul-profil.js"), "{commentaire}");
 }
+
+// ---- Contrôle de cohérence des mesures (ticket #1) ----
+
+/// Chaque texte du contrôle de cohérence existe en français et en anglais,
+/// y compris le nom de chaque contrôle tel que le module `profiler` l'envoie,
+/// et la page sait nommer chacun.
+#[test]
+fn toutes_les_cles_de_coherence_existent_en_deux_langues() {
+    use app::textes::{texte, Langue};
+    use profilage::Critere;
+    let script = lire("interface/calcul-profil.js");
+    let mut cles = vec![
+        "profil.refus.incoherent".to_string(),
+        "profil.coherence".to_string(),
+        "profil.coherence.autres".to_string(),
+        "profil.coherence.decalage".to_string(),
+        "profil.coherence.decalage_une".to_string(),
+        "profil.coherence.criteres".to_string(),
+        "profil.coherence.accepte".to_string(),
+        "profil.coherence.non_fait".to_string(),
+        "profil.coherence.non_controle".to_string(),
+    ];
+    for critere in [
+        Critere::DegradeGris,
+        Critere::BlancNoir,
+        Critere::Doublons,
+        Critere::Voisines,
+    ] {
+        let nom = serde_json::to_value(critere).unwrap();
+        let nom = nom.as_str().unwrap();
+        assert!(script.contains(&format!("{nom}: \"profil.coherence.critere.{nom}\"")));
+        cles.push(format!("profil.coherence.critere.{nom}"));
+    }
+    for cle in &cles {
+        if cle != "profil.refus.incoherent" {
+            assert!(
+                script.contains(&format!("\"{cle}\"")),
+                "{cle} absente de la page"
+            );
+        }
+        for langue in [Langue::Francais, Langue::Anglais] {
+            assert_ne!(texte(langue, cle), cle.as_str(), "{cle} ({langue:?})");
+        }
+    }
+}
+
+/// Un refus de cohérence nomme les plages en cause à la place de
+/// `{plages}`, compte les suivantes, dit les contrôles et la piste du
+/// décalage ; il remplace le bouton « Calculer le profil ».
+#[test]
+fn un_refus_de_coherence_nomme_ses_plages_a_la_place_du_bouton() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(
+        script.contains("if (erreur.coherence) texte = texteCoherence(texte, erreur.coherence);")
+    );
+    assert!(script.contains("texte.replace(\"{plages}\", () => plages)"));
+    assert!(script.contains("t(\"profil.coherence.autres\").replace(\"{n}\""));
+    assert!(script.contains("typeof c.decalage === \"number\""));
+    assert!(script.contains("boutonCalculer.remove();"));
+}
+
+/// La provenance d'un profil calculé dit si ses mesures ont été contrôlées,
+/// puis les contrôles non faits ; un profil plus ancien est dit « non
+/// contrôlé ».
+#[test]
+fn la_provenance_dit_si_les_mesures_ont_ete_controlees() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains(
+        "cleValeur(\"profil.coherence\", t(c ? \"profil.coherence.accepte\" : \"profil.coherence.non_controle\"))"
+    ));
+    assert!(script.contains("cleValeur(\"profil.coherence.non_fait\", nomsCriteres(c.non_faits))"));
+}
