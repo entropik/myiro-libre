@@ -217,7 +217,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.recette.approfondi",
-        "Approfondi\u{202f}: le plus fin, le plus long (durée à mesurer)",
+        "Approfondi\u{202f}: en cours de réglage, pas encore disponible",
     ),
     (
         "profil.avance",
@@ -334,6 +334,14 @@ const FRANCAIS: Catalogue = &[
     (
         "profil.erreur.calcul",
         "Le calcul du profil a échoué dans ArgyllCMS. Le profil actuel n’a pas changé. Vérifiez la mesure, puis réessayez.",
+    ),
+    (
+        "profil.erreur.recette_en_reglage",
+        "La recette Approfondi est en cours de réglage. Choisissez Rapide ou Standard.",
+    ),
+    (
+        "profil.erreur.interrompu",
+        "Le calcul a été interrompu avant la fin (programme ArgyllCMS arrêté, ou poste mis en veille). Le profil actuel n’a pas changé. Relancez le calcul.",
     ),
     (
         "profil.erreur.controle",
@@ -1201,7 +1209,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.recette.approfondi",
-        "Thorough: the finest, the longest (duration to be measured)",
+        "Thorough: being tuned, not available yet",
     ),
     (
         "profil.avance",
@@ -1318,6 +1326,14 @@ const ANGLAIS: Catalogue = &[
     (
         "profil.erreur.calcul",
         "Computing the profile failed in ArgyllCMS. The current profile has not changed. Check the measurement, then try again.",
+    ),
+    (
+        "profil.erreur.recette_en_reglage",
+        "The Thorough recipe is being tuned. Choose Fast or Standard.",
+    ),
+    (
+        "profil.erreur.interrompu",
+        "The computation was interrupted before the end (ArgyllCMS program stopped, or computer put to sleep). The current profile has not changed. Start the computation again.",
     ),
     (
         "profil.erreur.controle",

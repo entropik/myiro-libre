@@ -15,6 +15,8 @@ window.CalculProfil = (() => {
   const ouvrir = vue.querySelector("[data-calcul-ouvrir]");
   const calcul = vue.querySelector("[data-calcul-profil]");
   const RECETTES = ["rapide", "standard", "approfondi"];
+  // Approfondi est en cours de réglage (ticket #40) : visible, inactif, jamais choisi.
+  const RECETTES_EN_REGLAGE = ["approfondi"];
   // Ce que reglage.js prête : la résolution affichée, de quoi recharger, annoncer, agir et
   // redessiner l'occupation des boutons.
   let parc = {
@@ -226,13 +228,14 @@ window.CalculProfil = (() => {
     return champ("profil.source", liste);
   }
 
-  function puces(valeurs, choisie, libelle, choisir) {
+  function puces(valeurs, choisie, libelle, choisir, inactive = () => false) {
     const p = el("div", "puces");
     for (const v of valeurs) {
       const b = el("button", "", libelle(v));
       b.type = "button";
       b.setAttribute("aria-pressed", String(v === choisie));
-      b.addEventListener("click", () => changer(() => choisir(v)));
+      if (inactive(v)) b.dataset.inactif = "";
+      b.addEventListener("click", () => { if (!inactive(v)) changer(() => choisir(v)); });
       p.append(b);
     }
     return p;
@@ -280,8 +283,10 @@ window.CalculProfil = (() => {
         puces(source.conditions, choix.mesureCondition, (c) => c, (c) => { choix.mesureCondition = c; })));
     }
     const recette = champ("profil.recette",
-      puces(RECETTES, choix.recette, (r) => t("profil.recette.nom." + r), (r) => { choix.recette = r; }));
+      puces(RECETTES, choix.recette, (r) => t("profil.recette.nom." + r), (r) => { choix.recette = r; },
+        (r) => RECETTES_EN_REGLAGE.includes(r)));
     recette.append(el("p", "", t("profil.recette." + choix.recette)));
+    for (const r of RECETTES_EN_REGLAGE) recette.append(el("p", "why", t("profil.recette." + r)));
     corps.append(recette, blocCommandes());
     const actions = el("div", "actions");
     const calculer = el("button", "btn btn--primary", t("profil.calculer"));

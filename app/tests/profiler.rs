@@ -256,6 +256,87 @@ fn un_echec_du_moteur_laisse_le_profil_actif_inchange() {
     assert_eq!(detail.historique.len(), 1);
 }
 
+/// Approfondi est en cours de réglage (28 octobre 2026) : refusé avant
+/// ArgyllCMS, rien n'est rangé, le profil actuel ne change pas.
+#[test]
+fn approfondi_est_refuse_sans_lancer_argyll() {
+    let b = banc();
+    let ancien = b.ranger_un_profil_existant();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
+    let moteur = MoteurSimule::reussit(b"icc".to_vec());
+
+    let erreur = b
+        .ouverte
+        .calculer_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M1,
+            Recette::Approfondi,
+            &moteur,
+            maintenant(),
+            &mut |_| {},
+        )
+        .unwrap_err();
+
+    assert_eq!(erreur.cle, "profil.erreur.recette_en_reglage");
+    assert!(est_au_catalogue(erreur.cle));
+    assert!(moteur.demandes().is_empty());
+    let detail = b.ouverte.detail_reglage(b.condition).unwrap();
+    assert_eq!(detail.actif.map(|p| p.id), Some(ancien));
+    assert_eq!(detail.historique.len(), 1);
+}
+
+/// Un calcul arrêté en route : sa propre clé, sans cause montrée ; le profil
+/// actuel ne change pas.
+#[test]
+fn un_calcul_interrompu_le_dit_sans_cause() {
+    let b = banc();
+    let ancien = b.ranger_un_profil_existant();
+    let mesure = b.importer(b.condition, "mesure00001_M1.txt", &export_rvb("D50"));
+    let moteur = MoteurSimule::echoue(ErreurMoteur::Interrompu {
+        etape: Etape::Profil,
+    });
+
+    let erreur = b
+        .ouverte
+        .calculer_profil(
+            b.condition,
+            mesure,
+            ConditionMesure::M1,
+            Recette::Standard,
+            &moteur,
+            maintenant(),
+            &mut |_| {},
+        )
+        .unwrap_err();
+
+    assert_eq!(
+        erreur,
+        ErreurProfil {
+            cle: "profil.erreur.interrompu",
+            cause: None,
+            version: None,
+        }
+    );
+    assert!(est_au_catalogue(erreur.cle));
+    let detail = b.ouverte.detail_reglage(b.condition).unwrap();
+    assert_eq!(detail.actif.map(|p| p.id), Some(ancien));
+}
+
+/// Interrompu ne conseille pas de vérifier la mesure : elle n'y est pour rien.
+#[test]
+fn un_calcul_interrompu_invite_a_relancer() {
+    use app::textes::{texte, Langue};
+    let fr = texte(Langue::Francais, "profil.erreur.interrompu");
+    let en = texte(Langue::Anglais, "profil.erreur.interrompu");
+    assert!(fr.contains("interrompu") && fr.contains("Relancez"), "{fr}");
+    assert!(en.contains("interrupted") && en.contains("Start"), "{en}");
+    assert!(
+        !fr.contains("mesure") && !en.contains("measurement"),
+        "{fr} / {en}"
+    );
+}
+
 #[test]
 fn argyll_introuvable_ne_range_rien() {
     // Au lancement, ArgyllCMS n'a pas été trouvé : le moteur manque.
@@ -448,16 +529,11 @@ fn les_commandes_se_montrent_sans_rien_calculer() {
     // Aucun moteur n'est demandé : la commande se construit sans ArgyllCMS.
     let commandes = b
         .ouverte
-        .commandes_profil(
-            b.condition,
-            mesure,
-            ConditionMesure::M1,
-            Recette::Approfondi,
-        )
+        .commandes_profil(b.condition, mesure, ConditionMesure::M1, Recette::Rapide)
         .unwrap();
 
     assert_eq!(commandes.len(), 2, "{commandes:?}");
-    assert!(commandes[0].starts_with("colprof") && commandes[0].contains("-qu"));
+    assert!(commandes[0].starts_with("colprof") && commandes[0].contains("-qm"));
     // La description passée à colprof est sans accents (ArgyllCMS n'écrit
     // que de l'ASCII) ; la bibliothèque garde le nom d'origine.
     assert!(
@@ -500,6 +576,8 @@ fn les_textes_du_calcul_existent() {
         "profil.erreur.calcul",
         "profil.erreur.controle",
         "profil.erreur.fichier",
+        "profil.erreur.recette_en_reglage",
+        "profil.erreur.interrompu",
         "profil.erreur.mesure_ailleurs",
         "profil.erreur.cause",
         "profil.rvb",
@@ -790,8 +868,8 @@ fn argyll_introuvable_demande_de_relancer() {
 }
 
 /// Seules les durées mesurées sont données (poste de l'imprimeur, 26 octobre
-/// 2026, 2 520 plages) : Rapide 58 s, Standard 3 min 03 s. Approfondi ne
-/// promet aucune durée.
+/// 2026, 2 520 plages) : Rapide 58 s, Standard 3 min 03 s. Approfondi, en
+/// cours de réglage, ne promet aucune durée.
 #[test]
 fn seule_la_duree_mesuree_est_donnee() {
     use app::textes::{texte, Langue};
@@ -813,8 +891,8 @@ fn seule_la_duree_mesuree_est_donnee() {
     }
     let fr = texte(Langue::Francais, "profil.recette.approfondi");
     let en = texte(Langue::Anglais, "profil.recette.approfondi");
-    assert!(fr.contains("durée à mesurer"), "{fr}");
-    assert!(en.contains("duration to be measured"), "{en}");
+    assert!(fr.contains("en cours de réglage"), "{fr}");
+    assert!(en.contains("being tuned"), "{en}");
     assert!(!fr.contains("min") && !en.contains("min"), "{fr} / {en}");
 }
 

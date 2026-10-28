@@ -692,6 +692,17 @@ fn le_bouton_calculer_inactif_dit_pourquoi() {
     assert!(reglage.contains("occupe.hidden = !enCours || calcul.raisonVisible();"));
 }
 
+/// Approfondi, en cours de réglage (28 octobre 2026), reste visible mais
+/// inactif, sa raison écrite dessous ; un clic ne le choisit pas.
+#[test]
+fn approfondi_est_inactif_avec_sa_raison() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains("const RECETTES_EN_REGLAGE = [\"approfondi\"];"));
+    assert!(script.contains("if (inactive(v)) b.dataset.inactif = \"\";"));
+    assert!(script.contains("if (!inactive(v)) changer(() => choisir(v));"));
+    assert!(script.contains("el(\"p\", \"why\", t(\"profil.recette.\" + r))"));
+}
+
 /// Un calcul fini alors que l'opérateur a changé de résolution n'annonce rien
 /// sur l'autre vue ; un rechargement qui échoue après un calcul réussi ne
 /// dit pas que le calcul a échoué.
