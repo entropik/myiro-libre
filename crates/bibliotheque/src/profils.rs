@@ -171,7 +171,7 @@ pub fn profil_ancien(horodatage: &str, maintenant: SystemTime) -> bool {
 }
 
 /// Empreinte SHA-256 en hexadécimal minuscule.
-fn empreinte(octets: &[u8]) -> String {
+pub(crate) fn empreinte(octets: &[u8]) -> String {
     let mut hex = String::with_capacity(64);
     for o in Sha256::digest(octets) {
         let _ = write!(hex, "{o:02x}");

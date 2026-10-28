@@ -1123,6 +1123,16 @@ const FRANCAIS: Catalogue = &[
         "Importez dans cette résolution la mesure d’une seconde mire, imprimée à travers ce profil.",
     ),
     ("verif.filtre.html", "Page HTML"),
+    ("verif.filtre.xml", "Charte FD-S2w (XML)"),
+    (
+        "verif.mire_fd9",
+        "Mire de vérification FD-9\u{202f}: enregistrer pour FD-S2w",
+    ),
+    ("verif.mire_fd9.faite", "Mire de vérification enregistrée\u{202f}:"),
+    (
+        "verif.mire_fd9.aide",
+        "Ouvrez ce fichier dans FD-S2w (Fichier, Ouvrir le fichier de la charte), imprimez la mire à travers le profil, mesurez-la, puis importez l’export ici. Ses 210 couleurs sont différentes de celles de la mire RGB-2520.",
+    ),
     ("verif.demande", "Couleur demandée"),
     ("verif.appareil", "Valeur après transformation"),
     ("verif.predite", "Prédiction du profil"),
@@ -2304,6 +2314,16 @@ const ANGLAIS: Catalogue = &[
         "Import into this resolution the measurement of a second chart, printed through this profile.",
     ),
     ("verif.filtre.html", "HTML page"),
+    ("verif.filtre.xml", "FD-S2w chart (XML)"),
+    (
+        "verif.mire_fd9",
+        "FD-9 verification chart: save for FD-S2w",
+    ),
+    ("verif.mire_fd9.faite", "Verification chart saved:"),
+    (
+        "verif.mire_fd9.aide",
+        "Open this file in FD-S2w (File, Open chart file), print the chart through the profile, measure it, then import the export here. Its 210 colours differ from those of the RGB-2520 chart.",
+    ),
     ("verif.demande", "Requested colour"),
     ("verif.appareil", "Value after transform"),
     ("verif.predite", "Profile prediction"),

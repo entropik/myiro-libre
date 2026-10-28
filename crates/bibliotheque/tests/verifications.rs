@@ -311,7 +311,8 @@ fn une_base_de_l_organisation_precedente_passe_sans_rien_perdre() {
     base.execute_batch(
         "DROP TRIGGER tolerances_immuables; DROP TRIGGER tolerances_gardees;
          DROP TRIGGER verifications_immuables; DROP TRIGGER verifications_gardees;
-         DROP TABLE verifications; DROP TABLE tolerances; PRAGMA user_version = 5;",
+         DROP TABLE verifications; DROP TABLE tolerances; DROP TABLE mires_verification;
+         PRAGMA user_version = 5;",
     )
     .unwrap();
     drop(base);
@@ -332,6 +333,37 @@ fn une_base_de_l_organisation_precedente_passe_sans_rien_perdre() {
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
     assert_eq!(version, 7);
+}
+
+/// Une mire de vérification est rangée une fois par contenu : la ranger de
+/// nouveau rend le même numéro, sans doublon.
+#[test]
+fn une_mire_de_verification_se_range_une_seule_fois() {
+    let banc = banc();
+    let xml = "<?xml version=\"1.0\"?><Data/>";
+    let premiere = banc
+        .b
+        .ranger_mire_verification("Mire v1", "fd9", 1, xml, "2026-10-28T09:00:00Z")
+        .unwrap();
+    let encore = banc
+        .b
+        .ranger_mire_verification("Mire v1", "fd9", 1, xml, "2026-10-29T09:00:00Z")
+        .unwrap();
+    assert_eq!(premiere, encore);
+    let mires = banc.b.mires_verification().unwrap();
+    assert_eq!(mires.len(), 1);
+    let m = &mires[0];
+    assert_eq!(
+        (
+            m.nom.as_str(),
+            m.instrument.as_str(),
+            m.version,
+            m.contenu.as_str()
+        ),
+        ("Mire v1", "fd9", 1, xml)
+    );
+    assert_eq!(m.horodatage, "2026-10-28T09:00:00Z");
+    assert_eq!(m.empreinte.len(), 64);
 }
 
 #[test]

@@ -1299,6 +1299,7 @@ fn la_vue_d_une_resolution_appelle_la_verification() {
         "invoke(\"tolerances_enregistrer\"",
         "\"verifier_exporter_rapport\"",
         "\"verifier_exporter_profil\"",
+        "invoke(\"verifier_mire_fd9\"",
         // La demande est une structure : ses champs restent en snake_case.
         "mesure_condition:",
     ] {

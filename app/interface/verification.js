@@ -258,9 +258,18 @@ window.Verification = (() => {
     corps.append(tete, champ("verif.profil", liste("verif-profil", profilsRvb(d).map((p) => ({
       valeur: p.id, libelle: `${date(p.horodatage)} · ${t(p.libelle)}`,
     })), choix.profil, (id) => { choix.profil = id; choix.mesure = null; resultat = null; charger(parc.reglage()); })));
+    // La mire de vérification FD-9, créée une fois, s'ouvre dans FD-S2w pour être imprimée.
+    const mire = el("button", "btn", t("verif.mire_fd9"));
+    mire.type = "button";
+    mire.addEventListener("click", () => parc.agir(async () => {
+      const nom = await invoke("verifier_mire_fd9", { filtre: t("verif.filtre.xml") });
+      if (nom) parc.annoncer(`${t("verif.mire_fd9.faite")} ${nom}`);
+    }));
+    const actionsMire = el("div", "actions actions--serrees");
+    actionsMire.append(mire);
     corps.append(champ("verif.mesure", liste("verif-mesure", donnees.sources.map((s) => ({
       valeur: s.mesure, libelle: s.fichier, raison: s.raison,
-    })), choix.mesure, (m) => { choix.mesure = m; })));
+    })), choix.mesure, (m) => { choix.mesure = m; }), actionsMire, el("p", "", t("verif.mire_fd9.aide"))));
     const source = donnees.sources.find((s) => s.mesure === choix.mesure);
     if (source) {
       const puces = el("div", "puces");

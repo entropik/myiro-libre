@@ -15,8 +15,14 @@
 //! zéro.
 
 mod ecarts;
+mod mire_fd9;
 mod serde_lab;
 mod tolerances;
+
+pub use mire_fd9::{
+    couleurs_verification_fd9, ecrire_xml_fds2w, lire_xml_fds2w, mire_verification_fd9, MireFd9,
+    PlageMire, MIRE_FD9_VERSION, RGB2520_NIVEAUX,
+};
 
 pub use tolerances::{
     conclure, valider_criteres, Conclusion, Controle, Critere, Criteres, Famille, RefusCriteres,

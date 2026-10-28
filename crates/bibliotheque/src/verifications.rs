@@ -263,11 +263,88 @@ impl Bibliotheque {
     }
 }
 
+/// Numéro d'une mire de vérification dans la bibliothèque.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct IdMireVerification(pub i64);
+
+/// Une mire de vérification rangée : son contenu (XML de FD-S2w pour le
+/// FD-9), tel qu'écrit la première fois.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct MireVerificationRangee {
+    pub id: IdMireVerification,
+    pub nom: String,
+    /// `fd9` ou `myiro1`.
+    pub instrument: String,
+    pub version: u32,
+    /// SHA-256 du contenu, en hexadécimal minuscule.
+    pub empreinte: String,
+    pub contenu: String,
+    /// Première fois qu'elle a été rangée.
+    pub horodatage: String,
+}
+
+impl Bibliotheque {
+    /// Range une mire de vérification une seule fois : un contenu déjà rangé
+    /// rend son numéro, sans rien changer.
+    pub fn ranger_mire_verification(
+        &self,
+        nom: &str,
+        instrument: &str,
+        version: u32,
+        contenu: &str,
+        horodatage: &str,
+    ) -> Resultat<IdMireVerification> {
+        horodatage_valide(horodatage)?;
+        let empreinte = crate::profils::empreinte(contenu.as_bytes());
+        self.base.execute(
+            "INSERT OR IGNORE INTO mires_verification
+                 (nom, instrument, version, empreinte, contenu, horodatage)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![nom, instrument, version, empreinte, contenu, horodatage],
+        )?;
+        Ok(IdMireVerification(self.base.query_row(
+            "SELECT id FROM mires_verification WHERE empreinte = ?1",
+            params![empreinte],
+            |l| l.get(0),
+        )?))
+    }
+
+    /// Les mires de vérification, dans l'ordre où elles ont été rangées.
+    pub fn mires_verification(&self) -> Resultat<Vec<MireVerificationRangee>> {
+        let mut requete = self.base.prepare(
+            "SELECT id, nom, instrument, version, empreinte, contenu, horodatage
+             FROM mires_verification ORDER BY id",
+        )?;
+        let mires = requete.query_map([], |l| {
+            Ok(MireVerificationRangee {
+                id: IdMireVerification(l.get(0)?),
+                nom: l.get(1)?,
+                instrument: l.get(2)?,
+                version: l.get(3)?,
+                empreinte: l.get(4)?,
+                contenu: l.get(5)?,
+                horodatage: l.get(6)?,
+            })
+        })?;
+        Ok(mires.collect::<Result<_, _>>()?)
+    }
+}
+
 /// Organisation 7 (ticket #41), par-dessus l'organisation 6 (mires, #33) :
-/// les jeux de tolérances versionnés et les vérifications de profils. La
-/// base elle-même refuse de modifier ou d'effacer un jeu ou une
-/// vérification. Rien n'est réécrit ni effacé.
+/// les jeux de tolérances versionnés, les vérifications de profils et les
+/// mires de vérification (rangées une fois par contenu ; elles rejoindront
+/// les mires de #33 à sa fusion). La base elle-même refuse de modifier ou
+/// d'effacer un jeu ou une vérification. Rien n'est réécrit ni effacé.
 pub(crate) const ORGANISATION_7: &str = "
+CREATE TABLE mires_verification (
+    id INTEGER PRIMARY KEY,
+    nom TEXT NOT NULL,
+    instrument TEXT NOT NULL CHECK (instrument IN ('fd9', 'myiro1')),
+    version INTEGER NOT NULL CHECK (version > 0),
+    empreinte TEXT NOT NULL UNIQUE,
+    contenu TEXT NOT NULL,
+    horodatage TEXT NOT NULL
+);
 CREATE TABLE tolerances (
     id INTEGER PRIMARY KEY,
     nom TEXT NOT NULL,

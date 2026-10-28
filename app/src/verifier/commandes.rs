@@ -153,6 +153,25 @@ pub fn verifier_exporter_profil(
     })
 }
 
+/// Écrit la mire de vérification FD-9 (XML de FD-S2w) là où l'opérateur le
+/// dit ; rend le nom du fichier écrit, ou `None` s'il a annulé.
+#[tauri::command(async)]
+pub fn verifier_mire_fd9(
+    app: tauri::AppHandle,
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+    filtre: String,
+) -> Result<Option<String>, String> {
+    let mire = ouverte.mire_verification_fd9(SystemTime::now())?;
+    let fichier = app
+        .dialog()
+        .file()
+        .set_file_name(format!("{}.xml", mire.nom))
+        .add_filter(filtre, &["xml"])
+        .blocking_save_file()
+        .and_then(|f| f.into_path().ok());
+    si_choisi(fichier, |f| ouverte.exporter_mire_fd9(f, SystemTime::now()))
+}
+
 fn nom_fichier(f: &std::path::Path) -> String {
     f.file_name()
         .map(|n| n.to_string_lossy().into_owned())

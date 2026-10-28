@@ -334,6 +334,25 @@ fn des_mesures_incoherentes_bloquent_la_verification() {
     assert_eq!(b.etat(b.profil), EtatVerification::NonVerifie);
 }
 
+/// La mire de vérification FD-9 est créée une fois : la demander de nouveau
+/// rend la même mire (même empreinte), sans doublon, et le fichier écrit
+/// pour FD-S2w est son XML, à l'octet.
+#[test]
+fn la_mire_de_verification_est_creee_une_seule_fois() {
+    let b = banc();
+    let premiere = b.ouverte.mire_verification_fd9(a(1)).unwrap();
+    let encore = b.ouverte.mire_verification_fd9(a(2)).unwrap();
+    assert_eq!(premiere, encore);
+    assert_eq!(premiere.instrument, "fd9");
+    let xml = verification::ecrire_xml_fds2w(&verification::mire_verification_fd9());
+    assert_eq!(premiere.contenu, xml);
+    let fichier = b.dossier.path().join("mire.xml");
+    let nom = b.ouverte.exporter_mire_fd9(&fichier, a(3)).unwrap();
+    assert_eq!(nom, "mire.xml");
+    assert_eq!(std::fs::read_to_string(&fichier).unwrap(), xml);
+    assert_eq!(b.ouverte.mire_verification_fd9(a(4)).unwrap(), premiere);
+}
+
 #[test]
 fn les_textes_de_la_verification_existent() {
     for cle in [

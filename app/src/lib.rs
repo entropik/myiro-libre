@@ -631,6 +631,7 @@ pub fn lancer() {
             verifier::commandes::tolerances_enregistrer,
             verifier::commandes::verifier_exporter_rapport,
             verifier::commandes::verifier_exporter_profil,
+            verifier::commandes::verifier_mire_fd9,
             etalonner,
             repondre_geste
         ])
