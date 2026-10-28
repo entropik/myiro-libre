@@ -32,6 +32,11 @@ int32_t __stdcall FD9_Disconnect(void);   /* x86 : ret (aucun argument) */
 - Sur 1104, ne pas insister : arrêter d'abord la mesure (fonctions hors du périmètre de ces fiches).
 - Désinscrire ensuite le rappel (`FD9_RegisterDeviceEventHandler` avec un pointeur nul).
 
+## Ce qu'a montré l'instrument
+
+- **E2 (28 octobre 2026)** : après un `FD9_StopMeasurement(&faux)` admis depuis l'état 1 et sans événement 10, `FD9_Disconnect` **n'a pas rendu la main** en près de 5 minutes (processus arrêté de force). L'appel peut donc bloquer : le pont le borne (confirmé). Cause : voir [FD9_StopMeasurement](FD9_StopMeasurement.md).
+- MYIROtools, à sa déconnexion (`mit-x64` `0x1403eb7f0`), appelle `FD9_ExitMeasurement(&0, NULL)` sans lire le retour, puis `FD9_Disconnect`, puis attend par `FD9_GetStatus` l'état 1 ou le code 1102, sans limite (confirmé).
+
 ## À vérifier sur l'instrument
 
 - Après la déconnexion, FD-S2w doit pouvoir reprendre la main sans redémarrer l'instrument.

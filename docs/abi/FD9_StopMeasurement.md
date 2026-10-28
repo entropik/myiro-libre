@@ -25,6 +25,16 @@ Lu dans le gestionnaire d'événements de MYIROtools, le logiciel du fabricant q
 
 D'après les contrôles ci-dessus, l'appel de l'événement 9 est refusé (1104) si l'état est encore 9 à ce moment ; la suite de MYIROtools ne dépend pas de son retour.
 
+Quand l'opérateur **annule** (`0x1403ec140`, journal « setCancelMeasurement ») : MYIROtools lit l'état par `FD9_GetStatus` (mot +0x10) et n'appelle `FD9_StopMeasurement` **que dans les états 2 à 8**. Dans les états 0 et 1 (attente de la feuille, rien d'engagé) et à partir de 9, il n'appelle rien et rend la main (confirmé).
+
+Sa **déconnexion** (`0x1403eb7f0`) : `FD9_ExitMeasurement(&0, NULL)` sans lire le retour, puis `FD9_Disconnect`, puis `FD9_GetStatus` toutes les 100 ms jusqu'à l'état 1 (code 0) ou au code 1102 (plus de session), **sans limite de temps** (confirmé).
+
+## Ce qu'a montré l'instrument
+
+- **Confirmé par E2 (28 octobre 2026)** : pas d'événement 10 en 30 s après `FD9_StopMeasurement(&faux)` rendu 0 depuis l'état 1 (attente de la feuille, aucune feuille glissée). Le `FD9_Disconnect` qui a suivi n'a pas rendu la main en près de 5 minutes ; le processus a été arrêté de force.
+- Supposé : le drapeau d'arrêt n'est lu que par les fils de travail de la DLL (feuille, mesure) ; à l'état 1, aucun ne tourne, donc rien ne produit l'événement 10, et l'arrêt de ces fils dans `FD9_Disconnect` (`0x1008af80`) reste bloqué. La cause exacte du blocage n'est pas établie.
+- Aucun délai interne d'attente de la feuille n'a été trouvé dans la DLL (seule chaîne de délai : celle du fil de vie de la liaison) : inconnu, rien ne dit que la DLL abandonne seule.
+
 ## Propriété de la mémoire
 
 - Le booléen appartient à l'appelant ; la DLL en lit un octet pendant l'appel et garde sa **valeur**, pas son adresse (confirmé).
@@ -32,7 +42,7 @@ D'après les contrôles ci-dessus, l'appel de l'événement 9 est refusé (1104)
 ## Ce qui est supposé
 
 - `vrai` = l'instrument attend une nouvelle feuille après l'arrêt ; `faux` = il rend la feuille et s'arrête (nom d'origine `bNextFeed`).
-- Après un arrêt admis, l'état passe à 10 et l'événement 10 est envoyé au rappel.
+- Après un arrêt admis dans les états 2 à 8, l'état passe à 10 et l'événement 10 est envoyé au rappel (faux depuis l'état 1, voir E2).
 - À l'événement 9, l'attente d'une seconde de MYIROtools ne change pas l'état ; son `FD9_StopMeasurement(&vrai)` est alors sans effet.
 
 ## Pour le pont
@@ -47,7 +57,7 @@ D'après les contrôles ci-dessus, l'appel de l'événement 9 est refusé (1104)
 ## À vérifier sur l'instrument
 
 - La feuille est-elle éjectée ou retenue après `FD9_StopMeasurement(&faux)` (essais E2 et E3) ?
-- L'événement 10 arrive-t-il après un arrêt en attente de feuille (état 1) ?
+- ~~L'événement 10 arrive-t-il après un arrêt en attente de feuille (état 1) ?~~ Non (E2, voir plus haut).
 - Le code rendu par `FD9_StopMeasurement(&vrai)` à l'événement 9 (essai E4).
 
 ## Preuves (locales)
