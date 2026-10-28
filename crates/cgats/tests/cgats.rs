@@ -67,6 +67,7 @@ fn provenance(geometrie: Geometrie, demande: Info<ConditionsCalcul>) -> Provenan
             demande,
             observe: Info::Inconnue,
         },
+        feuille: None,
     }
 }
 

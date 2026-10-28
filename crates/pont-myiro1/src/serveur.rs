@@ -252,6 +252,17 @@ fn traiter<S: SdkMyiro1>(session: &mut Session<S>, requete: Requete) -> (Reponse
                 false,
             )
         }
+        // Le MYIRO-1 ne lit pas de feuille : commandes du FD-9, refusées sans
+        // rien transmettre à la DLL.
+        Requete::Prenumeriser { .. } | Requete::MesurerFeuille { .. } => {
+            return (
+                Reponse::RequeteInvalide {
+                    detail: "mesure d'une feuille : commande du FD-9, inconnue du pont MYIRO-1"
+                        .into(),
+                },
+                false,
+            )
+        }
         Requete::Etalonner {} => session.etalonner().map(|etalonnage| Reponse::Etalonne {
             date: etalonnage.date,
         }),

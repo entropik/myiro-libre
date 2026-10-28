@@ -3,8 +3,10 @@
 //! Une ligne JSON par message, dans chaque sens. Ce crate ne dépend ni de
 //! Windows ni d'une DLL de fabricant.
 
+mod feuille;
 mod mesure;
 
+pub use feuille::*;
 pub use mesure::*;
 use mesure::{est_mesure_initiale, mesure_initiale};
 
@@ -54,6 +56,18 @@ pub enum Requete {
     /// acquise, ou l'erreur `mesure_annulee`), puis `annuler` reçoit
     /// `annulation`.
     Annuler {},
+    /// FD-9 : attend la feuille, la capture, lit son QR et reconnaît ses
+    /// plages selon `mire`, puis la rend sans la mesurer. Un pont sans
+    /// mesure en feuille répond `requete_invalide`.
+    Prenumeriser {
+        mire: DefinitionFeuille,
+    },
+    /// FD-9 : mêmes étapes que `prenumeriser`, puis mesure de toutes les
+    /// plages ; répond `mesure` (géométrie feuille, lecture dans la
+    /// provenance).
+    MesurerFeuille {
+        mire: DefinitionFeuille,
+    },
 }
 
 /// Ce qu'une demande `annuler` a produit sur la requête qui la précède.
@@ -149,6 +163,10 @@ pub enum Reponse {
     /// Réponse à `annuler`, écrite après celle de la mesure visée.
     Annulation {
         effet: EffetAnnulation,
+    },
+    /// Feuille capturée et reconnue, sans mesure (`prenumeriser`).
+    Prenumerisee {
+        lecture: LectureFeuille,
     },
     /// La ligne reçue n'est pas une requête valable ; rien n'a été fait.
     RequeteInvalide {
@@ -307,6 +325,11 @@ pub enum Palier {
     Etalonnage,
     MesurePonctuelle,
     Bande,
+    /// FD-9 : feuille capturée et reconnue, sans mesure. Après `Bande` :
+    /// l'ordre sert aux plafonds.
+    Prenumerisation,
+    /// FD-9 : feuille mesurée plage par plage.
+    Feuille,
 }
 
 /// Erreurs qu'un pont peut renvoyer.
@@ -374,6 +397,23 @@ pub enum ErreurPont {
     /// Une fermeture a été demandée : plus rien n'est transmis à la DLL, sauf
     /// une nouvelle demande `fermer` si la déconnexion a échoué.
     SessionFermee {},
+    /// Feuille reconnue, mais ses zones, ses plages, son origine ou son pas
+    /// s'écartent de la définition (`ecart_max` en 1/100 mm) : rien n'a été
+    /// mesuré.
+    MireNonReconnue {
+        zones: u32,
+        plages: u32,
+        ecart_max: u32,
+    },
+    /// Le QR de la feuille désigne une autre mire (texte lu) : rien n'a été
+    /// mesuré.
+    AutreMire { texte: String },
+    /// Aucune feuille glissée dans le délai d'attente.
+    FeuilleAbsente {},
+    /// L'instrument a signalé un incident pendant la feuille (état brut du
+    /// rappel : 101–103, 201–206, 301) ; `premesure` : code de
+    /// `FD9_GetPremeasurementError` quand il a été lu.
+    IncidentFeuille { etat: u32, premesure: Option<i32> },
     /// Autre code d'erreur de la DLL, conservé brut.
     Sdk { code: i32 },
 }

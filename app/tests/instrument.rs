@@ -1243,3 +1243,34 @@ fn une_panne_du_pont_pendant_la_mesure_est_signalee() {
         assert!(!instrument.vue().mesurable);
     }
 }
+
+#[test]
+fn le_pont_simule_refuse_la_mesure_d_une_feuille_comme_pont_myiro1() {
+    use app::pont::{Pont, PontSimule};
+    use pont_protocole::{DefinitionFeuille, Reponse, Requete, ZoneFeuille};
+    let mire = DefinitionFeuille {
+        nom: "RGB-2520 - 1P MY9".into(),
+        largeur: 27_940,
+        hauteur: 41_660,
+        zones: vec![ZoneFeuille {
+            gauche: 1_349,
+            haut: 2_300,
+            largeur_plage: 601,
+            hauteur_plage: 601,
+            pas_x: 601,
+            pas_y: 601,
+            rangees: 60,
+            colonnes: 42,
+        }],
+    };
+    let mut simule = PontSimule::avec_instruments(&[12345678]);
+    for requete in [
+        Requete::Prenumeriser { mire: mire.clone() },
+        Requete::MesurerFeuille { mire },
+    ] {
+        assert!(matches!(
+            simule.demander(&requete),
+            Ok(Reponse::RequeteInvalide { .. })
+        ));
+    }
+}

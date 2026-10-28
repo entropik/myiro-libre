@@ -187,3 +187,33 @@ fn annuler_est_sans_effet_et_sans_appel_a_la_dll() {
     );
     assert!(session.sdk().appels.is_empty());
 }
+
+/// Définition de la RGB-2520, telle que l'application l'enverra.
+const MIRE: &str = r#"{"nom":"RGB-2520 - 1P MY9","largeur":27940,"hauteur":41660,"zones":[{"gauche":1349,"haut":2300,"largeur_plage":601,"hauteur_plage":601,"pas_x":601,"pas_y":601,"rangees":60,"colonnes":42}]}"#;
+
+#[test]
+fn la_feuille_est_refusee_par_les_paliers_du_fd9_sans_appel_a_la_dll() {
+    let (lignes, session) = dialoguer(
+        Fd9Simule::avec_un_fd9(),
+        Palier::Feuille,
+        &[
+            &format!(r#"{{"cmd":"prenumeriser","mire":{MIRE}}}"#),
+            &format!(r#"{{"cmd":"mesurer_feuille","mire":{MIRE}}}"#),
+        ],
+    );
+    let refus = |demande| Reponse::Erreur {
+        erreur: ErreurPont::PalierNonAutorise {
+            demande,
+            plafond: Palier::Detection,
+        },
+    };
+    assert_eq!(
+        reponses(&lignes),
+        [refus(Palier::Prenumerisation), refus(Palier::Feuille)]
+    );
+    assert!(
+        session.sdk().appels.is_empty(),
+        "{:?}",
+        session.sdk().appels
+    );
+}

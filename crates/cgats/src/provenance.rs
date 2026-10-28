@@ -192,6 +192,8 @@ pub(crate) fn lire(cles: &HashMap<String, String>) -> Result<Provenance, ErreurC
             demande: lire_conditions("DEMANDE", &champ)?,
             observe: lire_conditions("OBSERVE", &champ)?,
         },
+        // L'en-tête CGATS ne porte pas (encore) la lecture d'une feuille.
+        feuille: None,
     })
 }
 

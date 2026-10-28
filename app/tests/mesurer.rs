@@ -371,6 +371,7 @@ fn gris(demande: Info<ConditionsCalcul>) -> Mesure {
             demande,
             observe: Info::Inconnue,
         },
+        feuille: None,
     };
     Mesure::new(vec![plage], provenance).unwrap()
 }

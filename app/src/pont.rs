@@ -494,6 +494,7 @@ fn mesure_simulee(serie: u32, etalonnage: Option<Horodatage>) -> Mesure {
             }),
             observe: Info::Inconnue,
         },
+        feuille: None,
     };
     Mesure::new(vec![plage], provenance).expect("mesure fictive valable")
 }
@@ -624,6 +625,11 @@ impl Pont for PontSimule {
             Requete::ConnecterAdresse { .. } => {
                 return Ok(Reponse::RequeteInvalide {
                     detail: "connecter_adresse : commande du FD-9".into(),
+                })
+            }
+            Requete::Prenumeriser { .. } | Requete::MesurerFeuille { .. } => {
+                return Ok(Reponse::RequeteInvalide {
+                    detail: "mesure d'une feuille : commande du FD-9".into(),
                 })
             }
         };

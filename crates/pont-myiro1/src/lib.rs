@@ -764,6 +764,7 @@ impl<S: SdkMyiro1> Session<S> {
             etalonnage,
             geometrie,
             calcul: conditions_de_calcul(),
+            feuille: None,
         })
     }
 

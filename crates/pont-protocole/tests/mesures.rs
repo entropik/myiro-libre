@@ -85,10 +85,19 @@ fn une_plage_relue_est_validee_comme_a_la_construction() {
 use pont_protocole::{
     ecrire_mesure, ecrire_reponse, lire_mesure, lire_reponse, Calcul, ConditionMesure,
     ConditionsCalcul, Echantillonnage, Empreinte, Geometrie, Horodatage, Illuminant, Info,
-    InstrumentMesurant, Mesure, Observateur, Provenance, RemiseAuRepos, Reponse, FORMAT_MESURE,
+    InstrumentMesurant, LectureFeuille, Mesure, Observateur, Provenance, RemiseAuRepos, Reponse,
+    FORMAT_MESURE,
 };
 
 fn provenance(modele: &str, geometrie: Geometrie) -> Provenance {
+    // Une mesure en feuille porte la lecture de sa feuille.
+    let feuille = matches!(geometrie, Geometrie::Feuille {}).then(|| LectureFeuille {
+        qr: Info::Inconnue,
+        zones: 1,
+        plages: 2,
+        fiabilite: 0,
+        ecart_max: 0,
+    });
     Provenance {
         instrument: InstrumentMesurant {
             modele: modele.into(),
@@ -120,6 +129,7 @@ fn provenance(modele: &str, geometrie: Geometrie) -> Provenance {
             }),
             observe: Info::Inconnue,
         },
+        feuille,
     }
 }
 
