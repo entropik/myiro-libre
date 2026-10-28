@@ -14,7 +14,8 @@
 //!
 //! Elle lit le profil d'une image (`ProfilSource` : matrice et courbes, gris
 //! ou table `mft2` ; sRVB quand l'image n'en embarque pas) pour donner la
-//! couleur demandée de chaque pixel, en Lab relatif D50.
+//! couleur demandée de chaque pixel, en Lab relatif D50, et mesure l'écart de
+//! chaque pixel d'une image à un profil de sortie (`analyser_pixels`).
 //!
 //! De ces valeurs, elle tire la surface du cube RVB et son volume, les
 //! couleurs de base, la densité approchée du noir, la table de chroma par
@@ -36,6 +37,7 @@ mod analyse;
 mod comparaison;
 mod essai;
 mod icc;
+mod image;
 mod limite;
 mod mesures;
 mod source;
@@ -48,6 +50,10 @@ pub use comparaison::{
 };
 pub use essai::{profil_essai, profil_essai_xyz, ProfilEssai};
 pub use icc::{ErreurIcc, ProfilIcc};
+pub use image::{
+    analyser_pixels, AnalyseImage, Annulee, PointNuage, ECART_INCONNU, PAS_HISTOGRAMME,
+    POINTS_NUAGE, SECTEURS_TEINTE,
+};
 pub use limite::lire_gam;
 pub use mesures::{fidelite, memes_mesures, points_du_chemin, repetabilite, Mesure, Repetabilite};
 pub use source::ProfilSource;
