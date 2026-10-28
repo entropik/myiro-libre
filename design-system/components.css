@@ -372,3 +372,10 @@ select.input option { background: var(--panneau); color: var(--encre); }
 .vue3d { width: 100%; aspect-ratio: 4 / 3; background: var(--carte); border: var(--rule) solid var(--filet); cursor: grab; touch-action: none; }
 .vue3d:active { cursor: grabbing; }
 .vue3d:focus-visible { outline: var(--rule-strong) solid var(--accent); outline-offset: var(--rule-strong); }
+/* Profils d'une comparaison : carré de la couleur de série, nom, « Retirer », raison d'un refus. */
+.profils-compares { list-style: none; margin: 0; padding: 0; }
+.profils-compares li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-2) 0; border-top: var(--rule) solid var(--filet); }
+.profils-compares li > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.profils-compares li > .why { flex-basis: 100%; margin-top: 0; }
+/* Curseur d'une valeur dans un intervalle (clarté d'une coupe). */
+.curseur { width: 100%; max-width: var(--measure); accent-color: var(--accent); }

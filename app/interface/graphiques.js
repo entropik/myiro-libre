@@ -20,6 +20,8 @@ window.Graphiques = (() => {
     return new Intl.NumberFormat(langue, {
       minimumFractionDigits: decimales,
       maximumFractionDigits: decimales,
+      // « 0,00 » et non « -0,00 » pour une valeur à peine négative.
+      signDisplay: "negative",
     }).format(valeur);
   }
 

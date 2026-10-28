@@ -591,6 +591,474 @@ const FRANCAIS: Catalogue = &[
         "comparer.graphique.chemin.c.aria",
         "Chroma C* le long du chemin du cube RVB\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
     ),
+    (
+        "comparer.titre",
+        "Comparer des profils",
+    ),
+    (
+        "comparer.aide",
+        "De un à quatre profils RVB, rangés dans la bibliothèque ou ouverts depuis un fichier. Le premier sert de référence aux écarts.",
+    ),
+    (
+        "comparer.profils",
+        "Profils comparés",
+    ),
+    (
+        "comparer.ajouter",
+        "Ajouter un profil",
+    ),
+    (
+        "comparer.ajouter.chargement",
+        "Lecture de la liste des profils en cours…",
+    ),
+    (
+        "comparer.ajouter.max",
+        "Quatre profils au plus\u{202f}: retirez-en un pour en ajouter un autre.",
+    ),
+    (
+        "comparer.fermer",
+        "Fermer la comparaison",
+    ),
+    (
+        "comparer.en_cours",
+        "Comparaison en cours\u{202f}: la limite du gamut peut prendre quelques secondes par profil.",
+    ),
+    (
+        "comparer.ouvrir",
+        "Comparer",
+    ),
+    (
+        "comparer.ouvrir.actuel",
+        "Comparer à l’actuel",
+    ),
+    (
+        "comparer.retirer",
+        "Retirer",
+    ),
+    (
+        "comparer.reference",
+        "référence",
+    ),
+    (
+        "comparer.choix.titre",
+        "Profils de la bibliothèque",
+    ),
+    (
+        "comparer.choix.vide",
+        "Aucun profil rangé dans la bibliothèque pour l’instant.",
+    ),
+    (
+        "comparer.choix.actuel",
+        "actuel",
+    ),
+    (
+        "comparer.choix.fichier",
+        "Ouvrir un fichier .icc",
+    ),
+    (
+        "comparer.vide",
+        "Ajoutez un profil pour commencer la comparaison.",
+    ),
+    (
+        "comparer.chiffres",
+        "Chiffres clés",
+    ),
+    (
+        "comparer.chiffres.blanc",
+        "Blanc du papier",
+    ),
+    (
+        "comparer.chiffres.noir",
+        "Noir",
+    ),
+    (
+        "comparer.chiffres.noir.valeur",
+        "L* {l} · densité ≈ {d}",
+    ),
+    (
+        "comparer.chiffres.volume_surface",
+        "Volume, surface brute",
+    ),
+    (
+        "comparer.chiffres.volume_limite",
+        "Volume, limite du gamut",
+    ),
+    (
+        "comparer.chiffres.limite_indisponible",
+        "non calculé",
+    ),
+    (
+        "comparer.chiffres.fidelite",
+        "Fidélité à ses mesures",
+    ),
+    (
+        "comparer.chiffres.fidelite.valeur",
+        "moyenne {moyenne}, p95 {p95}, max {max} ΔE00 sur {plages} plages",
+    ),
+    (
+        "comparer.chiffres.repetabilite",
+        "Répétabilité des mesures",
+    ),
+    (
+        "comparer.chiffres.repetabilite.valeur",
+        "moyenne {moyenne}, max {max} ΔE00 ({couleurs} couleurs, {paires} paires)",
+    ),
+    (
+        "comparer.chiffres.repetabilite.inconnue",
+        "inconnue\u{202f}: aucune plage mesurée deux fois",
+    ),
+    (
+        "comparer.valeur.lab",
+        "L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "comparer.valeur.volume",
+        "{volume} unités L*a*b* au cube",
+    ),
+    (
+        "comparer.volume",
+        "Gamut en volume",
+    ),
+    (
+        "comparer.volume.affiches",
+        "Profils affichés",
+    ),
+    (
+        "comparer.volume.couleur",
+        "Couleur",
+    ),
+    (
+        "comparer.volume.couleur.serie",
+        "Par profil",
+    ),
+    (
+        "comparer.volume.couleur.reelle",
+        "Couleurs réelles",
+    ),
+    (
+        "comparer.volume.forme",
+        "Forme",
+    ),
+    (
+        "comparer.volume.forme.limite",
+        "Limite du gamut",
+    ),
+    (
+        "comparer.volume.forme.surface",
+        "Surface brute",
+    ),
+    (
+        "comparer.volume.rendu",
+        "Rendu",
+    ),
+    (
+        "comparer.volume.rendu.opaque",
+        "Opaque",
+    ),
+    (
+        "comparer.volume.rendu.transparent",
+        "Transparent",
+    ),
+    (
+        "comparer.volume.aide",
+        "Glisser pour tourner, molette pour zoomer\u{202f}; au clavier, flèches, + et −, 0 pour revenir.",
+    ),
+    (
+        "comparer.volume.surface_montree",
+        "{nom}\u{202f}: surface brute montrée. {raison}",
+    ),
+    (
+        "comparer.teintes",
+        "Chroma maximale par teinte",
+    ),
+    (
+        "comparer.coupe",
+        "Coupe à clarté constante",
+    ),
+    (
+        "comparer.coupe.clarte",
+        "Clarté L*",
+    ),
+    (
+        "comparer.chemin",
+        "Courbes le long d’un chemin du cube RVB",
+    ),
+    (
+        "comparer.chemin.depart",
+        "Départ",
+    ),
+    (
+        "comparer.chemin.arrivee",
+        "Arrivée",
+    ),
+    (
+        "comparer.primaires",
+        "Couleurs de base",
+    ),
+    (
+        "comparer.primaire.blanc",
+        "Blanc",
+    ),
+    (
+        "comparer.primaire.noir",
+        "Noir",
+    ),
+    (
+        "comparer.primaire.rouge",
+        "Rouge",
+    ),
+    (
+        "comparer.primaire.vert",
+        "Vert",
+    ),
+    (
+        "comparer.primaire.bleu",
+        "Bleu",
+    ),
+    (
+        "comparer.primaire.cyan",
+        "Cyan",
+    ),
+    (
+        "comparer.primaire.magenta",
+        "Magenta",
+    ),
+    (
+        "comparer.primaire.jaune",
+        "Jaune",
+    ),
+    (
+        "comparer.primaires.couleur",
+        "Couleur",
+    ),
+    (
+        "comparer.primaires.profil",
+        "Profil",
+    ),
+    (
+        "comparer.primaires.pastille",
+        "Pastille",
+    ),
+    (
+        "comparer.primaires.approchee",
+        "approchée",
+    ),
+    (
+        "comparer.primaires.sans_teinte",
+        "—",
+    ),
+    (
+        "comparer.ecarts",
+        "Écarts au profil de référence",
+    ),
+    (
+        "comparer.ecarts.deux",
+        "Les écarts se calculent à partir de deux profils.",
+    ),
+    (
+        "comparer.ecarts.titre",
+        "{nom} comparé à {reference}",
+    ),
+    (
+        "comparer.ecarts.identiques",
+        "Profils identiques\u{202f}: aucun écart sur les 35 937 valeurs RVB.",
+    ),
+    (
+        "comparer.ecarts.memes_mesures",
+        "Mêmes mesures\u{202f}: seul le logiciel de calcul change.",
+    ),
+    (
+        "comparer.ecarts.refuse",
+        "Pas d’écarts\u{202f}: ce profil, ou le profil de référence, n’est pas comparé.",
+    ),
+    (
+        "comparer.ecarts.grille",
+        "Sur 35 937 valeurs RVB",
+    ),
+    (
+        "comparer.ecarts.moyenne",
+        "Moyenne",
+    ),
+    (
+        "comparer.ecarts.mediane",
+        "Médiane",
+    ),
+    (
+        "comparer.ecarts.p95",
+        "p95",
+    ),
+    (
+        "comparer.ecarts.max",
+        "Max",
+    ),
+    (
+        "comparer.ecarts.sup_1",
+        "Au-delà de 1 ΔE00",
+    ),
+    (
+        "comparer.ecarts.sup_2",
+        "Au-delà de 2 ΔE00",
+    ),
+    (
+        "comparer.ecarts.part",
+        "{part}\u{202f}%",
+    ),
+    (
+        "comparer.ecarts.zones",
+        "Par zone",
+    ),
+    (
+        "comparer.ecarts.zone",
+        "Zone",
+    ),
+    (
+        "comparer.ecarts.nombre",
+        "Valeurs",
+    ),
+    (
+        "comparer.ecarts.pires",
+        "Les 10 écarts les plus forts",
+    ),
+    (
+        "comparer.ecarts.rvb",
+        "RVB",
+    ),
+    (
+        "comparer.ecarts.lab_reference",
+        "L*a*b* de référence",
+    ),
+    (
+        "comparer.ecarts.lab_compare",
+        "L*a*b* comparé",
+    ),
+    (
+        "comparer.ecarts.ecart",
+        "ΔE00",
+    ),
+    (
+        "comparer.ecarts.primaires",
+        "Couleurs de base",
+    ),
+    (
+        "comparer.ecarts.fidelites",
+        "Fidélités côte à côte",
+    ),
+    (
+        "comparer.methode",
+        "Méthode",
+    ),
+    (
+        "comparer.methode.resume",
+        "Méthode\u{202f}: ce qui est calculé, ce qui est approché",
+    ),
+    (
+        "comparer.methode.calcule.titre",
+        "Calculé",
+    ),
+    (
+        "comparer.methode.calcule",
+        "Valeurs lues dans les tables A2B1 des profils, en colorimétrie absolue (blanc du papier compris). Volume de la surface du cube RVB, à 33 points par arête. Limite du gamut et son volume par iccgamut (ArgyllCMS 3.5.0). Écarts ΔE00 sur 35 937 valeurs RVB.",
+    ),
+    (
+        "comparer.methode.approche.titre",
+        "Approché",
+    ),
+    (
+        "comparer.methode.approche",
+        "Chroma par teinte et coupes, par tranches de 1 L* et de 2°. Densité du noir tirée de Y, et non densité ISO status T. Pastilles d’écran\u{202f}: une couleur hors de l’écran est ramenée, et marquée «\u{202f}approchée\u{202f}».",
+    ),
+    (
+        "comparer.methode.volume",
+        "Le volume dit l’étendue des couleurs d’un profil, pas sa qualité.",
+    ),
+    (
+        "comparer.methode.fidelite",
+        "La fidélité se mesure sur les plages qui ont servi au calcul\u{202f}: elle avantage le profil qui les suit au plus près. Pour savoir lequel prédit le mieux un nouveau tirage, il faut mesurer une mire de contrôle (vérification, prévue).",
+    ),
+    (
+        "comparer.provenance.origine",
+        "Origine",
+    ),
+    (
+        "comparer.provenance.version",
+        "Version ICC",
+    ),
+    (
+        "comparer.provenance.description",
+        "Description",
+    ),
+    (
+        "comparer.provenance.aucune",
+        "aucune",
+    ),
+    (
+        "comparer.provenance.grille",
+        "Grille A2B1",
+    ),
+    (
+        "comparer.provenance.grille.valeur",
+        "{n} points par arête",
+    ),
+    (
+        "comparer.provenance.mesures",
+        "Mesures embarquées",
+    ),
+    (
+        "comparer.provenance.mesures.valeur",
+        "{n} plages",
+    ),
+    (
+        "comparer.provenance.condition",
+        "Condition de mesure",
+    ),
+    (
+        "comparer.provenance.condition.inconnue",
+        "inconnue",
+    ),
+    (
+        "comparer.provenance.supposee",
+        "supposée",
+    ),
+    (
+        "comparer.provenance.rvb",
+        "Valeurs RVB",
+    ),
+    (
+        "comparer.provenance.rvb_supposes",
+        "échelle 0 à 255 supposée",
+    ),
+    (
+        "comparer.provenance.lab",
+        "L*a*b* des mesures",
+    ),
+    (
+        "comparer.provenance.lab_calcule",
+        "calculé par myiro-libre depuis les spectres",
+    ),
+    (
+        "comparer.provenance.lab_lu",
+        "lu dans le fichier",
+    ),
+    (
+        "comparer.avance",
+        "Avancé\u{202f}: commande et journal d’iccgamut",
+    ),
+    (
+        "comparer.avance.commande",
+        "Commande",
+    ),
+    (
+        "comparer.avance.sans_commande",
+        "Sans ArgyllCMS, aucune commande n’est lancée.",
+    ),
+    (
+        "comparer.avance.journal",
+        "Journal d’iccgamut, {nom}",
+    ),
+    (
+        "comparer.avance.cause",
+        "Message d’ArgyllCMS, {nom}",
+    ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "Journal d’ArgyllCMS"),
     ("profil.rvb", "Valeurs RVB"),
@@ -1805,6 +2273,474 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.graphique.chemin.c.aria",
         "Chroma C* along the RGB cube path: {profils}. The values are in the “Values” table.",
+    ),
+    (
+        "comparer.titre",
+        "Compare profiles",
+    ),
+    (
+        "comparer.aide",
+        "One to four RGB profiles, stored in the library or opened from a file. The first one is the reference for the differences.",
+    ),
+    (
+        "comparer.profils",
+        "Compared profiles",
+    ),
+    (
+        "comparer.ajouter",
+        "Add a profile",
+    ),
+    (
+        "comparer.ajouter.chargement",
+        "Reading the list of profiles…",
+    ),
+    (
+        "comparer.ajouter.max",
+        "Four profiles at most: remove one to add another.",
+    ),
+    (
+        "comparer.fermer",
+        "Close the comparison",
+    ),
+    (
+        "comparer.en_cours",
+        "Comparison in progress: the gamut boundary can take a few seconds per profile.",
+    ),
+    (
+        "comparer.ouvrir",
+        "Compare",
+    ),
+    (
+        "comparer.ouvrir.actuel",
+        "Compare with current",
+    ),
+    (
+        "comparer.retirer",
+        "Remove",
+    ),
+    (
+        "comparer.reference",
+        "reference",
+    ),
+    (
+        "comparer.choix.titre",
+        "Library profiles",
+    ),
+    (
+        "comparer.choix.vide",
+        "No profile stored in the library yet.",
+    ),
+    (
+        "comparer.choix.actuel",
+        "current",
+    ),
+    (
+        "comparer.choix.fichier",
+        "Open an .icc file",
+    ),
+    (
+        "comparer.vide",
+        "Add a profile to start the comparison.",
+    ),
+    (
+        "comparer.chiffres",
+        "Key figures",
+    ),
+    (
+        "comparer.chiffres.blanc",
+        "Paper white",
+    ),
+    (
+        "comparer.chiffres.noir",
+        "Black",
+    ),
+    (
+        "comparer.chiffres.noir.valeur",
+        "L* {l} · density ≈ {d}",
+    ),
+    (
+        "comparer.chiffres.volume_surface",
+        "Volume, raw surface",
+    ),
+    (
+        "comparer.chiffres.volume_limite",
+        "Volume, gamut boundary",
+    ),
+    (
+        "comparer.chiffres.limite_indisponible",
+        "not computed",
+    ),
+    (
+        "comparer.chiffres.fidelite",
+        "Fidelity to its measurements",
+    ),
+    (
+        "comparer.chiffres.fidelite.valeur",
+        "mean {moyenne}, p95 {p95}, max {max} ΔE00 over {plages} patches",
+    ),
+    (
+        "comparer.chiffres.repetabilite",
+        "Measurement repeatability",
+    ),
+    (
+        "comparer.chiffres.repetabilite.valeur",
+        "mean {moyenne}, max {max} ΔE00 ({couleurs} colours, {paires} pairs)",
+    ),
+    (
+        "comparer.chiffres.repetabilite.inconnue",
+        "unknown: no patch measured twice",
+    ),
+    (
+        "comparer.valeur.lab",
+        "L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "comparer.valeur.volume",
+        "{volume} cubic L*a*b* units",
+    ),
+    (
+        "comparer.volume",
+        "Gamut in 3D",
+    ),
+    (
+        "comparer.volume.affiches",
+        "Profiles shown",
+    ),
+    (
+        "comparer.volume.couleur",
+        "Colour",
+    ),
+    (
+        "comparer.volume.couleur.serie",
+        "By profile",
+    ),
+    (
+        "comparer.volume.couleur.reelle",
+        "Real colours",
+    ),
+    (
+        "comparer.volume.forme",
+        "Shape",
+    ),
+    (
+        "comparer.volume.forme.limite",
+        "Gamut boundary",
+    ),
+    (
+        "comparer.volume.forme.surface",
+        "Raw surface",
+    ),
+    (
+        "comparer.volume.rendu",
+        "Rendering",
+    ),
+    (
+        "comparer.volume.rendu.opaque",
+        "Opaque",
+    ),
+    (
+        "comparer.volume.rendu.transparent",
+        "Transparent",
+    ),
+    (
+        "comparer.volume.aide",
+        "Drag to rotate, wheel to zoom; with the keyboard, arrows, + and −, 0 to reset.",
+    ),
+    (
+        "comparer.volume.surface_montree",
+        "{nom}: raw surface shown. {raison}",
+    ),
+    (
+        "comparer.teintes",
+        "Maximum chroma by hue",
+    ),
+    (
+        "comparer.coupe",
+        "Constant lightness slice",
+    ),
+    (
+        "comparer.coupe.clarte",
+        "Lightness L*",
+    ),
+    (
+        "comparer.chemin",
+        "Curves along a path of the RGB cube",
+    ),
+    (
+        "comparer.chemin.depart",
+        "Start",
+    ),
+    (
+        "comparer.chemin.arrivee",
+        "End",
+    ),
+    (
+        "comparer.primaires",
+        "Primary colours",
+    ),
+    (
+        "comparer.primaire.blanc",
+        "White",
+    ),
+    (
+        "comparer.primaire.noir",
+        "Black",
+    ),
+    (
+        "comparer.primaire.rouge",
+        "Red",
+    ),
+    (
+        "comparer.primaire.vert",
+        "Green",
+    ),
+    (
+        "comparer.primaire.bleu",
+        "Blue",
+    ),
+    (
+        "comparer.primaire.cyan",
+        "Cyan",
+    ),
+    (
+        "comparer.primaire.magenta",
+        "Magenta",
+    ),
+    (
+        "comparer.primaire.jaune",
+        "Yellow",
+    ),
+    (
+        "comparer.primaires.couleur",
+        "Colour",
+    ),
+    (
+        "comparer.primaires.profil",
+        "Profile",
+    ),
+    (
+        "comparer.primaires.pastille",
+        "Swatch",
+    ),
+    (
+        "comparer.primaires.approchee",
+        "approximate",
+    ),
+    (
+        "comparer.primaires.sans_teinte",
+        "—",
+    ),
+    (
+        "comparer.ecarts",
+        "Differences from the reference profile",
+    ),
+    (
+        "comparer.ecarts.deux",
+        "Differences are computed from two profiles.",
+    ),
+    (
+        "comparer.ecarts.titre",
+        "{nom} compared with {reference}",
+    ),
+    (
+        "comparer.ecarts.identiques",
+        "Identical profiles: no difference over the 35,937 RGB values.",
+    ),
+    (
+        "comparer.ecarts.memes_mesures",
+        "Same measurements: only the computing software changes.",
+    ),
+    (
+        "comparer.ecarts.refuse",
+        "No differences: this profile, or the reference profile, is not compared.",
+    ),
+    (
+        "comparer.ecarts.grille",
+        "Over 35,937 RGB values",
+    ),
+    (
+        "comparer.ecarts.moyenne",
+        "Mean",
+    ),
+    (
+        "comparer.ecarts.mediane",
+        "Median",
+    ),
+    (
+        "comparer.ecarts.p95",
+        "p95",
+    ),
+    (
+        "comparer.ecarts.max",
+        "Max",
+    ),
+    (
+        "comparer.ecarts.sup_1",
+        "Above 1 ΔE00",
+    ),
+    (
+        "comparer.ecarts.sup_2",
+        "Above 2 ΔE00",
+    ),
+    (
+        "comparer.ecarts.part",
+        "{part}%",
+    ),
+    (
+        "comparer.ecarts.zones",
+        "By area",
+    ),
+    (
+        "comparer.ecarts.zone",
+        "Area",
+    ),
+    (
+        "comparer.ecarts.nombre",
+        "Values",
+    ),
+    (
+        "comparer.ecarts.pires",
+        "The 10 largest differences",
+    ),
+    (
+        "comparer.ecarts.rvb",
+        "RGB",
+    ),
+    (
+        "comparer.ecarts.lab_reference",
+        "Reference L*a*b*",
+    ),
+    (
+        "comparer.ecarts.lab_compare",
+        "Compared L*a*b*",
+    ),
+    (
+        "comparer.ecarts.ecart",
+        "ΔE00",
+    ),
+    (
+        "comparer.ecarts.primaires",
+        "Primary colours",
+    ),
+    (
+        "comparer.ecarts.fidelites",
+        "Fidelities side by side",
+    ),
+    (
+        "comparer.methode",
+        "Method",
+    ),
+    (
+        "comparer.methode.resume",
+        "Method: what is computed, what is approximated",
+    ),
+    (
+        "comparer.methode.calcule.titre",
+        "Computed",
+    ),
+    (
+        "comparer.methode.calcule",
+        "Values read from the A2B1 tables of the profiles, in absolute colorimetry (paper white included). Volume of the RGB cube surface, 33 points per edge. Gamut boundary and its volume by iccgamut (ArgyllCMS 3.5.0). ΔE00 differences over 35,937 RGB values.",
+    ),
+    (
+        "comparer.methode.approche.titre",
+        "Approximated",
+    ),
+    (
+        "comparer.methode.approche",
+        "Chroma by hue and slices, in steps of 1 L* and 2°. Black density derived from Y, not an ISO status T density. Screen swatches: a colour outside the screen is brought back, and marked “approximate”.",
+    ),
+    (
+        "comparer.methode.volume",
+        "The volume tells the extent of a profile’s colours, not its quality.",
+    ),
+    (
+        "comparer.methode.fidelite",
+        "Fidelity is measured on the patches used for the computation: it favours the profile that follows them most closely. To know which one best predicts a new print, a control chart must be measured (verification, planned).",
+    ),
+    (
+        "comparer.provenance.origine",
+        "Origin",
+    ),
+    (
+        "comparer.provenance.version",
+        "ICC version",
+    ),
+    (
+        "comparer.provenance.description",
+        "Description",
+    ),
+    (
+        "comparer.provenance.aucune",
+        "none",
+    ),
+    (
+        "comparer.provenance.grille",
+        "A2B1 grid",
+    ),
+    (
+        "comparer.provenance.grille.valeur",
+        "{n} points per edge",
+    ),
+    (
+        "comparer.provenance.mesures",
+        "Embedded measurements",
+    ),
+    (
+        "comparer.provenance.mesures.valeur",
+        "{n} patches",
+    ),
+    (
+        "comparer.provenance.condition",
+        "Measurement condition",
+    ),
+    (
+        "comparer.provenance.condition.inconnue",
+        "unknown",
+    ),
+    (
+        "comparer.provenance.supposee",
+        "assumed",
+    ),
+    (
+        "comparer.provenance.rvb",
+        "RGB values",
+    ),
+    (
+        "comparer.provenance.rvb_supposes",
+        "0 to 255 scale assumed",
+    ),
+    (
+        "comparer.provenance.lab",
+        "Measurement L*a*b*",
+    ),
+    (
+        "comparer.provenance.lab_calcule",
+        "computed by myiro-libre from the spectra",
+    ),
+    (
+        "comparer.provenance.lab_lu",
+        "read from the file",
+    ),
+    (
+        "comparer.avance",
+        "Advanced: iccgamut command and log",
+    ),
+    (
+        "comparer.avance.commande",
+        "Command",
+    ),
+    (
+        "comparer.avance.sans_commande",
+        "Without ArgyllCMS, no command is run.",
+    ),
+    (
+        "comparer.avance.journal",
+        "iccgamut log, {nom}",
+    ),
+    (
+        "comparer.avance.cause",
+        "ArgyllCMS message, {nom}",
     ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "ArgyllCMS log"),

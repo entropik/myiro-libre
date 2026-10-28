@@ -1577,3 +1577,166 @@ fn les_exemples_du_systeme_ont_l_espace_fine_avant_les_deux_points() {
         .collect();
     assert!(fautes.is_empty(), "{fautes:?}");
 }
+
+// ---- Comparer des profils : la vue « Comparer » (ticket #71) ----
+
+/// comparer.js se sert de la vue 3D et des graphiques, et reglage.js de
+/// comparer.js : ordre app.js < vue3d.js, graphiques.js < comparer.js <
+/// reglage.js.
+#[test]
+fn comparer_js_est_charge_apres_ses_outils() {
+    let page = lire("interface/index.html");
+    let position = |nom: &str| {
+        page.find(&format!("<script src=\"{nom}\" defer>"))
+            .unwrap_or_else(|| panic!("{nom} non chargé"))
+    };
+    let comparer = position("comparer.js");
+    assert!(position("app.js") < position("vue3d.js"));
+    assert!(position("app.js") < position("graphiques.js"));
+    assert!(position("vue3d.js") < comparer && position("graphiques.js") < comparer);
+    assert!(
+        comparer < position("reglage.js"),
+        "comparer.js après reglage.js"
+    );
+}
+
+/// La vue « Comparer » a un seul bouton principal, « Ajouter un profil ».
+/// Inactif tant que la liste des profils n'est pas lue (puis à quatre
+/// profils), il dit pourquoi juste à côté : le test de tous les boutons
+/// principaux inactifs le voit.
+#[test]
+fn la_vue_comparer_a_un_seul_bouton_principal() {
+    let page = lire("interface/index.html");
+    let vue = element(&page, "data-vue-comparer");
+    assert_eq!(vue.matches("btn--primary").count(), 1, "{vue}");
+    let principal = vue
+        .split('<')
+        .find(|b| b.contains("btn--primary"))
+        .and_then(|b| b.split('>').next())
+        .unwrap_or_default();
+    assert!(principal.contains("data-comparer-ajouter"), "{principal}");
+    assert!(
+        principal.contains("data-t=\"comparer.ajouter\""),
+        "{principal}"
+    );
+    assert!(
+        principal.split_whitespace().any(|a| a == "disabled"),
+        "{principal}"
+    );
+    let apres = &vue[vue.find("data-comparer-ajouter").unwrap()..];
+    let raison = apres
+        .split('<')
+        .find(|b| b.starts_with("p class=\"why\""))
+        .unwrap_or_default();
+    assert!(raison.contains("data-comparer-ajouter-raison"), "{raison}");
+    // La vue est dans la bibliothèque, à la place de la vue d'une résolution.
+    let bibliotheque = element(&page, "data-vue=\"bibliotheque\"");
+    assert!(bibliotheque.contains("data-vue-comparer"));
+    let droite = element(&page, "data-zone=\"droite\"");
+    assert!(
+        droite.contains("data-details-comparer"),
+        "provenance à droite"
+    );
+}
+
+/// La vue d'une résolution ouvre la comparaison : « Comparer » avec le
+/// profil actuel, et, dans l'historique, « Comparer à l'actuel » ouvre
+/// l'avant / après, l'actuel en référence (premier profil).
+#[test]
+fn la_vue_d_une_resolution_ouvre_la_comparaison() {
+    let page = lire("interface/index.html");
+    let vue = element(&page, "data-vue-reglage");
+    let bouton = vue
+        .split('<')
+        .find(|b| b.contains("data-comparer-ouvrir"))
+        .and_then(|b| b.split('>').next())
+        .expect("bouton « Comparer »");
+    assert!(bouton.starts_with("button class=\"btn\""), "{bouton}");
+    assert!(bouton.contains("data-t=\"comparer.ouvrir\""), "{bouton}");
+    let script = lire("interface/reglage.js");
+    assert!(script.contains("const comparer = window.Comparer;"));
+    assert!(
+        script.contains("comparer.ouvrir([source(d.actif.id)]);"),
+        "« Comparer » avec le profil actuel"
+    );
+    assert!(
+        script.contains("comparer.ouvrir([source(d.actif.id), source(p.id)]);"),
+        "« Comparer à l'actuel », l'actuel en référence"
+    );
+    assert!(script.contains("t(\"comparer.ouvrir.actuel\")"));
+}
+
+/// Chaque clé `comparer.` citée par la vue « Comparer » (comparer.js et ses
+/// morceaux comparer-ecarts.js et comparer-details.js, reglage.js, index.html) existe en français et en anglais ; un début de
+/// clé complété à l'écran (`"comparer.primaire." + nom`) existe pour chaque
+/// couleur de base.
+#[test]
+fn les_textes_de_la_vue_comparer_existent_dans_les_deux_langues() {
+    use app::textes::{texte, Langue};
+    let mut script = lire("interface/comparer.js")
+        + &lire("interface/reglage.js")
+        + &lire("interface/index.html");
+    for morceau in ["comparer-ecarts.js", "comparer-details.js"] {
+        script += &lire(&format!("interface/{morceau}"));
+    }
+    let mut demandees: Vec<String> = script
+        .match_indices("\"comparer.")
+        .filter_map(|(i, _)| script[i + 1..].split('"').next())
+        // `<script src="comparer.js">` n'est pas une clé.
+        .filter(|c| !c.ends_with(".js"))
+        .map(String::from)
+        .collect();
+    assert!(demandees.len() > 30, "clés lues : {demandees:?}");
+    assert!(demandees.iter().any(|c| c == "comparer.primaire."));
+    let prefixes: Vec<String> = demandees
+        .iter()
+        .filter(|c| c.ends_with('.'))
+        .cloned()
+        .collect();
+    demandees.retain(|c| !c.ends_with('.'));
+    for prefixe in prefixes {
+        if prefixe == "comparer.primaire." {
+            for nom in [
+                "blanc", "noir", "rouge", "vert", "bleu", "cyan", "magenta", "jaune",
+            ] {
+                demandees.push(format!("{prefixe}{nom}"));
+            }
+        } else {
+            assert!(
+                app::textes::cles().any(|k| k.starts_with(prefixe.as_str())),
+                "début de clé sans texte : {prefixe}"
+            );
+        }
+    }
+    let absentes: Vec<_> = demandees
+        .iter()
+        .filter(|c| {
+            [Langue::Francais, Langue::Anglais]
+                .iter()
+                .any(|l| texte(*l, c) == c.as_str())
+        })
+        .collect();
+    assert!(absentes.is_empty(), "clés absentes : {absentes:?}");
+    // La limite de la fidélité, dite en ces mots (plan, tâche 7).
+    assert_eq!(
+        texte(Langue::Francais, "comparer.methode.fidelite"),
+        "La fidélité se mesure sur les plages qui ont servi au calcul\u{202f}: elle avantage le profil qui les suit au plus près. Pour savoir lequel prédit le mieux un nouveau tirage, il faut mesurer une mire de contrôle (vérification, prévue)."
+    );
+}
+
+/// Une valeur à peine négative, arrondie à zéro (a* d'un blanc), s'écrit
+/// « 0,00 », jamais « -0,00 » : le signe n'est écrit que pour un nombre
+/// négatif une fois arrondi.
+#[test]
+fn un_zero_arrondi_s_ecrit_sans_signe() {
+    let graphiques = lire("interface/graphiques.js");
+    let formateur = graphiques
+        .split("function nombre(valeur, decimales) {")
+        .nth(1)
+        .expect("formateur nombre absent");
+    let formateur = &formateur[..formateur.find("\n  }").unwrap_or(formateur.len())];
+    assert!(
+        formateur.contains("signDisplay: \"negative\""),
+        "{formateur}"
+    );
+}
