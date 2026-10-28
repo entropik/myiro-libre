@@ -1,46 +1,82 @@
 //! Profil de l'image (ticket #80) : la couleur demandée de chaque pixel, en
-//! L\*a\*b\* relatifs D50. Profil RVB matrice et courbes, gris (`kTRC`), ou
-//! RVB à table `mft2` ; sRVB quand l'image n'en embarque pas.
+//! L\*a\*b\* relatifs D50. Profil RVB à table `mft2` (A2B1, puis A2B0) ou
+//! matrice et courbes, dans l'ordre de l'ICC, ou gris (`kTRC`) ; sRVB quand
+//! l'image n'en embarque pas.
 
 use crate::icc::{
     lire_desc, s15, signature, u16_at, u32_at, vers_lab_pcs, Balises, ErreurIcc, ILLUMINANT_D50,
 };
 use crate::table::{lab16_vers_lab, lire_mft2, Lut, XYZ16};
 
-/// Profil RVB : matrice et courbes si les six balises y sont, sinon table
-/// `mft2` colorimétrique (A2B1), sinon perceptuelle (A2B0).
-fn lire_rvb(balises: &Balises, pcs: &[u8]) -> Result<Genre, ErreurIcc> {
+/// Conversions écartées : la balise et la raison pour laquelle elle ne se
+/// lit pas.
+type Ecartees = Vec<(String, ErreurIcc)>;
+
+/// Profil RVB, dans l'ordre de l'ICC : table colorimétrique A2B1, puis
+/// perceptuelle A2B0, puis matrice et courbes. Une conversion présente mais
+/// illisible est écartée avec sa raison, et la suivante est essayée ; si
+/// aucune ne se lit, la raison de la première écartée est rendue.
+fn lire_rvb(balises: &Balises, pcs: &[u8]) -> Result<(Genre, Ecartees), ErreurIcc> {
+    let mut ecartees = Ecartees::new();
+    for (sig, balise) in [(b"A2B1", "A2B1"), (b"A2B0", "A2B0")] {
+        let table = match balises.trouver(sig) {
+            Ok(None) => continue,
+            Ok(Some(d)) => lire_pcs(pcs).and_then(|pcs| {
+                Ok(Genre::Table {
+                    pcs,
+                    lut: lire_mft2(d, balise)?,
+                })
+            }),
+            Err(erreur) => Err(erreur),
+        };
+        match table {
+            Ok(genre) => return Ok((genre, ecartees)),
+            Err(erreur) => ecartees.push((balise.into(), erreur)),
+        }
+    }
+    match lire_matrice(balises) {
+        Ok(Some(genre)) => return Ok((genre, ecartees)),
+        Ok(None) => {}
+        Err(erreur) => ecartees.push(("rXYZ".into(), erreur)),
+    }
+    Err(ecartees
+        .into_iter()
+        .next()
+        .map_or(ErreurIcc::SansTable, |(_, erreur)| erreur))
+}
+
+/// Matrice et courbes : `None` si aucune des six balises n'y est.
+fn lire_matrice(balises: &Balises) -> Result<Option<Genre>, ErreurIcc> {
+    let paires = [(b"rXYZ", b"rTRC"), (b"gXYZ", b"gTRC"), (b"bXYZ", b"bTRC")];
     let mut colonnes = [[0.0; 3]; 3];
     let mut courbes = Vec::new();
-    for (xyz, trc) in [(b"rXYZ", b"rTRC"), (b"gXYZ", b"gTRC"), (b"bXYZ", b"bTRC")] {
-        let (Some(x), Some(t)) = (balises.trouver(xyz)?, balises.trouver(trc)?) else {
-            break;
-        };
-        colonnes[courbes.len()] = lire_xyz(x, xyz)?;
-        courbes.push(lire_courbe(t, trc)?);
-    }
-    if let Ok(courbes) = <[Courbe; 3]>::try_from(courbes) {
-        return Ok(Genre::Matrice { colonnes, courbes });
-    }
-    let pcs = match pcs {
-        b"Lab " => Pcs::Lab,
-        b"XYZ " => Pcs::Xyz,
-        autre => {
-            return Err(ErreurIcc::EnTete(format!(
-                "PCS {} non pris en charge",
-                signature(autre)
-            )))
-        }
-    };
-    for (sig, balise) in [(b"A2B1", "A2B1"), (b"A2B0", "A2B0")] {
-        if let Some(d) = balises.trouver(sig)? {
-            return Ok(Genre::Table {
-                pcs,
-                lut: lire_mft2(d, balise)?,
-            });
+    for (k, (xyz, trc)) in paires.into_iter().enumerate() {
+        match (balises.trouver(xyz)?, balises.trouver(trc)?) {
+            (Some(x), Some(t)) => {
+                colonnes[k] = lire_xyz(x, xyz)?;
+                courbes.push(lire_courbe(t, trc)?);
+            }
+            (None, None) if courbes.is_empty() && k == 0 => return Ok(None),
+            _ => {
+                return Err(ErreurIcc::StructureNonPriseEnCharge {
+                    structure: "matrice et courbes incomplètes".into(),
+                })
+            }
         }
     }
-    Err(ErreurIcc::SansTable)
+    let courbes = <[Courbe; 3]>::try_from(courbes).map_err(|_| ErreurIcc::SansTable)?;
+    Ok(Some(Genre::Matrice { colonnes, courbes }))
+}
+
+fn lire_pcs(pcs: &[u8]) -> Result<Pcs, ErreurIcc> {
+    match pcs {
+        b"Lab " => Ok(Pcs::Lab),
+        b"XYZ " => Ok(Pcs::Xyz),
+        autre => Err(ErreurIcc::EnTete(format!(
+            "PCS {} non pris en charge",
+            signature(autre)
+        ))),
+    }
 }
 
 /// Balise `XYZ ` : trois s15Fixed16.
@@ -171,8 +207,9 @@ enum Genre {
     },
     /// Table `mft2` : RVB vers PCS Lab « hérité » 16 bits ou XYZ.
     Table { pcs: Pcs, lut: Lut },
-    /// Y = courbe(gris), sur le blanc D50 du PCS.
-    Gris(Courbe),
+    /// Gris (ICC.1, annexe F.2) : la courbe donne Y sur le blanc D50 au PCS
+    /// XYZ, et L\* (de 0 à 1 pour 0 à 100) au PCS Lab.
+    Gris { pcs: Pcs, courbe: Courbe },
 }
 
 /// Profil de l'image, prêt à donner la couleur demandée d'un pixel.
@@ -181,9 +218,13 @@ pub struct ProfilSource {
     nom: String,
     illuminant: [f64; 3],
     genre: Genre,
+    ecartees: Ecartees,
 }
 
-/// Primaires sRVB adaptées D50, telles que les écrit un profil ICC sRVB.
+/// Primaires sRVB adaptées D50 par Bradford, à 4 décimales, telles que les
+/// écrit un profil ICC sRVB. `srvb` les ramène sur le D50 du PCS ; l'écart
+/// au `sRGB.icm` d'ArgyllCMS est de 0,0116 ΔE00 au plus (confirmé par le
+/// test `srvb_concorde_avec_le_srgb_d_argyll`).
 const PRIMAIRES_SRVB: [[f64; 3]; 3] = [
     [0.4361, 0.2225, 0.0139],
     [0.3851, 0.7169, 0.0971],
@@ -191,9 +232,9 @@ const PRIMAIRES_SRVB: [[f64; 3]; 3] = [
 ];
 
 impl ProfilSource {
-    /// sRVB (IEC 61966-2-1) : primaires adaptées D50 d'un profil ICC sRVB,
-    /// ramenées pour que leur somme soit exactement le D50 du PCS (le blanc
-    /// de l'image est le blanc D50) ; courbe `para` de type 3.
+    /// sRVB (IEC 61966-2-1) : primaires `PRIMAIRES_SRVB` ramenées pour que
+    /// leur somme soit exactement le D50 du PCS (le blanc de l'image est le
+    /// blanc D50) ; courbe `para` de type 3.
     pub fn srvb() -> ProfilSource {
         let somme = [0, 1, 2].map(|k| PRIMAIRES_SRVB.iter().map(|p| p[k]).sum::<f64>());
         let colonnes =
@@ -217,6 +258,7 @@ impl ProfilSource {
                 colonnes,
                 courbes: [courbe.clone(), courbe.clone(), courbe],
             },
+            ecartees: Ecartees::new(),
         }
     }
 
@@ -239,10 +281,16 @@ impl ProfilSource {
             return Err(ErreurIcc::EnTete("illuminant du PCS invalide".into()));
         }
         let balises = Balises::lire(octets)?;
-        let genre = match &octets[16..20] {
+        let (genre, ecartees) = match &octets[16..20] {
             b"RGB " => lire_rvb(&balises, &octets[20..24])?,
             b"GRAY" => match balises.trouver(b"kTRC")? {
-                Some(t) => Genre::Gris(lire_courbe(t, b"kTRC")?),
+                Some(t) => (
+                    Genre::Gris {
+                        pcs: lire_pcs(&octets[20..24])?,
+                        courbe: lire_courbe(t, b"kTRC")?,
+                    },
+                    Ecartees::new(),
+                ),
                 None => return Err(ErreurIcc::SansTable),
             },
             b"CMYK" => {
@@ -265,7 +313,31 @@ impl ProfilSource {
             nom,
             illuminant,
             genre,
+            ecartees,
         })
+    }
+
+    /// Conversions du profil écartées parce qu'illisibles, avec leur raison
+    /// (une A2B1 `mAB` quand l'A2B0 se lit, par exemple) : rien n'est
+    /// remplacé sans le dire.
+    pub fn ecartees(&self) -> &[(String, ErreurIcc)] {
+        &self.ecartees
+    }
+
+    /// Clé du catalogue de textes qui explique le refus du profil d'une
+    /// image, et non d'un profil d'imprimante.
+    pub fn cle_refus(erreur: &ErreurIcc) -> &'static str {
+        match erreur {
+            ErreurIcc::EnTete(_) => "comparer.image.refus.en_tete",
+            ErreurIcc::PasRvb { .. } => "comparer.image.refus.pas_rvb",
+            ErreurIcc::StructureNonPriseEnCharge { .. } => "comparer.image.refus.structure",
+            ErreurIcc::Tronque { .. } => "comparer.image.refus.tronque",
+            // Ni blanc ni table inverse ne sont demandés au profil d'une
+            // image : il n'en reste que l'absence de conversion.
+            ErreurIcc::SansTable | ErreurIcc::SansBlanc | ErreurIcc::SansTableInverse => {
+                "comparer.image.refus.sans_conversion"
+            }
+        }
     }
 
     /// Nom lu dans `desc` (vide s'il ne se lit pas), ou « sRVB » pour
@@ -290,9 +362,12 @@ impl ProfilSource {
                     Pcs::Xyz => vers_lab_pcs(v.map(|x| x * XYZ16), self.illuminant),
                 }
             }
-            Genre::Gris(courbe) => {
-                let y = courbe.appliquer(rvb[0]);
-                vers_lab_pcs(self.illuminant.map(|w| w * y), self.illuminant)
+            Genre::Gris { pcs, courbe } => {
+                let v = courbe.appliquer(rvb[0]);
+                match pcs {
+                    Pcs::Lab => [100.0 * v, 0.0, 0.0],
+                    Pcs::Xyz => vers_lab_pcs(self.illuminant.map(|w| w * v), self.illuminant),
+                }
             }
         }
     }

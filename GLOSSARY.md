@@ -271,7 +271,8 @@ _Éviter_ : couleur simulée, épreuve
 
 **Profil de l'image** :
 Profil ICC embarqué dans une photo, qui dit quelle couleur chaque pixel demande (la couleur demandée, en L\*a\*b\* relatif). Une photo sans profil est lue en sRVB. Un profil embarqué illisible ou en CMJN est refusé avec sa raison, jamais remplacé en silence.
-_Éviter_ : profil source, profil d'entrée
+Dans le code : `ProfilSource` (le « profil source » de l'ICC).
+_Éviter_ : profil d'entrée
 
 **Nuage de couleurs** :
 Les couleurs d'une photo placées dans l'espace L\*a\*b\*, regroupées par petits cubes de 4 unités : au plus 4 000 points, les plus peuplés d'abord. Chaque point est placé sur le blanc du papier du profil choisi et garde le plus grand écart de ses pixels.

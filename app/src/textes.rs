@@ -424,6 +424,26 @@ const FRANCAIS: Catalogue = &[
         "Ce fichier est bien trop grand pour un profil ICC\u{202f}: il n’est pas ouvert.",
     ),
     (
+        "comparer.image.refus.en_tete",
+        "Le profil embarqué dans cette image n’est pas un profil ICC lisible ({detail}).",
+    ),
+    (
+        "comparer.image.refus.pas_rvb",
+        "Le profil embarqué dans cette image est un profil CMJN. Les images CMJN sont prévues dans une seconde étape.",
+    ),
+    (
+        "comparer.image.refus.sans_conversion",
+        "Le profil embarqué dans cette image ne dit pas quelles couleurs ses pixels demandent\u{202f}: il n’a ni table A2B, ni matrice et courbes, ni courbe de gris.",
+    ),
+    (
+        "comparer.image.refus.structure",
+        "Le profil embarqué dans cette image est d’une structure que myiro-libre ne lit pas encore ({detail}).",
+    ),
+    (
+        "comparer.image.refus.tronque",
+        "Le profil embarqué dans cette image est incomplet\u{202f}: une partie ({detail}) sort du profil.",
+    ),
+    (
         "comparer.zone.gris",
         "Gris",
     ),
@@ -2169,6 +2189,26 @@ const ANGLAIS: Catalogue = &[
         "This file is far too large for an ICC profile: it is not opened.",
     ),
     (
+        "comparer.image.refus.en_tete",
+        "The profile embedded in this image is not a readable ICC profile ({detail}).",
+    ),
+    (
+        "comparer.image.refus.pas_rvb",
+        "The profile embedded in this image is a CMYK profile. CMYK images are planned for a second stage.",
+    ),
+    (
+        "comparer.image.refus.sans_conversion",
+        "The profile embedded in this image does not say which colours its pixels ask for: it has no A2B table, no matrix and curves, no grey curve.",
+    ),
+    (
+        "comparer.image.refus.structure",
+        "The profile embedded in this image has a structure myiro-libre does not read yet ({detail}).",
+    ),
+    (
+        "comparer.image.refus.tronque",
+        "The profile embedded in this image is incomplete: a part ({detail}) goes beyond the end of the profile.",
+    ),
+    (
         "comparer.zone.gris",
         "Greys",
     ),
@@ -3671,6 +3711,32 @@ mod tests {
             let calcul = texte(langue, "mesurer.calcul");
             assert!(calcul.contains("myiro-libre"), "{calcul}");
             assert!(calcul.contains("D50") && calcul.contains("2°"), "{calcul}");
+        }
+    }
+
+    /// Chaque refus du profil d'une image (#80) a son texte, dans les deux
+    /// langues.
+    #[test]
+    fn les_refus_d_un_profil_d_image_ont_leur_texte() {
+        use gamut::{ErreurIcc, ProfilSource};
+        let refus = [
+            ErreurIcc::EnTete(String::new()),
+            ErreurIcc::PasRvb {
+                espace: "CMYK".into(),
+            },
+            ErreurIcc::SansTable,
+            ErreurIcc::StructureNonPriseEnCharge {
+                structure: "mAB".into(),
+            },
+            ErreurIcc::Tronque {
+                balise: "kTRC".into(),
+            },
+        ];
+        for erreur in &refus {
+            let cle = ProfilSource::cle_refus(erreur);
+            for langue in [Langue::Francais, Langue::Anglais] {
+                assert_ne!(texte(langue, cle), cle, "{cle} manque");
+            }
         }
     }
 
