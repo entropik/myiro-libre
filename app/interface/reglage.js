@@ -39,17 +39,20 @@ window.Reglage = (() => {
   // Calcul d'un profil : section, calcul et provenance (calcul-profil.js).
   const calcul = window.CalculProfil;
   const { texteErreur } = calcul;
+  // Préparer une mire : section et préparation (mire.js).
+  const mire = window.PreparerMire;
 
   // Pendant une action (fenêtre de Windows ouverte, installation, calcul), tous les boutons de
   // la vue sont inactifs et la raison « en cours » est dite juste à côté : un double clic ne
   // fait rien. Pendant un calcul, seule sa raison à lui est dite, sous son bouton. Un bouton
   // marqué data-inactif l'est aussi hors de toute action.
   const BOUTONS = "[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-calcul-profil] button, [data-calcul-profil] input";
+  const BOUTONS_MIRE = "[data-mire-ouvrir], [data-mire] button, [data-mire] input";
   const occupe = vue.querySelector("[data-reglage-occupe]");
   let enCours = false;
 
   function dessinerOccupation(sansProfil) {
-    for (const b of vue.querySelectorAll(BOUTONS)) {
+    for (const b of vue.querySelectorAll(`${BOUTONS}, ${BOUTONS_MIRE}`)) {
       b.disabled = enCours || b.hasAttribute("data-inactif") || (sansProfil && b.hasAttribute("data-installer"));
     }
     occupe.hidden = !enCours || calcul.raisonVisible();
@@ -77,6 +80,7 @@ window.Reglage = (() => {
     vue.querySelector("[data-installer-raison]").hidden = Boolean(actif) || enCours;
     vue.querySelector("[data-exporter-profil]").hidden = !actif;
     calcul.dessiner(d);
+    mire.dessiner(d);
     dessinerOccupation(!actif);
 
     const historique = vue.querySelector("[data-historique]");
@@ -182,6 +186,16 @@ window.Reglage = (() => {
     recharger: () => parc.recharger(),
     annoncer,
     agir,
+    occupation: () => dessinerOccupation(!(parc.reglage() || {}).actif),
+  });
+
+  // La préparation d'une mire agit sur la résolution affichée, avec le même mécanisme.
+  mire.brancher({
+    reglage: () => parc.reglage(),
+    recharger: () => parc.recharger(),
+    annoncer,
+    agir,
+    texteErreur,
     occupation: () => dessinerOccupation(!(parc.reglage() || {}).actif),
   });
 
