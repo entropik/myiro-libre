@@ -1941,8 +1941,10 @@ name = "mires"
 version = "0.1.0"
 dependencies = [
  "cgats",
+ "colorimetrie",
  "pont-protocole",
  "serde",
+ "serde_json",
  "sha2",
  "tiff",
 ]

@@ -15,6 +15,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 mod gabarit;
+mod mise_en_page;
 mod rgb2520;
 mod ti1;
 
@@ -22,6 +23,9 @@ pub use gabarit::{
     Gabarit, Rectangle, CONTRASTE_MIN_DE76, DISTANCE_TEXTE_MM, MYIRO1_BANDEAU_MM,
     MYIRO1_BANDE_MAX_MM, MYIRO1_BLANC_BOUT_MM, MYIRO1_COTE_MIN_MM, MYIRO1_COTE_PAR_DEFAUT_MM,
     MYIRO1_ECART_BANDES_MM, MYIRO1_MARGE_PAGE_MM,
+};
+pub use mise_en_page::{
+    estimer_lab, mettre_en_page, verifier, Defaut, MiseEnPage, Page, PlagePlacee,
 };
 pub use rgb2520::{
     lire_mire_fd9, lire_mire_fd9_sans_empreinte, GeometrieFd9, MireFd9, RGB2520_EMPREINTE,
