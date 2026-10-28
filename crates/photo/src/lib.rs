@@ -75,7 +75,9 @@ pub struct Photo {
     pub icc: Option<Vec<u8>>,
     /// Un profil est présent dans le fichier mais le décodeur n'a pas pu le
     /// lire (abîmé, incomplet, trop grand) : la raison, jamais un « sans
-    /// profil » silencieux. `icc` vaut alors `None`.
+    /// profil » silencieux. `icc` vaut alors `None`, mais l'image ne doit
+    /// **jamais** être traitée comme sRVB sans le choix explicite de
+    /// l'opérateur (« Traiter comme sRVB »), affiché ensuite « supposé ».
     pub profil_illisible: Option<String>,
     /// `largeur` × `hauteur` pixels, ligne par ligne.
     pub rvba: Vec<[u8; 4]>,
