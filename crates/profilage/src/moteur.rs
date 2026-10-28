@@ -64,6 +64,8 @@ pub enum Etape {
     Profil,
     /// Contrôle du profil contre les mesures (`profcheck`).
     Controle,
+    /// Limite du gamut d'un profil (`iccgamut`, comparaison des profils).
+    Gamut,
 }
 
 /// Pourquoi le moteur n'a pas rendu de profil.
@@ -98,6 +100,10 @@ impl ErreurMoteur {
                 etape: Etape::Controle,
                 ..
             } => "profil.erreur.controle",
+            ErreurMoteur::Echec {
+                etape: Etape::Gamut,
+                ..
+            } => "comparer.erreur.limite",
             ErreurMoteur::Fichier(_) => "profil.erreur.fichier",
         }
     }
@@ -116,6 +122,7 @@ impl fmt::Display for ErreurMoteur {
                     Etape::Version => "lecture de la version",
                     Etape::Profil => "calcul du profil",
                     Etape::Controle => "contrôle du profil",
+                    Etape::Gamut => "calcul de la limite du gamut",
                 };
                 write!(f, "échec à l'étape {etape} : {cause}")
             }

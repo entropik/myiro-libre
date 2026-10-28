@@ -9,8 +9,11 @@
 //! - [`MoteurProfil`] calcule le profil à partir du `.ti3` : [`ArgyllCms`]
 //!   en vrai, version figée [`VERSION_ARGYLL`], [`MoteurSimule`] pour les
 //!   tests.
+//! - [`MoteurGamut`] calcule la limite du gamut d'un profil (`iccgamut`) :
+//!   [`ArgyllCms`] en vrai, [`MoteurGamutSimule`] pour les tests.
 
 mod argyll;
+mod limite;
 mod moteur;
 mod plages;
 mod suivi;
@@ -19,6 +22,9 @@ mod ti3;
 pub use argyll::{
     arguments_colprof, chercher_argyll, controler_version, description_argyll, lignes_commandes,
     lire_precision, lire_version, ArgyllCms,
+};
+pub use limite::{
+    arguments_iccgamut, lire_volume_iccgamut, LimiteCalculee, MoteurGamut, MoteurGamutSimule,
 };
 pub use moteur::{
     etape_colprof, lire_avancement, Avancement, DemandeProfil, ErreurMoteur, Etape, EtapeCalcul,
