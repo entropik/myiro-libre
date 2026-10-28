@@ -382,6 +382,39 @@ const FRANCAIS: Catalogue = &[
         "profil.precision.valeur",
         "{moyenne} en moyenne, {max} au plus (ΔE00)",
     ),
+    // Contrôle de cohérence des mesures (ticket #1)
+    (
+        "profil.refus.incoherent",
+        "Les mesures ne correspondent pas aux plages de la mire\u{202f}: le profil serait faux. Plages en cause\u{202f}: {plages}. Relisez la mire, vérifiez le sens de la feuille et l’ordre de lecture, et que ce fichier est bien celui de cette mire.",
+    ),
+    ("profil.coherence.autres", "et {n} autres"),
+    ("profil.coherence.autre", "et 1 autre"),
+    (
+        "profil.coherence.decalage",
+        "Les mesures semblent décalées de {n} plages.",
+    ),
+    (
+        "profil.coherence.decalage_une",
+        "Les mesures semblent décalées d’une plage.",
+    ),
+    (
+        "profil.coherence.criteres",
+        "Contrôles qui les signalent\u{202f}: {criteres}.",
+    ),
+    (
+        "profil.coherence.critere.degrade_gris",
+        "dégradé gris, du foncé au clair",
+    ),
+    ("profil.coherence.critere.blanc_noir", "blanc papier et noir"),
+    ("profil.coherence.critere.doublons", "plages répétées"),
+    ("profil.coherence.critere.voisines", "plages voisines"),
+    ("profil.coherence", "Mesures contrôlées"),
+    ("profil.coherence.accepte", "cohérentes"),
+    ("profil.coherence.non_fait", "Contrôles non faits"),
+    (
+        "profil.coherence.non_controle",
+        "non, profil calculé avant ce contrôle",
+    ),
     // Installation dans Windows
     ("installation.installe", "Installé dans Windows"),
     (
@@ -1373,6 +1406,36 @@ const ANGLAIS: Catalogue = &[
     (
         "profil.precision.valeur",
         "{moyenne} on average, {max} at most (ΔE00)",
+    ),
+    // Measurement consistency check (ticket #1)
+    (
+        "profil.refus.incoherent",
+        "The measurements do not match the patches of the chart: the profile would be wrong. Patches involved: {plages}. Read the chart again, check the sheet orientation and the reading order, and that this file belongs to this chart.",
+    ),
+    ("profil.coherence.autres", "and {n} others"),
+    ("profil.coherence.autre", "and 1 other"),
+    (
+        "profil.coherence.decalage",
+        "The measurements seem shifted by {n} patches.",
+    ),
+    (
+        "profil.coherence.decalage_une",
+        "The measurements seem shifted by one patch.",
+    ),
+    ("profil.coherence.criteres", "Checks that flag them: {criteres}."),
+    (
+        "profil.coherence.critere.degrade_gris",
+        "grey ramp, dark to light",
+    ),
+    ("profil.coherence.critere.blanc_noir", "paper white and black"),
+    ("profil.coherence.critere.doublons", "repeated patches"),
+    ("profil.coherence.critere.voisines", "neighbouring patches"),
+    ("profil.coherence", "Measurements checked"),
+    ("profil.coherence.accepte", "consistent"),
+    ("profil.coherence.non_fait", "Checks not done"),
+    (
+        "profil.coherence.non_controle",
+        "no, profile calculated before this check",
     ),
     // Installing in Windows
     ("installation.installe", "Installed in Windows"),

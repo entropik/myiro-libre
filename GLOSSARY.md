@@ -223,6 +223,10 @@ _Éviter_ : preset, mode, qualité seule
 Écart ΔE00 moyen et maximal entre les mesures qui ont servi au calcul et ce que le profil prédit pour elles. Elle dit si le calcul a bien suivi les mesures, pas si le profil est bon : un profil calculé reste « à vérifier » (« Profil calculé, à vérifier ») jusqu'à la vérification de profil.
 _Éviter_ : qualité du profil, vérification
 
+**Contrôle de cohérence** :
+Vérification, avant un calcul de profil, que les mesures correspondent aux plages de la mire : dégradé gris du foncé au clair, blanc papier et noir aux bonnes plages, plages répétées mesurées pareil, chaque plage proche de ses voisines. S'il signale une plage, le calcul est refusé, avec les plages en cause et, si un décalage de lecture l'explique, ce décalage ; rien n'est corrigé. Son résultat est gardé dans la provenance du profil. Les seuils sont des choix, à vérifier sur des mesures réelles.
+_Éviter_ : validation des mesures, correction des mesures
+
 ### Densitométrie et contrôle
 
 **Densité** :
