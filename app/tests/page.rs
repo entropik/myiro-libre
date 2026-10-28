@@ -1104,10 +1104,13 @@ fn pendant_une_action_sur_le_profil_les_boutons_disent_pourquoi() {
     let script = lire("interface/reglage.js");
     assert!(
         script.contains(
-            "const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-calcul-profil] button, [data-calcul-profil] input\";"
+            "const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-comparer-ouvrir], [data-comparer-actuel], [data-calcul-profil] button, [data-calcul-profil] input\";"
         ),
         "les boutons de la vue"
     );
+    // « Comparer à l'actuel » est dessiné après l'occupation : il naît inactif pendant une action.
+    assert!(script.contains("b.dataset.comparerActuel = \"\";"));
+    assert!(script.contains("b.disabled = enCours;"));
     assert!(script.contains("occupe.hidden = !enCours || calcul.raisonVisible();"));
     assert!(app::textes::cles().any(|c| c == "parc.en_cours"));
 }
@@ -1739,4 +1742,23 @@ fn un_zero_arrondi_s_ecrit_sans_signe() {
         formateur.contains("signDisplay: \"negative\""),
         "{formateur}"
     );
+}
+
+/// « Comparaison en cours » ne reste jamais affiché sur une vue vide : le
+/// dernier profil retiré pendant une analyse, ou la comparaison fermée, le
+/// masquent. Une réponse périmée ne le touche pas : la demande plus récente
+/// le tient.
+#[test]
+fn la_comparaison_en_cours_ne_reste_pas_sur_une_vue_vide() {
+    let script = lire("interface/comparer.js");
+    assert!(
+        script.contains("if (!choisis.length) { enCours.hidden = true; dessiner(); return; }"),
+        "dernier profil retiré"
+    );
+    let fermer = script
+        .split("function fermer() {")
+        .nth(1)
+        .expect("fermer absent");
+    let fermer = &fermer[..fermer.find("\n  }").unwrap_or(fermer.len())];
+    assert!(fermer.contains("enCours.hidden = true;"), "{fermer}");
 }

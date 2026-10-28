@@ -153,11 +153,12 @@ window.Comparer = (() => {
     comparaison = null;
     chemins = [];
     dessinerPuces();
-    if (!choisis.length) { dessiner(); return; }
+    if (!choisis.length) { enCours.hidden = true; dessiner(); return; }
     enCours.hidden = false;
     dessiner();
     try {
       const reponse = await invoke("comparer_analyser", { sources: choisis.map((c) => c.source) });
+      // Périmée : la demande plus récente tient « en cours ».
       if (n !== demande) return;
       comparaison = reponse;
       reglages.forme = null;
@@ -354,6 +355,7 @@ window.Comparer = (() => {
     if (!ouverte) return;
     ouverte = false;
     demande++;
+    enCours.hidden = true;
     vue.hidden = true;
     details.hidden = true;
     dessiner();

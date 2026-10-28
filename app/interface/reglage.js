@@ -47,8 +47,9 @@ window.Reglage = (() => {
   // Pendant une action (fenêtre de Windows ouverte, installation, calcul), tous les boutons de
   // la vue sont inactifs et la raison « en cours » est dite juste à côté : un double clic ne
   // fait rien. Pendant un calcul, seule sa raison à lui est dite, sous son bouton. Un bouton
-  // marqué data-inactif l'est aussi hors de toute action.
-  const BOUTONS = "[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-calcul-profil] button, [data-calcul-profil] input";
+  // marqué data-inactif l'est aussi hors de toute action. « Comparer » et « Comparer à
+  // l'actuel » en font partie.
+  const BOUTONS = "[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-comparer-ouvrir], [data-comparer-actuel], [data-calcul-profil] button, [data-calcul-profil] input";
   const occupe = vue.querySelector("[data-reglage-occupe]");
   let enCours = false;
 
@@ -94,6 +95,8 @@ window.Reglage = (() => {
       // Un profil remplacé se compare à l'actuel : avant / après, l'actuel en référence.
       if (!p.actif && actif) {
         const b = el("button", "btn", t("comparer.ouvrir.actuel"));
+        b.dataset.comparerActuel = "";
+        b.disabled = enCours;
         b.addEventListener("click", () => {
           comparer.ouvrir([source(d.actif.id), source(p.id)]);
         });
