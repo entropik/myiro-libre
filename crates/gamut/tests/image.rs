@@ -7,8 +7,8 @@
 use std::time::Instant;
 
 use gamut::{
-    analyser_pixels, profil_essai, ErreurIcc, ProfilEssai, ProfilIcc, ProfilSource, ECART_INCONNU,
-    POINTS_NUAGE, SECTEURS_TEINTE,
+    analyser_pixels, profil_essai, Annulee, ErreurIcc, ProfilEssai, ProfilIcc, ProfilSource,
+    ECART_INCONNU, POINTS_NUAGE, SECTEURS_TEINTE,
 };
 
 /// L = 25 + 75·(r+g+b)/3, a = 60·(r−g), b = 60·(g−b).
@@ -231,7 +231,7 @@ fn l_analyse_s_arrete_quand_on_annule() {
         &sortie(Some(lineaire_inverse)),
         &|| true,
     );
-    assert!(resultat.is_err());
+    assert!(matches!(resultat, Err(Annulee)));
 }
 
 #[test]
