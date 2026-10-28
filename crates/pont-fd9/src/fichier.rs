@@ -65,7 +65,8 @@ pub fn version_du_fichier(chemin: &Path) -> Option<[u32; 4]> {
             return None;
         }
         let mots = std::slice::from_raw_parts(valeur.cast::<u8>(), 16);
-        let mot = |i: usize| u32::from_le_bytes(mots[i..i + 4].try_into().unwrap());
+        // `mots` fait 16 octets : i + 3 < 16 pour i ≤ 12.
+        let mot = |i: usize| u32::from_le_bytes([mots[i], mots[i + 1], mots[i + 2], mots[i + 3]]);
         // Signature de VS_FIXEDFILEINFO.
         if mot(0) != 0xFEEF_04BD {
             return None;

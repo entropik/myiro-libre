@@ -13,8 +13,8 @@ use crate::connexion::inattendue;
 use crate::feuille::erreur_sdk;
 use crate::{SdkFd9, Session};
 use fd9_sys::{
-    CleOption, CoordonneesMire, EtatSdk, PointMesure, PositionPlage, DONNEES_BRUTES,
-    DONNEES_BRUTES_TYPE, LAB_TYPE, SPECTRE_TYPE,
+    CleOption, EtatSdk, PointMesure, PositionPlage, DONNEES_BRUTES, DONNEES_BRUTES_TYPE, LAB_TYPE,
+    SPECTRE_TYPE,
 };
 use pont_protocole::{
     Calcul, ConditionMesure, ConditionsCalcul, DefinitionFeuille, DonneesBrutes, Echantillonnage,
@@ -38,7 +38,15 @@ const ILLUMINANT_D50: u32 = 2;
 const OBSERVATEUR_2_DEGRES: u32 = 0;
 
 const LIBELLE_CALCUL: &str = "étalonnage automatique de l'instrument ; spectres : condition \
-     0/2/15 = M0/M1/M2 (supposé), 380-730 nm par 10 nm (supposé) ; Lab : D50, 2°";
+     0/2/15 = M0/M1/M2 (supposé), 380-730 nm par 10 nm (supposé) ; Lab : D50, 2° (supposé)";
+
+/// Position de départ de `FD9_GetData` : aucune plage n'a cette position
+/// (la DLL rend des rangées et colonnes d'au moins 0).
+const POSITION_IMPOSSIBLE: PositionPlage = PositionPlage {
+    zone_ou_index: u32::MAX,
+    rangee: -2,
+    colonne: -2,
+};
 
 /// Données brutes d'une plage, telles que `FD9_GetData` les rend.
 type Brutes = [f32; DONNEES_BRUTES];
@@ -48,15 +56,14 @@ impl<S: SdkFd9> Session<S> {
     /// La plage n° i de la mesure est la plage n° i de `mire` : vérifié par
     /// la position que rend la DLL, plage par plage.
     pub fn mesurer_feuille(&mut self, mire: &DefinitionFeuille) -> Result<Mesure, ErreurPont> {
-        self.autoriser(Palier::Feuille, Some(Palier::Connexion))?;
-        self.exiger_connexion()?;
-        let coordonnees = CoordonneesMire::depuis_definition(mire).map_err(|e| {
-            self.journal
-                .push(format!("définition de feuille refusée : {e:?}"));
-            ErreurPont::ParametreRefuse {}
-        })?;
-        self.vider_hors_requete();
-        self.recus.clear();
+        let resultat = self.mesurer_toute_la_feuille(mire);
+        // Une annulation ne vise que la feuille qui vient de finir.
+        self.annulation.effacer();
+        resultat
+    }
+
+    fn mesurer_toute_la_feuille(&mut self, mire: &DefinitionFeuille) -> Result<Mesure, ErreurPont> {
+        let coordonnees = self.commencer_feuille(Palier::Feuille, mire)?;
         let lecture = self.lire_feuille(mire, &coordonnees)?;
         let mut points = vec![PointMesure([0; 20]); lecture.plages as usize];
         let code = self.sdk.points_mesure(&mut points);
@@ -85,7 +92,9 @@ impl<S: SdkFd9> Session<S> {
         for (i, attendue) in attendues.iter().enumerate() {
             self.regler(CleOption::TypeDonnees, DONNEES_BRUTES_TYPE)?;
             let mut brutes = [0f32; DONNEES_BRUTES];
-            let mut rendue = PositionPlage::default();
+            // Valeur impossible : une position que la DLL n'écrit pas ne
+            // peut pas passer pour la bonne.
+            let mut rendue = POSITION_IMPOSSIBLE;
             // Bornée par PLAGES_MAX : le numéro tient dans un u32.
             let demandee = PositionPlage::numero(i as u32);
             let code = self.sdk.donnees(&mut rendue, &mut brutes, &demandee);
@@ -177,8 +186,9 @@ impl<S: SdkFd9> Session<S> {
     }
 
     /// Ce que le pont atteste : instrument et SDK lus à la connexion, pas
-    /// d'étalonnage par l'utilisateur, conditions supposées tant que l'essai
-    /// E4 ne les a pas comparées à une mesure de référence.
+    /// d'étalonnage par l'utilisateur, conditions, illuminant et observateur
+    /// supposés tant que l'essai E4 ne les a pas comparés à une mesure de
+    /// référence.
     fn provenance(&self, lecture: LectureFeuille) -> Result<Provenance, ErreurPont> {
         let identite = self
             .identite
@@ -212,8 +222,10 @@ impl<S: SdkFd9> Session<S> {
                         debut_nm: 380,
                         pas_nm: 10,
                     }),
-                    illuminant_lab: Info::Confirmee(Illuminant::D50),
-                    observateur_lab: Info::Confirmee(Observateur::DeuxDegres),
+                    // Valeurs 2 et 0 d'une table de FD-S2w, que la DLL ne
+                    // permet pas de relire (fiche FD9_SetOption) : supposées.
+                    illuminant_lab: Info::Supposee(Illuminant::D50),
+                    observateur_lab: Info::Supposee(Observateur::DeuxDegres),
                 }),
                 observe: Info::Inconnue,
             },

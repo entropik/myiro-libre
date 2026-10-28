@@ -467,3 +467,27 @@ fn sans_la_main_le_delai_rend_feuille_absente() {
         [ARRET[0], "FD9_GetLastError"]
     );
 }
+
+#[test]
+fn un_refus_de_la_capture_d_une_feuille_glissee_avant_est_rendu_tel_quel() {
+    // L'état 3 lu au début ne vaut que ce que dit StartCapture, qui contrôle
+    // lui-même l'état du SDK (1104 hors de l'état 3).
+    let sdk = Fd9Simule::avec_une_rgb2520().rendre("FD9_StartCapture", 1104);
+    let (mut session, depuis) = connectee(sdk, Palier::Prenumerisation);
+    session.sdk_mut().a_venir.clear();
+    session.sdk_mut().rappeler(2);
+    session.sdk_mut().rappeler(3);
+
+    assert_eq!(
+        session.prenumeriser(&rgb2520()),
+        Err(ErreurPont::EtatIncompatible {})
+    );
+    assert_eq!(
+        appels_de_la_feuille(&session, depuis),
+        ["FD9_StartCapture", "FD9_GetLastError", ARRET[0], ARRET[1]]
+    );
+    assert!(session
+        .journal()
+        .iter()
+        .any(|l| l.starts_with("FD9_StartCapture : code 1104")));
+}

@@ -70,6 +70,11 @@ pub struct Fd9Simule {
     pub options: [u32; 4],
     /// Plage dont `FD9_GetData` rend une autre position.
     pub position_fausse: Option<u32>,
+    /// `FD9_GetData` rend 0 sans écrire la position.
+    pub position_non_ecrite: bool,
+    /// État que l'instrument atteint juste avant le prochain
+    /// `FD9_StopMeasurement` : l'arrêt croise la fin de la mesure.
+    pub avant_arret: Option<u32>,
     /// Valeurs qu'un spectre demande (`FD9_CalculateData`, 1005 au-delà de
     /// la sortie donnée).
     pub spectre_longueur: usize,
@@ -386,6 +391,9 @@ impl SdkFd9 for Fd9Simule {
     }
 
     fn arreter(&mut self, feuille_suivante: bool) -> i32 {
+        if let Some(etat) = self.avant_arret.take() {
+            self.rappeler(etat);
+        }
         let detail = if feuille_suivante { "vrai" } else { "faux" };
         self.appel_admis("FD9_StopMeasurement", detail.into(), |e| {
             (1..=8).contains(&e)
@@ -463,6 +471,9 @@ impl SdkFd9 for Fd9Simule {
             .as_ref()
             .map_or(1, |c| c.compte_zones[0].colonnes.max(1));
         let decalage = i32::from(self.position_fausse == Some(i));
+        if self.position_non_ecrite {
+            return 0;
+        }
         *rendue = PositionPlage {
             zone_ou_index: 0,
             rangee: (i / colonnes) as i32,

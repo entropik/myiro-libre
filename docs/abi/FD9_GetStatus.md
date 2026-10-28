@@ -34,15 +34,18 @@ int32_t __stdcall FD9_GetStatus(tFD9_Status *etat);  /* x86 : ret 4 */
 
 - Les deux appels qui encadrent la recopie prennent et rendent un verrou : la lecture peut se faire pendant qu'un fil de la DLL reçoit des messages.
 - +0x14 = 1 : une feuille est engagée.
+- L'état lu à +0x10 au début d'une feuille dit si une feuille a été glissée avant la requête (3 : engagée ; 2 : en cours d'engagement ; 1 : attendue). Ce sens est **supposé** tant que l'essai E3 (feuille glissée avant la requête) ne l'a pas vérifié.
 
 ## Pour le pont
 
 - Structure à zéro avant l'appel ; garder les 8 nombres bruts dans le journal de session.
-- Ne jamais faire avancer la session sur `FD9_GetStatus` : seuls les événements du rappel et les codes de retour la font avancer.
+- **Une seule exception** à la règle « seuls les événements du rappel et les codes de retour font avancer la session » : le pont lit l'état **une seule fois**, au début de `prenumeriser` ou de `mesurer_feuille`, pour reprendre une feuille glissée avant la requête, dont les événements 2 et 3 sont arrivés hors de toute requête. À l'état 3, il lance aussitôt [FD9_StartCapture](FD9_StartCapture.md) ; à l'état 2, il attend l'événement 3 ; à l'état 1, il attend la feuille ; dans tout autre état, il refuse la feuille (`instrument_indisponible`) sans rien lancer. Ensuite, la session n'avance plus que sur les événements et les codes de retour.
+- Ce choix reste sûr si l'état lu était faux : `FD9_StartCapture` contrôle lui-même l'état du SDK et rend 1104 hors de l'état 3 (confirmé, fiche [FD9_StartCapture](FD9_StartCapture.md)). Ce refus est rendu tel quel, après l'arrêt de la feuille.
 
 ## À vérifier sur l'instrument
 
 - Les 8 nombres après la connexion, puis feuille engagée (essai E1).
+- L'état +0x10 quand la feuille a été glissée **avant** la requête, et la reprise de la feuille par le pont (essai E3).
 
 ## Preuves (locales)
 

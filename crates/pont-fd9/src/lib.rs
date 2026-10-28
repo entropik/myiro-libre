@@ -173,6 +173,9 @@ pub struct Session<S: SdkFd9> {
     reconnaissance: ModeReconnaissance,
     /// Événements reçus et pas encore traités par la requête en cours.
     recus: VecDeque<Evenement>,
+    /// Dernier état connu du SDK : dernier événement traité (hors avis de
+    /// plages), ou état lu au début d'une feuille.
+    dernier_etat: Option<EtatSdk>,
 }
 
 const APPAREIL_VIDE: Appareil = Appareil {
@@ -201,6 +204,7 @@ impl<S: SdkFd9> Session<S> {
             annulation: Annulation::default(),
             reconnaissance: ModeReconnaissance::Combine,
             recus: VecDeque::new(),
+            dernier_etat: None,
         }
     }
 

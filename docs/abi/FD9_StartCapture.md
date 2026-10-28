@@ -29,7 +29,7 @@ int32_t __stdcall FD9_StartCapture(void);  /* x86 : ret nu, aucun argument */
 
 ## Pour le pont
 
-- Ne l'appeler **que dans le fil de la session**, après avoir reçu l'événement 3 ; jamais depuis le rappel.
+- Ne l'appeler **que dans le fil de la session**, après avoir reçu l'événement 3 ; jamais depuis le rappel. Exception : une feuille glissée avant la requête, que le pont reprend sur l'état 3 lu par [FD9_GetStatus](FD9_GetStatus.md) (supposé, essai E3) ; le contrôle d'état ci-dessus rend alors 1104 si l'état n'était pas 3, et le pont le rend tel quel.
 - Attendre ensuite l'événement 5 avec un délai ; sans lui, rendre `Delai`, puis arrêter avec [FD9_StopMeasurement](FD9_StopMeasurement.md).
 
 ## À vérifier sur l'instrument

@@ -264,3 +264,78 @@ fn apres_un_incident_une_autre_feuille_peut_etre_mesuree() {
         6
     );
 }
+
+/// Session aux délais assez longs pour qu'une annulation arrive pendant
+/// l'attente.
+fn connectee_annulable(sdk: Fd9Simule) -> (Session<Fd9Simule>, usize) {
+    let mut session = Session::new(sdk, Palier::Feuille).avec_delais(Delais {
+        feuille: Duration::from_secs(5),
+        etape: Duration::from_secs(5),
+        mesure: Duration::from_secs(5),
+    });
+    session.version().unwrap();
+    session
+        .connecter_adresse(&AdresseReseau::new("192.0.2.40").unwrap())
+        .unwrap();
+    let annulation = session.annulation();
+    session.sdk_mut().annuler_pendant_l_attente = Some(annulation);
+    let appels = session.sdk().appels.len();
+    (session, appels)
+}
+
+#[test]
+fn une_annulation_croisee_avec_la_fin_de_mesure_clot_la_feuille() {
+    // L'opérateur annule pendant la mesure ; la mesure finit (état 9) juste
+    // avant l'arrêt, qui est refusé (1104) : la feuille est close par
+    // ExitMeasurement, admis à l'état 9.
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.reactions.insert("FD9_StartMeasurement2", vec![8]);
+    sdk.avant_arret = Some(9);
+    let (mut session, depuis) = connectee_annulable(sdk);
+
+    assert!(matches!(
+        session.mesurer_feuille(&six_plages()),
+        Err(ErreurPont::MesureAnnulee { .. })
+    ));
+    let appels = appels(&session, depuis);
+    assert_eq!(
+        appels[appels.len() - 3..],
+        [
+            "FD9_StopMeasurement faux",
+            "FD9_GetLastError",
+            "FD9_ExitMeasurement 0 nul"
+        ]
+    );
+    assert!(!appels.iter().any(|a| a.starts_with("FD9_GetData")));
+
+    // La requête suivante repart : une nouvelle feuille est mesurée.
+    session.sdk_mut().reactions.remove("FD9_StartMeasurement2");
+    session.sdk_mut().a_venir = [2, 3].into();
+    assert_eq!(
+        session
+            .mesurer_feuille(&six_plages())
+            .unwrap()
+            .plages()
+            .len(),
+        6
+    );
+}
+
+#[test]
+fn un_arret_refuse_apres_un_incident_clot_la_feuille_et_le_dit() {
+    // L'instrument signale un bourrage juste avant l'arrêt demandé.
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.reactions.insert("FD9_StartMeasurement2", vec![8]);
+    sdk.avant_arret = Some(102);
+    let (mut session, depuis) = connectee_annulable(sdk);
+
+    assert_eq!(
+        session.mesurer_feuille(&six_plages()),
+        Err(ErreurPont::IncidentFeuille {
+            etat: 102,
+            premesure: None
+        })
+    );
+    let appels = appels(&session, depuis);
+    assert_eq!(appels.last(), Some(&"FD9_ExitMeasurement 0 nul"));
+}

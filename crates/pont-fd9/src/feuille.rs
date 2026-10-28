@@ -10,9 +10,10 @@
 
 use crate::attente::{Attente, Fin};
 use crate::connexion::inattendue;
-use crate::{SdkFd9, Session};
+use crate::{Evenement, SdkFd9, Session};
 use fd9_sys::{CoordonneesMire, DonneesQr, EtatSdk, ResultatQr, ZONES_MAX};
 use pont_protocole::{DefinitionFeuille, ErreurPont, Info, LectureFeuille, Palier, RemiseAuRepos};
+use std::time::Duration;
 
 /// Écart d'origine ou de pas admis entre la reconnaissance et la
 /// définition : 3 mm, en 1/100 mm.
@@ -53,7 +54,32 @@ impl<S: SdkFd9> Session<S> {
     /// Capture la feuille glissée, lit son QR et reconnaît ses plages selon
     /// `mire`, puis la rend sans la mesurer.
     pub fn prenumeriser(&mut self, mire: &DefinitionFeuille) -> Result<LectureFeuille, ErreurPont> {
-        self.autoriser(Palier::Prenumerisation, Some(Palier::Connexion))?;
+        let resultat = self.prenumeriser_feuille(mire);
+        // Une annulation ne vise que la feuille qui vient de finir.
+        self.annulation.effacer();
+        resultat
+    }
+
+    fn prenumeriser_feuille(
+        &mut self,
+        mire: &DefinitionFeuille,
+    ) -> Result<LectureFeuille, ErreurPont> {
+        let coordonnees = self.commencer_feuille(Palier::Prenumerisation, mire)?;
+        let lecture = self.lire_feuille(mire, &coordonnees)?;
+        self.arreter_feuille().map_err(EchecArret::erreur)?;
+        self.franchir(Palier::Prenumerisation);
+        Ok(lecture)
+    }
+
+    /// Début commun des paliers Prénumérisation et Feuille, sans appel à la
+    /// DLL : palier, connexion, définition convertie, événements anciens
+    /// écartés.
+    pub(crate) fn commencer_feuille(
+        &mut self,
+        palier: Palier,
+        mire: &DefinitionFeuille,
+    ) -> Result<Box<CoordonneesMire>, ErreurPont> {
+        self.autoriser(palier, Some(Palier::Connexion))?;
         self.exiger_connexion()?;
         let coordonnees = CoordonneesMire::depuis_definition(mire).map_err(|e| {
             self.journal
@@ -62,10 +88,7 @@ impl<S: SdkFd9> Session<S> {
         })?;
         self.vider_hors_requete();
         self.recus.clear();
-        let lecture = self.lire_feuille(mire, &coordonnees)?;
-        self.arreter_feuille().map_err(EchecArret::erreur)?;
-        self.franchir(Palier::Prenumerisation);
-        Ok(lecture)
+        Ok(coordonnees)
     }
 
     pub(crate) fn exiger_connexion(&self) -> Result<(), ErreurPont> {
@@ -143,7 +166,9 @@ impl<S: SdkFd9> Session<S> {
         if code != 0 {
             return Err(erreur_sdk(code));
         }
-        match EtatSdk::depuis(statut[4]) {
+        let etat = EtatSdk::depuis(statut[4]);
+        self.dernier_etat = Some(etat);
+        match etat {
             EtatSdk::AlimentationFinie => Ok(()),
             EtatSdk::Alimentation => {
                 self.attendre_ou_conclure(EtatSdk::AlimentationFinie, Attente::Etape)
@@ -238,7 +263,7 @@ impl<S: SdkFd9> Session<S> {
         if code != 0 {
             let interne = self.sdk.dernier_code();
             self.journal.push(format!("code interne {interne}"));
-            return Err(EchecArret::Refuse(code));
+            return self.apres_arret_refuse(code);
         }
         let fin = match self.attendre(EtatSdk::AnnulationFinie, Attente::Arret) {
             Ok(()) => self.sortir(),
@@ -249,6 +274,24 @@ impl<S: SdkFd9> Session<S> {
             Err(Fin::Delai | Fin::Annulee) => Err(ErreurPont::Delai {}),
         };
         fin.map_err(EchecArret::Apres)
+    }
+
+    /// L'arrêt a pu croiser la fin de la feuille : les événements pas encore
+    /// traités disent où elle en est. Mesure finie ou arrêt fini (9, 10) :
+    /// la feuille est close par `ExitMeasurement`. Incident : il est traité
+    /// et rendu. Sinon, rien n'a changé.
+    fn apres_arret_refuse(&mut self, code: i32) -> Result<(), EchecArret> {
+        let recus: Vec<Evenement> = self.recus.drain(..).collect();
+        for e in recus.into_iter().chain(self.sdk.evenements(Duration::ZERO)) {
+            self.journaliser(&e, " reçu pendant l'arrêt");
+        }
+        match self.dernier_etat {
+            Some(EtatSdk::MesureFinie | EtatSdk::AnnulationFinie) => {
+                self.sortir().map_err(EchecArret::Apres)
+            }
+            Some(etat) if etat.est_erreur() => Err(EchecArret::Apres(self.incident(etat))),
+            _ => Err(EchecArret::Refuse(code)),
+        }
     }
 
     pub(crate) fn sortir(&mut self) -> Result<(), ErreurPont> {

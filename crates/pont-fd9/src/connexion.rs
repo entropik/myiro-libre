@@ -2,6 +2,7 @@
 //! dans l'ordre des fiches `docs/abi/FD9_RegisterDeviceEventHandler.md`,
 //! `FD9_Connect.md`, `FD9_GetSystemInfo.md` et `FD9_Disconnect.md`.
 
+use crate::feuille::erreur_sdk;
 use crate::{Fermeture, SdkFd9, Session, NOM_APPLICATION};
 use fd9_sys::{
     connexion_etablie, Appareil, InfosSysteme, NomApplication, TamponInfosSysteme,
@@ -46,7 +47,7 @@ impl<S: SdkFd9> Session<S> {
         self.journal
             .push(format!("FD9_RegisterDeviceEventHandler : {code}"));
         if code != 0 {
-            return Err(ErreurPont::Sdk { code });
+            return Err(erreur_sdk(code));
         }
         self.inscrit = true;
         let code = self.sdk.connecter(appareil, &nom);
@@ -55,7 +56,7 @@ impl<S: SdkFd9> Session<S> {
             self.journal
                 .push(format!("FD9_Connect : code {code}, code interne {interne}"));
             self.desinscrire();
-            return Err(ErreurPont::Sdk { code });
+            return Err(erreur_sdk(code));
         }
         self.connecte = true;
         let recertification_due = code == CODE_RECERTIFICATION_DUE;
@@ -89,7 +90,7 @@ impl<S: SdkFd9> Session<S> {
             self.journal.push(format!(
                 "FD9_GetSystemInfo : code {code}, code interne {interne}"
             ));
-            return Err(ErreurPont::Sdk { code });
+            return Err(erreur_sdk(code));
         }
         let infos = tampon.infos;
         self.version_sdk = infos.version_sdk;
@@ -149,13 +150,7 @@ impl<S: SdkFd9> Session<S> {
             return;
         }
         for e in self.sdk.evenements(Duration::ZERO) {
-            self.journal.push(format!(
-                "événement hors requête ignoré : état {} (travail {}, page {}, compte {})",
-                e.etat.code(),
-                e.travail,
-                e.page,
-                e.compte
-            ));
+            self.journaliser(&e, " hors requête, ignoré");
         }
     }
 

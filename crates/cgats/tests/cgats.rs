@@ -640,3 +640,70 @@ fn deux_tableaux_aux_rvb_differents_sont_refuses() {
         "tableau 2 : pas les mêmes valeurs RVB que le premier tableau"
     );
 }
+
+// --- Mesure en feuille (FD-9) : la lecture de la feuille dans l'en-tête ---
+
+fn feuille(qr: Info<String>) -> Mesure {
+    use pont_protocole::LectureFeuille;
+    let mut p = provenance(
+        Geometrie::Feuille {},
+        Info::Confirmee(conditions_confirmees()),
+    );
+    p.instrument.modele = "FD-9".into();
+    p.feuille = Some(LectureFeuille {
+        qr,
+        zones: 1,
+        plages: 3,
+        fiabilite: 97,
+        ecart_max: 12,
+    });
+    Mesure::new(vec![plage(0.1), plage(0.4), plage(0.85)], p).unwrap()
+}
+
+#[test]
+fn une_mesure_en_feuille_ecrite_puis_relue_garde_la_lecture_de_sa_feuille() {
+    let mesure = feuille(Info::Confirmee("RGB-2520 - 1P MY9*1+".into()));
+    let texte = ecrire(&mesure).unwrap();
+    assert!(
+        texte.contains("MYIRO_LIBRE_FEUILLE_QR\t\"confirmee:RGB-2520 - 1P MY9*1+\""),
+        "{texte}"
+    );
+    let relue = lire(&texte).unwrap();
+    verifier_sans_perte(&mesure, &relue);
+    // La provenance relue repasse par Mesure::new.
+    let Info::Confirmee(provenance) = relue.provenance else {
+        panic!("provenance perdue")
+    };
+    assert!(Mesure::new(mesure.plages().to_vec(), provenance).is_ok());
+}
+
+#[test]
+fn un_qr_non_lu_se_relit_inconnu() {
+    let mesure = feuille(Info::Inconnue);
+    let relue = lire(&ecrire(&mesure).unwrap()).unwrap();
+    verifier_sans_perte(&mesure, &relue);
+}
+
+#[test]
+fn une_feuille_sans_sa_lecture_est_refusee_a_la_relecture() {
+    let texte = ecrire(&feuille(Info::Inconnue)).unwrap();
+    let ampute: String = texte
+        .split_inclusive('\n')
+        .filter(|l| !l.contains("MYIRO_LIBRE_FEUILLE_"))
+        .collect();
+    assert_ne!(ampute, texte);
+    let erreur = lire(&ampute).unwrap_err();
+    assert!(erreur.0.contains("feuille"), "{}", erreur.0);
+    // Et une lecture de feuille sur une bande n'a pas de sens : les mêmes
+    // mots-clés, recopiés dans l'en-tête d'une bande, la font refuser.
+    let lecture: String = texte
+        .split_inclusive('\n')
+        .filter(|l| l.contains("MYIRO_LIBRE_FEUILLE_"))
+        .collect();
+    let bande = ecrire(&bande()).unwrap();
+    let declaration = "KEYWORD\t\"MYIRO_LIBRE_GEOMETRIE\"";
+    let ajout = bande.replacen(declaration, &format!("{lecture}{declaration}"), 1);
+    assert_ne!(ajout, bande);
+    let erreur = lire(&ajout).unwrap_err();
+    assert!(erreur.0.contains("feuille"), "{}", erreur.0);
+}

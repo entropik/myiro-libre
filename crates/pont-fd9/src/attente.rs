@@ -107,7 +107,7 @@ impl<S: SdkFd9> Session<S> {
         let mut rien_recu = false;
         loop {
             while let Some(evenement) = self.recus.pop_front() {
-                self.journaliser(&evenement);
+                self.journaliser(&evenement, "");
                 match evenement.etat {
                     etat if etat == voulu => return Ok(()),
                     EtatSdk::Inconnu(code) => return Err(Fin::Inconnu(code)),
@@ -140,13 +140,18 @@ impl<S: SdkFd9> Session<S> {
         }
     }
 
-    fn journaliser(&mut self, e: &Evenement) {
+    /// Note l'événement au journal (`contexte` après « événement ») et en
+    /// garde l'état comme dernier état connu, sauf pour un avis de plages.
+    pub(crate) fn journaliser(&mut self, e: &Evenement, contexte: &str) {
+        if e.etat != EtatSdk::AvisPlages {
+            self.dernier_etat = Some(e.etat);
+        }
         let precision = match e.etat {
             EtatSdk::AttenteSansMain => " : un autre logiciel a la main sur l'instrument",
             _ => "",
         };
         self.journal.push(format!(
-            "événement : état {} (travail {}, page {}, compte {}){precision}",
+            "événement{contexte} : état {} (travail {}, page {}, compte {}){precision}",
             e.etat.code(),
             e.travail,
             e.page,

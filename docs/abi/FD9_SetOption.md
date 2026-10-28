@@ -40,8 +40,8 @@ int32_t __stdcall FD9_SetOption(const uint32_t *cle,      /* 0 à 3 */
 | Clé | Rôle | Valeurs utiles au pont | Niveau |
 |---|---|---|---|
 | 0 | condition de mesure | M0 = 0, M1 = 2, M2 = 15 | rôle confirmé (passée à la conversion des données brutes) ; valeurs relevées dans les tables de FD-S2w, **supposées** |
-| 1 | illuminant du calcul colorimétrique | D50 = 2 | table de FD-S2w ; la valeur 16 (« Auto » de FD-S2w) est refusée ici |
-| 2 | observateur | 2° = 0, 10° = 1 | table de FD-S2w ; borne confirmée |
+| 1 | illuminant du calcul colorimétrique | D50 = 2 | valeur tirée d'une table de FD-S2w, **supposée** ; la valeur 16 (« Auto » de FD-S2w) est refusée ici |
+| 2 | observateur | 2° = 0, 10° = 1 | valeurs tirées d'une table de FD-S2w, **supposées** ; borne confirmée |
 | 3 | type de données rendu | L\*a\*b\* = 0, spectre = 0x0b (11), données brutes = 0x0c (12) | valeurs relevées dans FD-S2w et dans la séquence de MYIROtools ; longueurs confirmées dans [FD9_CalculateData](FD9_CalculateData.md) |
 
 ## Propriété de la mémoire

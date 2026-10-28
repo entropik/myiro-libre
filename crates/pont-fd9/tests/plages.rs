@@ -267,10 +267,12 @@ fn les_conditions_restent_supposees_tant_que_non_verifiees() {
             pas_nm: 10
         })
     );
-    assert_eq!(demande.illuminant_lab, Info::Confirmee(Illuminant::D50));
+    // Valeurs 2 et 0 tirées d'une table de FD-S2w, sans relecture possible
+    // dans la DLL : supposées (fiche FD9_SetOption).
+    assert_eq!(demande.illuminant_lab, Info::Supposee(Illuminant::D50));
     assert_eq!(
         demande.observateur_lab,
-        Info::Confirmee(Observateur::DeuxDegres)
+        Info::Supposee(Observateur::DeuxDegres)
     );
     assert_eq!(calcul.observe, Info::Inconnue);
 }
@@ -322,4 +324,21 @@ fn sans_fin_de_mesure_le_delai_arrete_la_feuille() {
         ["FD9_StopMeasurement faux", "FD9_ExitMeasurement 0 nul"]
     );
     assert!(!appels.iter().any(|a| a.starts_with("FD9_GetData")));
+}
+
+#[test]
+fn une_position_non_ecrite_refuse_la_mesure() {
+    // Une seule plage : sa position attendue est (0, 0, 0), celle d'une
+    // structure à zéro. La DLL rend 0 sans rien écrire.
+    let mut mire = six_plages();
+    mire.zones[0].rangees = 1;
+    mire.zones[0].colonnes = 1;
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.position_non_ecrite = true;
+    let (mut session, _) = connectee(sdk, Palier::Feuille);
+
+    let Err(ErreurPont::ReponseInattendue { detail }) = session.mesurer_feuille(&mire) else {
+        panic!("{:?}", session.journal())
+    };
+    assert!(detail.contains("plage n° 1"), "{detail}");
 }

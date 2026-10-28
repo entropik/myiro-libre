@@ -35,7 +35,7 @@ Pourquoi `SPEC_380` et pas `SPECTRAL_380` : la description du format d'ArgyllCMS
 
 ### La provenance dans l'en-tête
 
-Un mot-clé par champ, préfixé `MYIRO_LIBRE_` : `MODELE`, `NUMERO_SERIE`, `MICROLOGICIEL`, `CODE_PRODUIT`, `VERSION_SDK` (`1.0.1`), `EMPREINTE_DLL`, `VERSION_PONT`, `ARCHITECTURE`, `HORODATAGE`, `ETALONNAGE`, `GEOMETRIE` (`ponctuelle`, `bande 2`, `feuille`), `CALCUL_LIBELLE`, puis `CALCUL_DEMANDE` et `CALCUL_OBSERVE` (`confirmee`, `supposee` ou `inconnue`), chacun suivi, s'il n'est pas inconnu, de `_CONDITIONS`, `_LONGUEURS_ONDE` (`380/10`), `_ILLUMINANT` et `_OBSERVATEUR`.
+Un mot-clé par champ, préfixé `MYIRO_LIBRE_` : `MODELE`, `NUMERO_SERIE`, `MICROLOGICIEL`, `CODE_PRODUIT`, `VERSION_SDK` (`1.0.1`), `EMPREINTE_DLL`, `VERSION_PONT`, `ARCHITECTURE`, `HORODATAGE`, `ETALONNAGE`, `GEOMETRIE` (`ponctuelle`, `bande 2`, `feuille`), `CALCUL_LIBELLE`, puis `CALCUL_DEMANDE` et `CALCUL_OBSERVE` (`confirmee`, `supposee` ou `inconnue`), chacun suivi, s'il n'est pas inconnu, de `_CONDITIONS`, `_LONGUEURS_ONDE` (`380/10`), `_ILLUMINANT` et `_OBSERVATEUR`. Une mesure en feuille (FD-9) porte en plus ce que le pont a lu de la feuille : `FEUILLE_QR` (texte du QR, qualifié : `confirmee:RGB-2520 - 1P MY9*1+` ou `inconnue`), `FEUILLE_ZONES`, `FEUILLE_PLAGES`, `FEUILLE_FIABILITE` et `FEUILLE_ECART_MAX` (1/100 mm). À la relecture, une géométrie `feuille` sans ces mots-clés, ou ces mots-clés sur une autre géométrie, font refuser le fichier, comme une mesure.
 
 Une donnée qualifiée s'écrit `inconnue`, `confirmee:<valeur>` ou `supposee:<valeur>`. Exemple fictif :
 

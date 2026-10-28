@@ -8,7 +8,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::mesure::{ErreurMesure, Info};
 
-/// Zones qu'une feuille peut porter : borne du SDK.
+/// Zones qu'une feuille peut porter : borne du SDK. Même valeur que
+/// `fd9_sys::ZONES_MAX`, qui ne peut pas servir ici : `fd9-sys` dépend de ce
+/// crate.
 pub const ZONES_FEUILLE_MAX: usize = 50;
 
 /// Une feuille à mesurer au FD-9. Vérifiée à la lecture comme par
