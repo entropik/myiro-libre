@@ -16,6 +16,12 @@
 
 mod ecarts;
 mod serde_lab;
+mod tolerances;
+
+pub use tolerances::{
+    conclure, valider_criteres, Conclusion, Controle, Critere, Criteres, Famille, RefusCriteres,
+    Seuils,
+};
 
 pub use ecarts::{
     comparer, reclasser, statistiques, vers_relatif, EcartPlage, PlageAVerifier, RefusVerification,
