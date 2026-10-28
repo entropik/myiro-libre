@@ -1391,3 +1391,12 @@ fn une_saisie_illisible_de_la_mire_est_refusee_sur_place() {
     // Le côté minimal vient du module Rust, jamais d'un nombre écrit dans la page.
     assert!(!script.contains("apercu.limites_cote[0] : 7"));
 }
+
+/// Une mire déjà préparée et pas encore mesurée est reprise : la page dit sa
+/// date au lieu d'annoncer une nouvelle préparation.
+#[test]
+fn une_mire_deja_preparee_dit_sa_date() {
+    let script = lire("interface/mire.js");
+    assert!(script.contains("r.deja_preparee"));
+    assert!(script.contains("t(\"mire.deja_preparee\").replace(\"{date}\""));
+}

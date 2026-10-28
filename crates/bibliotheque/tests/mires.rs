@@ -246,3 +246,48 @@ fn une_ecriture_qui_echoue_ne_range_ni_tirage_ni_mire() {
     assert_eq!(id, IdMire(1));
     assert_eq!(b.tirages(condition).unwrap()[0].id, tirage);
 }
+
+/// Les tirages encore « préparés » (pas mesurés) d'une résolution, pour un
+/// instrument, avec leur mire : l'application y cherche une mire déjà
+/// préparée avant d'en refaire une.
+#[test]
+fn les_tirages_prepares_d_un_instrument_vont_du_plus_recent_au_plus_ancien() {
+    let (_d, b, condition) = condition_rangee();
+    let (_, ancien) = b
+        .enregistrer_mire_et_tirage(condition, &mire("a", "2026-10-27T09:00:00Z"), 1)
+        .unwrap();
+    let (_, recent) = b
+        .enregistrer_mire_et_tirage(condition, &mire("b", "2026-10-28T09:00:00Z"), 2)
+        .unwrap();
+    let fd9 = NouvelleMire {
+        nom: "RGB-2520",
+        instrument: "fd9",
+        plages: 2520,
+        ..mire("c", "2026-10-28T10:00:00Z")
+    };
+    let (_, tirage_fd9) = b.enregistrer_mire_et_tirage(condition, &fd9, 1).unwrap();
+    // Une autre résolution n'est pas regardée.
+    let epson = b.creer_imprimante("Epson SC-P5300").unwrap();
+    let papier = b.creer_papier(epson.id, "Baryta").unwrap();
+    let autre = b.creer_reglage(papier.id, "1440 ppp").unwrap().id;
+    b.enregistrer_mire_et_tirage(autre, &mire("d", "2026-10-28T11:00:00Z"), 1)
+        .unwrap();
+
+    let prepares = b.tirages_prepares(condition, "myiro1").unwrap();
+    assert_eq!(
+        prepares.iter().map(|t| t.id).collect::<Vec<_>>(),
+        [recent, ancien]
+    );
+    let premier = &prepares[0];
+    assert_eq!(
+        (premier.pages, premier.horodatage.as_str()),
+        (2, "2026-10-28T09:00:00Z")
+    );
+    assert_eq!(premier.mire.empreinte, "b");
+    assert_eq!(premier.mire.generation, mire("b", "").generation);
+    assert_eq!(premier.mire.mise_en_page, mire("b", "").mise_en_page);
+    let fd9 = b.tirages_prepares(condition, "fd9").unwrap();
+    assert_eq!(fd9.len(), 1);
+    assert_eq!((fd9[0].id, fd9[0].mire.plages), (tirage_fd9, 2520));
+    assert!(b.tirages_prepares(autre, "fd9").unwrap().is_empty());
+}

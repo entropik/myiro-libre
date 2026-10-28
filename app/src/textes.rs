@@ -1153,6 +1153,10 @@ const FRANCAIS: Catalogue = &[
     ("mire.commande", "Commande équivalente"),
     ("mire.preparer", "Préparer la mire"),
     ("mire.fait", "Mire préparée et rangée avec cette résolution."),
+    (
+        "mire.deja_preparee",
+        "Mire déjà préparée le {date}, pas encore mesurée\u{202f}: ses fichiers sont repris, sans doublon.",
+    ),
     ("mire.fichiers", "Fichiers à imprimer"),
     ("mire.ouvrir_dossier", "Ouvrir le dossier"),
     (
@@ -2269,6 +2273,10 @@ const ANGLAIS: Catalogue = &[
     ("mire.commande", "Equivalent command"),
     ("mire.preparer", "Prepare the chart"),
     ("mire.fait", "Chart prepared and stored with this resolution."),
+    (
+        "mire.deja_preparee",
+        "Chart already prepared on {date}, not yet measured: its files are reused, no duplicate.",
+    ),
     ("mire.fichiers", "Files to print"),
     ("mire.ouvrir_dossier", "Open the folder"),
     (

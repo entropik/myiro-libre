@@ -288,7 +288,12 @@ window.PreparerMire = (() => {
       const r = await invoke("mire_preparer", { condition: d.condition.id, demande: demande() });
       if (ici()) preparee = r;
       await parc.recharger();
-      if (ici()) parc.annoncer(t("mire.fait"));
+      // La même mire, pas encore mesurée, est reprise sans doublon : sa date est dite.
+      if (ici()) {
+        parc.annoncer(r.deja_preparee
+          ? t("mire.deja_preparee").replace("{date}", () => date(r.deja_preparee))
+          : t("mire.fait"));
+      }
     } catch (erreur) {
       if (ici()) {
         erreurPreparation = parc.texteErreur(erreur);

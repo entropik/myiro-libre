@@ -97,6 +97,34 @@ fn retirer(fichiers: &mut Vec<PathBuf>) {
     }
 }
 
+/// Reprend les fichiers d'un tirage déjà rangé, nommés `noms` dans
+/// `dossier` : ceux qui manquent (effacés à la main) sont réécrits sous le
+/// même numéro de tirage, par [`deposer`] ; `ecrire` reçoit leurs rangs dans
+/// `noms` et le dossier de travail où les écrire. Aucun fichier présent
+/// n'est touché. Rend les chemins de tous les fichiers du tirage.
+pub(super) fn completer(
+    dossier: &Path,
+    tirage: IdTirage,
+    noms: &[String],
+    ecrire: impl FnOnce(&[usize], &Path) -> Result<(), ErreurMire>,
+) -> Result<Vec<PathBuf>, String> {
+    let manquants: Vec<usize> = (0..noms.len())
+        .filter(|&i| !dossier.join(&noms[i]).exists())
+        .collect();
+    if !manquants.is_empty() {
+        let mut deposes = Vec::new();
+        deposer(dossier, tirage, &mut deposes, |_, travail| {
+            ecrire(&manquants, travail)?;
+            Ok(manquants.iter().map(|&i| noms[i].clone()).collect())
+        })
+        .map_err(|e| {
+            eprintln!("{e}");
+            e.cle().to_string()
+        })?;
+    }
+    Ok(noms.iter().map(|n| dossier.join(n)).collect())
+}
+
 impl BibliothequeOuverte {
     /// Range la mire et son tirage, et dépose ses fichiers dans `dossier`
     /// ([`deposer`]) : la transaction de la bibliothèque n'est validée

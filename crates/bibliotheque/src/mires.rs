@@ -52,6 +52,16 @@ pub struct ResumeTirage {
     pub horodatage: String,
 }
 
+/// Un tirage préparé, pas encore mesuré (état `prepare`), avec sa mire.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TiragePrepare {
+    pub id: IdTirage,
+    pub pages: usize,
+    /// Première préparation, en RFC 3339 : date des noms de ses fichiers.
+    pub horodatage: String,
+    pub mire: MireRangee,
+}
+
 /// Une mire rangée, telle qu'elle a été enregistrée.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MireRangee {
@@ -68,8 +78,9 @@ pub struct MireRangee {
 impl Bibliotheque {
     /// Range la mire et un tirage de `pages` pages dans la condition, en une
     /// transaction. Une mire de même empreinte déjà rangée est reprise, pas
-    /// dupliquée : chaque préparation de la mire FD-9 ajoute un tirage de la
-    /// même mire RGB-2520.
+    /// dupliquée. La bibliothèque range le tirage qu'on lui donne : c'est
+    /// l'application qui reprend un tirage pas encore mesuré de la même mire
+    /// au lieu d'en ranger un second ([`Self::tirages_prepares`]).
     pub fn enregistrer_mire_et_tirage(
         &self,
         condition: IdCondition,
@@ -176,6 +187,42 @@ impl Bibliotheque {
                 plages: l.get::<_, i64>(4)?.try_into().unwrap_or(0),
                 pages: l.get::<_, i64>(5)?.try_into().unwrap_or(0),
                 horodatage: l.get(6)?,
+            })
+        })?;
+        let mut tirages = lignes.collect::<Result<Vec<_>, _>>()?;
+        tirages.sort_by_cached_key(|t| std::cmp::Reverse((instant(&t.horodatage), t.id)));
+        Ok(tirages)
+    }
+
+    /// Les tirages pas encore mesurés (état `prepare`) de la condition dont
+    /// la mire est de cet instrument (`"fd9"` ou `"myiro1"`), avec leur mire,
+    /// du plus récent au plus ancien.
+    pub fn tirages_prepares(
+        &self,
+        condition: IdCondition,
+        instrument: &str,
+    ) -> Resultat<Vec<TiragePrepare>> {
+        let mut requete = self.base.prepare(
+            "SELECT t.id, t.pages, t.horodatage, m.id, m.nom, m.instrument, m.plages,
+                    m.generation, m.valeurs, m.mise_en_page, m.empreinte
+             FROM tirages t JOIN mires m ON m.id = t.mire
+             WHERE t.condition = ?1 AND m.instrument = ?2 AND t.etat = 'prepare'",
+        )?;
+        let lignes = requete.query_map(params![condition.0, instrument], |l| {
+            Ok(TiragePrepare {
+                id: IdTirage(l.get(0)?),
+                pages: l.get::<_, i64>(1)?.try_into().unwrap_or(0),
+                horodatage: l.get(2)?,
+                mire: MireRangee {
+                    id: IdMire(l.get(3)?),
+                    nom: l.get(4)?,
+                    instrument: l.get(5)?,
+                    plages: l.get::<_, i64>(6)?.try_into().unwrap_or(0),
+                    generation: l.get(7)?,
+                    valeurs: l.get(8)?,
+                    mise_en_page: l.get(9)?,
+                    empreinte: l.get(10)?,
+                },
             })
         })?;
         let mut tirages = lignes.collect::<Result<Vec<_>, _>>()?;

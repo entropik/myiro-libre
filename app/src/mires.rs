@@ -29,7 +29,7 @@ pub mod commandes;
 mod depot;
 mod myiro1;
 
-use depot::ecrire_fichier;
+use depot::{completer, ecrire_fichier};
 use myiro1::controler_myiro1;
 
 /// Bornes du nombre libre de plages MYIRO-1 (section « Avancé ») : des
@@ -75,6 +75,10 @@ pub struct MirePreparee {
     pub plages: usize,
     pub pages: usize,
     pub commande: String,
+    /// La même mire était déjà préparée dans cette résolution, pas encore
+    /// mesurée : son tirage et ses fichiers sont repris, sans doublon. Date
+    /// de la première préparation, en RFC 3339 ; rien pour un nouveau tirage.
+    pub deja_preparee: Option<String>,
 }
 
 /// Cherche `mire-fd9/RGB-2520 A3 - 1p.tif` à côté de l'exécutable (dans
@@ -120,6 +124,11 @@ pub fn nom_fichier_page(
         "{} - T{tirage} - page {page} sur {pages}.tif",
         parties.join(" - ")
     )
+}
+
+/// Date d'un horodatage RFC 3339 (« 2026-10-23 »), pour le nom des fichiers.
+fn date_de(horodatage: &str) -> &str {
+    horodatage.get(..10).unwrap_or(horodatage)
 }
 
 /// La mire FD-9 est RGB-2520 : ni taille, ni nombre, ni format, ni côté.
@@ -209,6 +218,9 @@ impl BibliothequeOuverte {
 
     /// Range une mire FD-9 déjà lue et vérifiée, et la copie telle quelle
     /// dans `dossier`, sans texte ni QR code ajoutés : elle garde les siens.
+    /// Si la même mire (même empreinte) a déjà un tirage pas encore mesuré
+    /// dans la résolution, ce tirage est repris : aucun nouveau tirage, et
+    /// seul un fichier effacé à la main est recopié.
     pub fn preparer_mire_fd9(
         &self,
         condition: IdCondition,
@@ -217,6 +229,36 @@ impl BibliothequeOuverte {
         maintenant: SystemTime,
     ) -> Result<MirePreparee, String> {
         let detail = self.detail_reglage(condition)?;
+        let deja = self
+            .avec(|b| b.tirages_prepares(condition, "fd9"))?
+            .into_iter()
+            .find(|t| t.mire.empreinte == mire.empreinte);
+        if let Some(t) = deja {
+            let noms = [nom_fichier_page(
+                &detail.imprimante,
+                &detail.papier,
+                &detail.resolution,
+                date_de(&t.horodatage),
+                t.id.0,
+                1,
+                1,
+            )];
+            let fichiers = completer(dossier, t.id, &noms, |_, travail| {
+                ecrire_fichier(&travail.join(&noms[0]), |f| {
+                    std::io::Write::write_all(f, &mire.octets)
+                        .map_err(|e| ErreurMire::Ecriture(e.to_string()))
+                })
+            })?;
+            return Ok(MirePreparee {
+                tirage: t.id.0,
+                fichiers,
+                dossier: dossier.to_path_buf(),
+                plages: mire.valeurs.len(),
+                pages: 1,
+                commande: String::new(),
+                deja_preparee: Some(t.horodatage),
+            });
+        }
         let horodatage = instant_utc(maintenant);
         let json = |v: serde_json::Result<String>| {
             v.map_err(|e| {
@@ -231,7 +273,7 @@ impl BibliothequeOuverte {
         })))?;
         let valeurs = json(serde_json::to_string(&mire.valeurs))?;
         let geometrie = json(serde_json::to_string(&mire.geometrie))?;
-        let date = horodatage.get(..10).unwrap_or(&horodatage);
+        let date = date_de(&horodatage);
         let nouvelle = NouvelleMire {
             nom: "RGB-2520",
             instrument: "fd9",
@@ -266,6 +308,7 @@ impl BibliothequeOuverte {
             plages: mire.valeurs.len(),
             pages: 1,
             commande: String::new(),
+            deja_preparee: None,
         })
     }
 }

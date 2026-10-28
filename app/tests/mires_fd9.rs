@@ -86,13 +86,47 @@ fn une_mire_fd9_n_accepte_ni_taille_ni_format() {
     assert_eq!(b.tirages(), 0);
 }
 
+/// Préparer deux fois la même mire dans la même résolution ne fait pas de
+/// doublon : tant que le tirage n'est pas mesuré, la seconde préparation le
+/// reprend avec ses fichiers et dit sa date.
 #[test]
-fn deux_preparations_fd9_donnent_deux_tirages_d_une_meme_mire() {
+fn deux_preparations_fd9_de_suite_donnent_un_seul_tirage() {
     let b = banc();
     let premiere = b
         .ouverte
         .preparer_mire_fd9(b.condition, lire_fictive().1, &b.mires(), maintenant())
         .unwrap();
+    assert_eq!(premiere.deja_preparee, None);
+    let seconde = b
+        .ouverte
+        .preparer_mire_fd9(
+            b.condition,
+            lire_fictive().1,
+            &b.mires(),
+            maintenant() + Duration::from_secs(86_400),
+        )
+        .unwrap();
+    assert_eq!(seconde.tirage, premiere.tirage);
+    assert_eq!(seconde.fichiers, premiere.fichiers);
+    assert_eq!(
+        seconde.deja_preparee.as_deref(),
+        Some("2026-10-23T09:15:00Z")
+    );
+    assert_eq!(b.tirages(), 1);
+    assert_eq!(b.fichiers().len(), 1);
+}
+
+/// Un fichier effacé à la main est réécrit, tel quel, sous le même numéro de
+/// tirage.
+#[test]
+fn un_fichier_fd9_efface_est_reecrit_sous_le_meme_tirage() {
+    let b = banc();
+    let (octets, mire) = lire_fictive();
+    let premiere = b
+        .ouverte
+        .preparer_mire_fd9(b.condition, mire, &b.mires(), maintenant())
+        .unwrap();
+    std::fs::remove_file(&premiere.fichiers[0]).unwrap();
     let seconde = b
         .ouverte
         .preparer_mire_fd9(
@@ -102,11 +136,35 @@ fn deux_preparations_fd9_donnent_deux_tirages_d_une_meme_mire() {
             maintenant() + Duration::from_secs(60),
         )
         .unwrap();
-    assert_ne!(premiere.tirage, seconde.tirage);
-    let tirages = b.ouverte.detail_reglage(b.condition).unwrap().tirages;
-    assert_eq!(tirages.len(), 2);
-    assert_eq!(tirages[0].mire, tirages[1].mire);
-    assert_eq!(tirages[0].instrument, "fd9");
+    assert_eq!(seconde.tirage, premiere.tirage);
+    assert_eq!(seconde.fichiers, premiere.fichiers);
+    assert_eq!(std::fs::read(&seconde.fichiers[0]).unwrap(), octets);
+    assert_eq!(b.tirages(), 1);
+    assert_eq!(b.fichiers().len(), 1);
+}
+
+/// Deux résolutions différentes ont chacune leur tirage.
+#[test]
+fn deux_resolutions_donnent_deux_tirages_fd9() {
+    let b = banc();
+    let epson = b.ouverte.ajouter_imprimante("Epson SC-P5300").unwrap();
+    let autre = b
+        .ouverte
+        .ajouter_papier(epson.id, "Baryta", "1440 dpi")
+        .unwrap()
+        .id;
+    let premiere = b
+        .ouverte
+        .preparer_mire_fd9(b.condition, lire_fictive().1, &b.mires(), maintenant())
+        .unwrap();
+    let seconde = b
+        .ouverte
+        .preparer_mire_fd9(autre, lire_fictive().1, &b.mires(), maintenant())
+        .unwrap();
+    assert_ne!(seconde.tirage, premiere.tirage);
+    assert_eq!(seconde.deja_preparee, None);
+    assert_eq!(b.tirages(), 1);
+    assert_eq!(b.ouverte.detail_reglage(autre).unwrap().tirages.len(), 1);
     assert_eq!(b.fichiers().len(), 2);
 }
 
