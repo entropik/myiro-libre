@@ -306,6 +306,7 @@ window.Vue3d = (() => {
       const ratio = window.devicePixelRatio || 1;
       return { x: (evenement.clientX - cadre.left) * ratio, y: (evenement.clientY - cadre.top) * ratio };
     }
+    // Vers le haut (souris ou flèche), le tangage augmente : on voit le dessus du gamut.
     function tourne(dLacet, dTangage) {
       vue.lacet = (vue.lacet + dLacet) % 360;
       vue.tangage = Math.min(90, Math.max(-90, vue.tangage + dTangage));
@@ -325,7 +326,7 @@ window.Vue3d = (() => {
         const p = position(e);
         if (glisser) {
           const ratio = window.devicePixelRatio || 1;
-          tourne(((p.x - glisser.x) / ratio) * 0.5, ((p.y - glisser.y) / ratio) * 0.5);
+          tourne(((p.x - glisser.x) / ratio) * 0.5, ((glisser.y - p.y) / ratio) * 0.5);
           glisser = p;
         } else {
           survol = p;
@@ -353,8 +354,8 @@ window.Vue3d = (() => {
       switch (e.key) {
         case "ArrowLeft": tourne(-PAS_ANGLE, 0); break;
         case "ArrowRight": tourne(PAS_ANGLE, 0); break;
-        case "ArrowUp": tourne(0, -PAS_ANGLE); break;
-        case "ArrowDown": tourne(0, PAS_ANGLE); break;
+        case "ArrowUp": tourne(0, PAS_ANGLE); break;
+        case "ArrowDown": tourne(0, -PAS_ANGLE); break;
         case "+": case "=": zoome(PAS_ZOOM); break;
         case "-": case "−": zoome(1 / PAS_ZOOM); break;
         case "0": vue = { ...DEPART }; redessiner(); break;

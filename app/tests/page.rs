@@ -1831,3 +1831,19 @@ fn les_legendes_ont_une_ligne_par_profil() {
     );
     assert!(!lire("interface/vue3d.js").contains("legende"));
 }
+
+/// Glisser la souris vers le haut, ou appuyer sur la flèche haut, montre le
+/// dessus du gamut (L* 100 qui vient vers l'observateur) ; vers le bas, le
+/// dessous. Remarque du mainteneur à l'essai d'écran du 28 octobre 2026 :
+/// « voir le dessus ».
+#[test]
+fn glisser_vers_le_haut_montre_le_dessus() {
+    let script = lire("interface/vue3d.js");
+    // Tangage positif : le haut vient vers l'observateur.
+    assert!(script.contains("const p = (-vue.tangage * Math.PI) / 180;"));
+    // Vers le haut, l'écran donne un y qui diminue : le tangage augmente.
+    assert!(script
+        .contains("tourne(((p.x - glisser.x) / ratio) * 0.5, ((glisser.y - p.y) / ratio) * 0.5);"));
+    assert!(script.contains("case \"ArrowUp\": tourne(0, PAS_ANGLE); break;"));
+    assert!(script.contains("case \"ArrowDown\": tourne(0, -PAS_ANGLE); break;"));
+}
