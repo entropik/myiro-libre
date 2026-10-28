@@ -182,7 +182,7 @@ fn detail_refus(erreur: &ErreurIcc) -> Option<String> {
         ErreurIcc::PasRvb { espace } => Some(espace.clone()),
         ErreurIcc::StructureNonPriseEnCharge { structure } => Some(structure.clone()),
         ErreurIcc::Tronque { balise } => Some(balise.clone()),
-        ErreurIcc::SansTable | ErreurIcc::SansBlanc => None,
+        ErreurIcc::SansTable | ErreurIcc::SansBlanc | ErreurIcc::SansTableInverse => None,
     }
 }
 

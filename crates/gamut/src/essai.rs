@@ -11,17 +11,32 @@ pub struct ProfilEssai {
     pub blanc: [f64; 3],
     /// Valeurs de la table : RVB de 0 à 1 vers L\*, a\*, b\* relatifs.
     pub cible: fn([f64; 3]) -> [f64; 3],
+    /// Table inverse B2A1, s'il y en a une : L\*, a\*, b\* relatifs vers RVB
+    /// de 0 à 1 (borné), sur une grille de `GRILLE_INVERSE` points par arête.
+    pub inverse: Option<fn([f64; 3]) -> [f64; 3]>,
     /// Texte de la balise `desc`, en ASCII (un autre caractère devient `?`).
     pub description: String,
     /// Texte de la balise `targ` (mesures embarquées), s'il y en a.
     pub mesures: Option<String>,
 }
 
+/// Points par arête de la table B2A1 d'un profil d'essai.
+const GRILLE_INVERSE: u8 = 33;
+
 /// Octets d'un profil ICC v2.4 de sortie RVB, PCS Lab : A2B1 `mft2` aux
 /// courbes identité dont la grille vaut `cible`, A2B0 copie d'A2B1, `wtpt`
-/// (XYZ de `blanc`), `desc`, `cprt`, et `targ` si `mesures` est donné.
+/// (XYZ de `blanc`), `desc`, `cprt`, B2A1 si `inverse` est donné, et `targ`
+/// si `mesures` est donné.
 pub fn profil_essai(p: &ProfilEssai) -> Vec<u8> {
-    let table = mft2(p);
+    let cible = p.cible;
+    let table = mft2(p.grille, |rvb| {
+        let lab = cible(rvb);
+        [
+            lab[0] * 652.80,
+            (lab[1] + 128.0) * 256.0,
+            (lab[2] + 128.0) * 256.0,
+        ]
+    });
     let mut balises: Vec<([u8; 4], Vec<u8>)> = vec![
         (*b"desc", desc(&p.description)),
         (*b"cprt", texte(b"Profil d'essai, domaine public")),
@@ -29,6 +44,18 @@ pub fn profil_essai(p: &ProfilEssai) -> Vec<u8> {
         (*b"A2B0", table.clone()),
         (*b"A2B1", table),
     ];
+    if let Some(inverse) = p.inverse {
+        let table = mft2(GRILLE_INVERSE, |x| {
+            // Nœud en Lab « hérité » 16 bits, l'encodage d'entrée de B2A1.
+            let lab = [
+                x[0] * 65535.0 / 652.80,
+                x[1] * 65535.0 / 256.0 - 128.0,
+                x[2] * 65535.0 / 256.0 - 128.0,
+            ];
+            inverse(lab).map(|v| v * 65535.0)
+        });
+        balises.push((*b"B2A1", table));
+    }
     if let Some(mesures) = &p.mesures {
         balises.push((*b"targ", texte(mesures.as_bytes())));
     }
@@ -72,8 +99,10 @@ fn en_tete(taille: usize) -> Vec<u8> {
     h
 }
 
-fn mft2(p: &ProfilEssai) -> Vec<u8> {
-    let g = p.grille.max(2);
+/// Table `mft2` aux courbes identité : `noeud` donne les trois mots (de 0 à
+/// 65 535) d'un nœud dont l'entrée va de 0 à 1.
+fn mft2(grille: u8, noeud: impl Fn([f64; 3]) -> [f64; 3]) -> Vec<u8> {
+    let g = grille.max(2);
     let mut t = Vec::new();
     t.extend_from_slice(b"mft2");
     t.extend_from_slice(&[0; 4]);
@@ -94,12 +123,7 @@ fn mft2(p: &ProfilEssai) -> Vec<u8> {
     for r in 0..g {
         for v in 0..g {
             for b in 0..g {
-                let lab = (p.cible)([f64::from(r) / pas, f64::from(v) / pas, f64::from(b) / pas]);
-                let mots = [
-                    lab[0] * 652.80,
-                    (lab[1] + 128.0) * 256.0,
-                    (lab[2] + 128.0) * 256.0,
-                ];
+                let mots = noeud([f64::from(r) / pas, f64::from(v) / pas, f64::from(b) / pas]);
                 for w in mots {
                     t.extend_from_slice(&mot16(w).to_be_bytes());
                 }

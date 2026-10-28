@@ -261,6 +261,14 @@ _Éviter_ : saturation par teinte
 Les huit coins du cube RVB passés par le profil : blanc, noir, rouge, vert, bleu, cyan, magenta et jaune.
 _Éviter_ : primaires seules, coins
 
+**Table inverse** :
+Table B2A1 d'un profil de sortie : d'une couleur demandée (L\*a\*b\*), elle donne les valeurs RVB à envoyer à l'imprimante, en colorimétrique relatif. Une couleur hors du gamut y est ramenée sur sa limite. Un profil sans table inverse lisible se compare quand même, mais ne dit pas ce qu'il ferait d'une image.
+_Éviter_ : table B2A, LUT inverse
+
+**Couleur reproduite** :
+Couleur que l'imprimante rend d'une couleur demandée : la couleur passée par la table inverse, puis par la table colorimétrique (aller-retour B2A1 puis A2B1, en colorimétrique relatif). L'écart ΔE00 entre les deux dit si la couleur est dans le gamut.
+_Éviter_ : couleur simulée, épreuve
+
 **Profil de référence** :
 Dans une comparaison, le premier profil choisi : les écarts des autres profils se calculent par rapport à lui. Dans un avant / après, c'est le profil actif. À ne pas confondre avec la référence d'un contrôle d'impression.
 _Éviter_ : profil maître, profil de base

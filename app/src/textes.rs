@@ -396,6 +396,10 @@ const FRANCAIS: Catalogue = &[
         "Ce profil ne dit pas quel est le blanc du support\u{202f}: ses couleurs absolues ne se calculent pas. Il n’est pas comparé.",
     ),
     (
+        "comparer.refus.sans_table_inverse",
+        "Ce profil n’a pas de table inverse lisible (B2A1)\u{202f}: on ne sait pas quelles couleurs l’imprimante rendrait de l’image. Ce point reste inconnu.",
+    ),
+    (
         "comparer.refus.trop_de_profils",
         "On compare quatre profils au plus. Retirez-en un, puis recommencez.",
     ),
@@ -2135,6 +2139,10 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.refus.sans_blanc",
         "This profile does not give the media white: its absolute colours cannot be computed. It is not compared.",
+    ),
+    (
+        "comparer.refus.sans_table_inverse",
+        "This profile has no readable inverse table (B2A1): which colours the printer would render from the image cannot be computed. This stays unknown.",
     ),
     (
         "comparer.refus.trop_de_profils",

@@ -6,6 +6,12 @@
 //! compris dans les valeurs. Un profil d'une autre structure, sans table ou
 //! sans blanc du support est refusé en le disant (`ErreurIcc`).
 //!
+//! Elle lit aussi, si elle existe, la table inverse **B2A1** du même type :
+//! l'aller-retour A2B1(B2A1(Lab)) en colorimétrique relatif donne la couleur
+//! que l'imprimante rend d'une couleur demandée (`ProfilIcc::reproduire`,
+//! ticket #80). Un profil sans B2A1 lisible se lit quand même ; seul
+//! l'aller-retour est alors refusé.
+//!
 //! De ces valeurs, elle tire la surface du cube RVB et son volume, les
 //! couleurs de base, la densité approchée du noir, la table de chroma par
 //! clarté et teinte (approchée) et les chemins du cube RVB (`analyser`,

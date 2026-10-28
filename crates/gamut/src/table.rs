@@ -1,12 +1,16 @@
-//! Table A2B1 de type `mft2` (lut16) : lecture et évaluation, courbes
-//! d'entrée, interpolation tétraédrique et courbes de sortie.
+//! Table `mft2` (lut16) A2B1 ou B2A1 : lecture et évaluation, matrice,
+//! courbes d'entrée, interpolation (tétraédrique pour A2B1, trilinéaire pour
+//! B2A1) et courbes de sortie.
 
-use crate::icc::{signature, u16_at, ErreurIcc};
+use crate::icc::{s15, signature, u16_at, ErreurIcc};
 
 /// Table `mft2` lue, valeurs ramenées de 0 à 1.
 #[derive(Debug, Clone)]
 pub(crate) struct Lut {
     pub(crate) grille: usize,
+    /// Matrice 3 × 3, rangée par lignes ; elle ne s'applique qu'à une entrée
+    /// XYZ (B2A1 d'un profil au PCS XYZ).
+    matrice: [f64; 9],
     entree: [Vec<f64>; 3],
     /// Nœuds de la grille, rouge le plus lent, bleu le plus rapide.
     table: Vec<[f64; 3]>,
@@ -14,16 +18,34 @@ pub(crate) struct Lut {
 }
 
 impl Lut {
-    /// Courbes d'entrée, interpolation tétraédrique, courbes de sortie.
+    /// Table A2B1 : courbes d'entrée, interpolation tétraédrique, courbes de
+    /// sortie.
     pub(crate) fn evaluer(&self, rvb: [f64; 3]) -> [f64; 3] {
         let x = [0, 1, 2].map(|k| interpoler(&self.entree[k], rvb[k]));
         let y = self.tetraedre(x);
         [0, 1, 2].map(|k| interpoler(&self.sortie[k], y[k]))
     }
 
-    /// Interpolation tétraédrique dans la grille ; les six cas et l'ordre des
-    /// égalités suivent la méthode de référence du prototype.
-    fn tetraedre(&self, x: [f64; 3]) -> [f64; 3] {
+    /// Table B2A1 : courbes d'entrée, interpolation trilinéaire, courbes de
+    /// sortie. ArgyllCMS interpole ainsi la table inverse ; en tétraédrique,
+    /// l'aller-retour s'écarte de `xicclu` jusqu'à 0,6 ΔE00.
+    pub(crate) fn evaluer_inverse(&self, x: [f64; 3]) -> [f64; 3] {
+        let x = [0, 1, 2].map(|k| interpoler(&self.entree[k], x[k]));
+        let y = self.trilineaire(x);
+        [0, 1, 2].map(|k| interpoler(&self.sortie[k], y[k]))
+    }
+
+    /// Comme `evaluer_inverse`, la matrice d'abord appliquée à l'entrée XYZ.
+    pub(crate) fn evaluer_inverse_xyz(&self, xyz: [f64; 3]) -> [f64; 3] {
+        let m = &self.matrice;
+        self.evaluer_inverse(
+            [0, 1, 2].map(|i| m[3 * i] * xyz[0] + m[3 * i + 1] * xyz[1] + m[3 * i + 2] * xyz[2]),
+        )
+    }
+
+    /// Maille de la grille qui contient `x` : premier nœud et position dans
+    /// la maille, de 0 à 1 sur chaque axe.
+    fn maille(&self, x: [f64; 3]) -> ([usize; 3], [f64; 3]) {
         let g = self.grille;
         let mut i = [0usize; 3];
         let mut f = [0f64; 3];
@@ -33,10 +55,21 @@ impl Lut {
             i[k] = (xf.floor() as usize).min(g - 2);
             f[k] = xf - i[k] as f64;
         }
-        let noeud = |a: usize, b: usize, c: usize| {
-            let index = ((i[0] + a) * g + i[1] + b) * g + i[2] + c;
-            self.table.get(index).copied().unwrap_or([0.0; 3])
-        };
+        (i, f)
+    }
+
+    /// Nœud `i` + (a, b, c) de la grille.
+    fn noeud(&self, i: [usize; 3], a: usize, b: usize, c: usize) -> [f64; 3] {
+        let g = self.grille;
+        let index = ((i[0] + a) * g + i[1] + b) * g + i[2] + c;
+        self.table.get(index).copied().unwrap_or([0.0; 3])
+    }
+
+    /// Interpolation tétraédrique dans la grille ; les six cas et l'ordre des
+    /// égalités suivent la méthode de référence du prototype.
+    fn tetraedre(&self, x: [f64; 3]) -> [f64; 3] {
+        let (i, f) = self.maille(x);
+        let noeud = |a: usize, b: usize, c: usize| self.noeud(i, a, b, c);
         let [r, v, b] = f;
         let (p1, p2, w1, w2, w3) = if r >= v && v >= b {
             (noeud(1, 0, 0), noeud(1, 1, 0), r, v, b)
@@ -55,6 +88,26 @@ impl Lut {
         [0, 1, 2].map(|k| {
             c000[k] + w1 * (p1[k] - c000[k]) + w2 * (p2[k] - p1[k]) + w3 * (c111[k] - p2[k])
         })
+    }
+
+    /// Interpolation trilinéaire : moyenne des huit coins de la maille,
+    /// pondérée par la position.
+    fn trilineaire(&self, x: [f64; 3]) -> [f64; 3] {
+        let (i, f) = self.maille(x);
+        let poids = |k: usize, coin: usize| if coin == 1 { f[k] } else { 1.0 - f[k] };
+        let mut y = [0f64; 3];
+        for a in 0..2 {
+            for b in 0..2 {
+                for c in 0..2 {
+                    let w = poids(0, a) * poids(1, b) * poids(2, c);
+                    let n = self.noeud(i, a, b, c);
+                    for k in 0..3 {
+                        y[k] += w * n[k];
+                    }
+                }
+            }
+        }
+        y
     }
 }
 
@@ -76,9 +129,11 @@ fn borner(x: f64) -> f64 {
     }
 }
 
-pub(crate) fn lire_mft2(d: &[u8]) -> Result<Lut, ErreurIcc> {
+/// Lit une table `mft2` à trois entrées et trois sorties ; `balise` nomme la
+/// table dans les refus.
+pub(crate) fn lire_mft2(d: &[u8], balise: &str) -> Result<Lut, ErreurIcc> {
     let tronque = || ErreurIcc::Tronque {
-        balise: "A2B1".into(),
+        balise: balise.into(),
     };
     let type_table = d.get(0..4).ok_or_else(tronque)?;
     if type_table != b"mft2" {
@@ -95,7 +150,10 @@ pub(crate) fn lire_mft2(d: &[u8]) -> Result<Lut, ErreurIcc> {
             structure: format!("mft2 {n_entrees}→{n_sorties}, grille {grille}"),
         });
     }
-    // La matrice (octets 12 à 47) ne s'applique qu'à une entrée XYZ : ignorée.
+    if d.len() < 48 {
+        return Err(tronque());
+    }
+    let matrice = std::array::from_fn(|k| s15(d, 12 + 4 * k));
     let n_courbe_e = usize::from(u16_at(d, 48).ok_or_else(tronque)?);
     let n_courbe_s = usize::from(u16_at(d, 50).ok_or_else(tronque)?);
     if n_courbe_e < 2 || n_courbe_s < 2 {
@@ -116,6 +174,7 @@ pub(crate) fn lire_mft2(d: &[u8]) -> Result<Lut, ErreurIcc> {
     let sortie = lecteur.courbes(n_courbe_s).ok_or_else(tronque)?;
     Ok(Lut {
         grille,
+        matrice,
         entree,
         table,
         sortie,
