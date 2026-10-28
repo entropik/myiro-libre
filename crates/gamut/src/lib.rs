@@ -12,6 +12,10 @@
 //! ticket #80). Un profil sans B2A1 lisible se lit quand même ; seul
 //! l'aller-retour est alors refusé.
 //!
+//! Elle lit le profil d'une image (`ProfilSource` : matrice et courbes, gris
+//! ou table `mft2` ; sRVB quand l'image n'en embarque pas) pour donner la
+//! couleur demandée de chaque pixel, en Lab relatif D50.
+//!
 //! De ces valeurs, elle tire la surface du cube RVB et son volume, les
 //! couleurs de base, la densité approchée du noir, la table de chroma par
 //! clarté et teinte (approchée) et les chemins du cube RVB (`analyser`,
@@ -34,6 +38,7 @@ mod essai;
 mod icc;
 mod limite;
 mod mesures;
+mod source;
 mod surface;
 mod table;
 
@@ -45,4 +50,5 @@ pub use essai::{profil_essai, profil_essai_xyz, ProfilEssai};
 pub use icc::{ErreurIcc, ProfilIcc};
 pub use limite::lire_gam;
 pub use mesures::{fidelite, memes_mesures, points_du_chemin, repetabilite, Mesure, Repetabilite};
+pub use source::ProfilSource;
 pub use surface::{maillage_affiche, surface_cube, volume, Maillage, MaillageAffiche};

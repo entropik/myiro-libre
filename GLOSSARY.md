@@ -269,6 +269,10 @@ _Éviter_ : table B2A, LUT inverse
 Couleur que l'imprimante rend d'une couleur demandée : la couleur passée par la table inverse, puis par la table colorimétrique (aller-retour B2A1 puis A2B1, en colorimétrique relatif). L'écart ΔE00 entre les deux dit si la couleur est dans le gamut.
 _Éviter_ : couleur simulée, épreuve
 
+**Profil de l'image** :
+Profil ICC embarqué dans une photo, qui dit quelle couleur chaque pixel demande (la couleur demandée, en L\*a\*b\* relatif). Une photo sans profil est lue en sRVB. Un profil embarqué illisible ou en CMJN est refusé avec sa raison, jamais remplacé en silence.
+_Éviter_ : profil source, profil d'entrée
+
 **Profil de référence** :
 Dans une comparaison, le premier profil choisi : les écarts des autres profils se calculent par rapport à lui. Dans un avant / après, c'est le profil actif. À ne pas confondre avec la référence d'un contrôle d'impression.
 _Éviter_ : profil maître, profil de base

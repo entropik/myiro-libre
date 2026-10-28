@@ -202,13 +202,13 @@ impl ProfilIcc {
 }
 
 /// Table des balises : signature, position et taille.
-struct Balises<'a> {
+pub(crate) struct Balises<'a> {
     octets: &'a [u8],
     entrees: Vec<([u8; 4], usize, usize)>,
 }
 
 impl<'a> Balises<'a> {
-    fn lire(octets: &'a [u8]) -> Result<Balises<'a>, ErreurIcc> {
+    pub(crate) fn lire(octets: &'a [u8]) -> Result<Balises<'a>, ErreurIcc> {
         let nombre = u32_at(octets, 128).unwrap_or(0) as usize;
         let fin = nombre
             .checked_mul(12)
@@ -231,7 +231,7 @@ impl<'a> Balises<'a> {
     }
 
     /// Données d'une balise ; `Tronque` si elle sort du fichier.
-    fn trouver(&self, sig: &[u8; 4]) -> Result<Option<&'a [u8]>, ErreurIcc> {
+    pub(crate) fn trouver(&self, sig: &[u8; 4]) -> Result<Option<&'a [u8]>, ErreurIcc> {
         let Some(&(_, position, taille)) = self.entrees.iter().find(|e| &e.0 == sig) else {
             return Ok(None);
         };
@@ -246,7 +246,7 @@ impl<'a> Balises<'a> {
 }
 
 /// Texte d'un `desc` (ASCII) ou premier enregistrement d'un `mluc`.
-fn lire_desc(d: &[u8]) -> Option<String> {
+pub(crate) fn lire_desc(d: &[u8]) -> Option<String> {
     match d.get(0..4)? {
         b"desc" => {
             let n = u32_at(d, 8)? as usize;
@@ -314,7 +314,7 @@ pub(crate) fn vers_lab(lab: [f64; 3]) -> Lab {
 }
 
 /// XYZ (échelle Y = 1) vers L\*, a\*, b\* rapportés à l'illuminant du PCS.
-fn vers_lab_pcs(xyz: [f64; 3], illuminant: [f64; 3]) -> [f64; 3] {
+pub(crate) fn vers_lab_pcs(xyz: [f64; 3], illuminant: [f64; 3]) -> [f64; 3] {
     let cent = |v: [f64; 3]| Xyz {
         x: 100.0 * v[0],
         y: 100.0 * v[1],
