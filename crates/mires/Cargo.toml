@@ -1,0 +1,10 @@
+[package]
+name = "mires"
+version = "0.1.0"
+description = "Mires de profilage RVB : mire FD-9 RGB-2520 reprise telle quelle, pages en bandes du MYIRO-1 en TIFF sans gestion couleur"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
