@@ -181,6 +181,10 @@ _Éviter_ : OK/KO, bon/mauvais, pass/fail
 Angle de la couleur dans le plan a*b*, en degrés (0 à 360). Un gris parfait (chroma nulle) n'a pas de teinte : elle est inconnue, pas nulle.
 _Éviter_ : hue, nuance
 
+**Chroma** :
+Distance d'une couleur à l'axe des gris dans le plan a\*b\* (C\*) : plus elle est grande, plus la couleur est vive. Un gris a une chroma nulle. La chroma ne dépend pas de la clarté, au contraire de la saturation au sens courant.
+_Éviter_ : saturation, pureté
+
 ### Impression
 
 **Condition d'impression** :
@@ -222,6 +226,52 @@ _Éviter_ : preset, mode, qualité seule
 **Précision du calcul** :
 Écart ΔE00 moyen et maximal entre les mesures qui ont servi au calcul et ce que le profil prédit pour elles. Elle dit si le calcul a bien suivi les mesures, pas si le profil est bon : un profil calculé reste « à vérifier » (« Profil calculé, à vérifier ») jusqu'à la vérification de profil.
 _Éviter_ : qualité du profil, vérification
+
+### Comparaison de profils
+
+**Gamut** :
+Ensemble des couleurs qu'une condition d'impression peut produire, tel que son profil ICC le décrit. Il se lit dans la table colorimétrique du profil, en colorimétrie absolue : le blanc du papier est compris.
+_Éviter_ : espace couleur, gamme
+
+**Surface brute** :
+Forme du gamut obtenue en passant les six faces du cube RVB par le profil. Elle est calculée sans ArgyllCMS, mais se replie là où la couleur fait demi-tour (bleus et violets sombres).
+_Éviter_ : enveloppe, coque
+
+**Limite du gamut** :
+Enveloppe extérieure du gamut, calculée par ArgyllCMS (`iccgamut`) : une forme propre, sans replis. C'est la forme montrée par défaut ; sans ArgyllCMS ou sans `iccgamut`, la surface brute la remplace, avec la raison.
+_Éviter_ : frontière, contour
+
+**Volume du gamut** :
+Taille du gamut en unités L\*a\*b\* au cube. Il dit l'étendue des couleurs d'un profil, pas sa qualité : un grand volume n'est pas un meilleur profil.
+_Éviter_ : score, note
+
+**Coupe à clarté constante** :
+Tranche du gamut à une clarté L\* donnée, vue dans le plan a\*b\* : la chroma atteinte dans chaque teinte à cette clarté. Valeur approchée, par tranches de 1 L\* et de 2°.
+_Éviter_ : section, slice
+
+**Chroma par teinte** :
+Chroma la plus forte atteinte par un profil dans chaque teinte, toutes clartés confondues. Valeur approchée, par tranches de 2°.
+_Éviter_ : saturation par teinte
+
+**Couleurs de base** :
+Les huit coins du cube RVB passés par le profil : blanc, noir, rouge, vert, bleu, cyan, magenta et jaune.
+_Éviter_ : primaires seules, coins
+
+**Profil de référence** :
+Dans une comparaison, le premier profil choisi : les écarts des autres profils se calculent par rapport à lui. Dans un avant / après, c'est le profil actif. À ne pas confondre avec la référence d'un contrôle d'impression.
+_Éviter_ : profil maître, profil de base
+
+**Fidélité d'un profil** :
+Écart ΔE00 entre ce que le profil prédit et les mesures qu'il embarque, plage par plage, recalculé par myiro-libre pour tout profil, d'où qu'il vienne. Elle se mesure sur les plages qui ont servi au calcul : elle avantage le profil qui les suit au plus près, et ne dit pas lequel prédit le mieux un nouveau tirage (c'est la vérification de profil). Sans mesures embarquées lisibles, elle est inconnue, avec la raison.
+_Éviter_ : précision du calcul (donnée par ArgyllCMS au calcul), qualité
+
+**Répétabilité** :
+Écart ΔE00 entre les plages répétées d'une même mire (mêmes valeurs RVB imprimées et mesurées plusieurs fois). Elle dit le bruit de la mesure et de la feuille, pas le profil. Sans plage répétée, elle est inconnue.
+_Éviter_ : reproductibilité, dispersion seule
+
+**Mêmes mesures** :
+Deux profils embarquent les mêmes mesures quand ils ont le même nombre de plages, les mêmes valeurs RVB une fois triées et au plus 0,1 ΔE00 d'écart plage par plage. La comparaison le dit : seul le logiciel de calcul change.
+_Éviter_ : même mire, même fichier
 
 ### Densitométrie et contrôle
 
