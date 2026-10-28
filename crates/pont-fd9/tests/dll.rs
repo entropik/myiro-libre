@@ -24,10 +24,16 @@ fn dll() -> PathBuf {
 
 /// Lance le pont avec ce plafond, lui envoie ces lignes et rend ses réponses.
 fn dialoguer(plafond: &str, requetes: &[&str]) -> Vec<String> {
+    dialoguer_avec(plafond, &[], requetes)
+}
+
+/// Comme `dialoguer`, avec des arguments de plus pour le pont.
+fn dialoguer_avec(plafond: &str, arguments: &[&str], requetes: &[&str]) -> Vec<String> {
     let mut enfant = Command::new(env!("CARGO_BIN_EXE_pont-fd9"))
         .arg("--dll")
         .arg(dll())
         .args(["--plafond", plafond])
+        .args(arguments)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -106,3 +112,34 @@ fn palier_connexion() {
     assert!(lignes[1].contains(r#""rep":"connecte""#), "{}", lignes[1]);
     assert!(lignes[2].contains(r#""rep":"ferme""#), "{}", lignes[2]);
 }
+
+/// Palier Prénumérisation (essais E2, E3, E3 bis) : connexion, puis attente
+/// de la feuille (`FD9_ATTENTE` secondes, 120 par défaut), capture, QR et
+/// reconnaissance de la RGB-2520, puis arrêt sans mesure. Geste : glisser la
+/// feuille (E3), rien (E2), ou une autre feuille (E3 bis). Affiche le texte
+/// du QR, les zones, les plages, la fiabilité et l'écart.
+#[test]
+#[ignore = "fait passer une feuille dans le FD-9 avec la DLL Konica Minolta du poste"]
+fn palier_prenumerisation() {
+    let attente = std::env::var("FD9_ATTENTE").unwrap_or_else(|_| "120".into());
+    let connecter = format!(r#"{{"cmd":"connecter_adresse","adresse":"{}"}}"#, adresse());
+    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{RGB2520}}}"#);
+    let lignes = dialoguer_avec(
+        "prenumerisation",
+        &["--attente-feuille", &attente],
+        &[
+            r#"{"cmd":"version"}"#,
+            &connecter,
+            &prenumeriser,
+            r#"{"cmd":"fermer"}"#,
+        ],
+    );
+    assert_eq!(lignes.len(), 4);
+    assert!(lignes[1].contains(r#""rep":"connecte""#), "{}", lignes[1]);
+    // E3 : `prenumerisee` ; E2 : `feuille_absente` ; E3 bis : refus nommé.
+    println!("prénumérisation : {}", lignes[2]);
+    assert!(lignes[3].contains(r#""rep":"ferme""#), "{}", lignes[3]);
+}
+
+/// Définition de la RGB-2520 envoyée au pont (nombres de l'étude statique).
+const RGB2520: &str = r#"{"nom":"RGB-2520 - 1P MY9","largeur":27940,"hauteur":41660,"zones":[{"gauche":1349,"haut":2300,"largeur_plage":601,"hauteur_plage":601,"pas_x":601,"pas_y":601,"rangees":60,"colonnes":42}]}"#;

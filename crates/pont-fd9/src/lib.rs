@@ -2,26 +2,34 @@
 //!
 //! La session impose l'ordre des paliers et le plafond fixé au lancement,
 //! avant tout appel à la DLL (ADR 0005, fiches `docs/abi/FD9_*`). Le pont FD-9
-//! déclare ses propres paliers : Version, Détection et Connexion. Il n'a ni
-//! étalonnage par l'utilisateur ni mesure ponctuelle. Tout palier au-delà est
-//! refusé sans appel à la DLL.
+//! déclare ses propres paliers : Version, Détection, Connexion et
+//! Prénumérisation. Il n'a ni étalonnage par l'utilisateur ni mesure
+//! ponctuelle. Tout palier au-delà est refusé sans appel à la DLL.
 //!
 //! La session n'avance que sur un code de retour lu ou un événement reçu du
 //! rappel ; elle n'invente aucun état.
 
+mod attente;
+mod connexion;
 pub mod dll;
 pub mod evenements;
+mod feuille;
+mod fichier;
 pub mod serveur;
 
+pub use attente::{Annulation, Delais};
+pub use feuille::{ECART_ADMIS, TAILLE_IMAGE_MAX};
+
 use fd9_sys::{
-    connexion_etablie, Appareil, EtatSdk, InfosSysteme, NomApplication, TamponInfosSysteme,
-    CODE_RECERTIFICATION_DUE,
+    Appareil, CoordonneesMire, DonneesQr, EtatSdk, ModeReconnaissance, NomApplication,
+    TamponInfosSysteme,
 };
-use pont_protocole::{AdresseReseau, ErreurPont, Identite, Palier, RemiseAuRepos};
+use pont_protocole::{ErreurPont, Palier, RemiseAuRepos};
+use std::collections::VecDeque;
 use std::time::Duration;
 
 /// Dernier palier que ce pont sait franchir, quel que soit le plafond demandé.
-pub const PALIER_MAX: Palier = Palier::Connexion;
+pub const PALIER_MAX: Palier = Palier::Prenumerisation;
 
 /// Entrées passées à `FD9_GetDeviceList` : comme FD-S2w (la DLL admet 1 à 100).
 pub const CAPACITE_DETECTION: usize = 10;
@@ -61,6 +69,33 @@ pub trait SdkFd9 {
     /// Rappels reçus sans session pour les lire (avant l'inscription ou
     /// après la désinscription).
     fn rappels_orphelins(&self) -> u64;
+    /// `FD9_StartCapture` : admis à l'état 3 seulement.
+    fn capturer(&mut self) -> i32;
+    /// `FD9_GetCaptureResult` : sans `image`, rend la taille de l'image dans
+    /// `taille` ; avec, la remplit (tampon d'au moins `taille` octets).
+    fn resultat_capture(
+        &mut self,
+        qr_resultat: &mut u32,
+        qr: &mut DonneesQr,
+        taille: &mut u32,
+        image: Option<&mut [u8]>,
+    ) -> i32;
+    /// `FD9_StartPatchRecognition`, sans couleurs, rangées et colonnes à 0 :
+    /// le type n'admet ni couleurs ni mode matrice.
+    fn reconnaitre(&mut self, mode: ModeReconnaissance, coordonnees: &CoordonneesMire) -> i32;
+    /// `FD9_GetPatchRecognitionResult2`, sans disposition.
+    fn resultat_reconnaissance(
+        &mut self,
+        fiabilite: &mut u32,
+        coordonnees: &mut CoordonneesMire,
+    ) -> i32;
+    /// `FD9_StopMeasurement` : admis aux états 1 à 8.
+    fn arreter(&mut self, feuille_suivante: bool) -> i32;
+    /// `FD9_ExitMeasurement(0, NULL)` : admis aux états 9, 10 et d'erreur.
+    /// Le type n'envoie jamais d'image à l'instrument.
+    fn sortir(&mut self) -> i32;
+    /// `FD9_GetPremeasurementError` (`__cdecl`), sans texte : rend la cause.
+    fn erreur_premesure(&mut self, erreur_systeme: &mut i32) -> i32;
 }
 
 /// Un appel du rappel d'événements : les quatre nombres de la DLL, l'état
@@ -106,6 +141,13 @@ pub struct Session<S: SdkFd9> {
     /// Rappel inscrit dans la DLL, session de la DLL ouverte.
     inscrit: bool,
     connecte: bool,
+    /// Liaison perdue (état 103) : plus rien ne part vers l'instrument.
+    perdu: bool,
+    delais: Delais,
+    annulation: Annulation,
+    reconnaissance: ModeReconnaissance,
+    /// Événements reçus et pas encore traités par la requête en cours.
+    recus: VecDeque<Evenement>,
 }
 
 const APPAREIL_VIDE: Appareil = Appareil {
@@ -127,7 +169,31 @@ impl<S: SdkFd9> Session<S> {
             detectes: Vec::new(),
             inscrit: false,
             connecte: false,
+            perdu: false,
+            delais: Delais::default(),
+            annulation: Annulation::default(),
+            reconnaissance: ModeReconnaissance::Combine,
+            recus: VecDeque::new(),
         }
+    }
+
+    /// Délais d'attente de la feuille et de chaque étape.
+    pub fn avec_delais(mut self, delais: Delais) -> Self {
+        self.delais = delais;
+        self
+    }
+
+    /// Mode de reconnaissance des plages : COMBINE par défaut, COORDINATE en
+    /// repli, sur réglage explicite.
+    pub fn avec_reconnaissance(mut self, mode: ModeReconnaissance) -> Self {
+        self.reconnaissance = mode;
+        self
+    }
+
+    /// Poignée d'annulation de la requête en cours, à donner au fil qui lit
+    /// les requêtes.
+    pub fn annulation(&self) -> Annulation {
+        self.annulation.clone()
     }
 
     pub fn sdk(&self) -> &S {
@@ -201,149 +267,6 @@ impl<S: SdkFd9> Session<S> {
         Ok(self.detectes.clone())
     }
 
-    /// Connexion à l'instrument n° `instrument` de la dernière détection.
-    pub fn connecter(&mut self, instrument: usize) -> Result<Identite, ErreurPont> {
-        self.autoriser(Palier::Connexion, Some(Palier::Detection))?;
-        let appareil = *self
-            .detectes
-            .get(instrument)
-            .ok_or(ErreurPont::InstrumentInconnu {})?;
-        self.ouvrir(&appareil)
-    }
-
-    /// Connexion directe à une adresse réseau, sans détection.
-    pub fn connecter_adresse(&mut self, adresse: &AdresseReseau) -> Result<Identite, ErreurPont> {
-        self.autoriser(Palier::Connexion, Some(Palier::Version))?;
-        let appareil =
-            Appareil::reseau(adresse.texte()).map_err(|_| ErreurPont::ParametreRefuse {})?;
-        self.ouvrir(&appareil)
-    }
-
-    /// Inscrit le rappel, se connecte, lit l'identité et l'état. Un échec
-    /// défait ce qui a été fait, dans l'ordre inverse.
-    fn ouvrir(&mut self, appareil: &Appareil) -> Result<Identite, ErreurPont> {
-        // Déjà connectée, la DLL rendrait 0 sans rien faire : succès trompeur.
-        if self.connecte {
-            return Err(ErreurPont::EtatIncompatible {});
-        }
-        let nom = NomApplication::nouveau(NOM_APPLICATION)
-            .map_err(|e| inattendue(format!("nom d'application refusé : {e:?}")))?;
-        self.vider_hors_requete();
-        let code = self.sdk.inscrire_rappel(true);
-        self.journal
-            .push(format!("FD9_RegisterDeviceEventHandler : {code}"));
-        if code != 0 {
-            return Err(ErreurPont::Sdk { code });
-        }
-        self.inscrit = true;
-        let code = self.sdk.connecter(appareil, &nom);
-        if !connexion_etablie(code) {
-            let interne = self.sdk.dernier_code();
-            self.journal
-                .push(format!("FD9_Connect : code {code}, code interne {interne}"));
-            self.desinscrire();
-            return Err(ErreurPont::Sdk { code });
-        }
-        self.connecte = true;
-        let recertification_due = code == CODE_RECERTIFICATION_DUE;
-        self.journal.push(if recertification_due {
-            "FD9_Connect : 1901, connecté, recertification de l'instrument due".into()
-        } else {
-            format!("FD9_Connect : {code}")
-        });
-        match self.lire_identite(recertification_due) {
-            Ok(identite) => {
-                let mut statut = [0u32; 8];
-                let code = self.sdk.statut(&mut statut);
-                self.journal
-                    .push(format!("FD9_GetStatus : code {code}, {statut:?}"));
-                self.franchir(Palier::Connexion);
-                Ok(identite)
-            }
-            Err(erreur) => {
-                self.abandonner_connexion();
-                Err(erreur)
-            }
-        }
-    }
-
-    fn lire_identite(&mut self, recertification_due: bool) -> Result<Identite, ErreurPont> {
-        let mut tampon = TamponInfosSysteme::vide();
-        let code = self.sdk.infos(&mut tampon);
-        if code != 0 {
-            let interne = self.sdk.dernier_code();
-            self.journal.push(format!(
-                "FD9_GetSystemInfo : code {code}, code interne {interne}"
-            ));
-            return Err(ErreurPont::Sdk { code });
-        }
-        let infos = tampon.infos;
-        if !infos.est_rempli() {
-            return Err(inattendue("FD9_GetSystemInfo n'a rien écrit".into()));
-        }
-        // 8 chiffres supposés en BCD : lus en décimal, sans rien deviner.
-        let texte = infos.numero_de_serie();
-        let numero_serie = Some(&texte)
-            .filter(|t| !t.is_empty() && t.bytes().all(|o| o.is_ascii_digit()))
-            .and_then(|t| t.parse().ok())
-            .ok_or_else(|| inattendue(format!("n° de série « {texte} » non numérique")))?;
-        self.journal.push(format!(
-            "FD9_GetSystemInfo : 0, micrologiciel {}, produit {}",
-            infos.micrologiciel(),
-            infos.produit()
-        ));
-        Ok(Identite {
-            numero_serie,
-            micrologiciel: infos.micrologiciel(),
-            code_produit: infos.code_produit(),
-            adresse_mac: infos.mac(),
-            // Le sens des dates du FD-9 n'est pas établi (fiche FD9_GetSystemInfo).
-            date_initiale: None,
-            anomalie_date_initiale: false,
-            brute_hex: octets(&infos)
-                .iter()
-                .map(|octet| format!("{octet:02x}"))
-                .collect(),
-            recertification_due,
-        })
-    }
-
-    /// Connecté, mais l'identité est inutilisable : déconnecter, puis
-    /// désinscrire. Une déconnexion refusée laisse la session à fermer.
-    fn abandonner_connexion(&mut self) {
-        let code = self.sdk.deconnecter();
-        self.journal.push(format!("FD9_Disconnect : {code}"));
-        if code == 0 {
-            self.connecte = false;
-            self.desinscrire();
-        }
-    }
-
-    fn desinscrire(&mut self) {
-        let code = self.sdk.inscrire_rappel(false);
-        self.journal
-            .push(format!("FD9_RegisterDeviceEventHandler (nul) : {code}"));
-        if code == 0 {
-            self.inscrit = false;
-        }
-    }
-
-    /// Événements arrivés hors de toute requête : journalisés, sans effet.
-    fn vider_hors_requete(&mut self) {
-        if !self.inscrit {
-            return;
-        }
-        for e in self.sdk.evenements(Duration::ZERO) {
-            self.journal.push(format!(
-                "événement hors requête ignoré : état {} (travail {}, page {}, compte {})",
-                e.etat.code(),
-                e.travail,
-                e.page,
-                e.compte
-            ));
-        }
-    }
-
     /// Réponse à une demande d'un palier que ce pont ne déclare pas
     /// (étalonnage, mesures) : refusée sans appel à la DLL.
     pub fn hors_paliers(&self, palier: Palier) -> ErreurPont {
@@ -355,38 +278,6 @@ impl<S: SdkFd9> Session<S> {
                 plafond: self.plafond,
             }
         }
-    }
-
-    /// Déconnecte puis désinscrit le rappel. Ensuite, plus rien n'atteint la
-    /// DLL. Une déconnexion refusée n'est pas retentée.
-    pub fn fermer(&mut self) -> Fermeture {
-        if let Some(fermeture) = &self.fermeture {
-            return fermeture.clone();
-        }
-        self.fermee = true;
-        self.vider_hors_requete();
-        let fermeture = if self.connecte {
-            let code = self.sdk.deconnecter();
-            self.journal.push(format!("FD9_Disconnect : {code}"));
-            if code == 0 {
-                self.connecte = false;
-                self.desinscrire();
-                Fermeture::Confirmee
-            } else {
-                Fermeture::Incertaine {
-                    remise_au_repos: RemiseAuRepos::ArretRefuse { code },
-                }
-            }
-        } else {
-            if self.inscrit {
-                self.desinscrire();
-            }
-            Fermeture::Confirmee
-        };
-        self.journal
-            .push(format!("résultat de la fermeture : {fermeture:?}"));
-        self.fermeture = Some(fermeture.clone());
-        fermeture
     }
 
     fn franchir(&mut self, palier: Palier) {
@@ -410,26 +301,4 @@ impl<S: SdkFd9> Session<S> {
         }
         Ok(())
     }
-}
-
-fn inattendue(detail: String) -> ErreurPont {
-    ErreurPont::ReponseInattendue { detail }
-}
-
-/// Les 100 octets de l'identité, dans l'ordre de la DLL.
-fn octets(infos: &InfosSysteme) -> Vec<u8> {
-    let mots =
-        |valeurs: &[u32]| -> Vec<u8> { valeurs.iter().flat_map(|v| v.to_le_bytes()).collect() };
-    [
-        mots(&infos.version_sdk),
-        mots(&infos.version_micrologiciel),
-        infos.code_produit.to_vec(),
-        infos.numero_serie.to_vec(),
-        infos.adresse_mac.to_vec(),
-        infos.remplissage.to_vec(),
-        mots(&infos.date_etalonnage_usine),
-        mots(&infos.date_premiere_mesure),
-        infos.nom_produit.to_vec(),
-    ]
-    .concat()
 }

@@ -7,8 +7,8 @@ use commun::{Fd9Simule, EMPREINTE_SIMULEE};
 use pont_fd9::serveur::servir;
 use pont_fd9::{Session, PALIER_MAX};
 use pont_protocole::{
-    lire_reponse, Empreinte, ErreurPont, Info, InstrumentFd9, LiaisonFd9, Palier, RemiseAuRepos,
-    Reponse,
+    lire_reponse, Empreinte, ErreurPont, Info, InstrumentFd9, LectureFeuille, LiaisonFd9, Palier,
+    RemiseAuRepos, Reponse,
 };
 
 /// Envoie `requetes` au pont ; rend les lignes écrites et la session.
@@ -20,7 +20,12 @@ fn dialoguer(
     let mut session = Session::new(sdk, plafond);
     let entree = requetes.join("\n");
     let mut sortie = Vec::new();
-    servir(&mut session, entree.as_bytes(), &mut sortie).unwrap();
+    servir(
+        &mut session,
+        std::io::Cursor::new(entree.into_bytes()),
+        &mut sortie,
+    )
+    .unwrap();
     let lignes = String::from_utf8(sortie)
         .unwrap()
         .lines()
@@ -121,7 +126,7 @@ fn la_connexion_est_refusee_au_plafond_detection_sans_appel_a_la_dll() {
 fn etalonnage_et_mesures_du_myiro1_sont_refuses_par_les_paliers_du_fd9() {
     let (lignes, session) = dialoguer(
         Fd9Simule::avec_un_fd9(),
-        Palier::Bande,
+        Palier::Feuille,
         &[
             r#"{"cmd":"etalonner"}"#,
             r#"{"cmd":"mesurer_ponctuelle"}"#,
@@ -270,11 +275,13 @@ fn annuler_est_sans_effet_et_sans_appel_a_la_dll() {
 const MIRE: &str = r#"{"nom":"RGB-2520 - 1P MY9","largeur":27940,"hauteur":41660,"zones":[{"gauche":1349,"haut":2300,"largeur_plage":601,"hauteur_plage":601,"pas_x":601,"pas_y":601,"rangees":60,"colonnes":42}]}"#;
 
 #[test]
-fn la_feuille_est_refusee_par_les_paliers_du_fd9_sans_appel_a_la_dll() {
+fn la_feuille_est_refusee_au_plafond_connexion_sans_appel_a_la_dll() {
     let (lignes, session) = dialoguer(
-        Fd9Simule::avec_un_fd9(),
-        Palier::Feuille,
+        Fd9Simule::avec_une_rgb2520(),
+        Palier::Connexion,
         &[
+            r#"{"cmd":"version"}"#,
+            r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#,
             &format!(r#"{{"cmd":"prenumeriser","mire":{MIRE}}}"#),
             &format!(r#"{{"cmd":"mesurer_feuille","mire":{MIRE}}}"#),
         ],
@@ -282,16 +289,134 @@ fn la_feuille_est_refusee_par_les_paliers_du_fd9_sans_appel_a_la_dll() {
     let refus = |demande| Reponse::Erreur {
         erreur: ErreurPont::PalierNonAutorise {
             demande,
-            plafond: PALIER_MAX,
+            plafond: Palier::Connexion,
         },
     };
     assert_eq!(
-        reponses(&lignes),
+        reponses(&lignes)[2..],
         [refus(Palier::Prenumerisation), refus(Palier::Feuille)]
     );
-    assert!(
-        session.sdk().appels.is_empty(),
-        "{:?}",
-        session.sdk().appels
+    // Après la connexion, plus rien jusqu'à la fermeture.
+    assert_eq!(
+        session.sdk().appels_dll()[1..5],
+        [
+            "FD9_RegisterDeviceEventHandler rappel",
+            "FD9_Connect 192.0.2.40 myiro-libre",
+            "FD9_GetSystemInfo",
+            "FD9_GetStatus"
+        ]
     );
+    assert_eq!(
+        session.sdk().appels_dll()[5..],
+        ["FD9_Disconnect", "FD9_RegisterDeviceEventHandler nul"]
+    );
+}
+
+#[test]
+fn la_mesure_d_une_feuille_reste_refusee_au_dela_de_la_prenumerisation() {
+    let (lignes, session) = dialoguer(
+        Fd9Simule::avec_une_rgb2520(),
+        Palier::Feuille,
+        &[&format!(r#"{{"cmd":"mesurer_feuille","mire":{MIRE}}}"#)],
+    );
+    assert_eq!(
+        reponses(&lignes),
+        [Reponse::Erreur {
+            erreur: ErreurPont::PalierNonAutorise {
+                demande: Palier::Feuille,
+                plafond: PALIER_MAX,
+            }
+        }]
+    );
+    assert!(session.sdk().appels.is_empty());
+}
+
+#[test]
+fn prenumeriser_rend_la_lecture_de_la_feuille() {
+    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{MIRE}}}"#);
+    let (lignes, session) = dialoguer(
+        Fd9Simule::avec_une_rgb2520(),
+        Palier::Prenumerisation,
+        &[
+            r#"{"cmd":"version"}"#,
+            r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#,
+            &prenumeriser,
+            r#"{"cmd":"fermer"}"#,
+        ],
+    );
+    assert_eq!(
+        reponses(&lignes)[2],
+        Reponse::Prenumerisee {
+            lecture: LectureFeuille {
+                qr: Info::Confirmee("RGB-2520 - 1P MY9*1+".into()),
+                zones: 1,
+                plages: 2_520,
+                fiabilite: 97,
+                ecart_max: 0,
+            }
+        }
+    );
+    assert_eq!(reponses(&lignes)[3], Reponse::Ferme {});
+    assert!(!session
+        .sdk()
+        .appels_dll()
+        .iter()
+        .any(|a| a.starts_with("FD9_StartMeasurement")));
+}
+
+#[test]
+fn annuler_interrompt_l_attente_de_la_feuille() {
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.a_venir.clear();
+    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{MIRE}}}"#);
+    let (lignes, session) = dialoguer(
+        sdk,
+        Palier::Prenumerisation,
+        &[
+            r#"{"cmd":"version"}"#,
+            r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#,
+            &prenumeriser,
+            r#"{"cmd":"annuler"}"#,
+        ],
+    );
+    // La feuille reçoit son résultat unique, puis `annuler` son accusé.
+    assert_eq!(
+        reponses(&lignes)[2..],
+        [
+            Reponse::Erreur {
+                erreur: ErreurPont::MesureAnnulee {
+                    remise_au_repos: RemiseAuRepos::AuRepos {}
+                }
+            },
+            Reponse::Annulation {
+                effet: pont_protocole::EffetAnnulation::Appliquee
+            },
+        ]
+    );
+    let appels = session.sdk().appels_dll();
+    assert!(appels.contains(&"FD9_StopMeasurement faux"));
+    assert!(appels.contains(&"FD9_ExitMeasurement 0 nul"));
+}
+
+#[test]
+fn la_fin_de_l_entree_abandonne_une_feuille_pas_encore_glissee() {
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.a_venir.clear();
+    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{MIRE}}}"#);
+    let (lignes, session) = dialoguer(
+        sdk,
+        Palier::Prenumerisation,
+        &[
+            r#"{"cmd":"version"}"#,
+            r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#,
+            &prenumeriser,
+        ],
+    );
+    assert!(matches!(
+        reponses(&lignes)[2],
+        Reponse::Erreur {
+            erreur: ErreurPont::MesureAnnulee { .. }
+        }
+    ));
+    assert!(!session.sdk().connecte && !session.sdk().inscrit);
 }

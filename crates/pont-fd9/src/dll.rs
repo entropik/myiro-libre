@@ -8,12 +8,16 @@
 
 use crate::{evenements, Evenement, SdkFd9};
 use fd9_sys::{
-    Appareil, GestionnaireEvenements, NomApplication, TamponInfosSysteme, EXPORTS_AUTORISES,
+    Appareil, CoordonneesMire, DonneesQr, GestionnaireEvenements, ImageFd9, ModeReconnaissance,
+    NomApplication, TamponInfosSysteme, EXPORTS_AUTORISES,
 };
 use libloading::Library;
+use std::ffi::{c_char, c_void};
 use std::path::Path;
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
+
+pub use crate::fichier::{empreinte_fichier, version_du_fichier};
 
 /// Exports dont l'adapter demande l'adresse au chargement : toute la liste
 /// blanche, pour vérifier que la DLL est complète (fiche
@@ -46,6 +50,22 @@ type FnConnecter = unsafe extern "system" fn(*const Appareil, *const u8) -> i32;
 type FnInfos = unsafe extern "system" fn(*mut TamponInfosSysteme) -> i32;
 type FnStatut = unsafe extern "system" fn(*mut [u32; 8]) -> i32;
 type FnSansArgument = unsafe extern "system" fn() -> i32;
+type FnResultatCapture =
+    unsafe extern "system" fn(*mut u32, *mut DonneesQr, *mut u32, *mut ImageFd9) -> i32;
+type FnReconnaitre = unsafe extern "system" fn(
+    *const u32,
+    *const CoordonneesMire,
+    *const c_void,
+    *const u32,
+    *const u32,
+) -> i32;
+type FnResultatReconnaissance =
+    unsafe extern "system" fn(*mut u32, *mut c_void, *mut CoordonneesMire) -> i32;
+type FnArreter = unsafe extern "system" fn(*const bool) -> i32;
+type FnSortir = unsafe extern "system" fn(*const u32, *const c_void) -> i32;
+/// Seul export en `__cdecl` de la liste blanche (fiche
+/// FD9_GetPremeasurementError).
+type FnErreurPremesure = unsafe extern "C" fn(*mut i32, *mut *const c_char) -> i32;
 
 pub struct Fd9Dll {
     dernier_code: FnDernierCode,
@@ -55,6 +75,13 @@ pub struct Fd9Dll {
     infos: FnInfos,
     statut: FnStatut,
     deconnecter: FnSansArgument,
+    capturer: FnSansArgument,
+    resultat_capture: FnResultatCapture,
+    reconnaitre: FnReconnaitre,
+    resultat_reconnaissance: FnResultatReconnaissance,
+    arreter: FnArreter,
+    sortir: FnSortir,
+    erreur_premesure: FnErreurPremesure,
     /// Événements du rappel, tant qu'il est inscrit.
     reception: Option<Receiver<Evenement>>,
     version_fichier: Option<[u32; 4]>,
@@ -88,6 +115,13 @@ impl Fd9Dll {
             infos: resoudre(&bibliotheque, "FD9_GetSystemInfo")?,
             statut: resoudre(&bibliotheque, "FD9_GetStatus")?,
             deconnecter: resoudre(&bibliotheque, "FD9_Disconnect")?,
+            capturer: resoudre(&bibliotheque, "FD9_StartCapture")?,
+            resultat_capture: resoudre(&bibliotheque, "FD9_GetCaptureResult")?,
+            reconnaitre: resoudre(&bibliotheque, "FD9_StartPatchRecognition")?,
+            resultat_reconnaissance: resoudre(&bibliotheque, "FD9_GetPatchRecognitionResult2")?,
+            arreter: resoudre(&bibliotheque, "FD9_StopMeasurement")?,
+            sortir: resoudre(&bibliotheque, "FD9_ExitMeasurement")?,
+            erreur_premesure: resoudre(&bibliotheque, "FD9_GetPremeasurementError")?,
             reception: None,
             version_fichier,
             empreinte,
@@ -233,82 +267,77 @@ impl SdkFd9 for Fd9Dll {
     fn rappels_orphelins(&self) -> u64 {
         evenements::orphelins()
     }
-}
 
-/// SHA-256 d'un fichier, en hexadécimal minuscule.
-pub fn empreinte_fichier(chemin: &Path) -> std::io::Result<String> {
-    use sha2::{Digest, Sha256};
-    let contenu = std::fs::read(chemin)?;
-    Ok(Sha256::digest(&contenu)
-        .iter()
-        .map(|octet| format!("{octet:02x}"))
-        .collect())
-}
-
-/// Version binaire du fichier (`VS_FIXEDFILEINFO`, majeur, mineur, révision,
-/// build), lue par l'outil de version de Windows sans exécuter le fichier.
-/// `None` si le fichier n'a pas de ressource de version.
-#[cfg(windows)]
-pub fn version_du_fichier(chemin: &Path) -> Option<[u32; 4]> {
-    use std::ffi::c_void;
-    use std::os::windows::ffi::OsStrExt;
-
-    #[link(name = "version")]
-    extern "system" {
-        fn GetFileVersionInfoSizeW(nom: *const u16, poignee: *mut u32) -> u32;
-        fn GetFileVersionInfoW(
-            nom: *const u16,
-            poignee: u32,
-            taille: u32,
-            donnees: *mut c_void,
-        ) -> i32;
-        fn VerQueryValueW(
-            bloc: *const c_void,
-            chemin: *const u16,
-            valeur: *mut *mut c_void,
-            taille: *mut u32,
-        ) -> i32;
+    fn capturer(&mut self) -> i32 {
+        // SAFETY : aucun argument (fiche FD9_StartCapture).
+        unsafe { (self.capturer)() }
     }
 
-    let nom: Vec<u16> = chemin.as_os_str().encode_wide().chain([0]).collect();
-    let racine: Vec<u16> = "\\".encode_utf16().chain([0]).collect();
-    let mut poignee = 0;
-    // SAFETY : textes terminés par zéro ; tampon de la taille annoncée ; la
-    // valeur rendue pointe dans ce tampon, lue seulement sur `taille` octets.
-    unsafe {
-        let taille = GetFileVersionInfoSizeW(nom.as_ptr(), &mut poignee);
-        if taille == 0 {
-            return None;
+    fn resultat_capture(
+        &mut self,
+        qr_resultat: &mut u32,
+        qr: &mut DonneesQr,
+        taille: &mut u32,
+        image: Option<&mut [u8]>,
+    ) -> i32 {
+        let Some(tampon) = image else {
+            // SAFETY : trois sorties valides ; image nulle : la DLL n'écrit
+            // que la taille (fiche FD9_GetCaptureResult).
+            return unsafe {
+                (self.resultat_capture)(qr_resultat, qr, taille, std::ptr::null_mut())
+            };
+        };
+        // La DLL se fie à `*taille` : un tampon plus petit est refusé ici.
+        if tampon.len() < *taille as usize {
+            return fd9_sys::CODE_PARAMETRE_INVALIDE;
         }
-        let mut tampon = vec![0u8; taille as usize];
-        if GetFileVersionInfoW(nom.as_ptr(), 0, taille, tampon.as_mut_ptr().cast()) == 0 {
-            return None;
-        }
-        let mut valeur: *mut c_void = std::ptr::null_mut();
-        let mut longueur = 0u32;
-        if VerQueryValueW(
-            tampon.as_ptr().cast(),
-            racine.as_ptr(),
-            &mut valeur,
-            &mut longueur,
-        ) == 0
-            || valeur.is_null()
-            || longueur < 16
-        {
-            return None;
-        }
-        let mots = std::slice::from_raw_parts(valeur.cast::<u8>(), 16);
-        let mot = |i: usize| u32::from_le_bytes(mots[i..i + 4].try_into().unwrap());
-        // Signature de VS_FIXEDFILEINFO.
-        if mot(0) != 0xFEEF_04BD {
-            return None;
-        }
-        let (haut, bas) = (mot(8), mot(12));
-        Some([haut >> 16, haut & 0xffff, bas >> 16, bas & 0xffff])
+        let mut image = ImageFd9 {
+            largeur: 0,
+            hauteur: 0,
+            bits: 0,
+            donnees: tampon.as_mut_ptr(),
+        };
+        // SAFETY : QR de 1 172 octets, tampon d'au moins `*taille` octets,
+        // aucune adresse gardée après l'appel (fiche FD9_GetCaptureResult).
+        unsafe { (self.resultat_capture)(qr_resultat, qr, taille, &mut image) }
     }
-}
 
-#[cfg(not(windows))]
-pub fn version_du_fichier(_chemin: &Path) -> Option<[u32; 4]> {
-    None
+    fn reconnaitre(&mut self, mode: ModeReconnaissance, coordonnees: &CoordonneesMire) -> i32 {
+        let mode = mode as u32;
+        let (rangees, colonnes) = (0u32, 0u32);
+        // SAFETY : mode, rangées et colonnes jamais nuls (lus sans test par
+        // la DLL), coordonnées de 0xd70 octets (0xd78 en 64 bits) recopiées
+        // avant le retour, couleurs nulles admises en COMBINE et COORDINATE
+        // (fiche FD9_StartPatchRecognition).
+        unsafe { (self.reconnaitre)(&mode, coordonnees, std::ptr::null(), &rangees, &colonnes) }
+    }
+
+    fn resultat_reconnaissance(
+        &mut self,
+        fiabilite: &mut u32,
+        coordonnees: &mut CoordonneesMire,
+    ) -> i32 {
+        // SAFETY : disposition nulle admise ; coordonnées à la taille de la
+        // structure, écrites pendant l'appel (fiche
+        // FD9_GetPatchRecognitionResult2).
+        unsafe { (self.resultat_reconnaissance)(fiabilite, std::ptr::null_mut(), coordonnees) }
+    }
+
+    fn arreter(&mut self, feuille_suivante: bool) -> i32 {
+        // SAFETY : un octet lu pendant l'appel (fiche FD9_StopMeasurement).
+        unsafe { (self.arreter)(&feuille_suivante) }
+    }
+
+    fn sortir(&mut self) -> i32 {
+        let afficher = 0u32;
+        // SAFETY : un nombre lu pendant l'appel ; image nulle avec 0 (fiche
+        // FD9_ExitMeasurement).
+        unsafe { (self.sortir)(&afficher, std::ptr::null()) }
+    }
+
+    fn erreur_premesure(&mut self, erreur_systeme: &mut i32) -> i32 {
+        // SAFETY : `__cdecl` ; texte nul admis, rien de la DLL n'est gardé
+        // (fiche FD9_GetPremeasurementError).
+        unsafe { (self.erreur_premesure)(erreur_systeme, std::ptr::null_mut()) }
+    }
 }

@@ -77,21 +77,11 @@ pub struct CoordonneesMire {
 }
 
 impl CoordonneesMire {
-    /// Zéro partout, puis la définition, champ par champ et sans conversion
-    /// d'unité, comme FD-S2w. Refuse, avant tout appel à la DLL, une
-    /// définition sans zone, plus de 50 zones ou de 15 000 plages, une zone
-    /// vide ou hors des bornes du SDK, et une zone qui déborde de la feuille
-    /// (`gauche + pas × colonnes ≤ largeur`, de même en hauteur).
-    pub fn depuis_definition(d: &DefinitionFeuille) -> Result<Box<Self>, ErreurParametre> {
-        if d.zones.is_empty() {
-            return Err(ErreurParametre::Vide);
-        }
-        if d.zones.len() > ZONES_MAX {
-            return Err(ErreurParametre::TropDeZones { maximum: ZONES_MAX });
-        }
-        let mut c = Box::new(CoordonneesMire {
-            largeur: d.largeur,
-            hauteur: d.hauteur,
+    /// Tout à zéro, sans image modèle : tampon à passer à la DLL.
+    pub fn vide() -> Box<Self> {
+        Box::new(CoordonneesMire {
+            largeur: 0,
+            hauteur: 0,
             zones: 0,
             plages: 0,
             compte_zones: [CompteZone::default(); ZONES_MAX],
@@ -104,7 +94,24 @@ impl CoordonneesMire {
                 bits: 0,
                 donnees: std::ptr::null_mut(),
             },
-        });
+        })
+    }
+
+    /// Zéro partout, puis la définition, champ par champ et sans conversion
+    /// d'unité, comme FD-S2w. Refuse, avant tout appel à la DLL, une
+    /// définition sans zone, plus de 50 zones ou de 15 000 plages, une zone
+    /// vide ou hors des bornes du SDK, et une zone qui déborde de la feuille
+    /// (`gauche + pas × colonnes ≤ largeur`, de même en hauteur).
+    pub fn depuis_definition(d: &DefinitionFeuille) -> Result<Box<Self>, ErreurParametre> {
+        if d.zones.is_empty() {
+            return Err(ErreurParametre::Vide);
+        }
+        if d.zones.len() > ZONES_MAX {
+            return Err(ErreurParametre::TropDeZones { maximum: ZONES_MAX });
+        }
+        let mut c = CoordonneesMire::vide();
+        c.largeur = d.largeur;
+        c.hauteur = d.hauteur;
         let mut plages = 0usize;
         for (i, z) in d.zones.iter().enumerate() {
             let zone = i + 1;

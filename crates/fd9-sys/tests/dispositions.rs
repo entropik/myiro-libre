@@ -278,3 +278,14 @@ fn les_etats_du_rappel_sont_nommes_et_relus() {
         assert_eq!(EtatSdk::depuis(trou), EtatSdk::Inconnu(trou));
     }
 }
+
+#[test]
+fn des_coordonnees_vides_sont_toutes_a_zero() {
+    // Tampon passé à FD9_GetPatchRecognitionResult2.
+    let c = CoordonneesMire::vide();
+    assert_eq!((c.largeur, c.hauteur, c.zones, c.plages), (0, 0, 0, 0));
+    assert!(c.compte_zones.iter().all(|z| *z == CompteZone::default()));
+    assert!(c.geometries.iter().all(|g| *g == GeometrieZone::default()));
+    assert!(c.reserve.iter().all(|&o| o == 0));
+    assert!(c.modele.donnees.is_null());
+}
