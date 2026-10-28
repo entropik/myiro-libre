@@ -16,8 +16,10 @@ use serde::{Deserialize, Serialize};
 
 mod gabarit;
 mod mise_en_page;
+mod rendu;
 mod rgb2520;
 mod ti1;
+mod tiff;
 
 pub use gabarit::{
     Gabarit, Rectangle, CONTRASTE_MIN_DE76, DISTANCE_TEXTE_MM, MYIRO1_BANDEAU_MM,
@@ -27,11 +29,15 @@ pub use gabarit::{
 pub use mise_en_page::{
     estimer_lab, mettre_en_page, verifier, Defaut, MiseEnPage, Page, PlagePlacee,
 };
+pub use rendu::{
+    contenu_qr, couper_ligne, lire_qr, rendre_page, CodeTirage, Etiquette, ImageRvb, RESOLUTION_PPP,
+};
 pub use rgb2520::{
     lire_mire_fd9, lire_mire_fd9_sans_empreinte, GeometrieFd9, MireFd9, RGB2520_EMPREINTE,
     RGB2520_FICHIER, RGB2520_GEOMETRIE, RGB2520_NOM,
 };
 pub use ti1::lire_ti1;
+pub use tiff::ecrire_tiff;
 
 /// Instrument qui lira la mire.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

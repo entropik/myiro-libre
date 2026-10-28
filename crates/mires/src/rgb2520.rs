@@ -6,10 +6,10 @@
 
 use std::io::Cursor;
 
+use ::tiff::decoder::{Decoder, DecodingResult};
+use ::tiff::ColorType;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tiff::decoder::{Decoder, DecodingResult};
-use tiff::ColorType;
 
 use crate::ErreurMire;
 

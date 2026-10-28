@@ -8,11 +8,14 @@ repository.workspace = true
 
 [dependencies]
 colorimetrie = { path = "../colorimetrie" }
+font8x8 = { version = "0.3", default-features = false }
+qrcode = { version = "0.14", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 tiff = { version = "0.11", default-features = false, features = ["lzw"] }
 
 [dev-dependencies]
+rqrr = { version = "0.7", default-features = false }
 cgats = { path = "../cgats" }
 pont-protocole = { path = "../pont-protocole" }
