@@ -73,7 +73,7 @@ Reportés, avec l'accord du mainteneur (23 octobre 2026) :
 - **QR code des pages MYIRO-1** : contenu `MYIRO-LIBRE:T<tirage>:P<page>/<pages>:<8 premiers caractères de l'empreinte>`, en mode alphanumérique, correction M, modules de 0,6 mm. Le MYIRO-1 ne le lit pas : il sert à reconnaître la page ailleurs, et il ne coûte rien. La mire FD-9 garde son QR d'origine.
 - **Dossier des fichiers à imprimer** : `Documents\myiro-libre\Mires\`, créé par l'application. L'utilisateur ne choisit pas de dossier, et un bouton « Ouvrir le dossier » le montre dans l'Explorateur.
 - **Nombre libre MYIRO-1 en mode avancé** : de 24 à 3 000 plages. Ce sont des bornes de saisie, pas un avis sur la qualité.
-- **Seuils du contrôle de cohérence** (tâche 8), tous « choix, à vérifier » sur des mesures réelles :
+- **Seuils du contrôle de cohérence** (tâche 8), acceptés par le mainteneur le 28 octobre 2026. Ce ne sont pas des valeurs de norme : aucune norme ne fixe de seuil pour ce contrôle. Ils restent des choix à vérifier sur des mesures réelles, et le code les commente comme tels :
   - dégradé gris : un retour en arrière de plus de 3 L* entre deux gris successifs ;
   - blanc et noir : le blanc RVB 100 à moins de 2 L* de la plage la plus claire, le noir RVB 0 à moins de 5 L* de la plus foncée ;
   - doublons : plus de 3 ΔE00 entre deux plages de même RVB (entre MYIRO-1 et FD-9, les écarts mesurés le 7 octobre restaient sous 0,6 ΔE00) ;
