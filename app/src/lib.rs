@@ -10,6 +10,7 @@ pub mod demonstration;
 pub mod installation;
 pub mod instrument;
 pub mod mesurer;
+pub mod mires;
 pub mod parc;
 pub mod pont;
 pub mod profiler;
@@ -619,6 +620,9 @@ pub fn lancer() {
             parc::parc_installer_profil,
             profiler::profiler_commandes,
             profiler::profiler_calculer,
+            mires::commandes::mire_apercu,
+            mires::commandes::mire_preparer,
+            mires::commandes::mire_ouvrir_dossier,
             etalonner,
             repondre_geste
         ])

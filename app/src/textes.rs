@@ -1027,6 +1027,51 @@ const FRANCAIS: Catalogue = &[
         "probleme.repos_incertain.action",
         "Pour mesurer de nouveau, cliquez sur «\u{202f}Réessayer\u{202f}»\u{202f}: l’instrument sera reconnecté, puis à étalonner.",
     ),
+    // Préparer une mire (ticket #33)
+    (
+        "mire.erreur.cote",
+        "Côté de plage refusé\u{202f}: le MYIRO-1 lit des plages de 7\u{202f}mm au moins, et la bande doit tenir sur la page. Choisissez un autre côté.",
+    ),
+    (
+        "mire.erreur.nombre_libre",
+        "Nombre de plages refusé\u{202f}: choisissez de 24 à 3\u{202f}000 plages.",
+    ),
+    (
+        "mire.erreur.ti1",
+        "Les plages choisies par ArgyllCMS sont illisibles. Rien n’a été préparé. Relancez la préparation.",
+    ),
+    (
+        "mire.erreur.nombre",
+        "ArgyllCMS n’a pas rendu le nombre de plages demandé. Rien n’a été préparé. Relancez la préparation.",
+    ),
+    (
+        "mire.erreur.generation",
+        "ArgyllCMS n’a pas pu choisir les plages de la mire. Rien n’a été préparé.",
+    ),
+    (
+        "mire.erreur.contraste",
+        "Plages trop proches pour être lues\u{202f}: certaines ne se distinguent pas assez de leur voisine ou du blanc du papier. Rien n’a été préparé. Choisissez un plus grand nombre de plages.",
+    ),
+    (
+        "mire.erreur.ecriture",
+        "Les pages de la mire n’ont pas pu être écrites dans le dossier Documents\\myiro-libre\\Mires. Vérifiez qu’il reste de la place et que le dossier n’est pas protégé, puis recommencez.",
+    ),
+    (
+        "mire.erreur.fd9_introuvable",
+        "Mire RGB-2520 introuvable. Placez le fichier «\u{202f}RGB-2520 A3 - 1p.tif\u{202f}» dans le dossier mire-fd9 à côté de l’application. Le MYIRO-1 reste utilisable.",
+    ),
+    (
+        "mire.erreur.fd9_autre",
+        "Ce fichier n’est pas la mire RGB-2520 retenue\u{202f}: il a été modifié ou remplacé. Rien n’a été préparé. Reprenez le fichier d’origine, sans l’ouvrir ni l’enregistrer dans un autre logiciel.",
+    ),
+    (
+        "mire.erreur.fd9_illisible",
+        "La mire RGB-2520 est illisible ou n’a pas la forme attendue. Rien n’a été préparé. Reprenez le fichier d’origine.",
+    ),
+    (
+        "mire.erreur.fd9_fixe",
+        "La mire du FD-9 est RGB-2520, sur une page A3\u{202f}: ni taille, ni format, ni côté à choisir.",
+    ),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -2011,6 +2056,51 @@ const ANGLAIS: Catalogue = &[
     (
         "probleme.repos_incertain.action",
         "To measure again, click “Try again”: the instrument will be reconnected, then needs calibrating.",
+    ),
+    // Prepare a chart (ticket #33)
+    (
+        "mire.erreur.cote",
+        "Patch size refused: the MYIRO-1 reads patches of at least 7 mm, and the strip must fit on the page. Choose another size.",
+    ),
+    (
+        "mire.erreur.nombre_libre",
+        "Number of patches refused: choose from 24 to 3,000 patches.",
+    ),
+    (
+        "mire.erreur.ti1",
+        "The patches chosen by ArgyllCMS cannot be read. Nothing was prepared. Prepare the chart again.",
+    ),
+    (
+        "mire.erreur.nombre",
+        "ArgyllCMS did not return the number of patches requested. Nothing was prepared. Prepare the chart again.",
+    ),
+    (
+        "mire.erreur.generation",
+        "ArgyllCMS could not choose the patches of the chart. Nothing was prepared.",
+    ),
+    (
+        "mire.erreur.contraste",
+        "Patches too close to be read: some do not stand out enough from their neighbour or from the paper white. Nothing was prepared. Choose a larger number of patches.",
+    ),
+    (
+        "mire.erreur.ecriture",
+        "The chart pages could not be written to the Documents\\myiro-libre\\Mires folder. Check that there is space left and that the folder is not protected, then try again.",
+    ),
+    (
+        "mire.erreur.fd9_introuvable",
+        "RGB-2520 chart not found. Place the file “RGB-2520 A3 - 1p.tif” in the mire-fd9 folder next to the application. The MYIRO-1 can still be used.",
+    ),
+    (
+        "mire.erreur.fd9_autre",
+        "This file is not the selected RGB-2520 chart: it has been modified or replaced. Nothing was prepared. Use the original file, without opening or saving it in another program.",
+    ),
+    (
+        "mire.erreur.fd9_illisible",
+        "The RGB-2520 chart cannot be read or does not have the expected layout. Nothing was prepared. Use the original file.",
+    ),
+    (
+        "mire.erreur.fd9_fixe",
+        "The FD-9 chart is RGB-2520, on one A3 page: no size, format or patch size to choose.",
     ),
 ];
 

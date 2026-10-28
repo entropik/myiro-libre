@@ -23,6 +23,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 bibliotheque = { path = "../crates/bibliotheque" }
 cgats = { path = "../crates/cgats" }
+mires = { path = "../crates/mires" }
 colorimetrie = { path = "../crates/colorimetrie" }
 profilage = { path = "../crates/profilage" }
 pont-protocole = { path = "../crates/pont-protocole" }
