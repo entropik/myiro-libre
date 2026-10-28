@@ -276,8 +276,9 @@ fn sans_gris_le_critere_est_dit_non_fait() {
     assert_eq!(controle.faits, [Critere::Doublons, Critere::Voisines]);
 }
 
-#[test]
-fn le_controle_de_2520_plages_tient_en_2_secondes() {
+/// Mesure saine de 2 520 plages, avec gris et doublons en tête du fichier,
+/// puis la même décalée de 60 plages.
+fn mesure_2520_et_decalee() -> (PlagesProfil, PlagesProfil) {
     // Grille 13 × 13 × 13, 300 plages au hasard, 23 doublons.
     let mut saine = mesure_synthetique(13, 300, 23);
     assert_eq!(saine.plages.len(), 2520);
@@ -298,6 +299,25 @@ fn le_controle_de_2520_plages_tient_en_2_secondes() {
     ordre.sort_by_key(|&i| !speciales[i]);
     saine.plages = ordre.iter().map(|&i| saine.plages[i].clone()).collect();
     let decalee = decaler(&saine, 60);
+    (saine, decalee)
+}
+
+#[test]
+fn un_decalage_de_60_sur_2520_plages_est_trouve() {
+    let (saine, decalee) = mesure_2520_et_decalee();
+    assert!(controler_coherence(&saine).accepte());
+    assert_eq!(controler_coherence(&decalee).decalage, Some(60));
+}
+
+/// Durée, mesurée à part : sur une machine partagée (CI, 32 bits, mode
+/// debug), un seuil de temps n'est pas fiable. Sur le poste, 1,35 s en mode
+/// debug 64 bits pour les deux contrôles (28 octobre 2026). Les voisines en
+/// RVB sont calculées une seule fois ; chaque décalage ne coûte que n × 6.
+/// `cargo test -p profilage --test coherence -- --ignored tient_en_2_secondes`
+#[test]
+#[ignore]
+fn le_controle_de_2520_plages_tient_en_2_secondes() {
+    let (saine, decalee) = mesure_2520_et_decalee();
     let debut = std::time::Instant::now();
     assert!(controler_coherence(&saine).accepte());
     assert_eq!(controler_coherence(&decalee).decalage, Some(60));
