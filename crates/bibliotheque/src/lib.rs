@@ -11,12 +11,14 @@ use std::path::Path;
 use cgats::MesureImportee;
 use pont_protocole::{ecrire_mesure, lire_mesure, Geometrie, Info, Mesure};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, TransactionBehavior, MAIN_DB};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 mod parc;
 mod profils;
+mod verifications;
 pub use parc::*;
 pub use profils::*;
+pub use verifications::*;
 
 /// Nom du fichier de la base, dans le dossier de la bibliothèque.
 pub const FICHIER_BASE: &str = "bibliotheque.sqlite";
@@ -68,7 +70,7 @@ fn fichier_libre(chemin: &Path) -> std::path::PathBuf {
 }
 
 /// Version de l'organisation de la base ; une base plus récente est refusée.
-const VERSION_BASE: i32 = 5;
+const VERSION_BASE: i32 = 7;
 
 /// Ce qui peut empêcher une opération sur la bibliothèque.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -104,6 +106,11 @@ pub enum ErreurBibliotheque {
     /// Le fichier à restaurer n'est pas une sauvegarde utilisable ; la
     /// bibliothèque n'a pas été touchée.
     SauvegardeInvalide(String),
+    ToleranceInconnue(IdTolerances),
+    VerificationInconnue(IdVerification),
+    /// « Non vérifié » n'est pas le résultat d'une vérification ; rien
+    /// n'est rangé.
+    EtatVerificationInvalide,
     /// Erreur du fichier ou de la base elle-même.
     Base(String),
 }
@@ -142,6 +149,11 @@ impl fmt::Display for ErreurBibliotheque {
             Self::SauvegardeInvalide(detail) => {
                 write!(f, "sauvegarde inutilisable, rien n'a été restauré : {detail}")
             }
+            Self::ToleranceInconnue(id) => write!(f, "jeu de tolérances n° {} inconnu", id.0),
+            Self::VerificationInconnue(id) => write!(f, "vérification n° {} inconnue", id.0),
+            Self::EtatVerificationInvalide => {
+                f.write_str("« non vérifié » n'est pas le résultat d'une vérification")
+            }
             Self::Base(detail) => write!(f, "bibliothèque : {detail}"),
         }
     }
@@ -162,7 +174,7 @@ pub type Resultat<T> = Result<T, ErreurBibliotheque>;
 pub struct IdCondition(pub i64);
 
 /// Numéro d'une mesure dans la bibliothèque.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct IdMesure(pub i64);
 
 /// Condition d'impression (GLOSSARY) : pour l'instant, son nom.
@@ -943,6 +955,8 @@ fn migrer(base: &mut Connection) -> Resultat<()> {
             2 => transaction.execute_batch(ORGANISATION_3)?,
             3 => transaction.execute_batch(ORGANISATION_4)?,
             4 => transaction.execute_batch(ORGANISATION_5)?,
+            5 => transaction.execute_batch(ORGANISATION_6)?,
+            6 => transaction.execute_batch(verifications::ORGANISATION_7)?,
             autre => unreachable!("aucune migration depuis l'organisation {autre}"),
         }
         version += 1;
@@ -1070,6 +1084,12 @@ CREATE TABLE profils (
 CREATE INDEX profils_par_condition ON profils (condition);
 CREATE UNIQUE INDEX un_profil_actif_par_condition ON profils (condition) WHERE actif = 1;
 ";
+
+/// Organisation 6 : réservée aux mires et tirages du ticket #33, développés
+/// en parallèle (plan 4). Vide ici ; la fusion de #33 la remplace par la
+/// sienne. Une base passée par cette organisation vide n'aurait pas les
+/// tables des mires : fusionner #33 avant le ticket #41.
+const ORGANISATION_6: &str = "";
 
 #[cfg(test)]
 mod tests {
