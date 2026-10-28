@@ -1762,3 +1762,20 @@ fn la_comparaison_en_cours_ne_reste_pas_sur_une_vue_vide() {
     let fermer = &fermer[..fermer.find("\n  }").unwrap_or(fermer.len())];
     assert!(fermer.contains("enCours.hidden = true;"), "{fermer}");
 }
+
+/// Les axes a* et b* sont posés au plancher L* = 0 (plan de base), et l'axe
+/// L* part de ce plancher : ils se coupent en (0, 0, 0). Le centre de
+/// rotation reste au milieu du gamut (L* 50). Remarque du mainteneur à
+/// l'essai d'écran du 28 octobre 2026 : « les axes ne sont pas à 0 ? ».
+#[test]
+fn les_axes_de_la_vue_3d_partent_du_plancher_l_0() {
+    let script = lire("interface/vue3d.js");
+    for attendu in [
+        "{ nom: \"L*\", de: [0, 0, 0], a: [100, 0, 0], pas: (v) => [v, 0, 0], debut: 0, fin: 100 },",
+        "{ nom: \"a*\", de: [0, -120, 0], a: [0, 120, 0], pas: (v) => [0, v, 0], debut: -100, fin: 100 },",
+        "{ nom: \"b*\", de: [0, 0, -120], a: [0, 0, 120], pas: (v) => [0, 0, v], debut: -100, fin: 100 },",
+        "const y = s[0] - 50;",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+}

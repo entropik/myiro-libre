@@ -180,12 +180,12 @@ window.Vue3d = (() => {
       ctx.globalAlpha = 1;
     }
 
-    // Axes L*, a*, b*, gradués tous les 20, dans la couleur atténuée.
+    // Axes L*, a*, b*, gradués tous les 20, dans la couleur atténuée ; a* et b* au plancher L* = 0.
     function dessinerAxes(ctx, r, k, avecTextes) {
       const axes = [
         { nom: "L*", de: [0, 0, 0], a: [100, 0, 0], pas: (v) => [v, 0, 0], debut: 0, fin: 100 },
-        { nom: "a*", de: [50, -120, 0], a: [50, 120, 0], pas: (v) => [50, v, 0], debut: -100, fin: 100 },
-        { nom: "b*", de: [50, 0, -120], a: [50, 0, 120], pas: (v) => [50, 0, v], debut: -100, fin: 100 },
+        { nom: "a*", de: [0, -120, 0], a: [0, 120, 0], pas: (v) => [0, v, 0], debut: -100, fin: 100 },
+        { nom: "b*", de: [0, 0, -120], a: [0, 0, 120], pas: (v) => [0, 0, v], debut: -100, fin: 100 },
       ];
       ctx.strokeStyle = jetons.attenue;
       ctx.fillStyle = jetons.attenue;
