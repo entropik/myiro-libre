@@ -42,6 +42,8 @@ jobs:
         run: cargo test
       - name: Tests (32 bits, comme la DLL de MY-CT1)
         run: cargo test --target i686-pc-windows-msvc
+      - name: Tests de la préparation de l'installateur
+        run: python outils/test_preparer_installateur.py
       - name: Tests du vérificateur de documentation
         run: python outils/test_verifier_docs.py
       - name: Vérification de la documentation
@@ -58,6 +60,7 @@ jobs:
         -p colorimetrie
         -p bibliotheque
         -p cgats
+        -p profilage
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -74,6 +77,8 @@ jobs:
         run: cargo clippy $CRATES --all-targets -- -D warnings
       - name: Tests
         run: cargo test $CRATES
+      - name: Tests de la préparation de l'installateur
+        run: python outils/test_preparer_installateur.py
       - name: Tests du vérificateur de documentation
         run: python outils/test_verifier_docs.py
       - name: Vérification de la documentation

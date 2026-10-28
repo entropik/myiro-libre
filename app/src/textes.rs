@@ -112,7 +112,9 @@ const FRANCAIS: Catalogue = &[
     ("parc.age.plus_d_un_an", "plus d’un an"),
     ("parc.verdict.contexte", "Profil actuel"),
     ("parc.verdict.verifie", "Profil vérifié"),
-    ("parc.verdict.non_verifie", "Profil non vérifié"),
+    ("parc.verdict.non_verifie", "Profil à vérifier"),
+    ("parc.verdict.calcule_a_verifier", "Profil calculé, à vérifier"),
+    ("parc.verdict.importe_a_verifier", "Profil importé, à vérifier"),
     ("parc.verdict.hors", "Profil hors tolérance"),
     ("parc.verdict.incomplet", "Vérification incomplète"),
     ("parc.verdict.aucun", "Aucun profil"),
@@ -129,11 +131,6 @@ const FRANCAIS: Catalogue = &[
     ),
     ("parc.exporter", "Exporter"),
     ("parc.ranger", "Ranger un profil existant"),
-    ("parc.refaire", "Refaire le profil"),
-    (
-        "parc.refaire.raison",
-        "Le calcul des profils arrive dans une prochaine étape.",
-    ),
     ("parc.range", "Profil rangé. Il devient le profil actuel."),
     (
         "parc.en_cours",
@@ -148,7 +145,7 @@ const FRANCAIS: Catalogue = &[
     ("parc.historique.actuel", "actuel"),
     ("parc.historique.remplace", "remplacé"),
     ("parc.historique.vide", "Aucun profil pour l’instant."),
-    ("parc.etat.non_verifie", "non vérifié"),
+    ("parc.etat.non_verifie", "à vérifier"),
     ("parc.etat.accepte", "vérifié"),
     ("parc.etat.hors_tolerance", "hors tolérance"),
     ("parc.etat.incomplet", "incomplet"),
@@ -192,6 +189,198 @@ const FRANCAIS: Catalogue = &[
     (
         "parc.erreur.fichier_illisible",
         "Le fichier n’a pas pu être lu. Vérifiez qu’il existe encore et qu’il n’est pas ouvert ailleurs.",
+    ),
+    // Calcul d’un profil (ticket #40)
+    (
+        "profil.titre",
+        "Calculer un profil",
+    ),
+    (
+        "profil.source",
+        "Mesure",
+    ),
+    (
+        "profil.condition",
+        "Condition de mesure",
+    ),
+    (
+        "profil.recette",
+        "Recette de calcul",
+    ),
+    (
+        "profil.recette.rapide",
+        "Rapide\u{202f}: pour un essai, le plus court (environ 1\u{a0}min pour 2\u{202f}520 plages)",
+    ),
+    (
+        "profil.recette.standard",
+        "Standard\u{202f}: conseillée pour la production (environ 3\u{a0}min pour 2\u{202f}520 plages)",
+    ),
+    (
+        "profil.recette.approfondi",
+        "Approfondi\u{202f}: en cours de réglage, pas encore disponible",
+    ),
+    (
+        "profil.avance",
+        "Avancé\u{202f}: commande équivalente",
+    ),
+    (
+        "profil.calculer",
+        "Calculer le profil",
+    ),
+    (
+        "profil.en_cours",
+        "Calcul du profil en cours. Cela peut prendre plusieurs minutes.",
+    ),
+    (
+        "profil.etape.preparation",
+        "Préparation des mesures",
+    ),
+    (
+        "profil.etape.profil",
+        "Calcul du profil (colprof)\u{202f}: courbes",
+    ),
+    (
+        "profil.etape.table",
+        "Calcul du profil (colprof)\u{202f}: table principale",
+    ),
+    (
+        "profil.etape.gamut",
+        "Calcul du profil (colprof)\u{202f}: correspondance des gamuts",
+    ),
+    (
+        "profil.etape.inverses",
+        "Calcul du profil (colprof)\u{202f}: tables inverses",
+    ),
+    (
+        "profil.etape.limite",
+        "Calcul du profil (colprof)\u{202f}: limite du gamut",
+    ),
+    (
+        "profil.progression",
+        "Avancement du calcul",
+    ),
+    (
+        "profil.progression.etape",
+        "Calcul du profil, étape {n} sur {total}",
+    ),
+    (
+        "profil.estimation.restante",
+        "environ {duree} restantes (estimé)",
+    ),
+    (
+        "profil.estimation.depassee",
+        "plus long que le dernier calcul de cette recette (estimé)",
+    ),
+    (
+        "profil.etape.controle",
+        "Contrôle de précision (profcheck)",
+    ),
+    (
+        "profil.ecoule",
+        "temps écoulé\u{202f}: {duree}",
+    ),
+    (
+        "profil.argyll.ligne",
+        "Dernière ligne d’ArgyllCMS\u{202f}: {ligne}",
+    ),
+    (
+        "profil.argyll.pourcentage",
+        "Dernière ligne d’ArgyllCMS\u{202f}: {ligne} — {pourcentage}\u{202f}% de cette partie",
+    ),
+    (
+        "profil.fait",
+        "Profil calculé. Écart moyen {moyenne} ΔE00, maximum {max}. Il reste à vérifier.",
+    ),
+    (
+        "profil.supposee",
+        "supposée",
+    ),
+    (
+        "profil.refus.condition_absente",
+        "Cette mesure ne contient pas cette condition de mesure. Choisissez une condition proposée dans la liste.",
+    ),
+    (
+        "profil.refus.rvb_inconnus",
+        "Cette mesure ne dit pas quelles valeurs RVB ont été imprimées. Importez un export CGATS de FD-S2w ou de MYIROtools qui contient les colonnes RVB.",
+    ),
+    (
+        "profil.refus.lab_inconnu",
+        "Une plage de cette mesure n’a pas de valeur Lab pour cette condition. Choisissez une autre condition, ou mesurez à nouveau la mire.",
+    ),
+    (
+        "profil.refus.rvb_hors_echelle",
+        "Une plage de cette mesure a une valeur RVB hors de l’échelle prévue. Vérifiez le fichier exporté, puis importez-le à nouveau.",
+    ),
+    (
+        "profil.refus.vide",
+        "Cette mesure ne contient aucune plage. Importez un autre fichier.",
+    ),
+    (
+        "profil.refus.aucune_condition",
+        "Aucune condition de mesure de ce fichier n’a toutes ses plages en Lab. Importez un export complet de FD-S2w ou de MYIROtools.",
+    ),
+    (
+        "profil.erreur.argyll_introuvable",
+        "ArgyllCMS 3.5.0 est introuvable. Placez-le dans le dossier argyll à côté de l’application, puis relancez l’application.",
+    ),
+    (
+        "profil.erreur.argyll_version",
+        "ArgyllCMS {version} a été trouvé, mais seule la version 3.5.0 est validée. Placez ArgyllCMS 3.5.0 dans le dossier argyll à côté de l’application, puis relancez l’application.",
+    ),
+    (
+        "profil.erreur.argyll_illisible",
+        "ArgyllCMS ne répond pas comme prévu\u{202f}: sa version n’a pas pu être lue. Remplacez le dossier argyll à côté de l’application par une copie complète d’ArgyllCMS 3.5.0, puis relancez l’application.",
+    ),
+    (
+        "profil.erreur.calcul",
+        "Le calcul du profil a échoué dans ArgyllCMS. Le profil actuel n’a pas changé. Vérifiez la mesure, puis réessayez.",
+    ),
+    (
+        "profil.erreur.recette_en_reglage",
+        "La recette Approfondi est en cours de réglage. Choisissez Rapide ou Standard.",
+    ),
+    (
+        "profil.erreur.interrompu",
+        "Le calcul a été interrompu avant la fin (programme ArgyllCMS arrêté, ou poste mis en veille). Le profil actuel n’a pas changé. Relancez le calcul.",
+    ),
+    (
+        "profil.erreur.controle",
+        "Le contrôle du profil calculé a échoué dans ArgyllCMS. Rien n’a été rangé, le profil actuel n’a pas changé. Réessayez.",
+    ),
+    (
+        "profil.erreur.fichier",
+        "Un fichier de travail du calcul n’a pas pu être lu ou écrit. Rien n’a été rangé. Réessayez, puis redémarrez l’ordinateur si l’erreur revient.",
+    ),
+    (
+        "profil.erreur.mesure_ailleurs",
+        "Cette mesure est rangée dans une autre résolution. Choisissez une mesure de cette résolution.",
+    ),
+    ("profil.erreur.cause", "Message d’ArgyllCMS\u{202f}: {cause}"),
+    ("profil.recette.nom.rapide", "Rapide"),
+    ("profil.recette.nom.standard", "Standard"),
+    ("profil.recette.nom.approfondi", "Approfondi"),
+    (
+        "profil.calculer.raison",
+        "Aucune mesure de cette résolution ne peut servir à calculer un profil. La raison est dite sous chaque mesure.",
+    ),
+    (
+        "profil.sans_mesure",
+        "Importez d’abord un export CGATS de FD-S2w ou de MYIROtools dans cette résolution.",
+    ),
+    ("profil.version", "ArgyllCMS"),
+    ("profil.journal", "Journal d’ArgyllCMS"),
+    ("profil.rvb", "Valeurs RVB"),
+    ("profil.rvb.supposee", "échelle 0 à 255 supposée"),
+    ("profil.avance.provenance", "Avancé\u{202f}: commande et journal"),
+    (
+        "parc.erreur.inattendue",
+        "L’action s’est arrêtée sur une erreur inattendue. Choisissez à nouveau cette résolution dans la bibliothèque, puis réessayez.",
+    ),
+    ("profil.precision", "Précision du calcul"),
+    ("profil.duree", "Durée du calcul"),
+    (
+        "profil.precision.valeur",
+        "{moyenne} en moyenne, {max} au plus (ΔE00)",
     ),
     // Installation dans Windows
     ("installation.installe", "Installé dans Windows"),
@@ -915,7 +1104,9 @@ const ANGLAIS: Catalogue = &[
     ("parc.age.plus_d_un_an", "over a year old"),
     ("parc.verdict.contexte", "Current profile"),
     ("parc.verdict.verifie", "Profile verified"),
-    ("parc.verdict.non_verifie", "Profile not verified"),
+    ("parc.verdict.non_verifie", "Profile to be verified"),
+    ("parc.verdict.calcule_a_verifier", "Profile computed, to be verified"),
+    ("parc.verdict.importe_a_verifier", "Profile imported, to be verified"),
     ("parc.verdict.hors", "Profile out of tolerance"),
     ("parc.verdict.incomplet", "Verification incomplete"),
     ("parc.verdict.aucun", "No profile"),
@@ -932,11 +1123,6 @@ const ANGLAIS: Catalogue = &[
     ),
     ("parc.exporter", "Export"),
     ("parc.ranger", "Store an existing profile"),
-    ("parc.refaire", "Redo the profile"),
-    (
-        "parc.refaire.raison",
-        "Profile computation arrives in a coming step.",
-    ),
     ("parc.range", "Profile stored. It is now the current profile."),
     (
         "parc.en_cours",
@@ -951,7 +1137,7 @@ const ANGLAIS: Catalogue = &[
     ("parc.historique.actuel", "current"),
     ("parc.historique.remplace", "replaced"),
     ("parc.historique.vide", "No profile yet."),
-    ("parc.etat.non_verifie", "not verified"),
+    ("parc.etat.non_verifie", "to be verified"),
     ("parc.etat.accepte", "verified"),
     ("parc.etat.hors_tolerance", "out of tolerance"),
     ("parc.etat.incomplet", "incomplete"),
@@ -995,6 +1181,198 @@ const ANGLAIS: Catalogue = &[
     (
         "parc.erreur.fichier_illisible",
         "The file could not be read. Check that it still exists and is not open elsewhere.",
+    ),
+    // Computing a profile (ticket #40)
+    (
+        "profil.titre",
+        "Compute a profile",
+    ),
+    (
+        "profil.source",
+        "Measurement",
+    ),
+    (
+        "profil.condition",
+        "Measurement condition",
+    ),
+    (
+        "profil.recette",
+        "Calculation recipe",
+    ),
+    (
+        "profil.recette.rapide",
+        "Fast: for a trial, the shortest (about 1 min for 2,520 patches)",
+    ),
+    (
+        "profil.recette.standard",
+        "Standard: advised for production (about 3 min for 2,520 patches)",
+    ),
+    (
+        "profil.recette.approfondi",
+        "Thorough: being tuned, not available yet",
+    ),
+    (
+        "profil.avance",
+        "Advanced: equivalent command",
+    ),
+    (
+        "profil.calculer",
+        "Compute the profile",
+    ),
+    (
+        "profil.en_cours",
+        "Computing the profile. This may take several minutes.",
+    ),
+    (
+        "profil.etape.preparation",
+        "Preparing the measurements",
+    ),
+    (
+        "profil.etape.profil",
+        "Computing the profile (colprof): curves",
+    ),
+    (
+        "profil.etape.table",
+        "Computing the profile (colprof): main table",
+    ),
+    (
+        "profil.etape.gamut",
+        "Computing the profile (colprof): gamut mapping",
+    ),
+    (
+        "profil.etape.inverses",
+        "Computing the profile (colprof): inverse tables",
+    ),
+    (
+        "profil.etape.limite",
+        "Computing the profile (colprof): gamut boundary",
+    ),
+    (
+        "profil.progression",
+        "Calculation progress",
+    ),
+    (
+        "profil.progression.etape",
+        "Computing the profile, step {n} of {total}",
+    ),
+    (
+        "profil.estimation.restante",
+        "about {duree} left (estimated)",
+    ),
+    (
+        "profil.estimation.depassee",
+        "longer than the last calculation with this recipe (estimated)",
+    ),
+    (
+        "profil.etape.controle",
+        "Checking accuracy (profcheck)",
+    ),
+    (
+        "profil.ecoule",
+        "elapsed time: {duree}",
+    ),
+    (
+        "profil.argyll.ligne",
+        "Last line from ArgyllCMS: {ligne}",
+    ),
+    (
+        "profil.argyll.pourcentage",
+        "Last line from ArgyllCMS: {ligne} — {pourcentage}% of this part",
+    ),
+    (
+        "profil.fait",
+        "Profile computed. Mean difference {moyenne} ΔE00, maximum {max}. It is still to be verified.",
+    ),
+    (
+        "profil.supposee",
+        "assumed",
+    ),
+    (
+        "profil.refus.condition_absente",
+        "This measurement does not contain this measurement condition. Choose a condition offered in the list.",
+    ),
+    (
+        "profil.refus.rvb_inconnus",
+        "This measurement does not say which RGB values were printed. Import a CGATS export from FD-S2w or MYIROtools that contains the RGB columns.",
+    ),
+    (
+        "profil.refus.lab_inconnu",
+        "A patch of this measurement has no Lab value for this condition. Choose another condition, or measure the chart again.",
+    ),
+    (
+        "profil.refus.rvb_hors_echelle",
+        "A patch of this measurement has an RGB value outside the expected scale. Check the exported file, then import it again.",
+    ),
+    (
+        "profil.refus.vide",
+        "This measurement contains no patch. Import another file.",
+    ),
+    (
+        "profil.refus.aucune_condition",
+        "No measurement condition of this file has all its patches in Lab. Import a complete export from FD-S2w or MYIROtools.",
+    ),
+    (
+        "profil.erreur.argyll_introuvable",
+        "ArgyllCMS 3.5.0 cannot be found. Place it in the argyll folder next to the application, then restart the application.",
+    ),
+    (
+        "profil.erreur.argyll_version",
+        "ArgyllCMS {version} was found, but only version 3.5.0 is validated. Place ArgyllCMS 3.5.0 in the argyll folder next to the application, then restart the application.",
+    ),
+    (
+        "profil.erreur.argyll_illisible",
+        "ArgyllCMS does not answer as expected: its version could not be read. Replace the argyll folder next to the application with a complete copy of ArgyllCMS 3.5.0, then restart the application.",
+    ),
+    (
+        "profil.erreur.calcul",
+        "Computing the profile failed in ArgyllCMS. The current profile has not changed. Check the measurement, then try again.",
+    ),
+    (
+        "profil.erreur.recette_en_reglage",
+        "The Thorough recipe is being tuned. Choose Fast or Standard.",
+    ),
+    (
+        "profil.erreur.interrompu",
+        "The computation was interrupted before the end (ArgyllCMS program stopped, or computer put to sleep). The current profile has not changed. Start the computation again.",
+    ),
+    (
+        "profil.erreur.controle",
+        "Checking the computed profile failed in ArgyllCMS. Nothing was stored, the current profile has not changed. Try again.",
+    ),
+    (
+        "profil.erreur.fichier",
+        "A working file of the calculation could not be read or written. Nothing was stored. Try again, then restart the computer if the error comes back.",
+    ),
+    (
+        "profil.erreur.mesure_ailleurs",
+        "This measurement is stored in another resolution. Choose a measurement of this resolution.",
+    ),
+    ("profil.erreur.cause", "ArgyllCMS message: {cause}"),
+    ("profil.recette.nom.rapide", "Fast"),
+    ("profil.recette.nom.standard", "Standard"),
+    ("profil.recette.nom.approfondi", "Thorough"),
+    (
+        "profil.calculer.raison",
+        "No measurement of this resolution can be used to compute a profile. The reason is given under each measurement.",
+    ),
+    (
+        "profil.sans_mesure",
+        "First import a CGATS export from FD-S2w or MYIROtools into this resolution.",
+    ),
+    ("profil.version", "ArgyllCMS"),
+    ("profil.journal", "ArgyllCMS log"),
+    ("profil.rvb", "RGB values"),
+    ("profil.rvb.supposee", "0 to 255 scale assumed"),
+    ("profil.avance.provenance", "Advanced: command and log"),
+    (
+        "parc.erreur.inattendue",
+        "The action stopped on an unexpected error. Choose this resolution again in the library, then try again.",
+    ),
+    ("profil.precision", "Calculation accuracy"),
+    ("profil.duree", "Calculation time"),
+    (
+        "profil.precision.valeur",
+        "{moyenne} on average, {max} at most (ΔE00)",
     ),
     // Installing in Windows
     ("installation.installe", "Installed in Windows"),

@@ -23,6 +23,9 @@
   --conforme:  #2fbf71;
   --limite:    #e8a23a;
   --hors:      #ff5d64;
+  /* Lumière spectrale de la barre de calcul : mélange et force selon le thème. */
+  --lumiere-melange: screen;
+  --lumiere-force: .9;
   color-scheme: dark;
 }
 
@@ -40,10 +43,21 @@
   --conforme:  #13864b;
   --limite:    #a8650a;
   --hors:      #cc1f29;
+  --lumiere-melange: normal;
+  --lumiere-force: .55;
   color-scheme: light;
 }
 
 :root {
+  /* Spectre : couleurs de la lumière qui traverse la barre de calcul, seul dégradé du système.
+     Les mêmes dans les deux thèmes. */
+  --spectre-1: #7a00ff;
+  --spectre-2: #2f6bff;
+  --spectre-3: #19d3c8;
+  --spectre-4: #19d36b;
+  --spectre-5: #ffe11a;
+  --spectre-6: #ff2a3c;
+
   /* Fonte : une seule famille, lineale grotesque à corps optique. */
   --font-body: "Inter", "Segoe UI", Arial, sans-serif;
   --font-code: ui-monospace, Consolas, monospace;

@@ -48,6 +48,11 @@ Audit-MYIRO/extraits/
 # Sources externes (manuels, captures, analyses) : copie locale de travail, droits des éditeurs, jamais publiées
 docs/sources/
 
+# ArgyllCMS (AGPL-3.0), posé à la main pour le développement et embarqué par l'installateur : jamais versionné
+argyll/
+# Mires de tiers sans droit de redistribution, copie locale de travail
+docs/mires/
+
 # Liste locale de mots interdits (voir outils/verifier_docs.py)
 .mots-interdits.local
 

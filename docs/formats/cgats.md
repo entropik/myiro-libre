@@ -63,9 +63,12 @@ Chaque tableau va dans un emplacement `m0`, `m1` ou `m2`, dans cet ordre de pré
 
 1. `MYIRO_LIBRE_SPECTRE` (fichier de myiro-libre) ;
 2. `MEASUREMENT_CONDITION` `M0`, `M1` ou `M2` : condition confirmée ;
-3. `MEASUREMENT_SOURCE` `A`, `D50` ou `UVCUT` : condition **supposée** M0, M1 ou M2. C'est la convention des exports CGATS du fabricant (un fichier par condition, source `A` pour M0, `D50` pour M1, `UVCUT` pour M2), observée sur des exports réels du poste ; elle correspond à la définition des conditions dans l'ISO 13655, mais aucun document du fabricant ne l'affirme.
+3. `MEASUREMENT_SOURCE` `M0`, `M1` ou `M2` : condition confirmée, écrite en clair. C'est ce qu'écrit MYIROtools dans ses exports RVB (observé sur un export réel d'un imprimeur, 26 octobre 2026) ;
+4. `MEASUREMENT_SOURCE` `A`, `D50` ou `UVCUT` : condition **supposée** M0, M1 ou M2. C'est la convention des exports CGATS du fabricant (un fichier par condition, source `A` pour M0, `D50` pour M1, `UVCUT` pour M2), observée sur des exports réels du poste ; elle correspond à la définition des conditions dans l'ISO 13655, mais aucun document du fabricant ne l'affirme.
 
-Sans aucun des trois, le fichier est **refusé** avec une phrase claire : on ne range pas des valeurs sous une condition devinée.
+Un tableau qui porte `MEASUREMENT_CONDITION` et une `MEASUREMENT_SOURCE` `M0`, `M1` ou `M2` différente est **refusé**, avec un message qui cite les deux valeurs : deux conditions écrites qui se contredisent, on n'en choisit pas une. Si elles concordent, le fichier est accepté.
+
+Sans aucun de ces mots-clés, le fichier est **refusé** avec une phrase claire : on ne range pas des valeurs sous une condition devinée.
 
 Dans les colonnes : `SAMPLE_ID` donne l'identifiant de la plage (sinon son rang), `LAB_L`, `LAB_A`, `LAB_B` le Lab, et le spectre vient de l'une de ces familles de colonnes, chacune avec son échelle, jamais devinée :
 
@@ -75,9 +78,22 @@ Dans les colonnes : `SAMPLE_ID` donne l'identifiant de la plage (sinon son rang)
 | `nm380`… | logiciels du fabricant | réflectance (0 à 1) |
 | `MYIRO_LIBRE_SPECTRE_1`… | myiro-libre, longueurs d'onde inconnues | pourcentage |
 
-Deux familles dans un même tableau : refusé. Les longueurs d'onde doivent être régulières (calcul en 64 bits : des valeurs démesurées sont refusées, sans planter). Une autre famille de colonnes (par exemple `SPECTRAL_NM380` ou `SPECTRAL_380`, dont l'échelle n'est pas établie) est ignorée : le spectre reste inconnu. Les autres colonnes (densités, RVB, emplacement sur la feuille…) sont ignorées. **Un fichier sans spectre donne des spectres inconnus** : tout ce qui exige un spectre (autre condition de mesure, densité calculée, nouvel illuminant) reste inconnu pour cette mesure. Un emplacement absent du fichier (par exemple M0 et M2 d'un export qui ne contient que M1) reste inconnu lui aussi.
+Deux familles dans un même tableau : refusé. Les longueurs d'onde doivent être régulières (calcul en 64 bits : des valeurs démesurées sont refusées, sans planter). Une autre famille de colonnes (par exemple `SPECTRAL_NM380` ou `SPECTRAL_380`, dont l'échelle n'est pas établie) est ignorée : le spectre reste inconnu. Les autres colonnes (densités, emplacement sur la feuille…) sont ignorées. **Un fichier sans spectre donne des spectres inconnus** : tout ce qui exige un spectre (autre condition de mesure, densité calculée, nouvel illuminant) reste inconnu pour cette mesure. Un emplacement absent du fichier (par exemple M0 et M2 d'un export qui ne contient que M1) reste inconnu lui aussi.
 
-Plusieurs tableaux doivent porter les mêmes plages, dans le même ordre. Un fichier de myiro-libre d'une autre version (`MYIRO_LIBRE_FORMAT` différent) ou dont la provenance est incomplète est refusé : il ne se relit pas à moitié.
+Les **valeurs RVB** envoyées à l'imprimante (colonnes `RGB_R`, `RGB_G`, `RGB_B`, toutes trois ou aucune : une ou deux seulement, le fichier est refusé) sont lues et ramenées de 0 à 1 (1 = 100 % de la composante). Elles servent au calcul d'un profil RVB. Leur échelle dépend du logiciel qui a écrit le fichier, et n'est jamais devinée :
+
+| Fichier | Reconnu par | Échelle | Qualification |
+|---|---|---|---|
+| ArgyllCMS (`.ti3`) | première ligne `CTI3` | 0 à 100 | confirmée (description du format `.ti3`) |
+| Export FD-S2w | `FILE_DESCRIPTOR "FD-S2w"` | 0 à 255 | **supposée** : observée sur des exports réels du poste (7 octobre 2026), aucun document du fabricant ne l'affirme |
+| Export MYIROtools | `ORIGINATOR "MYIROtools"` | 0 à 255 | **supposée** : observée sur un export réel d'un imprimeur (26 octobre 2026 : RVB de 0.00 à 255.00 sur 2520 plages, colonnes XYZ et Lab), aucun document du fabricant ne l'affirme |
+| Tout autre fichier | | non établie | inconnue : les RVB restent inconnus |
+
+L'export MYIROtools archivé sur le poste (une couleur d'accompagnement) ne tranche rien sur les RVB : il porte `ORIGINATOR` au nom du fabricant, `FILE_DESCRIPTOR "MYIROtools"` et des colonnes CMJN, sans colonne RVB. Il reste donc sans échelle RVB, ce qui est sans effet puisqu'il n'a pas de RVB.
+
+Une valeur RVB qui n'est pas un nombre est refusée, comme un Lab illisible. Une valeur hors de l'échelle (au-delà de 255 dans un export FD-S2w ou MYIROtools) est gardée telle quelle à la lecture : c'est le calcul du profil qui la refuse.
+
+Plusieurs tableaux doivent porter les mêmes plages, dans le même ordre, avec les mêmes valeurs RVB. Un fichier de myiro-libre d'une autre version (`MYIRO_LIBRE_FORMAT` différent) ou dont la provenance est incomplète est refusé : il ne se relit pas à moitié.
 
 Écrire une mesure puis la relire rend exactement ses spectres, ses Lab et sa provenance (test de la crate).
 

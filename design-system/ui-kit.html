@@ -26,6 +26,27 @@
 &lt;div class="actions"&gt;&lt;button class="btn" disabled&gt;Refaire le profil&lt;/button&gt;&lt;/div&gt;
 &lt;p class="why"&gt;Le calcul des profils arrive dans une prochaine étape.&lt;/p&gt;</pre></section>
 
+<section class="ds-block"><span class="label">Composant</span><h2>Barre d’avancement</h2><p>Pendant un calcul de profil. Continue, par étapes&#8239;: chaque étape en occupe une part égale, et la barre ne recule jamais. Dans une étape, elle ne suit qu’un pourcentage écrit par ArgyllCMS. Rendu «&#8239;Spectre&#8239;»&#8239;: 16&#8239;px de haut, angles droits, et une lumière spectrale traverse toute la piste en boucle (le calcul travaille)&#8239;; c’est le seul dégradé du système, fait des jetons <code>--spectre-1</code> à <code>--spectre-6</code>. Dessous, une seule ligne courte&#8239;: l’étape, le temps écoulé, le temps restant «&#8239;estimé&#8239;» s’il y a un historique&#8239;; la dernière ligne d’ArgyllCMS en petit. Fin&#8239;: état réussi ou état erreur, et la lumière s’éteint. Sans lumière ni animation si l’utilisateur réduit les animations. Le temps qui passe n’est pas lu en continu&#8239;: seule l’étape est annoncée, dans une zone <code>.lecteur-ecran</code> (lue par les lecteurs d’écran, invisible à l’écran) en <code>aria-live="polite"</code>.</p>
+<div class="ds-demo">
+<div class="progression"><div class="progression__piste" role="progressbar" aria-label="Avancement du calcul" aria-valuemin="0" aria-valuemax="7" aria-valuenow="2" aria-valuetext="Calcul du profil, étape 3 sur 7" style="--position: 28.57%"><span class="progression__remplissage"></span><span class="progression__reflet"></span></div></div>
+<p class="why">Calcul du profil (colprof)&#8239;: table principale · temps écoulé&#8239;: 1 min 12 s · environ 3 min restantes (estimé)</p>
+<p class="progression__detail">Dernière ligne d’ArgyllCMS&#8239;: Create final clut from scattered data</p>
+<div class="progression"><div class="progression__piste" role="progressbar" aria-label="Avancement du calcul" aria-valuemin="0" aria-valuemax="7" aria-valuenow="4" aria-valuetext="Calcul du profil, étape 5 sur 7" style="--position: 63.86%"><span class="progression__remplissage"></span><span class="progression__reflet"></span></div></div>
+<p class="why">Calcul du profil (colprof)&#8239;: tables inverses · temps écoulé&#8239;: 2 min 40 s</p>
+<p class="progression__detail">Dernière ligne d’ArgyllCMS&#8239;: Creating B to A tables — 47&#8239;% de cette partie</p>
+<div class="progression"><div class="progression__piste" role="progressbar" aria-label="Avancement du calcul" aria-valuemin="0" aria-valuemax="7" aria-valuenow="7" data-etat="reussi" style="--position: 100%"><span class="progression__remplissage"></span><span class="progression__reflet"></span></div></div>
+<p class="why">Réussi.</p>
+<div class="progression"><div class="progression__piste" role="progressbar" aria-label="Avancement du calcul" aria-valuemin="0" aria-valuemax="7" aria-valuenow="1" data-etat="erreur" style="--position: 14.29%"><span class="progression__remplissage"></span><span class="progression__reflet"></span></div></div>
+<p class="why">Erreur&#8239;: le message dit l’étape, la cause et l’action.</p>
+</div>
+<pre class="ds-code">&lt;div class="progression"&gt;&lt;div class="progression__piste" role="progressbar" aria-valuemin="0" aria-valuemax="7" aria-valuenow="2" aria-valuetext="Calcul du profil, étape 3 sur 7"
+     style="--position: 28.57%"&gt;
+  &lt;span class="progression__remplissage"&gt;&lt;/span&gt;&lt;span class="progression__reflet"&gt;&lt;/span&gt;
+&lt;/div&gt;&lt;/div&gt;
+&lt;p class="why"&gt;Étape · temps écoulé · temps restant (estimé)&lt;/p&gt;
+&lt;p class="progression__detail"&gt;Dernière ligne d’ArgyllCMS&lt;/p&gt;
+&lt;!-- Fin : data-etat="reussi" ou data-etat="erreur" sur .progression__piste --&gt;</pre></section>
+
 <section class="ds-block"><span class="label">Composant</span><h2>Tâches de la barre du haut</h2><p>Icône au-dessus du libellé&#8239;; la tâche courante porte <code>aria-current="page"</code> et son icône prend l’accent. Tracés propres au projet.</p>
 <div class="ds-demo"><div class="barre-haut">
 <button class="tache" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/></svg>Bibliothèque</button>
@@ -69,7 +90,7 @@
 <section class="ds-block"><span class="label">Composant</span><h2>Carte de verdict</h2><p>Couleur, icône et mot. Conforme, limite, hors tolérance, ou aucun (atténué).</p>
 <div class="ds-demo">
 <div class="carte carte--verdict verdict--conforme"><svg class="verdict__icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg><div class="verdict__texte"><span class="verdict__contexte">Profil actuel · 20 oct. 2026 · RVB</span><div class="verdict__mot">Profil vérifié</div></div></div>
-<div class="carte carte--verdict verdict--limite"><svg class="verdict__icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M12 18v2"/></svg><div class="verdict__texte"><span class="verdict__contexte">Profil actuel · 3 mars 2026 · CMJN</span><div class="verdict__mot">Profil non vérifié</div></div></div>
+<div class="carte carte--verdict verdict--limite"><svg class="verdict__icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M12 18v2"/></svg><div class="verdict__texte"><span class="verdict__contexte">Profil actuel · 3 mars 2026 · CMJN</span><div class="verdict__mot">Profil importé, à vérifier</div></div></div>
 <div class="carte carte--verdict verdict--hors"><svg class="verdict__icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><div class="verdict__texte"><span class="verdict__contexte">Contrôle · 20 oct. 2026</span><div class="verdict__mot">Hors tolérance</div></div></div>
 <div class="carte carte--verdict verdict--aucun"><svg class="verdict__icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg><div class="verdict__texte"><span class="verdict__contexte">Aucun profil rangé</span><div class="verdict__mot">Aucun profil</div></div></div>
 </div>
@@ -87,7 +108,7 @@
 
 <section class="ds-block"><span class="label">Composant</span><h2>Carte et historique</h2><p>Une carte regroupe ce qui va ensemble. Les lignes clé et valeur s’alignent de part et d’autre.</p>
 <div class="ds-demo"><div class="carte"><span class="label label--ink">Historique</span>
-<div class="cle-valeur mute"><span>20 oct. 2026 · actuel</span><span>non vérifié</span></div>
+<div class="cle-valeur mute"><span>20 oct. 2026 · actuel</span><span>Profil calculé, à vérifier</span></div>
 <div class="cle-valeur mute"><span>3 mars 2026</span><span>remplacé</span></div></div></div>
 <pre class="ds-code">&lt;div class="carte"&gt;&lt;span class="label label--ink"&gt;Historique&lt;/span&gt;&lt;div class="cle-valeur"&gt;&lt;span&gt;…&lt;/span&gt;&lt;span&gt;…&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;</pre></section>
 

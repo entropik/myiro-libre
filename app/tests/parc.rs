@@ -111,6 +111,13 @@ fn ranger_un_profil_existant_le_rend_actif_avec_le_nom_propose() {
     assert!(!detail.ancien);
     // Provenance : un profil rangé tel quel, sans calcul ni mesure.
     assert_eq!(detail.origine, Some("profil_existant"));
+    // Verdict et historique : « Profil importé, à vérifier ».
+    assert_eq!(detail.verdict, "parc.verdict.importe_a_verifier");
+    assert_eq!(detail.historique[0].origine, "profil_existant");
+    assert_eq!(
+        detail.historique[0].libelle,
+        "parc.verdict.importe_a_verifier"
+    );
     assert!(detail.mesures.is_empty() && detail.importees.is_empty());
 }
 
@@ -132,6 +139,7 @@ fn ranger_un_fichier_qui_n_est_pas_un_profil_donne_une_cle_de_texte() {
     }
     let detail = ouverte.detail_reglage(condition).unwrap();
     assert_eq!((detail.actif, detail.origine), (None, None));
+    assert_eq!(detail.verdict, "parc.verdict.aucun");
 
     // Un fichier introuvable aussi, sans rien changer.
     let absent = dossier.path().join("absent.icc");
@@ -245,4 +253,75 @@ fn les_anciennes_conditions_sont_non_classees() {
     let parc = ouverte.parc("").unwrap();
     let noms: Vec<_> = parc.non_classees.iter().map(|c| c.nom.as_str()).collect();
     assert_eq!(noms, ["Offset, couché mat"]);
+}
+
+/// Le libellé d'un profil suit son état et, tant qu'il reste à vérifier, son
+/// origine : calculé par myiro-libre ou importé (rangé tel quel). Le statut
+/// enregistré, lui, ne change pas (`non_verifie`).
+#[test]
+fn le_libelle_d_un_profil_a_verifier_dit_son_origine() {
+    use app::parc::{cle_etat, cle_verdict};
+    use bibliotheque::EtatVerification as E;
+    assert_eq!(
+        cle_verdict(E::NonVerifie, "calcul"),
+        "parc.verdict.calcule_a_verifier"
+    );
+    assert_eq!(
+        cle_verdict(E::NonVerifie, "profil_existant"),
+        "parc.verdict.importe_a_verifier"
+    );
+    assert_eq!(cle_verdict(E::Accepte, "calcul"), "parc.verdict.verifie");
+    assert_eq!(cle_verdict(E::HorsTolerance, "calcul"), "parc.verdict.hors");
+    assert_eq!(
+        cle_verdict(E::Incomplet, "calcul"),
+        "parc.verdict.incomplet"
+    );
+    // L'historique dit la même chose qu'un verdict tant que le profil reste
+    // à vérifier ; sinon son état court.
+    assert_eq!(
+        cle_etat(E::NonVerifie, "calcul"),
+        "parc.verdict.calcule_a_verifier"
+    );
+    assert_eq!(
+        cle_etat(E::NonVerifie, "profil_existant"),
+        "parc.verdict.importe_a_verifier"
+    );
+    assert_eq!(cle_etat(E::Accepte, "calcul"), "parc.etat.accepte");
+    assert_eq!(
+        cle_etat(E::HorsTolerance, "profil_existant"),
+        "parc.etat.hors_tolerance"
+    );
+    assert_eq!(cle_etat(E::Incomplet, "calcul"), "parc.etat.incomplet");
+}
+
+/// Les libellés « à vérifier », en français et en anglais ; plus aucun texte
+/// ne dit « non vérifié », jugé trop inquiétant.
+#[test]
+fn les_libelles_a_verifier_existent_en_deux_langues() {
+    use app::textes::{cles, texte, Langue};
+    let attendus = [
+        (
+            "parc.verdict.calcule_a_verifier",
+            "Profil calculé, à vérifier",
+            "Profile computed, to be verified",
+        ),
+        (
+            "parc.verdict.importe_a_verifier",
+            "Profil importé, à vérifier",
+            "Profile imported, to be verified",
+        ),
+    ];
+    for (cle, fr, en) in attendus {
+        assert_eq!(texte(Langue::Francais, cle), fr);
+        assert_eq!(texte(Langue::Anglais, cle), en);
+    }
+    for cle in cles() {
+        let fr = texte(Langue::Francais, cle).to_lowercase();
+        let en = texte(Langue::Anglais, cle).to_lowercase();
+        assert!(!fr.contains("non vérifié"), "{cle} : {fr}");
+        assert!(!fr.contains("pas encore vérifié"), "{cle} : {fr}");
+        assert!(!en.contains("not verified"), "{cle} : {en}");
+    }
+    assert!(texte(Langue::Francais, "profil.fait").contains("à vérifier"));
+    assert!(texte(Langue::Anglais, "profil.fait").contains("to be verified"));
 }
