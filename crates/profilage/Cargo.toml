@@ -8,12 +8,12 @@ repository.workspace = true
 
 [dependencies]
 cgats = { path = "../cgats" }
+colorimetrie = { path = "../colorimetrie" }
 pont-protocole = { path = "../pont-protocole" }
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 bibliotheque = { path = "../bibliotheque" }
-colorimetrie = { path = "../colorimetrie" }
 serde_json = "1"
 verification = { path = "../verification" }
 tempfile = "3"

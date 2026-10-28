@@ -16,9 +16,10 @@ use bibliotheque::{
 };
 use pont_protocole::ConditionMesure;
 use profilage::{
-    chercher_argyll, conditions_utilisables, ecrire_ti3, lignes_commandes, preparer_plages,
-    ArgyllCms, Avancement, DemandeProfil, ErreurMoteur, EtapeCalcul, EtatAvancement, MoteurProfil,
-    PlagesProfil, Recette, RefusPlages, SuiviAvancement,
+    chercher_argyll, conditions_utilisables, controler_coherence, ecrire_ti3, lignes_commandes,
+    preparer_plages, ArgyllCms, Avancement, ControleCoherence, Critere, DemandeProfil,
+    ErreurMoteur, EtapeCalcul, EtatAvancement, MoteurProfil, PlagesProfil, Recette, RefusPlages,
+    SuiviAvancement,
 };
 use serde::{Deserialize, Serialize};
 
@@ -67,6 +68,54 @@ pub struct ErreurProfil {
     /// Version d'ArgyllCMS trouvée mais refusée : elle prend la place de
     /// `{version}` dans le texte de la clé.
     pub version: Option<String>,
+    /// Mesures qui ne correspondent pas aux plages (`profil.refus.incoherent`) :
+    /// les plages en cause, à la place de `{plages}`.
+    pub coherence: Option<Box<RefusCoherence>>,
+}
+
+/// Nombre de plages en cause nommées dans un refus de cohérence ; les
+/// suivantes sont seulement comptées.
+const PLAGES_NOMMEES: usize = 10;
+
+/// Pourquoi le contrôle de cohérence refuse une mesure, pour la page.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct RefusCoherence {
+    /// Identifiants de plage du fichier (`SAMPLE_ID`), dans l'ordre du
+    /// fichier, 10 au plus.
+    pub plages: Vec<String>,
+    /// Plages en cause au-delà des 10 nommées.
+    pub autres: usize,
+    /// Contrôles qui ont signalé des plages.
+    pub criteres: Vec<Critere>,
+    /// Piste seulement : les mesures semblent décalées de tant de plages.
+    pub decalage: Option<i64>,
+}
+
+impl RefusCoherence {
+    /// Rangs des plages suspectes traduits en identifiants du fichier.
+    fn new(controle: &ControleCoherence, identifiants: &[String]) -> Self {
+        let mut rangs: Vec<usize> = controle.suspectes.iter().map(|s| s.rang).collect();
+        rangs.dedup();
+        let mut criteres: Vec<Critere> = controle.suspectes.iter().map(|s| s.critere).collect();
+        criteres.sort();
+        criteres.dedup();
+        let plages = rangs
+            .iter()
+            .take(PLAGES_NOMMEES)
+            .map(|&r| {
+                r.checked_sub(1)
+                    .and_then(|i| identifiants.get(i))
+                    .cloned()
+                    .unwrap_or_else(|| r.to_string())
+            })
+            .collect();
+        RefusCoherence {
+            plages,
+            autres: rangs.len().saturating_sub(PLAGES_NOMMEES),
+            criteres,
+            decalage: controle.decalage,
+        }
+    }
 }
 
 impl ErreurProfil {
@@ -75,6 +124,7 @@ impl ErreurProfil {
             cle,
             cause: None,
             version: None,
+            coherence: None,
         }
     }
 
@@ -234,6 +284,9 @@ pub struct ProvenanceProfil {
     /// Durée réelle du calcul, en secondes ; rien pour un profil calculé
     /// avant qu'elle soit gardée (rien n'est inventé).
     pub duree_s: Option<f64>,
+    /// Contrôle de cohérence des mesures ; rien pour un profil calculé avant
+    /// ce contrôle (« mesures non contrôlées »).
+    pub coherence: Option<ControleCoherence>,
 }
 
 /// Paramètres conservés d'un profil calculé, tels que [`BibliothequeOuverte::calculer_profil`]
@@ -253,6 +306,8 @@ struct ParametresCalcul {
     journal: String,
     #[serde(default)]
     duree_s: Option<f64>,
+    #[serde(default)]
+    coherence: Option<ControleCoherence>,
 }
 
 #[derive(Deserialize)]
@@ -300,6 +355,7 @@ pub fn provenance_depuis_parametres(texte: &str) -> Option<ProvenanceProfil> {
             commandes: p.commandes,
             journal: journal_court(&p.journal),
             duree_s: p.duree_s,
+            coherence: p.coherence,
         })
 }
 
@@ -374,6 +430,7 @@ struct Preparation {
     horodatage: String,
     fichier: String,
     plages: PlagesProfil,
+    coherence: ControleCoherence,
     ti3: String,
 }
 
@@ -397,6 +454,21 @@ impl BibliothequeOuverte {
             eprintln!("{} : {e}", importee.fichier);
             ErreurProfil::sans_cause(e.cle())
         })?;
+        // Avant ArgyllCMS : des mesures qui ne correspondent pas aux plages
+        // donneraient un profil faux (ticket #1).
+        let coherence = controler_coherence(&plages);
+        if !coherence.accepte() {
+            eprintln!("{} : mesures incohérentes {coherence:?}", importee.fichier);
+            let identifiants: Vec<String> = importee
+                .mesure
+                .plages
+                .iter()
+                .map(|p| p.identifiant.clone())
+                .collect();
+            let mut e = ErreurProfil::sans_cause("profil.refus.incoherent");
+            e.coherence = Some(Box::new(RefusCoherence::new(&coherence, &identifiants)));
+            return Err(e);
+        }
         let horodatage = instant_utc(maintenant);
         let date = horodatage.get(..10).unwrap_or(&horodatage);
         let nom = nom_profil_propose(&detail.imprimante, &detail.papier, &detail.resolution, date);
@@ -411,6 +483,7 @@ impl BibliothequeOuverte {
             horodatage,
             fichier: importee.fichier,
             plages,
+            coherence,
             ti3,
         })
     }
@@ -493,6 +566,7 @@ impl BibliothequeOuverte {
             "ti3": p.ti3,
             "journal": calcule.journal,
             "duree_s": duree_s,
+            "coherence": p.coherence,
         })
         .to_string();
         let profil = self.avec(|b| {

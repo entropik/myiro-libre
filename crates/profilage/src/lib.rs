@@ -9,11 +9,15 @@
 //! - [`MoteurProfil`] calcule le profil à partir du `.ti3` : [`ArgyllCms`]
 //!   en vrai, version figée [`VERSION_ARGYLL`], [`MoteurSimule`] pour les
 //!   tests.
+//! - [`controler_coherence`] vérifie, avant tout calcul, que les mesures
+//!   correspondent aux plages (ticket #1) : il refuse ou laisse passer, sans
+//!   jamais corriger.
 //! - [`MoteurVerification`] interroge un profil pour le vérifier sur une
 //!   seconde mire (`xicclu`) : [`ArgyllCms`] en vrai,
 //!   [`MoteurVerificationSimule`] pour les tests.
 
 mod argyll;
+mod coherence;
 mod evaluation;
 mod moteur;
 mod plages;
@@ -23,6 +27,11 @@ mod ti3;
 pub use argyll::{
     arguments_colprof, chercher_argyll, controler_version, description_argyll, lignes_commandes,
     lire_precision, lire_version, ArgyllCms,
+};
+pub use coherence::{
+    controler_coherence, ControleCoherence, Critere, PlageSuspecte, DECALAGE_MAX,
+    ECART_BLANC_MAX_L, ECART_DOUBLONS_MAX_DE00, ECART_NOIR_MAX_L, ECART_VOISINES_MAX_DE00,
+    RETOUR_GRIS_MAX_L, VOISINES,
 };
 pub use evaluation::{
     arguments_xicclu, lire_sortie_xicclu, DemandeEvaluation, Evaluation, Impression,
