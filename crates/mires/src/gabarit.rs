@@ -1,8 +1,10 @@
 //! Gabarit des pages en bandes du MYIRO-1. Le FD-9 n'a pas de gabarit : sa
 //! mire est RGB-2520, reprise telle quelle.
 //!
-//! La page est en paysage. Un bandeau de texte et le QR code occupent le
-//! haut ; les bandes suivent le grand côté, séparées par du blanc.
+//! La page est en portrait (demande du mainteneur, 28 octobre 2026). Un
+//! bandeau de texte et le QR code occupent le haut ; les bandes traversent
+//! la largeur, se lisent de gauche à droite et sont centrées, séparées par
+//! un blanc étroit.
 
 use serde::{Deserialize, Serialize};
 
@@ -20,11 +22,11 @@ pub const MYIRO1_COTE_PAR_DEFAUT_MM: f64 = 8.0;
 pub const MYIRO1_BLANC_BOUT_MM: f64 = 10.0;
 /// Longueur maximale d'une bande, blancs compris (manuel MYIRO-1).
 pub const MYIRO1_BANDE_MAX_MM: f64 = 257.0;
-/// Blanc entre deux bandes : repris de la mire de comparaison
-/// (`outils/mire_comparaison.py`). Choix, pas une donnée du manuel.
-pub const MYIRO1_ECART_BANDES_MM: f64 = 15.0;
-/// Marge de page pour la zone non imprimable des imprimantes. Choix, à
-/// vérifier.
+/// Blanc entre deux bandes : le manuel ne fixe aucun écart entre bandes.
+/// À confirmer à l'impression avec la règle MY-A02 ; repli à 5 mm.
+pub const MYIRO1_ECART_BANDES_MM: f64 = 3.0;
+/// Marge technique d'impression en feuille, sur les quatre bords : donnée
+/// par le mainteneur (0,5 cm, 28 octobre 2026).
 pub const MYIRO1_MARGE_PAGE_MM: f64 = 5.0;
 /// Bandeau du haut (texte et QR code), écart au texte compris. Choix, à
 /// vérifier.
@@ -75,10 +77,9 @@ impl Gabarit {
         (MYIRO1_COTE_MIN_MM, None)
     }
 
-    /// Largeur et hauteur de la page en paysage, en millimètres.
+    /// Largeur et hauteur de la page en portrait, en millimètres.
     pub fn page_mm(&self) -> (f64, f64) {
-        let (largeur, hauteur) = self.format.dimensions();
-        (hauteur, largeur)
+        self.format.dimensions()
     }
 
     /// Plages par bande : la bande, blancs compris, tient en 257 mm et dans
@@ -114,9 +115,11 @@ impl Gabarit {
     }
 
     /// Coin haut gauche d'une plage, en millimètres. Les plages d'une bande
-    /// sont jointives ; la bande commence après la marge et le blanc du bout.
+    /// sont jointives ; la bande, blancs de bout compris, est centrée dans la
+    /// largeur de la page.
     pub fn origine_plage(&self, rangee: usize, colonne: usize) -> (f64, f64) {
-        let x = MYIRO1_MARGE_PAGE_MM + MYIRO1_BLANC_BOUT_MM + colonne as f64 * self.cote_mm;
+        let debut = (self.page_mm().0 - self.colonnes() as f64 * self.cote_mm) / 2.0;
+        let x = debut + colonne as f64 * self.cote_mm;
         let y = MYIRO1_MARGE_PAGE_MM
             + MYIRO1_BANDEAU_MM
             + rangee as f64 * (self.cote_mm + MYIRO1_ECART_BANDES_MM);

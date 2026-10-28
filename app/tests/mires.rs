@@ -39,7 +39,7 @@ fn une_mire_preparee_ecrit_ses_pages_et_range_son_tirage() {
 fn une_mire_de_deux_pages_ecrit_deux_fichiers_nommes() {
     let b = banc();
     let preparee = b
-        .preparer(&myiro1(TailleMire::Standard), &moteur(464), None)
+        .preparer(&myiro1(TailleMire::Approfondi), &moteur(928), None)
         .unwrap();
     assert_eq!(preparee.pages, 2);
     let fichiers = b.fichiers();
@@ -86,7 +86,7 @@ fn l_apercu_dit_plages_pages_et_commande_sans_rien_lancer() {
         .ouverte
         .apercu_mire(&myiro1(TailleMire::Approfondi), &m)
         .unwrap();
-    assert_eq!((apercu.plages, apercu.pages), (928, 4));
+    assert_eq!((apercu.plages, apercu.pages), (928, 2));
     assert_eq!(apercu.cote_mm, 8.0);
     assert_eq!(apercu.limites_cote, (7.0, None));
     assert_eq!(apercu.commande, "targen -v -d2 -G -f928 mire");
@@ -202,7 +202,7 @@ fn une_page_qui_ne_se_depose_pas_ne_laisse_ni_tirage_ni_fichier() {
         "Canon PRO-4100 - Hahnemühle Photo Rag 308 - 720 dpi - 2026-10-23 - T1 - page 2 sur 2.tif";
     std::fs::create_dir_all(b.mires().join(page_2).join("occupe")).unwrap();
     assert_eq!(
-        b.preparer(&myiro1(TailleMire::Standard), &moteur(464), None)
+        b.preparer(&myiro1(TailleMire::Approfondi), &moteur(928), None)
             .map(|_| ()),
         Err("mire.erreur.fichier_existant".to_string())
     );
@@ -211,7 +211,7 @@ fn une_page_qui_ne_se_depose_pas_ne_laisse_ni_tirage_ni_fichier() {
     // Une préparation suivante réussit, avec ses deux pages.
     std::fs::remove_dir_all(b.mires().join(page_2)).unwrap();
     let preparee = b
-        .preparer(&myiro1(TailleMire::Standard), &moteur(464), None)
+        .preparer(&myiro1(TailleMire::Approfondi), &moteur(928), None)
         .unwrap();
     assert_eq!(preparee.fichiers.len(), 2);
     assert_eq!(b.tirages(), 1);

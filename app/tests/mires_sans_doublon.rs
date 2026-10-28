@@ -82,8 +82,10 @@ fn un_reglage_change_donne_un_nouveau_tirage() {
 #[test]
 fn une_page_myiro1_effacee_est_redessinee_sous_le_meme_tirage() {
     let b = banc();
-    let m = moteur(464);
-    let premiere = b.preparer(&myiro1(TailleMire::Standard), &m, None).unwrap();
+    let m = moteur(928);
+    let premiere = b
+        .preparer(&myiro1(TailleMire::Approfondi), &m, None)
+        .unwrap();
     assert_eq!(premiere.fichiers.len(), 2);
     let page_2 = std::fs::read(&premiere.fichiers[1]).unwrap();
     std::fs::remove_file(&premiere.fichiers[1]).unwrap();
@@ -91,7 +93,7 @@ fn une_page_myiro1_effacee_est_redessinee_sous_le_meme_tirage() {
         .ouverte
         .preparer_mire(
             b.condition,
-            &myiro1(TailleMire::Standard),
+            &myiro1(TailleMire::Approfondi),
             &m,
             None,
             &b.mires(),
@@ -101,7 +103,7 @@ fn une_page_myiro1_effacee_est_redessinee_sous_le_meme_tirage() {
     assert_eq!(seconde.tirage, premiere.tirage);
     assert_eq!(seconde.fichiers, premiere.fichiers);
     assert_eq!(std::fs::read(&seconde.fichiers[1]).unwrap(), page_2);
-    assert_eq!(m.plages_demandees(), [464]);
+    assert_eq!(m.plages_demandees(), [928]);
     assert_eq!(b.tirages(), 1);
     assert_eq!(b.fichiers().len(), 2);
 }

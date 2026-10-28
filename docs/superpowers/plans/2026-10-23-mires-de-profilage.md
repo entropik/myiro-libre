@@ -64,10 +64,10 @@ Reportés, avec l'accord du mainteneur (23 octobre 2026) :
 - **Valeurs de la mire FD-9** : lues dans le TIFF à chaque préparation, au centre de chaque plage, et non recopiées dans le code. Le code ne garde que la géométrie et l'empreinte.
 - **Impression de la mire FD-9** : l'image fait 279,4 mm de large, et une page A3 297 mm. Imprimée centrée, la zone de plages est décalée de 8,8 mm environ par rapport au fichier. Le manuel tolère 21 mm de décalage, et le scan du FD-9 retrouve les plages : c'est **à vérifier** à l'essai (tâche 9).
 - **Côté de plage MYIRO-1 par défaut** : 8 mm, choisi à l'intérieur des limites du manuel. La section « Avancé » laisse régler le côté dans ces limites. Seule la plage de 20 mm a déjà été mesurée (mire de comparaison, 7 octobre 2026) ; les autres côtés sont « à vérifier » à l'essai.
-- **Orientation MYIRO-1** : page en paysage ; les bandes suivent le grand côté, et le texte et le QR code sont dans un bandeau de 22 mm en haut.
-- **Écart entre deux bandes MYIRO-1** : 15 mm, repris de la mire de comparaison. Ce n'est pas une donnée du manuel.
-- **Marge de page MYIRO-1** : 5 mm de chaque côté, pour la zone non imprimable des imprimantes.
-- **Capacité MYIRO-1 qui en découle** : en plages de 8 mm, 8 bandes de 29 plages = 232 plages par page A4 et 12 bandes = 348 par page A3. Les tailles validées tiennent donc sur 1, 2 et 4 pages A4.
+- **Orientation MYIRO-1** (revue le 28 octobre 2026, demande du mainteneur : « trop de vide, trop de blanc ») : page en **portrait** ; les bandes traversent la largeur, se lisent de gauche à droite et sont centrées ; le texte et le QR code sont dans un bandeau de 22 mm en haut.
+- **Écart entre deux bandes MYIRO-1** : 3 mm (15 mm avant le 28 octobre 2026). Le manuel ne fixe aucun écart entre bandes : à confirmer à l'impression avec la règle MY-A02 ; repli à 5 mm.
+- **Marge de page MYIRO-1** : 5 mm sur les quatre bords, marge technique d'impression en feuille donnée par le mainteneur.
+- **Capacité MYIRO-1 qui en découle** : en plages de 8 mm, 24 bandes de 22 plages = 528 plages par page A4, et 35 bandes de 29 plages = 1 015 par page A3. Les tailles validées tiennent donc sur 1, 1 et 2 pages A4, et sur une seule page A3.
 - **Contraste entre voisines (MYIRO-1)** : ΔE*ab > 10 avec la voisine de gauche. Les plages au bout d'une bande doivent aussi trancher sur le blanc papier. Le Lab est **estimé** à partir des valeurs RVB, lues comme du sRGB : c'est une estimation pour la mise en page, jamais une mesure.
 - **Génération MYIRO-1** : `targen -v -d2 -G -f<n> mire`, avec les plages blanches et noires par défaut d'ArgyllCMS. L'option `-G` est plus lente : le temps est mesuré à l'essai, et l'option sera retirée si c'est trop long.
 - **Plages blanches de `targen`** (28 octobre 2026, décision du général) : les 4 plages blanches (RVB 100, papier nu) sont gardées telles quelles. Placées en milieu de bande, chacune laisse un blanc de la taille d'une plage ; la lecture d'une telle bande au MYIRO-1 est à vérifier à l'essai. Si la bande est coupée, repli sur `targen -e0`, avec un blanc papier mesuré à part.
@@ -147,7 +147,7 @@ Expected: `7550f4a38725ad9260982152bb6bcbe077922289adb48dd954f0bd7d2c7fc713`. Se
       pub fn par_defaut(format: Format) -> Gabarit;                                   // 8 mm
       pub fn nouveau(format: Format, cote_mm: f64) -> Result<Gabarit, ErreurMire>;
       pub fn limites_cote() -> (f64, Option<f64>);                                    // (7, None)
-      pub fn page_mm(&self) -> (f64, f64);       // largeur, hauteur : paysage
+      pub fn page_mm(&self) -> (f64, f64);       // largeur, hauteur : portrait
       pub fn colonnes(&self) -> usize;           // plages par bande
       pub fn rangees(&self) -> usize;            // bandes par page
       pub fn plages_par_page(&self) -> usize;
@@ -172,11 +172,12 @@ Expected: `7550f4a38725ad9260982152bb6bcbe077922289adb48dd954f0bd7d2c7fc713`. Se
   ```
 - Constantes publiques, chacune commentée avec sa source (« manuel MYIRO-1 », relevé dans `outils/mire_comparaison.py`, ou « choix, à vérifier ») :
   - texte : `DISTANCE_TEXTE_MM = 2.0` ;
-  - MYIRO-1 : `MYIRO1_BLANC_BOUT_MM = 10.0`, `MYIRO1_BANDE_MAX_MM = 257.0`, `MYIRO1_ECART_BANDES_MM = 15.0` (choix), `MYIRO1_MARGE_PAGE_MM = 5.0` (choix), `MYIRO1_BANDEAU_MM = 22.0` (choix) ;
+  - MYIRO-1 : `MYIRO1_BLANC_BOUT_MM = 10.0`, `MYIRO1_BANDE_MAX_MM = 257.0`, `MYIRO1_ECART_BANDES_MM = 3.0` (à confirmer à l'impression, repli à 5 mm), `MYIRO1_MARGE_PAGE_MM = 5.0` (marge technique donnée par le mainteneur), `MYIRO1_BANDEAU_MM = 22.0` (choix) ;
   - voisines : `CONTRASTE_MIN_DE76 = 10.0`.
 - Calcul de la capacité MYIRO-1 :
   - plages par bande : ⌊(257 − 2 × 10) / côté⌋, borné par ⌊(largeur − 2 × 5 − 2 × 10) / côté⌋ ;
-  - bandes par page : le plus grand n tel que n × côté + (n − 1) × 15 ≤ hauteur − 2 × 5 − 22.
+  - bandes par page : le plus grand n tel que n × côté + (n − 1) × 3 ≤ hauteur − 2 × 5 − 22 (page en portrait) ;
+  - chaque bande, blancs de bout compris, est centrée dans la largeur.
 
 - [ ] **Step 1 : Tests en échec**
 
@@ -186,12 +187,12 @@ fn les_tailles_validees_sont_celles_du_mainteneur() {
     assert_eq!([Rapide, Standard, Approfondi].map(nombre_plages_myiro1), [232, 464, 928]);
 }
 #[test]
-fn la_capacite_par_defaut_tient_les_tailles_en_1_2_4_pages_a4() {
+fn la_capacite_par_defaut_tient_les_tailles_en_1_1_2_pages_a4() {
     let my = Gabarit::par_defaut(Format::A4);
-    assert_eq!((my.colonnes(), my.rangees(), my.plages_par_page()), (29, 8, 232));
-    assert_eq!([232, 464, 928].map(|n| my.pages(n)), [1, 2, 4]);
+    assert_eq!((my.colonnes(), my.rangees(), my.plages_par_page()), (22, 24, 528));
+    assert_eq!([232, 464, 928].map(|n| my.pages(n)), [1, 1, 2]);
 }
-#[test] fn la_capacite_a3_est_348() {}
+#[test] fn la_capacite_a3_est_1015() {}
 #[test]
 fn un_cote_hors_limites_est_refuse() {
     assert_eq!(Gabarit::nouveau(Format::A4, 6.0), Err(ErreurMire::CoteHorsLimites { min: 7.0, max: None }));
@@ -472,7 +473,7 @@ git commit -m "Mires : placement des plages avec contraste entre voisines, véri
 
 ```rust
 #[test]
-fn une_page_myiro1_a4_paysage_fait_3508_par_2480_pixels() {}
+fn une_page_myiro1_a4_portrait_fait_2480_par_3508_pixels() {}
 #[test]
 fn une_plage_a_la_bonne_couleur_au_bon_endroit() {}       // centre de la plage (rangée 0, colonne 0) = octets de sa valeur
 #[test]

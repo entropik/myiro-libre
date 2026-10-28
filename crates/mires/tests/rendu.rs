@@ -63,10 +63,10 @@ fn px(mm: f64) -> u32 {
 }
 
 #[test]
-fn une_page_myiro1_a4_paysage_fait_3508_par_2480_pixels() {
+fn une_page_myiro1_a4_portrait_fait_2480_par_3508_pixels() {
     let image = page(&["Essai"]);
-    assert_eq!((image.largeur, image.hauteur), (3508, 2480));
-    assert_eq!(image.pixels.len(), 3508 * 2480 * 3);
+    assert_eq!((image.largeur, image.hauteur), (2480, 3508));
+    assert_eq!(image.pixels.len(), 2480 * 3508 * 3);
     assert_eq!(RESOLUTION_PPP, 300);
 }
 
@@ -109,7 +109,7 @@ fn le_tiff_se_relit_et_n_a_pas_de_profil() {
     // PackBits réduit nettement une page faite d'aplats.
     assert!(octets.len() < image.pixels.len() / 4, "{}", octets.len());
     let mut d = Decoder::new(Cursor::new(&octets)).unwrap();
-    assert_eq!(d.dimensions().unwrap(), (3508, 2480));
+    assert_eq!(d.dimensions().unwrap(), (2480, 3508));
     assert_eq!(d.get_tag_u32(Tag::Compression).unwrap(), 32773);
     assert_eq!(d.get_tag_u32(Tag::ResolutionUnit).unwrap(), 2);
     for tag in [Tag::XResolution, Tag::YResolution] {

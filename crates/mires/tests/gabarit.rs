@@ -15,27 +15,77 @@ fn les_tailles_validees_sont_celles_du_mainteneur() {
     );
 }
 
+/// Page en portrait (demande du mainteneur, 28 octobre 2026) : bandes de 22
+/// plages de 8 mm, 3 mm entre deux bandes.
 #[test]
-fn la_capacite_par_defaut_tient_les_tailles_en_1_2_4_pages_a4() {
+fn la_capacite_par_defaut_tient_les_tailles_en_1_1_2_pages_a4() {
     let my = Gabarit::par_defaut(Format::A4);
     assert_eq!(my.cote_mm, 8.0);
-    assert_eq!(my.page_mm(), (297.0, 210.0));
+    assert_eq!(my.page_mm(), (210.0, 297.0));
     assert_eq!(
         (my.colonnes(), my.rangees(), my.plages_par_page()),
-        (29, 8, 232)
+        (22, 24, 528)
     );
-    assert_eq!([232, 464, 928].map(|n| my.pages(n)), [1, 2, 4]);
+    assert_eq!([232, 464, 928].map(|n| my.pages(n)), [1, 1, 2]);
 }
 
 #[test]
-fn la_capacite_a3_est_348() {
+fn la_capacite_a3_est_1015() {
     let my = Gabarit::par_defaut(Format::A3);
-    assert_eq!(my.page_mm(), (420.0, 297.0));
+    assert_eq!(my.page_mm(), (297.0, 420.0));
     assert_eq!(
         (my.colonnes(), my.rangees(), my.plages_par_page()),
-        (29, 12, 348)
+        (29, 35, 1015)
     );
-    assert_eq!([232, 464, 928].map(|n| my.pages(n)), [1, 2, 3]);
+    assert_eq!([232, 464, 928].map(|n| my.pages(n)), [1, 1, 1]);
+}
+
+/// Marge technique d'impression en feuille, donnée par le mainteneur :
+/// aucune plage, aucun blanc de bout de bande ni aucun texte à moins de
+/// 5 mm d'un bord de la page.
+#[test]
+fn rien_n_est_a_moins_de_5_mm_d_un_bord() {
+    for format in [Format::A4, Format::A3] {
+        for cote in [7.0, 8.0, 12.5, 20.0] {
+            let g = Gabarit::nouveau(format, cote).unwrap();
+            let (largeur, hauteur) = g.page_mm();
+            let dans_la_marge = |x: f64, y: f64, l: f64, h: f64| {
+                x >= MYIRO1_MARGE_PAGE_MM - 1e-9
+                    && y >= MYIRO1_MARGE_PAGE_MM - 1e-9
+                    && x + l <= largeur - MYIRO1_MARGE_PAGE_MM + 1e-9
+                    && y + h <= hauteur - MYIRO1_MARGE_PAGE_MM + 1e-9
+            };
+            for r in 0..g.rangees() {
+                let (x, y) = g.origine_plage(r, 0);
+                let bande = g.colonnes() as f64 * cote + 2.0 * MYIRO1_BLANC_BOUT_MM;
+                assert!(
+                    dans_la_marge(x - MYIRO1_BLANC_BOUT_MM, y, bande, cote),
+                    "{format:?} {cote} mm, bande {r}"
+                );
+            }
+            let z = g.zone_texte();
+            assert!(dans_la_marge(z.x, z.y, z.largeur, z.hauteur), "{format:?}");
+        }
+    }
+}
+
+/// La bande, blancs de bout compris, est centrée dans la largeur de la page.
+#[test]
+fn chaque_bande_est_centree_dans_la_largeur() {
+    for format in [Format::A4, Format::A3] {
+        let g = Gabarit::par_defaut(format);
+        let (largeur, _) = g.page_mm();
+        for r in [0, g.rangees() - 1] {
+            let debut = g.origine_plage(r, 0).0 - MYIRO1_BLANC_BOUT_MM;
+            let fin = g.origine_plage(r, g.colonnes() - 1).0 + g.cote_mm + MYIRO1_BLANC_BOUT_MM;
+            assert!(
+                (debut - (largeur - fin)).abs() < 1e-9,
+                "{format:?} : {debut} et {fin}"
+            );
+        }
+    }
+    // A4 : 22 plages de 8 mm, soit 176 mm, à 17 mm de chaque bord.
+    assert_eq!(Gabarit::par_defaut(Format::A4).origine_plage(0, 0).0, 17.0);
 }
 
 #[test]
@@ -52,7 +102,7 @@ fn un_cote_hors_limites_est_refuse() {
 
 #[test]
 fn un_cote_sans_place_sur_la_page_est_refuse() {
-    // Aucune bande de 250 mm de haut ne tient sur une page A4 en paysage.
+    // Aucune bande de 250 mm de haut ne tient sur une page A4.
     assert!(matches!(
         Gabarit::nouveau(Format::A4, 250.0),
         Err(ErreurMire::CoteHorsLimites { .. })
@@ -90,7 +140,7 @@ fn deux_plages_voisines_se_touchent_et_les_bandes_sont_separees() {
     let (x1, y1) = g.origine_plage(0, 1);
     assert_eq!((x1 - x0, y1 - y0), (8.0, 0.0));
     let (_, y_bande_2) = g.origine_plage(1, 0);
-    assert_eq!(y_bande_2 - y0, 8.0 + 15.0);
+    assert_eq!(y_bande_2 - y0, 8.0 + 3.0);
 }
 
 #[test]

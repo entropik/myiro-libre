@@ -41,11 +41,8 @@ fn une_mire_myiro1_approfondie_se_place_sans_defaut() {
     let debut = Instant::now();
     let m = mettre_en_page(&v, &g, 7).unwrap();
     println!("mise en page de 928 plages : {:?}", debut.elapsed());
-    assert_eq!(m.pages.len(), 4);
-    assert_eq!(
-        m.pages.iter().map(|p| p.numero).collect::<Vec<_>>(),
-        [1, 2, 3, 4]
-    );
+    assert_eq!(m.pages.len(), 2);
+    assert_eq!(m.pages.iter().map(|p| p.numero).collect::<Vec<_>>(), [1, 2]);
     assert!(verifier(&m, &v).is_empty());
 }
 
@@ -167,7 +164,7 @@ fn verifier_signale_une_plage_claire_au_bout_d_une_bande() {
 #[test]
 fn verifier_signale_nombre_doublon_et_hors_gabarit() {
     let v = [[0.0, 0.0, 0.0], [0.0, 0.0, 100.0], [100.0, 0.0, 0.0]];
-    let m = a_la_main(&[(0, 0, 0), (1, 0, 1), (0, 0, 2), (2, 8, 0)]);
+    let m = a_la_main(&[(0, 0, 0), (1, 0, 1), (0, 0, 2), (2, 24, 0)]);
     let defauts = verifier(&m, &v);
     assert!(
         defauts.contains(&Defaut::Doublon { index: 0 }),
@@ -175,7 +172,7 @@ fn verifier_signale_nombre_doublon_et_hors_gabarit() {
     );
     assert!(defauts.contains(&Defaut::HorsGabarit {
         page: 1,
-        rangee: 8,
+        rangee: 24,
         colonne: 0
     }));
     let m = a_la_main(&[(0, 0, 0), (1, 0, 1)]);
