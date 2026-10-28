@@ -6,12 +6,22 @@
 //! compris dans les valeurs. Un profil d'une autre structure, sans table ou
 //! sans blanc du support est refusé en le disant (`ErreurIcc`).
 //!
-//! Elle ne dépend que de `colorimetrie` : ni Windows, ni l'interface, ni les
-//! ponts. Son interface publique est un contrat (ADR 0004).
+//! De ces valeurs, elle tire la surface du cube RVB et son volume, les
+//! couleurs de base, la densité approchée du noir, la table de chroma par
+//! clarté et teinte (approchée) et les chemins du cube RVB (`analyser`,
+//! `chemin`).
+//!
+//! Elle ne dépend que de `colorimetrie` et de `serde` : ni Windows, ni
+//! l'interface, ni les ponts. Son interface publique est un contrat
+//! (ADR 0004).
 
+mod analyse;
 mod essai;
 mod icc;
+mod surface;
 mod table;
 
+pub use analyse::{analyser, chemin, Analyse, Primaire};
 pub use essai::{profil_essai, ProfilEssai};
 pub use icc::{ErreurIcc, ProfilIcc};
+pub use surface::{maillage_affiche, surface_cube, volume, Maillage, MaillageAffiche};
