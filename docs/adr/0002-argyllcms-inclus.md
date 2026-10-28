@@ -31,3 +31,8 @@ Première partie du ticket : un profil RVB calculé à partir d'une mesure impor
 - **Confirmé avec le vrai ArgyllCMS 3.5.0** : ligne de bilan de `profcheck -k` (`errors(CIEDE2000): max. = …, avg. = …`), `COLOR_REP "iRGB"` écrit par `targen` pour un `.ti1` (le `.ti3` garde `"iRGB_LAB"`). `colprof -D` n'écrit que de l'ASCII : myiro-libre lui passe le nom sans accents, la bibliothèque garde le nom d'origine (voir la [référence des options](../references/icc-argyll-options.md)).
 - **Avancement** : les sorties de `colprof -v` et `profcheck` sont lues en direct (un fil par sortie, rien ne bloque) ; les étapes de `colprof` sont repérées à leur première ligne, et seul un pourcentage écrit par ArgyllCMS fait avancer la barre dans une étape. Le journal complet reste gardé avec le profil.
 - **Durée estimée** : la durée du dernier calcul réussi de chaque recette, rapportée au nombre de plages, est gardée sur le poste ; l'écran l'annonce comme « estimé », jamais sans calcul précédent.
+
+## Complété (28 octobre 2026, ticket #41)
+
+- **`xicclu` embarqué** : la vérification d'un profil l'interroge (couleur demandée en sRVB, valeur envoyée à l'imprimante, prédictions relative et absolue), derrière le trait `MoteurVerification` de `profilage`. L'installateur embarque `bin/xicclu.exe` et s'arrête s'il manque. Dans l'application, un dossier `argyll/` sans `xicclu` dit « outil manquant » (`ErreurMoteur::OutilManquant`) : rien n'est rangé, le calcul de profil reste possible.
+- **Confirmé avec ArgyllCMS 3.5.0** : `xicclu -v0` lit une couleur par ligne sur l'entrée standard et écrit trois nombres par ligne ; une couleur hors gamut demandée vers l'appareil est ramenée en silence (voir la [référence des options](../references/icc-argyll-options.md)).
