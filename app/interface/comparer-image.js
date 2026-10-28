@@ -40,6 +40,8 @@ window.ComparerImage = (() => {
   let canvas = null;
   let legende = null;
   let tableauChiffres = null;
+  let avisInconnu = null; // raison d'un profil de surimpression inconnu
+  let imageCalque = null; // ImageData du calque, gardée d'un mouvement du curseur à l'autre
 
   // Une rangée d'actions : un bouton par [clé, action].
   function actions(...boutons) {
@@ -52,19 +54,17 @@ window.ComparerImage = (() => {
     return rangee;
   }
 
-
   const statut = (texte) => {
     const p = el("p", "why", texte);
     p.setAttribute("role", "status");
     return p;
   };
 
-  // Un jeton de couleur du thème courant, en [r, v, b].
+  // Un jeton de couleur du thème courant, en [r, v, b] ; null s'il ne se lit pas.
   function jeton(nom) {
     const h = getComputedStyle(document.documentElement).getPropertyValue(nom).trim().replace("#", "");
-    return /^[0-9a-fA-F]{6}$/.test(h) ? [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) : [128, 128, 128];
+    return /^[0-9a-fA-F]{6}$/.test(h) ? [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) : null;
   }
-
 
   // ---- Ouvrir, analyser, annuler, fermer ----
   async function ouvrir() {
@@ -73,7 +73,7 @@ window.ComparerImage = (() => {
       const r = await invoke("image_ouvrir", { filtre: t("image.filtre") });
       if (!r) return; // annulé : rien ne change
       demande++;
-      [resume, analyses, ecarts] = [r, null, []];
+      [resume, apercu, analyses, ecarts] = [r, null, null, []];
       apercu = new Uint8ClampedArray(await invoke("image_apercu"));
     } catch (cle) {
       message = t(String(cle));
@@ -89,11 +89,14 @@ window.ComparerImage = (() => {
       resume = await invoke("image_traiter_comme_srvb");
     } catch (cle) {
       message = t(String(cle));
+      dessiner();
+      return;
     }
     await analyser();
   }
 
   async function analyser() {
+    message = ""; // un ancien « annulée » ou une ancienne erreur ne reste pas au-dessus de chiffres justes
     const n = ++demande;
     analyses = null;
     ecarts = [];
@@ -128,16 +131,10 @@ window.ComparerImage = (() => {
   function oublier() {
     demande++;
     resume = apercu = analyses = null;
-    ecarts = [];
-    enCours = false;
-    message = "";
+    [ecarts, enCours, message] = [[], false, ""];
   }
 
-  function retirer() {
-    oublier();
-    dessiner();
-    invoke("image_fermer").catch(erreur);
-  }
+  const retirer = () => { oublier(); dessiner(); invoke("image_fermer").catch(erreur); };
 
   // « Fermer la comparaison » ferme aussi l'image, et le seuil revient à 2,0.
   function fermer() {
@@ -145,6 +142,7 @@ window.ComparerImage = (() => {
     oublier();
     [sources, profils, seuil, affichage] = [[], [], 2, "les_deux"];
     racine.replaceChildren();
+    imageCalque = canvas = legende = tableauChiffres = avisInconnu = null;
     if (ouverte) invoke("image_fermer").catch(() => {});
   }
 
@@ -166,10 +164,7 @@ window.ComparerImage = (() => {
   }
 
   const pourcent = (p) => t("image.valeur.pourcent").replace("{p}", () => nombre(p, 1));
-  const analyseDe = (rang) => {
-    const a = analyses && analyses[rang];
-    return a && a.etat.etat === "calculee" ? a.etat.analyse : null;
-  };
+  const analyseDe = (rang) => (analyses?.[rang]?.etat.etat === "calculee" ? analyses[rang].etat.analyse : null);
 
   function teintes(a) {
     const k = code(seuil);
@@ -180,8 +175,7 @@ window.ComparerImage = (() => {
     if (!touchees.length) return t("image.teintes.aucune");
     const liste = el("div");
     for (const [f, p] of touchees) {
-      const nom = t("image.teinte." + f);
-      liste.append(el("div", "", t("image.teinte.valeur").replace("{nom}", () => nom).replace("{p}", () => nombre(p, 1))));
+      liste.append(el("div", "", t("image.teinte.valeur").replace("{nom}", () => t("image.teinte." + f)).replace("{p}", () => nombre(p, 1))));
     }
     return liste;
   }
@@ -207,10 +201,7 @@ window.ComparerImage = (() => {
     const lignes = cles.map((cle, i) => [
       t(cle).replace("{s}", () => nombre(seuil, 1)), ...colonnes.map((c) => c[i])]);
     // Un profil inconnu dit pourquoi, dans sa colonne.
-    const raisons = profils.map((p) => {
-      const e = analyses && analyses[p.rang];
-      return e && e.etat.etat === "inconnue" ? texteRefus(e.etat) : "";
-    });
+    const raisons = profils.map((p) => (analyses?.[p.rang]?.etat.etat === "inconnue" ? texteRefus(analyses[p.rang].etat) : ""));
     if (raisons.some(Boolean)) lignes.push([t("image.chiffres.raison"), ...raisons]);
     const entetes = profils.map((p) => {
       const nom = el("span", "");
@@ -224,24 +215,26 @@ window.ComparerImage = (() => {
   function calque() {
     if (!canvas || !apercu || !resume) return;
     const ctx = canvas.getContext("2d");
-    const image = ctx.createImageData(resume.largeur, resume.hauteur);
-    const d = image.data;
-    if (affichage !== "alerte") d.set(apercu.subarray(0, d.length));
-    const octets = affichage === "image" ? null : ecarts[choisi];
+    const [w, h] = [resume.largeur, resume.hauteur];
+    if (!imageCalque || imageCalque.width !== w || imageCalque.height !== h) imageCalque = ctx.createImageData(w, h);
+    const d = imageCalque.data;
     const k = code(seuil);
-    const alerte = jeton("--couleur-hors-gamut");
+    // Vert fluo sur la photo dans les deux thèmes ; la légende garde --couleur-hors-gamut.
+    const alerte = jeton("--couleur-hors-gamut-calque");
     const fond = jeton("--couleur-hors-gamut-fond");
-    const n = resume.largeur * resume.hauteur;
+    let octets = affichage === "image" ? null : ecarts[choisi];
+    let seule = affichage === "alerte";
+    if (!alerte || !fond) [octets, seule] = [null, false]; // jeton illisible : l'image seule, sans marque
+    if (!seule) d.set(apercu.subarray(0, d.length));
+    const n = w * h;
     for (let i = 0; i < n; i++) {
       const e = octets ? octets[i] : INCONNU;
-      const c = e !== INCONNU && e >= k ? alerte : affichage === "alerte" ? fond : null;
+      const c = e !== INCONNU && e >= k ? alerte : seule ? fond : null;
       if (!c) continue;
-      d[4 * i] = c[0];
-      d[4 * i + 1] = c[1];
-      d[4 * i + 2] = c[2];
+      d.set(c, 4 * i);
       d[4 * i + 3] = 255;
     }
-    ctx.putImageData(image, 0, 0);
+    ctx.putImageData(imageCalque, 0, 0);
     const p = profils.find((x) => x.rang === choisi);
     const nom = p ? p.nom : "";
     const a = analyseDe(choisi);
@@ -267,11 +260,22 @@ window.ComparerImage = (() => {
       o.selected = p.rang === choisi;
       s.append(o);
     }
-    s.addEventListener("change", () => { choisi = Number(s.value); dessiner(); });
+    // Seuls le calque et son avis changent : le choix garde le focus du clavier.
+    s.addEventListener("change", () => choisirProfil(Number(s.value)));
     const l = el("label", "label", t("image.surimpression.profil"));
     l.htmlFor = s.id;
     champ.append(l, s);
     return champ;
+  }
+
+  function choisirProfil(rang) {
+    choisi = rang;
+    const a = analyses?.[choisi];
+    if (avisInconnu) {
+      avisInconnu.hidden = a?.etat.etat !== "inconnue";
+      avisInconnu.textContent = avisInconnu.hidden ? "" : t("image.surimpression.inconnue").replace("{raison}", () => texteRefus(a.etat));
+    }
+    calque();
   }
 
   function curseurSeuil() {
@@ -337,11 +341,8 @@ window.ComparerImage = (() => {
   function surimpression() {
     const bloc = el("div");
     if (!profils.some((p) => p.rang === choisi)) choisi = profils.length ? profils[0].rang : 0;
-    bloc.append(choixProfil(), curseurSeuil(), choixAffichage());
-    const a = analyses && analyses[choisi];
-    if (a && a.etat.etat === "inconnue") {
-      bloc.append(el("p", "why", t("image.surimpression.inconnue").replace("{raison}", () => texteRefus(a.etat))));
-    }
+    avisInconnu = el("p", "why");
+    bloc.append(choixProfil(), curseurSeuil(), choixAffichage(), avisInconnu);
     legende = el("p", "legende-alerte");
     const carre = el("span", "swatch");
     carre.style.setProperty("--c", "var(--couleur-hors-gamut)");
@@ -355,9 +356,7 @@ window.ComparerImage = (() => {
   }
 
   function dessiner() {
-    canvas = null;
-    legende = null;
-    tableauChiffres = null;
+    canvas = legende = tableauChiffres = avisInconnu = null;
     const contenu = [];
     if (!resume) contenu.push(el("p", "prose", t("image.aide")));
     contenu.push(resume ? actions(["image.remplacer", ouvrir], ["image.retirer", retirer]) : actions(["image.ouvrir", ouvrir]));
@@ -374,7 +373,7 @@ window.ComparerImage = (() => {
       contenu.push(el("span", "label", t("image.chiffres")), tableauChiffres);
     }
     racine.replaceChildren(section("image.titre", ...contenu));
-    calque();
+    choisirProfil(choisi); // calque et avis d'un profil inconnu
     dessinerChiffres();
   }
 

@@ -2106,14 +2106,19 @@ fn comparer_image_js_est_charge_et_sans_couleur_en_dur() {
         assert!(!script.contains(interdit), "{interdit}");
     }
     assert!(script.contains("putImageData("));
-    for jeton in ["--couleur-hors-gamut", "--couleur-hors-gamut-fond"] {
+    for jeton in ["--couleur-hors-gamut-calque", "--couleur-hors-gamut-fond"] {
         assert!(script.contains(&format!("\"{jeton}\"")), "{jeton} non lu");
     }
+    assert!(script.contains("var(--couleur-hors-gamut)"), "légende");
 
     let jetons = lire("../design-system/tokens.css");
     for clair in [false, true] {
         let bloc = bloc_du_theme(&jetons, clair);
-        for jeton in ["--couleur-hors-gamut:", "--couleur-hors-gamut-fond:"] {
+        for jeton in [
+            "--couleur-hors-gamut:",
+            "--couleur-hors-gamut-fond:",
+            "--couleur-hors-gamut-calque:",
+        ] {
             assert!(bloc.contains(jeton), "{jeton} absent (clair : {clair})");
         }
     }
@@ -2261,4 +2266,71 @@ fn la_vue_comparer_porte_la_section_image() {
     // Un profil intégré refusé n'est jamais remplacé sans le choix de l'opérateur.
     assert!(script.contains("invoke(\"image_traiter_comme_srvb\")"));
     assert!(script.contains("actions([\"image.traiter_srvb\", traiterCommeSrvb])"));
+}
+
+/// Sur le canvas, au-dessus de la photo, l'alerte est le vert fluo choisi par
+/// le mainteneur dans les deux thèmes (`--couleur-hors-gamut-calque`) ; la
+/// légende et les textes gardent `--couleur-hors-gamut`, plus sombre en
+/// clair. Un jeton illisible ne donne aucune marque, jamais une couleur de
+/// repli écrite en dur.
+#[test]
+fn le_calque_est_vert_fluo_dans_les_deux_themes() {
+    let jetons = lire("../design-system/tokens.css");
+    for clair in [false, true] {
+        let ligne = bloc_du_theme(&jetons, clair)
+            .lines()
+            .find(|l| l.contains("--couleur-hors-gamut-calque:"))
+            .unwrap_or_default();
+        assert!(ligne.contains("#39ff14"), "clair : {clair} : {ligne}");
+    }
+    let script = lire("interface/comparer-image.js");
+    assert!(!script.contains("128, 128, 128"), "couleur de repli en dur");
+    let jeton = corps_de(&script, "function jeton(nom) {");
+    assert!(jeton.contains(": null;"), "{jeton}");
+    let calque = corps_de(&script, "function calque() {");
+    assert!(
+        calque.contains("const alerte = jeton(\"--couleur-hors-gamut-calque\");"),
+        "{calque}"
+    );
+    assert!(calque.contains("if (!alerte || !fond)"), "{calque}");
+    for fichier in ["brand-book.html", "README.md", "ui-kit.html"] {
+        assert!(
+            lire(&format!("../design-system/{fichier}")).contains("--couleur-hors-gamut-calque"),
+            "{fichier}"
+        );
+    }
+}
+
+/// Relecture de la section « Image » : une nouvelle analyse efface l'ancien
+/// message ; une nouvelle image oublie l'ancien aperçu dans la même
+/// affectation ; changer de profil ne redessine que le calque (le choix
+/// garde le focus du clavier) ; fermer oublie les éléments vivants ; le
+/// calque réutilise son ImageData.
+#[test]
+fn la_section_image_ne_garde_rien_de_perime() {
+    let script = lire("interface/comparer-image.js");
+    let analyser = corps_de(&script, "async function analyser() {");
+    let tete = analyser.find("message = \"\";").unwrap_or(usize::MAX);
+    assert!(
+        tete < analyser.find("invoke(").unwrap_or(0),
+        "message vidé en tête : {analyser}"
+    );
+    let ouvrir = corps_de(&script, "async function ouvrir() {");
+    assert!(
+        ouvrir.contains("[resume, apercu, analyses, ecarts] = [r, null, null, []];"),
+        "{ouvrir}"
+    );
+    let choix = corps_de(&script, "function choixProfil() {");
+    assert!(choix.contains("choisirProfil(Number(s.value))"), "{choix}");
+    let choisir = corps_de(&script, "function choisirProfil(rang) {");
+    assert!(choisir.contains("calque();"), "{choisir}");
+    assert!(!choisir.contains("dessiner()"), "{choisir}");
+    let fermer = corps_de(&script, "function fermer() {");
+    assert!(
+        fermer.contains("canvas = legende = tableauChiffres = avisInconnu = null;"),
+        "{fermer}"
+    );
+    let calque = corps_de(&script, "function calque() {");
+    assert!(calque.contains("imageCalque"), "{calque}");
+    assert!(calque.contains("const d = imageCalque.data;"), "{calque}");
 }
