@@ -488,6 +488,10 @@ const FRANCAIS: Catalogue = &[
         "Inconnue\u{202f}: les mesures embarquées dans ce profil ne se lisent pas.",
     ),
     (
+        "comparer.fidelite.echelle_spectre",
+        "Inconnue\u{202f}: la plus forte valeur des spectres embarqués est entre 1,5 et 2. On ne sait pas s’ils sont en réflectance de 0 à 1 ou en pourcentage, et rien n’est deviné.",
+    ),
+    (
         "comparer.fidelite.rvb_inconnus",
         "Inconnue\u{202f}: les mesures embarquées ne disent pas quelles valeurs RVB ont été imprimées, ou dans quelle échelle.",
     ),
@@ -2219,6 +2223,10 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.fidelite.illisible",
         "Unknown: the measurements embedded in this profile cannot be read.",
+    ),
+    (
+        "comparer.fidelite.echelle_spectre",
+        "Unknown: the highest value of the embedded spectra is between 1.5 and 2. It is not known whether they are a reflectance from 0 to 1 or a percentage, and nothing is guessed.",
     ),
     (
         "comparer.fidelite.rvb_inconnus",

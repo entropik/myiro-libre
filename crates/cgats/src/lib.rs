@@ -37,6 +37,14 @@ impl fmt::Display for ErreurCgats {
 
 impl std::error::Error for ErreurCgats {}
 
+impl ErreurCgats {
+    /// Le fichier est refusé parce que l'échelle de ses colonnes
+    /// `SPECTRAL_NM_` ne se décide pas (maximum entre 1,5 et 2).
+    pub fn echelle_spectre_indecidable(&self) -> bool {
+        self.0.starts_with(lecture::ECHELLE_INDECIDABLE)
+    }
+}
+
 pub(crate) fn erreur<T>(detail: impl Into<String>) -> Result<T, ErreurCgats> {
     Err(ErreurCgats(detail.into()))
 }

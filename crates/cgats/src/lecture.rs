@@ -229,6 +229,55 @@ impl EchelleRvb {
     }
 }
 
+/// Colonnes de spectre `SPECTRAL_NM_380`… (nom CGATS.17, celui des exports
+/// MYIROtools), en minuscules.
+const SPECTRAL_NM: &str = "spectral_nm_";
+/// Échelle de ces colonnes, **décidée** par myiro-libre sur le maximum de
+/// toutes leurs valeurs dans le fichier (le fichier ne la dit pas) : au plus
+/// 1,5, réflectance de 0 à 1 ; au moins 2, pourcentage ; entre les deux,
+/// refusé (`docs/formats/cgats.md`).
+const REFLECTANCE_MAX: f64 = 1.5;
+const POURCENTAGE_MIN: f64 = 2.0;
+/// Début du message de refus d'une échelle indécidable, reconnu par
+/// [`ErreurCgats::echelle_spectre_indecidable`].
+pub(crate) const ECHELLE_INDECIDABLE: &str = "échelle des colonnes SPECTRAL_NM_ indécidable";
+
+fn colonne_spectral_nm(champ: &str) -> Option<u32> {
+    champ
+        .to_ascii_lowercase()
+        .strip_prefix(SPECTRAL_NM)
+        .and_then(|l| l.parse().ok())
+}
+
+/// Les colonnes `SPECTRAL_NM_` du fichier sont-elles en pourcentage ?
+/// Décidé sur le maximum de toutes leurs valeurs lisibles, tous tableaux
+/// confondus ; une valeur illisible est refusée plus loin, à la lecture.
+fn spectral_nm_en_pourcentage(tableaux: &[Tableau]) -> Result<bool, ErreurCgats> {
+    let mut maximum = f64::NEG_INFINITY;
+    for t in tableaux {
+        let colonnes: Vec<usize> = (0..t.champs.len())
+            .filter(|&i| colonne_spectral_nm(&t.champs[i]).is_some())
+            .collect();
+        for ligne in t.lignes() {
+            for &c in &colonnes {
+                if let Some(v) = ligne[c].parse::<f64>().ok().filter(|v| v.is_finite()) {
+                    maximum = maximum.max(v);
+                }
+            }
+        }
+    }
+    if maximum <= REFLECTANCE_MAX {
+        Ok(false)
+    } else if maximum >= POURCENTAGE_MIN {
+        Ok(true)
+    } else {
+        erreur(format!(
+            "{ECHELLE_INDECIDABLE} : valeur maximale {maximum}, entre {REFLECTANCE_MAX} \
+             (réflectance de 0 à 1) et {POURCENTAGE_MIN} (pourcentage) ; rien n'est deviné"
+        ))
+    }
+}
+
 /// Pourcentage ramené à une réflectance de 0 à 1. Calculé en f64 : une valeur
 /// écrite par [`crate::ecrire`] (f32 × 100, en f64) se relit à l'identique.
 fn pourcent(texte: &str, quoi: &str) -> Result<f32, ErreurCgats> {
@@ -308,7 +357,12 @@ fn emplacement(
     }
 }
 
-fn lire_tableau(t: &Tableau, rang: usize, condition_exigee: bool) -> Result<Lu, ErreurCgats> {
+fn lire_tableau(
+    t: &Tableau,
+    rang: usize,
+    condition_exigee: bool,
+    spectral_nm_pourcentage: bool,
+) -> Result<Lu, ErreurCgats> {
     let (emplacement, condition) = emplacement(t, rang, condition_exigee)?;
     let colonne = |nom: &str| t.champs.iter().position(|c| c.eq_ignore_ascii_case(nom));
     let id = colonne("SAMPLE_ID");
@@ -321,10 +375,12 @@ fn lire_tableau(t: &Tableau, rang: usize, condition_exigee: bool) -> Result<Lu, 
 
     // Colonnes de spectre, chacune avec son échelle, jamais devinée :
     // `nm380` du fabricant (réflectance de 0 à 1), `SPEC_380` d'ArgyllCMS
-    // (pourcentage), `MYIRO_LIBRE_SPECTRE_1` de myiro-libre quand les
-    // longueurs d'onde sont inconnues (pourcentage).
+    // (pourcentage), `SPECTRAL_NM_380` de CGATS.17 (échelle décidée sur le
+    // fichier), `MYIRO_LIBRE_SPECTRE_1` de myiro-libre quand les longueurs
+    // d'onde sont inconnues (pourcentage).
     let mut nm: Vec<(u32, usize)> = Vec::new();
     let mut spec: Vec<(u32, usize)> = Vec::new();
+    let mut spectral: Vec<(u32, usize)> = Vec::new();
     let mut rangs: Vec<(u32, usize)> = Vec::new();
     for (i, champ) in t.champs.iter().enumerate() {
         let minuscule = champ.to_ascii_lowercase();
@@ -332,6 +388,8 @@ fn lire_tableau(t: &Tableau, rang: usize, condition_exigee: bool) -> Result<Lu, 
             nm.push((l, i));
         } else if let Some(l) = minuscule.strip_prefix("spec_").and_then(|l| l.parse().ok()) {
             spec.push((l, i));
+        } else if let Some(l) = colonne_spectral_nm(champ) {
+            spectral.push((l, i));
         } else if let Some(r) = champ
             .strip_prefix(&format!("{PREFIXE}SPECTRE_"))
             .and_then(|r| r.parse().ok())
@@ -339,14 +397,24 @@ fn lire_tableau(t: &Tableau, rang: usize, condition_exigee: bool) -> Result<Lu, 
             rangs.push((r, i));
         }
     }
-    let sortes = [!nm.is_empty(), !spec.is_empty(), !rangs.is_empty()];
+    let sortes = [
+        !nm.is_empty(),
+        !spec.is_empty(),
+        !spectral.is_empty(),
+        !rangs.is_empty(),
+    ];
     if sortes.iter().filter(|s| **s).count() > 1 {
         return erreur(format!(
             "tableau {rang} : deux sortes de colonnes de spectre"
         ));
     }
-    let pourcentage = nm.is_empty();
-    let nm = if nm.is_empty() { spec } else { nm };
+    let (nm, pourcentage) = if !nm.is_empty() {
+        (nm, false)
+    } else if !spectral.is_empty() {
+        (spectral, spectral_nm_pourcentage)
+    } else {
+        (spec, true)
+    };
     let (longueurs_onde, colonnes_spectre) = if !nm.is_empty() {
         let mut nm = nm;
         nm.sort();
@@ -489,8 +557,9 @@ fn lire_avec(texte: &str, condition_exigee: bool) -> Result<MesureImportee, Erre
     let mut plages: Vec<PlageImportee> = Vec::new();
     let mut vus = [false; 3];
     let mut rvb: Vec<Option<[f64; 3]>> = Vec::new();
+    let spectral_nm_pourcentage = spectral_nm_en_pourcentage(&tableaux)?;
     for (i, t) in tableaux.iter().enumerate() {
-        let lu = lire_tableau(t, i + 1, condition_exigee)?;
+        let lu = lire_tableau(t, i + 1, condition_exigee, spectral_nm_pourcentage)?;
         let e = lu.emplacement;
         if std::mem::replace(&mut vus[e], true) {
             return erreur(format!(

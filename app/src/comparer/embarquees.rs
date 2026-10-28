@@ -6,9 +6,10 @@ use cgats::MesureImportee;
 use pont_protocole::{ConditionMesure, Echantillonnage, Info};
 
 /// Clés des raisons pour lesquelles les mesures d'un profil ne servent pas.
-pub const CLES_FIDELITE: [&str; 5] = [
+pub const CLES_FIDELITE: [&str; 6] = [
     SANS_MESURES,
     ILLISIBLE,
+    ECHELLE_SPECTRE,
     RVB_INCONNUS,
     RVB_HORS_ECHELLE,
     LAB_INCONNU,
@@ -17,6 +18,9 @@ pub const CLES_FIDELITE: [&str; 5] = [
 /// Le profil n'embarque aucune mesure.
 pub const SANS_MESURES: &str = "comparer.fidelite.sans_mesures";
 const ILLISIBLE: &str = "comparer.fidelite.illisible";
+/// Spectres `SPECTRAL_NM_` dont l'échelle ne se décide pas
+/// (`docs/formats/cgats.md`).
+const ECHELLE_SPECTRE: &str = "comparer.fidelite.echelle_spectre";
 const RVB_INCONNUS: &str = "comparer.fidelite.rvb_inconnus";
 const RVB_HORS_ECHELLE: &str = "comparer.fidelite.rvb_hors_echelle";
 pub const LAB_INCONNU: &str = "comparer.fidelite.lab_inconnu";
@@ -54,7 +58,11 @@ pub struct MesuresProfil {
 pub fn mesures_embarquees(targ: &[u8]) -> Result<MesuresProfil, &'static str> {
     let mesure = cgats::lire_sans_condition(&cgats::decoder(targ)).map_err(|e| {
         eprintln!("mesures embarquées : {e}");
-        ILLISIBLE
+        if e.echelle_spectre_indecidable() {
+            ECHELLE_SPECTRE
+        } else {
+            ILLISIBLE
+        }
     })?;
     if mesure.plages.is_empty() {
         return Err(SANS_MESURES);

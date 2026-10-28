@@ -554,6 +554,129 @@ fn le_ti3_de_myiro_libre_donne_la_fidelite_et_les_memes_mesures() {
     assert_eq!(c.memes_mesures, vec![false, true]);
 }
 
+/// Réflectance (spectre plat) de chaque plage de `PLAGES`.
+const REFLEXIONS: [f64; 6] = [0.94, 0.02, 0.3, 0.1, 0.2, 0.5];
+
+/// Export MYIROtools tel qu'il est embarqué dans ses profils : spectres seuls
+/// en `SPECTRAL_NM_380`… de 0 à 1, sans Lab, RVB de 0 à 255, condition M1.
+/// `facteur` multiplie les spectres (100 pour un pourcentage).
+fn targ_myirotools_spectral(facteur: f64) -> String {
+    let champs: Vec<String> = (0..36)
+        .map(|i| format!("SPECTRAL_NM_{}", 380 + 10 * i))
+        .collect();
+    let lignes: String = PLAGES
+        .iter()
+        .zip(REFLEXIONS)
+        .enumerate()
+        .map(|(i, (rvb, r))| ligne_spectrale(i + 1, *rvb, r * facteur))
+        .collect();
+    format!(
+        "CGATS.17\r\nORIGINATOR\t\"MYIROtools\"\r\nMEASUREMENT_SOURCE\t\"M1\"\r\n\
+         BEGIN_DATA_FORMAT\r\nSAMPLE_ID\tRGB_R\tRGB_G\tRGB_B\t{}\r\nEND_DATA_FORMAT\r\n\
+         NUMBER_OF_SETS\t{}\r\nBEGIN_DATA\r\n{lignes}END_DATA\r\n",
+        champs.join("\t"),
+        PLAGES.len()
+    )
+}
+
+/// `.ti3` de myiro-libre des mêmes plages : Lab calculé depuis les mêmes
+/// spectres plats (D50, 2°).
+fn targ_ti3_des_spectres() -> String {
+    let plages = PlagesProfil {
+        plages: PLAGES
+            .iter()
+            .zip(REFLEXIONS)
+            .map(|(c, r)| {
+                let lab = colorimetrie::spectre_vers_lab(&[r; 36]).unwrap();
+                PlageProfil {
+                    rvb: c.map(|v| f64::from(v) / 255.0 * 100.0),
+                    lab: [lab.l, lab.a, lab.b],
+                    spectre: None,
+                }
+            })
+            .collect(),
+        condition: ConditionMesure::M1,
+        condition_supposee: false,
+        rvb_supposes: false,
+        longueurs_onde: None,
+    };
+    ecrire_ti3(
+        &plages,
+        "Canon PRO-4100, Photo Rag 308, 720 dpi",
+        "2026-10-28T09:00:00Z",
+    )
+}
+
+/// Cas principal du ticket, avec les mesures telles que MYIROtools les
+/// embarque vraiment : spectres en `SPECTRAL_NM_`, sans Lab.
+#[test]
+fn les_spectres_spectral_nm_de_myirotools_donnent_la_fidelite_et_les_memes_mesures() {
+    let b = banc();
+    let nous = b.ouvrir(
+        "libre.icc",
+        &essai(lineaire, 9, Some(targ_ti3_des_spectres())),
+    );
+    let eux = b.ouvrir(
+        "mt.icc",
+        &essai(lineaire, 17, Some(targ_myirotools_spectral(1.0))),
+    );
+    let c = b.ouverte.comparer(&[nous, eux], &b.fichiers, None).unwrap();
+    let EtatProfil::Analyse { fidelite, .. } = &c.profils[1].etat else {
+        panic!("{:?}", c.profils[1].etat);
+    };
+    match fidelite {
+        EtatFidelite::Connue {
+            plages,
+            lab_calcule,
+            rvb_supposes,
+            condition,
+            ..
+        } => {
+            assert_eq!(*plages, PLAGES.len());
+            assert!(lab_calcule, "Lab calculé depuis les spectres");
+            assert!(rvb_supposes);
+            assert_eq!(*condition, Some(ConditionMesure::M1));
+        }
+        autre => panic!("{autre:?}"),
+    }
+    assert_eq!(c.memes_mesures, vec![false, true]);
+}
+
+/// Les profils de l'essai du 26 octobre 2026, à l'atelier et hors du dépôt :
+/// `PROFILS_COMPARAISON` désigne le dossier de `mt.icc` (MYIROtools) et
+/// `libre.icc` (myiro-libre), faits de la même mesure de 2 520 plages.
+#[test]
+#[ignore = "profils de l'atelier, variable PROFILS_COMPARAISON"]
+fn les_mesures_embarquees_par_myirotools_se_lisent_sur_le_vrai_profil() {
+    let dossier = PathBuf::from(
+        std::env::var_os("PROFILS_COMPARAISON").expect("PROFILS_COMPARAISON : dossier des profils"),
+    );
+    let lire =
+        |nom: &str| gamut::ProfilIcc::lire(&std::fs::read(dossier.join(nom)).unwrap()).unwrap();
+    let (mt, libre) = (lire("mt.icc"), lire("libre.icc"));
+    let eux = mesures_embarquees(mt.mesures_embarquees().unwrap()).unwrap();
+    let nous = mesures_embarquees(libre.mesures_embarquees().unwrap()).unwrap();
+    assert_eq!(eux.mesures.len(), 2_520);
+    assert!(eux.lab_calcule, "Lab calculé depuis les SPECTRAL_NM_");
+    assert!(gamut::memes_mesures(&eux.mesures, &nous.mesures));
+    let fidelite = gamut::fidelite(&mt, &eux.mesures).expect("fidélité connue");
+    assert!(fidelite.moyenne < 0.1, "{fidelite:?}");
+}
+
+#[test]
+fn des_spectres_spectral_nm_d_echelle_indecidable_sont_refuses_en_clair() {
+    // Blanc à 1,7 : ni une réflectance de 0 à 1 (au plus 1,5), ni un
+    // pourcentage (au moins 2).
+    let targ = targ_myirotools_spectral(1.7 / 0.94);
+    let cle = mesures_embarquees(targ.as_bytes()).unwrap_err();
+    assert_eq!(cle, "comparer.fidelite.echelle_spectre");
+    assert!(CLES_FIDELITE.contains(&cle));
+    assert!(est_au_catalogue(cle));
+    // En pourcentage, les mêmes mesures se lisent.
+    let pourcent = mesures_embarquees(targ_myirotools_spectral(100.0).as_bytes()).unwrap();
+    assert_eq!(pourcent.mesures.len(), PLAGES.len());
+}
+
 #[test]
 fn des_mesures_embarquees_hors_echelle_restent_refusees() {
     let ti3 = targ_ti3(&PLAGES).replace(
