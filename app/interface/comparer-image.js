@@ -26,7 +26,7 @@ window.ComparerImage = (() => {
   const racine = el("div");
   let resume = null; // ImageResume de l'image ouverte
   let apercu = null; // pixels RVBA de l'image d'analyse
-  let analyses = null; // [{ source, etat }] dans l'ordre des profils de la comparaison
+  let analyses = null; // [{ source, etat }] de la dernière analyse, dans l'ordre des profils
   let ecarts = []; // codes d'écart par rang de profil (null pour un profil inconnu)
   let sources = [];
   let profils = []; // profils analysés de la comparaison : { rang, serie, nom }
@@ -106,11 +106,11 @@ window.ComparerImage = (() => {
     try {
       const reponse = await invoke("image_analyser", { sources });
       if (n !== demande) return; // périmée : la demande plus récente tient « en cours »
-      const octets = await Promise.all(reponse.map((a, index) => (a.etat.etat === "calculee"
-        ? invoke("image_ecarts", { index }).then((b) => new Uint8Array(b))
+      const octets = await Promise.all(reponse.profils.map((a, index) => (a.etat.etat === "calculee"
+        ? invoke("image_ecarts", { analyse: reponse.numero, index }).then((b) => new Uint8Array(b))
         : null)));
       if (n !== demande) return;
-      analyses = reponse;
+      analyses = reponse.profils;
       ecarts = octets;
     } catch (cle) {
       if (n === demande) message = t(String(cle));

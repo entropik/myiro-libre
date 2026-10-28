@@ -2245,7 +2245,9 @@ fn la_vue_comparer_porte_la_section_image() {
     assert!(comparer.contains("image.profilsChanges(choisis.map((c) => c.source));"));
     let script = lire("interface/comparer-image.js");
     assert!(script.contains("invoke(\"image_annuler\")"));
-    assert!(script.contains("invoke(\"image_ecarts\", { index"));
+    // Les écarts se demandent par le numéro de l'analyse qui les a calculés.
+    assert!(script.contains("invoke(\"image_ecarts\", { analyse: reponse.numero, index })"));
+    assert!(script.contains("const reponse = await invoke(\"image_analyser\", { sources });"));
     assert!(script.contains("t(\"image.en_cours\")"));
     // Un profil intégré refusé n'est jamais remplacé sans le choix de l'opérateur.
     assert!(script.contains("invoke(\"image_traiter_comme_srvb\")"));
