@@ -14,8 +14,24 @@ _Éviter_ : charte, chart, cible, target
 Mire servant à comparer deux instruments sur un même tirage (36 plages de 20 mm, lisible en feuille et en bande), produite par `outils/mire_comparaison.py`.
 _Éviter_ : mire de test, charte de contrôle
 
+**Mire RGB-2520** :
+La mire du FD-9 : 2 520 plages RVB sur une seule page A3, avec son QR code d'origine, reprise telle quelle (décision du mainteneur, 26 octobre 2026). myiro-libre en vérifie l'empreinte et la copie octet pour octet ; il ne la redessine pas.
+_Éviter_ : mire FD-9 dessinée, charte RGB
+
+**Taille de mire** :
+Nombre de plages d'une mire MYIRO-1 : rapide (232), standard (464) ou approfondi (928). Point de départ validé par le mainteneur le 23 octobre 2026, à corriger après essais.
+_Éviter_ : résolution de mire, densité de mire
+
+**Gabarit** :
+Mise en page des bandes du MYIRO-1 pour un format (A4 ou A3) et un côté de plage : nombre de plages par bande, de bandes par page, bandeau du texte et du QR code.
+_Éviter_ : modèle, template
+
+**Plan de lecture** :
+Ordre et place de chaque plage d'une mire, page par page, bande par bande. Il est rangé avec la mire, avec son empreinte, et sert à relire les mesures dans le bon ordre.
+_Éviter_ : layout, disposition
+
 **Tirage** :
-Réalisation physique d'une mire, imprimée dans une condition d'impression donnée ; c'est ce que l'instrument mesure.
+Réalisation physique d'une mire, imprimée dans une condition d'impression donnée ; c'est ce que l'instrument mesure. Le tirage rangé dans la bibliothèque à la préparation d'une mire en est la trace (date, mire, nombre de pages), avant même l'impression.
 _Éviter_ : épreuve, impression, feuille (au sens d'objet mesuré)
 
 **Mesure** :

@@ -31,3 +31,9 @@ Première partie du ticket : un profil RVB calculé à partir d'une mesure impor
 - **Confirmé avec le vrai ArgyllCMS 3.5.0** : ligne de bilan de `profcheck -k` (`errors(CIEDE2000): max. = …, avg. = …`), `COLOR_REP "iRGB"` écrit par `targen` pour un `.ti1` (le `.ti3` garde `"iRGB_LAB"`). `colprof -D` n'écrit que de l'ASCII : myiro-libre lui passe le nom sans accents, la bibliothèque garde le nom d'origine (voir la [référence des options](../references/icc-argyll-options.md)).
 - **Avancement** : les sorties de `colprof -v` et `profcheck` sont lues en direct (un fil par sortie, rien ne bloque) ; les étapes de `colprof` sont repérées à leur première ligne, et seul un pourcentage écrit par ArgyllCMS fait avancer la barre dans une étape. Le journal complet reste gardé avec le profil.
 - **Durée estimée** : la durée du dernier calcul réussi de chaque recette, rapportée au nombre de plages, est gardée sur le poste ; l'écran l'annonce comme « estimé », jamais sans calcul précédent.
+
+## Complété (28 octobre 2026, ticket #33)
+
+- **`targen` choisit les plages des mires MYIRO-1**, derrière le même trait `MoteurProfil` (`commande_plages`, `generer_plages`), dans un dossier de travail temporaire, avec la même version figée. Commande : `targen -v -d2 -G -f<n> mire`. Confirmé avec le vrai ArgyllCMS 3.5.0 : `-f` compte les plages blanches et noires que `targen` ajoute (4 et 4 par défaut), et le `.ti1` porte trois tableaux, dont seul le premier est celui des plages. Durée relevée sur le poste : moins d'une seconde pour 232 plages, 3 secondes pour 928.
+- **Installateur** : `bin/targen.exe` rejoint les fichiers embarqués sous `argyll/`.
+- **À vérifier à l'essai** : les plages blanches de `targen` (RVB 100, papier nu) placées au milieu d'une bande laissent un blanc de la taille d'une plage ; leur lecture au MYIRO-1 en bande n'est pas encore confirmée (la mire de comparaison évitait le papier nu en bande).
