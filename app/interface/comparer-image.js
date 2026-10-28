@@ -18,7 +18,8 @@ window.ComparerImage = (() => {
   const INCONNU = 255;
   // Classes d'écart du mainteneur, en codes d'écart : [nom, début inclus, fin exclue].
   const CLASSES = [["leger", 20, 50], ["moyen", 50, 100], ["fort", 100, 255]];
-  const SECTEURS = 13; // douze secteurs de 30°, puis les gris
+  // Familles de teinte, dans l'ordre des lignes de `par_teinte` (gamut::FAMILLES_TEINTE).
+  const FAMILLES = ["rouge", "jaune", "vert", "cyan", "bleu", "magenta", "gris"];
   const AFFICHAGES = ["image", "les_deux", "alerte"];
   const code = (s) => Math.round(s * 10);
 
@@ -172,14 +173,14 @@ window.ComparerImage = (() => {
 
   function teintes(a) {
     const k = code(seuil);
-    const touchees = Array.from({ length: SECTEURS }, (_, s) => [s, part(a, k, 255, a.par_teinte[s] || [])])
+    const touchees = FAMILLES.map((f, s) => [f, part(a, k, 255, a.par_teinte[s] || [])])
       .filter(([, p]) => p > 0)
       .sort((x, y) => y[1] - x[1])
       .slice(0, 3);
     if (!touchees.length) return t("image.teintes.aucune");
     const liste = el("div");
-    for (const [s, p] of touchees) {
-      const nom = t("image.teinte." + (s === SECTEURS - 1 ? "gris" : String(s)));
+    for (const [f, p] of touchees) {
+      const nom = t("image.teinte." + f);
       liste.append(el("div", "", t("image.teinte.valeur").replace("{nom}", () => nom).replace("{p}", () => nombre(p, 1))));
     }
     return liste;

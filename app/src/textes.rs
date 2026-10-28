@@ -648,52 +648,28 @@ const FRANCAIS: Catalogue = &[
         "aucun",
     ),
     (
-        "image.teinte.0",
-        "Roses (h 0 à 30°)",
+        "image.teinte.rouge",
+        "Rouges",
     ),
     (
-        "image.teinte.1",
-        "Rouges (h 30 à 60°)",
+        "image.teinte.jaune",
+        "Jaunes",
     ),
     (
-        "image.teinte.2",
-        "Orangés (h 60 à 90°)",
+        "image.teinte.vert",
+        "Verts",
     ),
     (
-        "image.teinte.3",
-        "Jaunes (h 90 à 120°)",
+        "image.teinte.cyan",
+        "Cyans",
     ),
     (
-        "image.teinte.4",
-        "Verts (h 120 à 150°)",
+        "image.teinte.bleu",
+        "Bleus",
     ),
     (
-        "image.teinte.5",
-        "Verts bleutés (h 150 à 180°)",
-    ),
-    (
-        "image.teinte.6",
-        "Cyans (h 180 à 210°)",
-    ),
-    (
-        "image.teinte.7",
-        "Bleus ciel (h 210 à 240°)",
-    ),
-    (
-        "image.teinte.8",
-        "Bleus azur (h 240 à 270°)",
-    ),
-    (
-        "image.teinte.9",
-        "Bleus (h 270 à 300°)",
-    ),
-    (
-        "image.teinte.10",
-        "Violets (h 300 à 330°)",
-    ),
-    (
-        "image.teinte.11",
-        "Magentas (h 330 à 360°)",
+        "image.teinte.magenta",
+        "Magentas",
     ),
     (
         "image.teinte.gris",
@@ -2669,52 +2645,28 @@ const ANGLAIS: Catalogue = &[
         "none",
     ),
     (
-        "image.teinte.0",
-        "Pinks (h 0 to 30°)",
+        "image.teinte.rouge",
+        "Reds",
     ),
     (
-        "image.teinte.1",
-        "Reds (h 30 to 60°)",
+        "image.teinte.jaune",
+        "Yellows",
     ),
     (
-        "image.teinte.2",
-        "Oranges (h 60 to 90°)",
+        "image.teinte.vert",
+        "Greens",
     ),
     (
-        "image.teinte.3",
-        "Yellows (h 90 to 120°)",
+        "image.teinte.cyan",
+        "Cyans",
     ),
     (
-        "image.teinte.4",
-        "Greens (h 120 to 150°)",
+        "image.teinte.bleu",
+        "Blues",
     ),
     (
-        "image.teinte.5",
-        "Blue-greens (h 150 to 180°)",
-    ),
-    (
-        "image.teinte.6",
-        "Cyans (h 180 to 210°)",
-    ),
-    (
-        "image.teinte.7",
-        "Sky blues (h 210 to 240°)",
-    ),
-    (
-        "image.teinte.8",
-        "Azure blues (h 240 to 270°)",
-    ),
-    (
-        "image.teinte.9",
-        "Blues (h 270 to 300°)",
-    ),
-    (
-        "image.teinte.10",
-        "Violets (h 300 to 330°)",
-    ),
-    (
-        "image.teinte.11",
-        "Magentas (h 330 to 360°)",
+        "image.teinte.magenta",
+        "Magentas",
     ),
     (
         "image.teinte.gris",

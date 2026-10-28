@@ -2138,7 +2138,7 @@ fn corps_de<'a>(script: &'a str, entete: &str) -> &'a str {
 
 /// Chaque texte de la section « Image » (`t("…")`, et les débuts de clé
 /// complétés à l'écran) existe en français et en anglais ; les noms des
-/// treize secteurs de teinte aussi. Les classes d'écart sont celles du
+/// familles de teinte de la crate `gamut`, dans son ordre, aussi. Les classes d'écart sont celles du
 /// mainteneur (2 à 5, 5 à 10, plus de 10).
 #[test]
 fn les_textes_de_la_section_image_existent_en_deux_langues() {
@@ -2158,10 +2158,7 @@ fn les_textes_de_la_section_image_existent_en_deux_langues() {
     demandees.retain(|c| !c.ends_with('.'));
     for prefixe in &prefixes {
         let fins: Vec<String> = match prefixe.as_str() {
-            "image.teinte." => (0..12)
-                .map(|n| n.to_string())
-                .chain(["gris".to_string()])
-                .collect(),
+            "image.teinte." => gamut::FAMILLES_TEINTE.map(String::from).to_vec(),
             "image.classe." => ["leger", "moyen", "fort"].map(String::from).to_vec(),
             "image.affichage." => ["image", "les_deux", "alerte"].map(String::from).to_vec(),
             autre => panic!("début de clé inattendu : {autre}"),
@@ -2192,6 +2189,18 @@ fn les_textes_de_la_section_image_existent_en_deux_langues() {
     assert_eq!(
         texte(Langue::Francais, "image.classe.fort"),
         "Fort, plus de 10\u{202f}ΔE00"
+    );
+    // Les lignes de `par_teinte` suivent l'ordre de `gamut::FAMILLES_TEINTE`.
+    let familles = gamut::FAMILLES_TEINTE
+        .map(|f| format!("\"{f}\""))
+        .join(", ");
+    assert!(
+        script.contains(&format!("const FAMILLES = [{familles}];")),
+        "familles de teinte"
+    );
+    assert_eq!(
+        texte(Langue::Francais, "image.teinte.gris"),
+        "Gris (C* < 5)"
     );
     // Bornes des classes en codes d'écart (dixièmes de ΔE00).
     assert!(script.contains(
