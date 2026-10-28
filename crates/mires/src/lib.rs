@@ -98,6 +98,9 @@ pub enum ErreurMire {
     Contraste { defauts: usize },
     /// Écriture d'une page impossible.
     Ecriture(String),
+    /// Un fichier de même nom existe déjà à la place d'une page : il n'est
+    /// jamais écrasé.
+    FichierExistant(String),
     /// La mire RGB-2520 n'est pas posée à côté de l'application.
     MireFd9Introuvable,
     /// Fichier lu, mais ce n'est pas la mire RGB-2520 retenue.
@@ -115,6 +118,7 @@ impl ErreurMire {
             ErreurMire::NombreInattendu { .. } => "mire.erreur.nombre",
             ErreurMire::Contraste { .. } => "mire.erreur.contraste",
             ErreurMire::Ecriture(_) => "mire.erreur.ecriture",
+            ErreurMire::FichierExistant(_) => "mire.erreur.fichier_existant",
             ErreurMire::MireFd9Introuvable => "mire.erreur.fd9_introuvable",
             ErreurMire::MireFd9Autre { .. } => "mire.erreur.fd9_autre",
             ErreurMire::MireFd9Illisible(_) => "mire.erreur.fd9_illisible",
@@ -145,6 +149,12 @@ impl fmt::Display for ErreurMire {
                 write!(f, "plages trop proches pour être lues : {defauts} défauts")
             }
             ErreurMire::Ecriture(cause) => write!(f, "écriture impossible : {cause}"),
+            ErreurMire::FichierExistant(fichier) => {
+                write!(
+                    f,
+                    "un fichier de même nom existe déjà, il n'est pas écrasé : {fichier}"
+                )
+            }
             ErreurMire::MireFd9Introuvable => f.write_str("mire RGB-2520 introuvable"),
             ErreurMire::MireFd9Autre { empreinte } => write!(
                 f,

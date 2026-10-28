@@ -1090,6 +1090,10 @@ const FRANCAIS: Catalogue = &[
         "Les pages de la mire n’ont pas pu être écrites dans le dossier Documents\\myiro-libre\\Mires. Vérifiez qu’il reste de la place et que le dossier n’est pas protégé, puis recommencez.",
     ),
     (
+        "mire.erreur.fichier_existant",
+        "Un fichier du même nom existe déjà dans le dossier Documents\\myiro-libre\\Mires\u{202f}: il n’a pas été remplacé, et rien n’a été préparé. Déplacez ou renommez l’ancien fichier, puis recommencez.",
+    ),
+    (
         "mire.erreur.fd9_introuvable",
         "Mire RGB-2520 introuvable. Placez le fichier «\u{202f}RGB-2520 A3 - 1p.tif\u{202f}» dans le dossier mire-fd9 à côté de l’application. Le MYIRO-1 reste utilisable.",
     ),
@@ -2195,6 +2199,10 @@ const ANGLAIS: Catalogue = &[
     (
         "mire.erreur.ecriture",
         "The chart pages could not be written to the Documents\\myiro-libre\\Mires folder. Check that there is space left and that the folder is not protected, then try again.",
+    ),
+    (
+        "mire.erreur.fichier_existant",
+        "A file with the same name already exists in the Documents\\myiro-libre\\Mires folder: it was not replaced, and nothing was prepared. Move or rename the old file, then try again.",
     ),
     (
         "mire.erreur.fd9_introuvable",

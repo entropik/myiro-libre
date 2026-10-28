@@ -14,7 +14,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use bibliotheque::{IdCondition, IdTirage, NouvelleMire};
+use bibliotheque::{IdCondition, NouvelleMire};
 use mires::{
     lire_mire_fd9, ErreurMire, Format, Gabarit, Instrument, MireFd9, TailleMire, RGB2520_FICHIER,
     RGB2520_NOM,
@@ -26,8 +26,10 @@ use crate::colonne::BibliothequeOuverte;
 use crate::parc::instant_utc;
 
 pub mod commandes;
+mod depot;
 mod myiro1;
 
+use depot::ecrire_fichier;
 use myiro1::controler_myiro1;
 
 /// Bornes du nombre libre de plages MYIRO-1 (section « Avancé ») : des
@@ -128,92 +130,6 @@ fn controler_fd9(demande: &DemandeMire) -> Result<(), String> {
         && demande.cote_mm.is_none();
     fixe.then_some(())
         .ok_or_else(|| "mire.erreur.fd9_fixe".to_string())
-}
-
-/// Écrit un fichier, avec la cause en cas d'échec.
-fn ecrire_fichier(
-    fichier: &Path,
-    ecrire: impl FnOnce(&mut fs::File) -> Result<(), ErreurMire>,
-) -> Result<(), ErreurMire> {
-    fs::File::create(fichier)
-        .map_err(|e| ErreurMire::Ecriture(format!("{} : {e}", fichier.display())))
-        .and_then(|mut f| ecrire(&mut f))
-}
-
-/// Écrit les fichiers d'un tirage dans un dossier de travail placé dans
-/// `dossier` (`ecrire` y écrit et rend leurs noms), puis les met à leur
-/// place ; les fichiers déposés s'ajoutent à `deposes`. En cas d'échec, les
-/// fichiers déjà déposés sont retirés. Le dossier de travail est toujours
-/// effacé.
-fn deposer(
-    dossier: &Path,
-    tirage: IdTirage,
-    deposes: &mut Vec<PathBuf>,
-    ecrire: impl FnOnce(IdTirage, &Path) -> Result<Vec<String>, ErreurMire>,
-) -> Result<(), ErreurMire> {
-    let travail = dossier.join(format!(".preparation-T{}", tirage.0));
-    let ecriture = |chemin: &Path, e: std::io::Error| {
-        ErreurMire::Ecriture(format!("{} : {e}", chemin.display()))
-    };
-    let faire = || {
-        fs::create_dir_all(&travail).map_err(|e| ecriture(&travail, e))?;
-        for nom in ecrire(tirage, &travail)? {
-            let place = dossier.join(&nom);
-            fs::rename(travail.join(&nom), &place).map_err(|e| ecriture(&place, e))?;
-            deposes.push(place);
-        }
-        Ok(())
-    };
-    let resultat = faire();
-    if travail.exists() {
-        let _ = fs::remove_dir_all(&travail);
-    }
-    if resultat.is_err() {
-        retirer(deposes);
-    }
-    resultat
-}
-
-fn retirer(fichiers: &mut Vec<PathBuf>) {
-    for f in fichiers.drain(..) {
-        let _ = fs::remove_file(f);
-    }
-}
-
-impl BibliothequeOuverte {
-    /// Range la mire et son tirage, et dépose ses fichiers dans `dossier`
-    /// ([`deposer`]) : la transaction de la bibliothèque n'est validée
-    /// qu'après le dépôt de tous les fichiers. Un tirage n'apparaît donc
-    /// jamais sans ses fichiers : en cas d'échec, rien n'est rangé, aucun
-    /// fichier ne reste, et la clé de l'erreur est rendue. Le verrou de la
-    /// bibliothèque est tenu pendant l'écriture des pages.
-    fn ranger_et_deposer(
-        &self,
-        condition: IdCondition,
-        mire: &NouvelleMire,
-        pages: usize,
-        dossier: &Path,
-        ecrire: impl FnOnce(IdTirage, &Path) -> Result<Vec<String>, ErreurMire>,
-    ) -> Result<(IdTirage, Vec<PathBuf>), String> {
-        let mut deposes = Vec::new();
-        let rangee = self.avec(|b| {
-            b.enregistrer_mire_et_tirage_si(condition, mire, pages, |tirage| {
-                deposer(dossier, tirage, &mut deposes, ecrire)
-            })
-        });
-        match rangee {
-            Ok(Ok((_, tirage))) => Ok((tirage, deposes)),
-            Ok(Err(e)) => {
-                eprintln!("{e}");
-                Err(e.cle().to_string())
-            }
-            // Validation refusée par la base après le dépôt : les fichiers partent.
-            Err(cle) => {
-                retirer(&mut deposes);
-                Err(cle)
-            }
-        }
-    }
 }
 
 impl BibliothequeOuverte {

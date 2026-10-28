@@ -191,9 +191,9 @@ fn une_ecriture_impossible_ne_laisse_aucun_fichier() {
     assert_eq!(b.tirages(), 0, "un tirage sans fichiers");
 }
 
-/// Un tirage n'apparaît jamais sans ses fichiers : si la deuxième page ne
-/// peut pas être déposée, la première est retirée, aucun dossier de travail
-/// ne reste et rien n'est rangé.
+/// Un tirage n'apparaît jamais sans ses fichiers : si la place de la
+/// deuxième page est prise, aucune page n'est déposée, aucun dossier de
+/// travail ne reste et rien n'est rangé.
 #[test]
 fn une_page_qui_ne_se_depose_pas_ne_laisse_ni_tirage_ni_fichier() {
     let b = banc();
@@ -204,7 +204,7 @@ fn une_page_qui_ne_se_depose_pas_ne_laisse_ni_tirage_ni_fichier() {
     assert_eq!(
         b.preparer(&myiro1(TailleMire::Standard), &moteur(464), None)
             .map(|_| ()),
-        Err("mire.erreur.ecriture".to_string())
+        Err("mire.erreur.fichier_existant".to_string())
     );
     assert_eq!(b.tirages(), 0);
     assert_eq!(b.fichiers(), [page_2]);
@@ -216,6 +216,29 @@ fn une_page_qui_ne_se_depose_pas_ne_laisse_ni_tirage_ni_fichier() {
     assert_eq!(preparee.fichiers.len(), 2);
     assert_eq!(b.tirages(), 1);
     assert_eq!(b.fichiers().len(), 2);
+}
+
+/// Un fichier de même nom (numéros de tirage repartis après la restauration
+/// d'une ancienne sauvegarde) n'est jamais écrasé : rien n'est rangé et le
+/// message le dit.
+#[test]
+fn une_page_deja_presente_n_est_pas_ecrasee() {
+    let b = banc();
+    let page_1 =
+        "Canon PRO-4100 - Hahnemühle Photo Rag 308 - 720 dpi - 2026-10-23 - T1 - page 1 sur 1.tif";
+    std::fs::create_dir_all(b.mires()).unwrap();
+    std::fs::write(b.mires().join(page_1), b"ancienne page").unwrap();
+    assert_eq!(
+        b.preparer(&myiro1(TailleMire::Rapide), &moteur(232), None)
+            .map(|_| ()),
+        Err("mire.erreur.fichier_existant".to_string())
+    );
+    assert_eq!(
+        std::fs::read(b.mires().join(page_1)).unwrap(),
+        b"ancienne page"
+    );
+    assert_eq!(b.fichiers(), [page_1]);
+    assert_eq!(b.tirages(), 0);
 }
 
 #[test]
@@ -237,6 +260,7 @@ fn toutes_les_cles_mire_existent_en_deux_langues() {
             empreinte: String::new(),
         },
         ErreurMire::MireFd9Illisible(String::new()),
+        ErreurMire::FichierExistant(String::new()),
     ]
     .iter()
     .map(ErreurMire::cle)
