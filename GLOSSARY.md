@@ -265,6 +265,11 @@ _Éviter_ : primaires seules, coins
 Table B2A1 d'un profil de sortie : d'une couleur demandée (L\*a\*b\*), elle donne les valeurs RVB à envoyer à l'imprimante, en colorimétrique relatif. Une couleur hors du gamut y est ramenée sur sa limite. Un profil sans table inverse lisible se compare quand même, mais ne dit pas ce qu'il ferait d'une image.
 _Éviter_ : table B2A, LUT inverse
 
+**Couleur demandée** :
+Couleur qu'un pixel d'une photo demande, lue par le profil de l'image (sRVB si la photo n'en a pas), en L\*a\*b\* relatif D50 : le blanc de l'image vaut L\* = 100. C'est elle que l'imprimante doit rendre ; la couleur reproduite dit ce qu'elle rendra.
+Dans le code : `ProfilSource::demande`.
+_Éviter_ : couleur d'origine, couleur source
+
 **Couleur reproduite** :
 Couleur que l'imprimante rend d'une couleur demandée : la couleur passée par la table inverse, puis par la table colorimétrique (aller-retour B2A1 puis A2B1, en colorimétrique relatif). L'écart ΔE00 entre les deux dit si la couleur est dans le gamut.
 _Éviter_ : couleur simulée, épreuve
@@ -277,6 +282,19 @@ _Éviter_ : profil d'entrée
 **Nuage de couleurs** :
 Les couleurs d'une photo placées dans l'espace L\*a\*b\*, regroupées par petits cubes de 4 unités : au plus 4 000 points, les plus peuplés d'abord. Chaque point est placé sur le blanc du papier du profil choisi et garde le plus grand écart de ses pixels.
 _Éviter_ : nuage de points, histogramme 3D
+
+**Image d'analyse** :
+La photo ramenée à 2 048 pixels de côté au plus, en prenant un pixel sur N dans chaque sens, sans mélanger les voisins : c'est sur elle que se calculent les écarts, et l'écran dit « 1 pixel sur N » quand elle est réduite. Elle n'existe qu'en mémoire, le temps de la séance ; la photo n'est jamais rangée ni copiée.
+_Éviter_ : vignette, aperçu, image réduite
+
+**Seuil d'alerte** :
+Écart ΔE00 entre couleur demandée et couleur reproduite au-delà duquel un pixel est signalé en vert fluo sur la photo : 2,0 au départ, réglable de 0,5 à 10 par pas de 0,5, sans relancer le calcul. Quel que soit le seuil, les écarts se classent aussi en léger (2 à 5), moyen (5 à 10) et fort (plus de 10). Un pixel dont l'écart ne se calcule pas est dit « inconnu », jamais compté comme bon. À ne pas confondre avec l'écart accepté d'une mesure, qui donne un verdict.
+_Éviter_ : tolérance, seuil hors gamut
+
+**Famille de teinte** :
+Pour les teintes touchées d'une photo : rouges, jaunes, verts, cyans, bleus ou magentas, chaque famille centrée sur la teinte de la couleur sRVB pure du même nom et bornée à mi-chemin des voisines ; une couleur de chroma inférieure à 5 est un gris. À ne pas confondre avec la famille d'une zone du cube RVB dans les écarts entre profils.
+Dans le code : `familles_teinte`.
+_Éviter_ : secteur de teinte
 
 **Profil de référence** :
 Dans une comparaison, le premier profil choisi : les écarts des autres profils se calculent par rapport à lui. Dans un avant / après, c'est le profil actif. À ne pas confondre avec la référence d'un contrôle d'impression.

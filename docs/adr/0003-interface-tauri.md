@@ -74,3 +74,9 @@ Après le refus de l'écran (« illisible », fenêtre d'environ 1900 × 1080) :
 - La colonne de la bibliothèque, commune à toutes les tâches, passe de deux à trois colonnes de la grille ; la feuille en prend six, les détails trois (au lieu de 2 + 7 + 3). Une entrée de mesure tient sur deux lignes : le nom, puis la date courte et la lecture ; aucun mot n'est coupé, et une fin trop longue est remplacée par des points, le texte entier restant au survol.
 - Aucune zone ne défile en largeur ; toutes les barres de défilement sont fines ; deux champs qui se suivent sont espacés.
 - Dans Mesurer, les boutons de spectre portent « M0 », « M1 », « M2 » et « à confirmer » est dit une seule fois dessous. Les détails montrent d'abord l'écart, compact et titré, puis la couleur, les valeurs et la provenance ; les actions sur la couleur de référence viennent en dernier.
+
+## Pixels d'une image en binaire (28 octobre 2026, ticket #80)
+
+- Les pixels de l'image d'analyse (RVBA, 4 octets par pixel) et ses codes d'écart (1 octet par pixel) passent de l'application à la page en **réponse binaire** (`tauri::ipc::Response`), reçue en `ArrayBuffer` : jamais en JSON. Une image d'analyse de 2 048 × 1 536 pixels fait ainsi 12 Mio, au lieu de plusieurs fois plus en texte. Les autres réponses (résumé de l'image, chiffres, histogramme, nuage) restent en JSON.
+- La page dessine l'image et la surimpression dans un `canvas` (`ImageData`) : la politique de sécurité de la page **ne change pas** (aucune image chargée par adresse, aucun `blob:` ni `data:` ajouté à `img-src`).
+- La photo ne vit qu'en mémoire, le temps de la séance : elle n'est jamais rangée, copiée ni écrite sur le disque.
