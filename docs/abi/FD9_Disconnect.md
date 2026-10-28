@@ -32,7 +32,7 @@ int32_t __stdcall FD9_Disconnect(void);   /* x86 : ret (aucun argument) */
 - **Fermeture, dans l'ordre de MYIROtools** : [FD9_ExitMeasurement](FD9_ExitMeasurement.md)`(&0, NULL)` sans tenir compte du retour, puis `FD9_Disconnect`, puis [FD9_GetStatus](FD9_GetStatus.md) toutes les 100 ms jusqu'à l'état 1 (code 0) ou au code 1102 (plus de session). Le pont borne cette attente à 10 s (`ATTENTE_APRES_DECONNEXION`) ; au-delà, il le dit dans son journal, et la fermeture reste confirmée puisque `FD9_Disconnect` a rendu 0 ou 1004.
 - Sur 1104, ne pas insister ni attendre l'état : la fermeture est dite incertaine (`arret_refuse` avec le code), le rappel reste inscrit.
 - Désinscrire ensuite le rappel (`FD9_RegisterDeviceEventHandler` avec un pointeur nul).
-- Toute la fermeture est bornée par un chien de garde (15 s, `DELAI_FERMETURE`) : passé ce délai, le pont répond `fermeture_incertaine` avec `deconnexion_bloquee` et s'arrête avec le code 4 ([protocole](../formats/protocole.md#fermeture-du-fd-9-qui-ne-rend-pas-la-main--deconnexion_bloquee)).
+- Toute la fermeture est bornée par un chien de garde (20 s, `DELAI_FERMETURE`) : passé ce délai, le pont répond `fermeture_incertaine` avec `deconnexion_bloquee` et s'arrête avec le code 4 ([protocole](../formats/protocole.md#fermeture-du-fd-9-qui-ne-rend-pas-la-main--deconnexion_bloquee)).
 
 ## Ce qu'a montré l'instrument
 

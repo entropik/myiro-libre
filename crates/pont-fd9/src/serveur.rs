@@ -17,11 +17,12 @@ use std::time::Duration;
 /// Délai laissé à la fermeture (sortie de la feuille, `FD9_Disconnect`,
 /// attente de la fin de session, désinscription du rappel) pour rendre la
 /// main. À l'essai E2, `FD9_Disconnect` est resté bloqué environ 5 min. Plus
-/// court que les 30 s pendant lesquelles l'application attend la réponse à
-/// `fermer` : elle la reçoit avant de couper le pont elle-même. L'attente de
-/// la fin de session (10 s au plus) finit d'ordinaire à la première lecture,
-/// qui rend 1102 une fois la session fermée.
-pub const DELAI_FERMETURE: Duration = Duration::from_secs(15);
+/// long que la sortie, la déconnexion et l'attente de la fin de session
+/// (`ATTENTE_APRES_DECONNEXION`, 10 s) réunies, pour que la garde ne se
+/// déclenche pas à tort ; plus court que les 30 s pendant lesquelles
+/// l'application attend la réponse à `fermer` : elle la reçoit avant de
+/// couper le pont elle-même.
+pub const DELAI_FERMETURE: Duration = Duration::from_secs(20);
 
 /// Chien de garde de la fermeture : un fil à part, qui n'appelle jamais la
 /// DLL. Si la fermeture ne rend pas la main dans `delai`, il appelle

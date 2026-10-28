@@ -4,8 +4,8 @@
 mod commun;
 
 use commun::{Fd9Simule, EMPREINTE_SIMULEE};
-use pont_fd9::serveur::{servir, Garde};
-use pont_fd9::{Session, PALIER_MAX};
+use pont_fd9::serveur::{servir, Garde, DELAI_FERMETURE};
+use pont_fd9::{Session, ATTENTE_APRES_DECONNEXION, PALIER_MAX};
 use pont_protocole::{
     lire_reponse, Empreinte, ErreurPont, Info, InstrumentFd9, LectureFeuille, LiaisonFd9, Palier,
     RemiseAuRepos, Reponse,
@@ -559,4 +559,12 @@ fn une_fermeture_rapide_ne_reveille_pas_la_garde() {
     assert_eq!(lire_reponse(&lignes[2]), Ok(Reponse::Ferme {}));
     std::thread::sleep(Duration::from_millis(300));
     assert!(recu.try_recv().is_err());
+}
+
+#[test]
+fn la_garde_laisse_finir_la_fermeture_et_repond_avant_l_application() {
+    // Sortie et déconnexion ont au moins 5 s en plus de l'attente de la fin
+    // de session ; l'application attend la réponse à `fermer` 30 s.
+    assert!(DELAI_FERMETURE >= ATTENTE_APRES_DECONNEXION + Duration::from_secs(5));
+    assert!(DELAI_FERMETURE < Duration::from_secs(30));
 }

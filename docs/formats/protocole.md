@@ -97,7 +97,7 @@ Côté application, après l'envoi de `annuler`, chaque réponse est attendue au
 
 ## Fermeture du FD-9 qui ne rend pas la main : `deconnexion_bloquee`
 
-À l'essai réel E2, `FD9_Disconnect` est resté bloqué dans la DLL environ 5 minutes : la requête `fermer` n'a jamais eu de réponse. Le pont FD-9 surveille donc sa fermeture par un fil à part, qui n'appelle jamais la DLL. Si la fermeture (sortie de la feuille, déconnexion, attente de la fin de session, puis désinscription du rappel, comme MYIROtools) n'a pas rendu la main en 15 s (`DELAI_FERMETURE`), ce fil répond quand même à `fermer` :
+À l'essai réel E2, `FD9_Disconnect` est resté bloqué dans la DLL environ 5 minutes : la requête `fermer` n'a jamais eu de réponse. Le pont FD-9 surveille donc sa fermeture par un fil à part, qui n'appelle jamais la DLL. Si la fermeture (sortie de la feuille, déconnexion, attente de la fin de session, puis désinscription du rappel, comme MYIROtools) n'a pas rendu la main en 20 s (`DELAI_FERMETURE`, plus long que les 10 s d'attente de la fin de session), ce fil répond quand même à `fermer` :
 
 ```json
 {"rep": "fermeture_incertaine", "remise_au_repos": {"etat": "deconnexion_bloquee"}}
