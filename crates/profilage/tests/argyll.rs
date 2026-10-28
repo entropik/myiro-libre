@@ -82,6 +82,29 @@ fn calculer_avec_avancement(
     (profil, annonces)
 }
 
+/// colprof embarque les plages du `.ti3` reçu dans la balise `targ`, réécrites
+/// à sa façon (constaté le 28 octobre 2026 avec ArgyllCMS 3.5.0 : fins de
+/// ligne LF, `KEYWORD` retirés, cinq décimales), sans condition de mesure.
+/// La comparaison des profils les relit : mêmes plages, mêmes RVB, mêmes Lab.
+#[test]
+#[ignore = "demande ArgyllCMS 3.5.0"]
+fn colprof_embarque_les_plages_du_ti3() {
+    let description = "Essai targ 2026-10-28";
+    let profil = calculer(description, Recette::Rapide);
+    let ti3 = ecrire_ti3(&mire_synthetique(), description, "2026-10-23T09:00:00Z");
+    let lu = gamut::ProfilIcc::lire(&profil.icc).unwrap();
+    let targ = String::from_utf8_lossy(lu.mesures_embarquees().expect("balise targ")).into_owned();
+    println!("{targ}");
+    assert!(targ.starts_with("CTI3"));
+    let ecrit = cgats::lire_sans_condition(&ti3).unwrap();
+    let embarque = cgats::lire_sans_condition(&targ).unwrap();
+    assert_eq!(embarque.plages.len(), ecrit.plages.len());
+    for (e, a) in embarque.plages.iter().zip(&ecrit.plages) {
+        assert_eq!(e.rvb, a.rvb);
+        assert_eq!(e.lab, a.lab);
+    }
+}
+
 /// Description d'un profil ICC v2 (`desc`, textDescriptionType) : partie
 /// ASCII et partie Unicode.
 fn description_icc(icc: &[u8]) -> (String, String) {

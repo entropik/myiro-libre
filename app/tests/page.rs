@@ -1119,10 +1119,13 @@ fn pendant_une_action_sur_le_profil_les_boutons_disent_pourquoi() {
     let script = lire("interface/reglage.js");
     assert!(
         script.contains(
-            "const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-calcul-profil] button, [data-calcul-profil] input\";"
+            "const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-comparer-ouvrir], [data-comparer-actuel], [data-calcul-profil] button, [data-calcul-profil] input\";"
         ),
         "les boutons de la vue"
     );
+    // « Comparer à l'actuel » est dessiné après l'occupation : il naît inactif pendant une action.
+    assert!(script.contains("b.dataset.comparerActuel = \"\";"));
+    assert!(script.contains("b.disabled = enCours;"));
     assert!(script.contains("occupe.hidden = !enCours || calcul.raisonVisible();"));
     assert!(app::textes::cles().any(|c| c == "parc.en_cours"));
 }
@@ -1193,6 +1196,671 @@ fn la_section_du_calcul_est_construite_par_calcul_profil_js() {
     let section = page.find("data-calcul-profil hidden").expect("section");
     let commentaire = &page[page[..section].rfind("<!--").unwrap_or(0)..section];
     assert!(commentaire.contains("calcul-profil.js"), "{commentaire}");
+}
+
+// ---- Comparer des profils : couleurs de série, vue 3D et graphiques (ticket #71) ----
+
+/// Les quatre couleurs de série (bleu, orange, violet, gris : ni vert ni
+/// rouge, réservés aux verdicts) sont des jetons, définis dans le bloc du
+/// thème sombre et dans celui du thème clair.
+#[test]
+fn les_couleurs_de_serie_sont_des_jetons_des_deux_themes() {
+    let jetons = lire("../design-system/tokens.css");
+    let (sombre, clair) = jetons
+        .split_once(":root[data-theme=\"light\"]")
+        .expect("thème clair");
+    let sombre = &sombre[sombre
+        .find(":root[data-theme=\"dark\"]")
+        .expect("thème sombre")..];
+    let clair = &clair[..clair.find('}').unwrap()];
+    for (n, valeur_sombre, valeur_claire) in [
+        (1, "#4c9aff", "#1f6fe5"),
+        (2, "#f0773a", "#c4501a"),
+        (3, "#b48cff", "#7c4dd6"),
+        (4, "#c9d1dd", "#2f3642"),
+    ] {
+        let nom = format!("--serie-{n}:");
+        for (theme, bloc, valeur) in [
+            ("sombre", sombre, valeur_sombre),
+            ("clair", clair, valeur_claire),
+        ] {
+            let ligne = bloc
+                .lines()
+                .find(|l| l.contains(&nom))
+                .unwrap_or_else(|| panic!("{nom} absent du thème {theme}"));
+            assert!(ligne.contains(valeur), "{theme} : {ligne}");
+        }
+    }
+    // Une série ne prend jamais la couleur des axes (`--attenue`).
+    for (theme, bloc) in [("sombre", sombre), ("clair", clair)] {
+        let valeur = |nom: &str| {
+            bloc.lines()
+                .find(|l| l.trim_start().starts_with(nom))
+                .and_then(|l| l.split(':').nth(1))
+                .map(|v| v.trim().trim_end_matches(';').to_string())
+                .unwrap_or_default()
+        };
+        let attenue = valeur("--attenue:");
+        assert!(!attenue.is_empty(), "{theme} : --attenue absent");
+        for n in 1..=4 {
+            assert_ne!(
+                valeur(&format!("--serie-{n}:")),
+                attenue,
+                "{theme} : série {n}"
+            );
+        }
+    }
+    let readme = lire("../design-system/README.md");
+    assert!(
+        readme.contains("--serie-1"),
+        "README sans les couleurs de série"
+    );
+}
+
+/// Scripts de la page (`app/interface/*.js`), avec leur nom.
+fn scripts_de_la_page() -> Vec<(String, String)> {
+    let dossier = Path::new(env!("CARGO_MANIFEST_DIR")).join("interface");
+    let mut scripts: Vec<(String, String)> = std::fs::read_dir(dossier)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|nom| nom.ends_with(".js"))
+        .map(|nom| {
+            let texte = lire(&format!("interface/{nom}"));
+            (nom, texte)
+        })
+        .collect();
+    scripts.sort();
+    scripts
+}
+
+/// La vue 3D et les graphiques sont maison : aucun script ne vient d'un
+/// autre site, aucun module n'est chargé de loin.
+#[test]
+fn aucun_script_de_la_page_ne_vient_d_ailleurs() {
+    let page = lire("interface/index.html");
+    for (_, balise) in balises(&page) {
+        if let Some(src) = attribut(balise, "src") {
+            assert!(
+                !src.contains("http") && !src.starts_with("//"),
+                "script distant : {balise}"
+            );
+        }
+    }
+    let scripts = scripts_de_la_page();
+    for attendu in ["vue3d.js", "graphiques.js"] {
+        assert!(
+            scripts.iter().any(|(nom, _)| nom == attendu),
+            "{attendu} absent"
+        );
+    }
+    for (nom, texte) in &scripts {
+        for motif in [
+            "import(\"http",
+            "import('http",
+            "import(\"//",
+            "import('//",
+            "from \"http",
+            "from 'http",
+        ] {
+            assert!(!texte.contains(motif), "{nom} : {motif}");
+        }
+        let modules: Vec<&str> = texte.lines().filter(|l| l.contains("import(")).collect();
+        assert!(
+            modules.is_empty(),
+            "{nom} : chargement de module : {modules:?}"
+        );
+    }
+}
+
+/// La politique de sécurité de la page reste celle d'avant la comparaison :
+/// aucun script, style ni fonte d'ailleurs.
+#[test]
+fn la_csp_ne_change_pas() {
+    let conf: serde_json::Value = serde_json::from_str(&lire("tauri.conf.json")).unwrap();
+    assert_eq!(
+        conf["app"]["security"]["csp"],
+        "default-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; script-src 'self'; connect-src ipc: http://ipc.localhost"
+    );
+}
+
+/// La vue 3D se pilote au clavier : flèches pour tourner, `+` et `-` pour
+/// zoomer, `0` pour revenir à la vue de départ. Le canvas prend le focus et
+/// se présente comme une image décrite.
+#[test]
+fn la_vue_3d_se_pilote_au_clavier() {
+    let script = lire("interface/vue3d.js");
+    for touche in [
+        "ArrowLeft",
+        "ArrowRight",
+        "ArrowUp",
+        "ArrowDown",
+        "+",
+        "-",
+        "0",
+    ] {
+        assert!(
+            script.contains(&format!("case \"{touche}\":")),
+            "touche {touche} non traitée"
+        );
+    }
+    assert!(script.contains("addEventListener(\"keydown\""));
+    assert!(script.contains("canvas.tabIndex = 0;"));
+    assert!(script.contains("canvas.setAttribute(\"role\", \"img\");"));
+    assert!(script.contains("canvas.setAttribute(\"aria-label\""));
+}
+
+/// Un chiffre incalculable arrive en `null` dans le JSON (volume de la
+/// limite, valeur absente d'une série) : la vue 3D et les graphiques
+/// l'écrivent « inconnu », jamais « 0,00 », et ne plantent pas sur
+/// `null.toFixed`. Un seul formateur, `Graphiques.nombre`, écrit les chiffres,
+/// avec la virgule décimale de la langue.
+#[test]
+fn un_chiffre_inconnu_s_ecrit_inconnu() {
+    use app::textes::{texte, Langue};
+    let graphiques = lire("interface/graphiques.js");
+    let formateur = graphiques
+        .split("function nombre(valeur, decimales) {")
+        .nth(1)
+        .expect("formateur nombre absent");
+    let formateur = &formateur[..formateur.find("\n  }").unwrap_or(formateur.len())];
+    assert!(
+        formateur.contains(
+            "if (typeof valeur !== \"number\" || !Number.isFinite(valeur)) return t(\"comparer.inconnu\");"
+        ),
+        "{formateur}"
+    );
+    assert!(formateur.contains("Intl.NumberFormat"), "{formateur}");
+    assert!(graphiques.contains("window.Graphiques = "));
+    assert!(graphiques.contains("nombre,"), "formateur non partagé");
+    let vue3d = lire("interface/vue3d.js");
+    assert!(vue3d.contains("window.Graphiques.nombre(v, decimales)"));
+    for (nom, script) in [("graphiques.js", &graphiques), ("vue3d.js", &vue3d)] {
+        assert!(
+            !script.contains(".toFixed("),
+            "{nom} écrit un chiffre sans le formateur"
+        );
+        assert!(!script.contains("toLocaleString("), "{nom}");
+    }
+    // Une valeur absente d'une courbe la coupe, sans point inventé à zéro.
+    assert!(graphiques.contains("function connue(v)"));
+    assert_eq!(texte(Langue::Francais, "comparer.inconnu"), "inconnu");
+    assert_eq!(texte(Langue::Anglais, "comparer.inconnu"), "unknown");
+}
+
+/// Graphiques et vue 3D sont des composants du système graphique : chaque
+/// série prend son jeton par `data-serie`, avec un trait propre (plein,
+/// tirets, points, mixte) pour que la couleur ne parle pas seule ; axes,
+/// grille et textes en couleur atténuée ; la page d'exemple les montre.
+#[test]
+fn les_graphiques_sont_des_composants_du_systeme() {
+    let css = composants();
+    for n in 1..=4 {
+        let corps = regle(&css, &format!(".graphique [data-serie=\"{n}\"]")).join(";");
+        assert!(
+            corps.contains(&format!("--serie:var(--serie-{n})")),
+            "série {n} : {corps}"
+        );
+    }
+    for n in 2..=4 {
+        let corps = regle(&css, &format!(".graphique__trace[data-serie=\"{n}\"]")).join(";");
+        assert!(
+            corps.contains("stroke-dasharray:"),
+            "série {n} sans trait propre : {corps}"
+        );
+    }
+    let trace = regle(&css, ".graphique__trace").join(";");
+    assert!(
+        trace.contains("stroke:var(--serie)") && trace.contains("fill:none"),
+        "{trace}"
+    );
+    for (selecteur, attendu) in [
+        (".graphique__axe", "stroke:var(--attenue)"),
+        (".graphique__grille", "stroke:var(--filet)"),
+        (".graphique__texte", "fill:var(--attenue)"),
+        (".graphique__point", "fill:var(--serie"),
+    ] {
+        let corps = regle(&css, selecteur).join(";");
+        assert!(corps.contains(attendu), "{selecteur} : {corps}");
+    }
+    let vue = regle(&css, ".vue3d").join(";");
+    assert!(
+        vue.contains("aspect-ratio:") && vue.contains("width:100%"),
+        "{vue}"
+    );
+    assert!(regle(&css, ".vue3d:focus-visible")
+        .join(";")
+        .contains("outline:"));
+    let exemple = lire("../design-system/ui-kit.html");
+    assert!(
+        exemple.contains("class=\"graphique\""),
+        "graphique absent de ui-kit.html"
+    );
+    assert!(
+        exemple.contains("class=\"vue3d\""),
+        "vue 3D absente de ui-kit.html"
+    );
+}
+
+/// Chaque texte demandé par la vue 3D et les graphiques (`t("…")`) existe en
+/// français et en anglais.
+#[test]
+fn les_textes_de_la_vue_3d_et_des_graphiques_existent_en_deux_langues() {
+    use app::textes::{texte, Langue};
+    let script = lire("interface/vue3d.js") + &lire("interface/graphiques.js");
+    let demandees: Vec<&str> = script
+        .match_indices("t(\"")
+        .filter(|(i, _)| {
+            !script[..*i]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.')
+        })
+        .filter_map(|(i, _)| script[i + 3..].split('"').next())
+        .chain([
+            "comparer.graphique.chemin.l.aria",
+            "comparer.graphique.chemin.c.aria",
+        ])
+        .collect();
+    assert!(demandees.len() > 10, "clés lues : {demandees:?}");
+    let absentes: Vec<_> = demandees
+        .iter()
+        .filter(|c| {
+            [Langue::Francais, Langue::Anglais]
+                .iter()
+                .any(|l| texte(*l, c) == **c)
+        })
+        .collect();
+    assert!(absentes.is_empty(), "clés absentes : {absentes:?}");
+}
+
+/// La vue 3D trie, à chaque image, les triangles de toutes les formes par
+/// profondeur et les peint du plus loin au plus proche : sans ce tri, la
+/// transparence dessinait de fausses facettes (essai du 26 octobre 2026).
+/// Ombrage plat, opacité 0,35 en transparent ; les jetons de série sont lus
+/// dans la feuille de style et relus quand le thème change.
+#[test]
+fn la_vue_3d_trie_par_profondeur_et_suit_le_theme() {
+    let script = lire("interface/vue3d.js");
+    for attendu in [
+        "ordre.sort((u, v) => profondeurs[v] - profondeurs[u]);",
+        "const lumiere = 0.8 + 0.2 * Math.abs(",
+        "const OPACITE_TRANSPARENT = 0.35;",
+        "getComputedStyle(document.documentElement)",
+        "`--serie-${n}`",
+        "attributeFilter: [\"data-theme\"]",
+        "jetons = lireJetons();",
+        "document.addEventListener(\"langue-appliquee\", langue);",
+        "Vue3d = ",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+    // Le tri est fait dans dessiner(), donc à chaque image.
+    let dessiner = script
+        .split("function dessiner() {")
+        .nth(1)
+        .expect("dessiner absent");
+    let dessiner = &dessiner[..dessiner.find("\n    }").unwrap_or(dessiner.len())];
+    assert!(
+        dessiner.contains("dessinerTriangles(ctx, k);"),
+        "{dessiner}"
+    );
+    assert!(dessiner.contains("projeter(r);"), "{dessiner}");
+}
+
+/// Le chemin a deux graphiques (L* et C*) : chacun a son tableau « Valeurs »,
+/// et les plages mesurées du chemin s'y lisent aussi, pas seulement en
+/// points.
+#[test]
+fn chaque_graphique_du_chemin_a_ses_valeurs_avec_les_plages_mesurees() {
+    use app::textes::{texte, Langue};
+    let script = lire("interface/graphiques.js");
+    let chemin = script
+        .split("function chemin(svgL, svgC, series) {")
+        .nth(1)
+        .expect("chemin absent");
+    let chemin = &chemin[..chemin.find("\n  }").unwrap_or(chemin.len())];
+    assert_eq!(chemin.matches("valeurs(svg, ").count(), 1, "{chemin}");
+    assert!(chemin.contains("dessiner(svgL, 0,") && chemin.contains("dessiner(svgC, 1,"));
+    assert!(
+        chemin.contains("t(\"comparer.graphique.plage_mesuree\")"),
+        "{chemin}"
+    );
+    assert!(chemin.contains("s.mesures"), "{chemin}");
+    assert_eq!(
+        texte(Langue::Francais, "comparer.graphique.plage_mesuree"),
+        "{position} (plage mesurée)"
+    );
+    assert_eq!(
+        texte(Langue::Anglais, "comparer.graphique.plage_mesuree"),
+        "{position} (measured patch)"
+    );
+}
+
+/// Le glossaire dit « chroma », jamais « saturation » : les textes de la
+/// comparaison suivent.
+#[test]
+fn la_comparaison_dit_chroma() {
+    use app::textes::{cles, texte, Langue};
+    assert_eq!(
+        texte(Langue::Francais, "comparer.graphique.chroma"),
+        "Chroma C*"
+    );
+    let fautes: Vec<_> = cles()
+        .filter(|c| c.starts_with("comparer."))
+        .filter(|c| {
+            texte(Langue::Francais, c)
+                .to_lowercase()
+                .contains("saturation")
+        })
+        .collect();
+    assert!(fautes.is_empty(), "{fautes:?}");
+    assert!(!lire("../design-system/ui-kit.html").contains("saturation par teinte"));
+}
+
+/// La vue 3D lit ses tailles (corps du texte, marges et hauteur de la bulle)
+/// dans les jetons, comme ses couleurs : aucune taille en dur.
+#[test]
+fn la_vue_3d_lit_ses_tailles_dans_les_jetons() {
+    let script = lire("interface/vue3d.js");
+    for jeton in [
+        "\"--text-xs\"",
+        "\"--space-1\"",
+        "\"--space-2\"",
+        "\"--space-5\"",
+    ] {
+        assert!(script.contains(&format!("taille({jeton})")), "{jeton}");
+    }
+    for en_dur in [
+        "Math.round(11",
+        "const marge = 6",
+        "const hauteur = 20",
+        "+ 4,",
+        "- 4)",
+    ] {
+        assert!(!script.contains(en_dur), "{en_dur}");
+    }
+}
+
+/// Les textes de remplacement des exemples suivent la typographie française
+/// (espace fine insécable avant le deux-points).
+#[test]
+fn les_exemples_du_systeme_ont_l_espace_fine_avant_les_deux_points() {
+    let exemple = lire("../design-system/ui-kit.html");
+    let fautes: Vec<_> = exemple
+        .split("aria-label=\"")
+        .skip(1)
+        .filter_map(|r| r.split('"').next())
+        .filter(|v| v.contains(" :") || v.contains(" ;"))
+        .collect();
+    assert!(fautes.is_empty(), "{fautes:?}");
+}
+
+// ---- Comparer des profils : la vue « Comparer » (ticket #71) ----
+
+/// comparer.js se sert de la vue 3D et des graphiques, et reglage.js de
+/// comparer.js : ordre app.js < vue3d.js, graphiques.js < comparer.js <
+/// reglage.js.
+#[test]
+fn comparer_js_est_charge_apres_ses_outils() {
+    let page = lire("interface/index.html");
+    let position = |nom: &str| {
+        page.find(&format!("<script src=\"{nom}\" defer>"))
+            .unwrap_or_else(|| panic!("{nom} non chargé"))
+    };
+    let comparer = position("comparer.js");
+    assert!(position("app.js") < position("vue3d.js"));
+    assert!(position("app.js") < position("graphiques.js"));
+    assert!(position("vue3d.js") < comparer && position("graphiques.js") < comparer);
+    assert!(
+        comparer < position("reglage.js"),
+        "comparer.js après reglage.js"
+    );
+}
+
+/// La vue « Comparer » a un seul bouton principal, « Ajouter un profil ».
+/// Inactif tant que la liste des profils n'est pas lue (puis à quatre
+/// profils), il dit pourquoi juste à côté : le test de tous les boutons
+/// principaux inactifs le voit.
+#[test]
+fn la_vue_comparer_a_un_seul_bouton_principal() {
+    let page = lire("interface/index.html");
+    let vue = element(&page, "data-vue-comparer");
+    assert_eq!(vue.matches("btn--primary").count(), 1, "{vue}");
+    let principal = vue
+        .split('<')
+        .find(|b| b.contains("btn--primary"))
+        .and_then(|b| b.split('>').next())
+        .unwrap_or_default();
+    assert!(principal.contains("data-comparer-ajouter"), "{principal}");
+    assert!(
+        principal.contains("data-t=\"comparer.ajouter\""),
+        "{principal}"
+    );
+    assert!(
+        principal.split_whitespace().any(|a| a == "disabled"),
+        "{principal}"
+    );
+    let apres = &vue[vue.find("data-comparer-ajouter").unwrap()..];
+    let raison = apres
+        .split('<')
+        .find(|b| b.starts_with("p class=\"why\""))
+        .unwrap_or_default();
+    assert!(raison.contains("data-comparer-ajouter-raison"), "{raison}");
+    // La vue est dans la bibliothèque, à la place de la vue d'une résolution.
+    let bibliotheque = element(&page, "data-vue=\"bibliotheque\"");
+    assert!(bibliotheque.contains("data-vue-comparer"));
+    let droite = element(&page, "data-zone=\"droite\"");
+    assert!(
+        droite.contains("data-details-comparer"),
+        "provenance à droite"
+    );
+}
+
+/// La vue d'une résolution ouvre la comparaison : « Comparer » avec le
+/// profil actuel, et, dans l'historique, « Comparer à l'actuel » ouvre
+/// l'avant / après, l'actuel en référence (premier profil).
+#[test]
+fn la_vue_d_une_resolution_ouvre_la_comparaison() {
+    let page = lire("interface/index.html");
+    let vue = element(&page, "data-vue-reglage");
+    let bouton = vue
+        .split('<')
+        .find(|b| b.contains("data-comparer-ouvrir"))
+        .and_then(|b| b.split('>').next())
+        .expect("bouton « Comparer »");
+    assert!(bouton.starts_with("button class=\"btn\""), "{bouton}");
+    assert!(bouton.contains("data-t=\"comparer.ouvrir\""), "{bouton}");
+    let script = lire("interface/reglage.js");
+    assert!(script.contains("const comparer = window.Comparer;"));
+    assert!(
+        script.contains("comparer.ouvrir([source(d.actif.id)]);"),
+        "« Comparer » avec le profil actuel"
+    );
+    assert!(
+        script.contains("comparer.ouvrir([source(d.actif.id), source(p.id)]);"),
+        "« Comparer à l'actuel », l'actuel en référence"
+    );
+    assert!(script.contains("t(\"comparer.ouvrir.actuel\")"));
+}
+
+/// Chaque clé `comparer.` citée par la vue « Comparer » (comparer.js et ses
+/// morceaux comparer-ecarts.js et comparer-details.js, reglage.js, index.html) existe en français et en anglais ; un début de
+/// clé complété à l'écran (`"comparer.primaire." + nom`) existe pour chaque
+/// couleur de base.
+#[test]
+fn les_textes_de_la_vue_comparer_existent_dans_les_deux_langues() {
+    use app::textes::{texte, Langue};
+    let mut script = lire("interface/comparer.js")
+        + &lire("interface/reglage.js")
+        + &lire("interface/index.html");
+    for morceau in ["comparer-ecarts.js", "comparer-details.js"] {
+        script += &lire(&format!("interface/{morceau}"));
+    }
+    let mut demandees: Vec<String> = script
+        .match_indices("\"comparer.")
+        .filter_map(|(i, _)| script[i + 1..].split('"').next())
+        // `<script src="comparer.js">` n'est pas une clé.
+        .filter(|c| !c.ends_with(".js"))
+        .map(String::from)
+        .collect();
+    assert!(demandees.len() > 30, "clés lues : {demandees:?}");
+    assert!(demandees.iter().any(|c| c == "comparer.primaire."));
+    let prefixes: Vec<String> = demandees
+        .iter()
+        .filter(|c| c.ends_with('.'))
+        .cloned()
+        .collect();
+    demandees.retain(|c| !c.ends_with('.'));
+    for prefixe in prefixes {
+        if prefixe == "comparer.primaire." {
+            for nom in [
+                "blanc", "noir", "rouge", "vert", "bleu", "cyan", "magenta", "jaune",
+            ] {
+                demandees.push(format!("{prefixe}{nom}"));
+            }
+        } else {
+            assert!(
+                app::textes::cles().any(|k| k.starts_with(prefixe.as_str())),
+                "début de clé sans texte : {prefixe}"
+            );
+        }
+    }
+    let absentes: Vec<_> = demandees
+        .iter()
+        .filter(|c| {
+            [Langue::Francais, Langue::Anglais]
+                .iter()
+                .any(|l| texte(*l, c) == c.as_str())
+        })
+        .collect();
+    assert!(absentes.is_empty(), "clés absentes : {absentes:?}");
+    // La limite de la fidélité, dite en ces mots (plan, tâche 7).
+    assert_eq!(
+        texte(Langue::Francais, "comparer.methode.fidelite"),
+        "La fidélité se mesure sur les plages qui ont servi au calcul\u{202f}: elle avantage le profil qui les suit au plus près. Pour savoir lequel prédit le mieux un nouveau tirage, il faut mesurer une mire de contrôle (vérification, prévue)."
+    );
+}
+
+/// Une valeur à peine négative, arrondie à zéro (a* d'un blanc), s'écrit
+/// « 0,00 », jamais « -0,00 » : le signe n'est écrit que pour un nombre
+/// négatif une fois arrondi.
+#[test]
+fn un_zero_arrondi_s_ecrit_sans_signe() {
+    let graphiques = lire("interface/graphiques.js");
+    let formateur = graphiques
+        .split("function nombre(valeur, decimales) {")
+        .nth(1)
+        .expect("formateur nombre absent");
+    let formateur = &formateur[..formateur.find("\n  }").unwrap_or(formateur.len())];
+    assert!(
+        formateur.contains("signDisplay: \"negative\""),
+        "{formateur}"
+    );
+}
+
+/// « Comparaison en cours » ne reste jamais affiché sur une vue vide : le
+/// dernier profil retiré pendant une analyse, ou la comparaison fermée, le
+/// masquent. Une réponse périmée ne le touche pas : la demande plus récente
+/// le tient.
+#[test]
+fn la_comparaison_en_cours_ne_reste_pas_sur_une_vue_vide() {
+    let script = lire("interface/comparer.js");
+    assert!(
+        script.contains("if (!choisis.length) { enCours.hidden = true; dessiner(); return; }"),
+        "dernier profil retiré"
+    );
+    let fermer = script
+        .split("function fermer() {")
+        .nth(1)
+        .expect("fermer absent");
+    let fermer = &fermer[..fermer.find("\n  }").unwrap_or(fermer.len())];
+    assert!(fermer.contains("enCours.hidden = true;"), "{fermer}");
+}
+
+/// Les axes a* et b* sont posés au plancher L* = 0 (plan de base), et l'axe
+/// L* part de ce plancher : ils se coupent en (0, 0, 0). Le centre de
+/// rotation reste au milieu du gamut (L* 50). Remarque du mainteneur à
+/// l'essai d'écran du 28 octobre 2026 : « les axes ne sont pas à 0 ? ».
+#[test]
+fn les_axes_de_la_vue_3d_partent_du_plancher_l_0() {
+    let script = lire("interface/vue3d.js");
+    for attendu in [
+        "{ nom: \"L*\", de: [0, 0, 0], a: [100, 0, 0], pas: (v) => [v, 0, 0], debut: 0, fin: 100 },",
+        "{ nom: \"a*\", de: [0, -120, 0], a: [0, 120, 0], pas: (v) => [0, v, 0], debut: -100, fin: 100 },",
+        "{ nom: \"b*\", de: [0, 0, -120], a: [0, 0, 120], pas: (v) => [0, 0, v], debut: -100, fin: 100 },",
+        "const [x, y, z] = [s[1], s[0] - 50, s[2]];",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+}
+
+/// En « couleurs réelles », un seul profil est habillé de ses couleurs : le
+/// premier affiché, la référence. Les autres sont dessinés en fil de fer,
+/// arêtes dans leur couleur de série, sans faces pleines, pour qu'on les
+/// distingue (essai d'écran du 28 octobre 2026 : « j'ai du mal à distinguer
+/// visuellement les deux »). En « couleur par profil », rien ne change.
+/// L'aide de l'option le dit.
+#[test]
+fn en_couleurs_reelles_seule_la_reference_est_pleine() {
+    use app::textes::{texte, Langue};
+    let script = lire("interface/vue3d.js");
+    assert!(script.contains("const filaire = reglages.couleur === \"reelle\" && liste[j * 2] > 0;"));
+    let filaire = script
+        .split("if (filaire) {")
+        .nth(1)
+        .expect("branche filaire absente");
+    let filaire = &filaire[..filaire.find('}').unwrap_or(filaire.len())];
+    assert!(filaire.contains("jetons.series[f.serie - 1]"), "{filaire}");
+    assert!(filaire.contains("ctx.stroke();"), "{filaire}");
+    assert!(!filaire.contains("ctx.fill();"), "{filaire}");
+    let comparer = lire("interface/comparer.js");
+    assert!(comparer.contains("t(\"comparer.volume.couleur.aide\")"));
+    assert!(texte(Langue::Francais, "comparer.volume.couleur.aide").contains("fil de fer"));
+    assert!(texte(Langue::Anglais, "comparer.volume.couleur.aide").contains("wireframe"));
+}
+
+/// Une ligne par profil dans les légendes des graphiques : le trait d'un
+/// profil ne chevauche jamais le nom du précédent (essai d'écran du
+/// 28 octobre 2026 : « mettre à la ligne les profils »). Un nom trop long
+/// finit par des points, entier au survol. La vue 3D n'a pas de légende
+/// dessinée : ses profils sont nommés par les cases « Profils affichés ».
+#[test]
+fn les_legendes_ont_une_ligne_par_profil() {
+    let script = lire("interface/graphiques.js");
+    let legende = script
+        .split("function legende(svg, series, y, avecMesures) {")
+        .nth(1)
+        .expect("legende absente");
+    let legende = &legende[..legende.find("\n  }").unwrap_or(legende.len())];
+    assert!(
+        legende.contains("const ligne = y + i * LIGNE_LEGENDE;"),
+        "{legende}"
+    );
+    assert!(legende.contains("const x = MARGE.gauche;"), "{legende}");
+    assert!(legende.contains("noeud(\"title\", {}, e.nom)"), "{legende}");
+    assert!(legende.contains("NOM_MAX"), "{legende}");
+    assert!(
+        !script.contains("/ 2) * LIGNE_LEGENDE"),
+        "légende sur deux colonnes"
+    );
+    assert!(!lire("interface/vue3d.js").contains("legende"));
+}
+
+/// Glisser la souris vers le haut, ou appuyer sur la flèche haut, montre le
+/// dessus du gamut (L* 100 qui vient vers l'observateur) ; vers le bas, le
+/// dessous. Remarque du mainteneur à l'essai d'écran du 28 octobre 2026 :
+/// « voir le dessus ».
+#[test]
+fn glisser_vers_le_haut_montre_le_dessus() {
+    let script = lire("interface/vue3d.js");
+    // Tangage positif : le haut vient vers l'observateur.
+    assert!(script.contains("const p = (-vue.tangage * Math.PI) / 180;"));
+    // Vers le haut, l'écran donne un y qui diminue : le tangage augmente.
+    assert!(script
+        .contains("tourne(((p.x - glisser.x) / ratio) * 0.5, ((glisser.y - p.y) / ratio) * 0.5);"));
+    assert!(script.contains("case \"ArrowUp\": tourne(0, PAS_ANGLE); break;"));
+    assert!(script.contains("case \"ArrowDown\": tourne(0, -PAS_ANGLE); break;"));
 }
 
 // ---- Contrôle de cohérence des mesures (ticket #1) ----

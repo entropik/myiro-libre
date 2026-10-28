@@ -54,6 +54,7 @@ dependencies = [
  "bibliotheque",
  "cgats",
  "colorimetrie",
+ "gamut",
  "pont-protocole",
  "profilage",
  "serde",
@@ -967,6 +968,15 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "slab",
+]
+
+[[package]]
+name = "gamut"
+version = "0.1.0"
+dependencies = [
+ "bibliotheque",
+ "colorimetrie",
+ "serde",
 ]
 
 [[package]]
@@ -2514,6 +2524,7 @@ dependencies = [
  "bibliotheque",
  "cgats",
  "colorimetrie",
+ "gamut",
  "pont-protocole",
  "serde",
  "serde_json",

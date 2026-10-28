@@ -1,0 +1,14 @@
+[package]
+name = "gamut"
+version = "0.1.0"
+description = "Gamut des profils ICC RVB : table A2B1 en colorimétrie absolue, volume, chroma par teinte, couleurs de base (ADR 0004)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+colorimetrie = { path = "../colorimetrie" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+bibliotheque = { path = "../bibliotheque" }

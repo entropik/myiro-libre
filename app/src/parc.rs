@@ -145,7 +145,7 @@ pub fn instant_utc(instant: SystemTime) -> String {
 }
 
 /// Lit un fichier choisi comme profil, borné à [`TAILLE_MAX_PROFIL`].
-fn lire_profil(fichier: &Path) -> Result<Vec<u8>, String> {
+pub(crate) fn lire_profil(fichier: &Path) -> Result<Vec<u8>, String> {
     let illisible = |e: std::io::Error| {
         eprintln!("{} : {e}", fichier.display());
         "parc.erreur.fichier_illisible".to_string()

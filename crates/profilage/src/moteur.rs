@@ -85,6 +85,8 @@ pub enum Etape {
     Profil,
     /// Contrôle du profil contre les mesures (`profcheck`).
     Controle,
+    /// Limite du gamut d'un profil (`iccgamut`, comparaison des profils).
+    Gamut,
 }
 
 /// Pourquoi le moteur n'a pas rendu de profil.
@@ -94,6 +96,9 @@ pub enum ErreurMoteur {
     Introuvable,
     /// ArgyllCMS est là, mais pas en version [`VERSION_ARGYLL`].
     VersionNonValidee { trouvee: String },
+    /// ArgyllCMS est là, mais il lui manque cet outil (par exemple
+    /// `iccgamut`, pour la limite du gamut).
+    OutilManquant { outil: String },
     /// Un outil a échoué ; `cause` est la dernière ligne non vide de sa
     /// sortie d'erreur.
     Echec { etape: Etape, cause: String },
@@ -114,6 +119,7 @@ impl ErreurMoteur {
         match self {
             ErreurMoteur::Introuvable => "profil.erreur.argyll_introuvable",
             ErreurMoteur::VersionNonValidee { .. } => "profil.erreur.argyll_version",
+            ErreurMoteur::OutilManquant { .. } => "profil.erreur.outil_manquant",
             ErreurMoteur::Echec {
                 etape: Etape::Version,
                 ..
@@ -126,6 +132,10 @@ impl ErreurMoteur {
                 etape: Etape::Controle,
                 ..
             } => "profil.erreur.controle",
+            ErreurMoteur::Echec {
+                etape: Etape::Gamut,
+                ..
+            } => "comparer.erreur.limite",
             ErreurMoteur::Fichier(_) => "profil.erreur.fichier",
             ErreurMoteur::RecetteEnReglage => "profil.erreur.recette_en_reglage",
             ErreurMoteur::Interrompu { .. } => "profil.erreur.interrompu",
@@ -141,6 +151,9 @@ impl fmt::Display for ErreurMoteur {
                 f,
                 "ArgyllCMS est en version {trouvee}, seule la version {VERSION_ARGYLL} est validée"
             ),
+            ErreurMoteur::OutilManquant { outil } => {
+                write!(f, "l'outil {outil} d'ArgyllCMS manque")
+            }
             ErreurMoteur::Echec { etape, cause } => {
                 write!(f, "échec à l'étape {} : {cause}", nom_etape(*etape))
             }
@@ -164,6 +177,7 @@ fn nom_etape(etape: Etape) -> &'static str {
         Etape::Version => "lecture de la version",
         Etape::Profil => "calcul du profil",
         Etape::Controle => "contrôle du profil",
+        Etape::Gamut => "calcul de la limite du gamut",
     }
 }
 

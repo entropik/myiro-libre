@@ -14,5 +14,6 @@ serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 bibliotheque = { path = "../bibliotheque" }
+gamut = { path = "../gamut" }
 serde_json = "1"
 tempfile = "3"

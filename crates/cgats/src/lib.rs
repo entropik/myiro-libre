@@ -20,7 +20,7 @@ use std::fmt;
 use pont_protocole::{ConditionMesure, Echantillonnage, Info, Lab, Provenance, Spectre};
 
 pub use ecriture::ecrire;
-pub use lecture::lire;
+pub use lecture::{lire, lire_sans_condition};
 
 /// Version du CGATS écrit par myiro-libre (mot-clé `MYIRO_LIBRE_FORMAT`).
 pub const FORMAT_CGATS: &str = "myiro-libre/cgats/1";
@@ -36,6 +36,14 @@ impl fmt::Display for ErreurCgats {
 }
 
 impl std::error::Error for ErreurCgats {}
+
+impl ErreurCgats {
+    /// Le fichier est refusé parce que l'échelle de ses colonnes
+    /// `SPECTRAL_NM_` ne se décide pas (maximum entre 1,5 et 2).
+    pub fn echelle_spectre_indecidable(&self) -> bool {
+        self.0.starts_with(lecture::ECHELLE_INDECIDABLE)
+    }
+}
 
 pub(crate) fn erreur<T>(detail: impl Into<String>) -> Result<T, ErreurCgats> {
     Err(ErreurCgats(detail.into()))

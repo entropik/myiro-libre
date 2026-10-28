@@ -229,6 +229,55 @@ impl EchelleRvb {
     }
 }
 
+/// Colonnes de spectre `SPECTRAL_NM_380`… (nom CGATS.17, celui des exports
+/// MYIROtools), en minuscules.
+const SPECTRAL_NM: &str = "spectral_nm_";
+/// Échelle de ces colonnes, **décidée** par myiro-libre sur le maximum de
+/// toutes leurs valeurs dans le fichier (le fichier ne la dit pas) : au plus
+/// 1,5, réflectance de 0 à 1 ; au moins 2, pourcentage ; entre les deux,
+/// refusé (`docs/formats/cgats.md`).
+const REFLECTANCE_MAX: f64 = 1.5;
+const POURCENTAGE_MIN: f64 = 2.0;
+/// Début du message de refus d'une échelle indécidable, reconnu par
+/// [`ErreurCgats::echelle_spectre_indecidable`].
+pub(crate) const ECHELLE_INDECIDABLE: &str = "échelle des colonnes SPECTRAL_NM_ indécidable";
+
+fn colonne_spectral_nm(champ: &str) -> Option<u32> {
+    champ
+        .to_ascii_lowercase()
+        .strip_prefix(SPECTRAL_NM)
+        .and_then(|l| l.parse().ok())
+}
+
+/// Les colonnes `SPECTRAL_NM_` du fichier sont-elles en pourcentage ?
+/// Décidé sur le maximum de toutes leurs valeurs lisibles, tous tableaux
+/// confondus ; une valeur illisible est refusée plus loin, à la lecture.
+fn spectral_nm_en_pourcentage(tableaux: &[Tableau]) -> Result<bool, ErreurCgats> {
+    let mut maximum = f64::NEG_INFINITY;
+    for t in tableaux {
+        let colonnes: Vec<usize> = (0..t.champs.len())
+            .filter(|&i| colonne_spectral_nm(&t.champs[i]).is_some())
+            .collect();
+        for ligne in t.lignes() {
+            for &c in &colonnes {
+                if let Some(v) = ligne[c].parse::<f64>().ok().filter(|v| v.is_finite()) {
+                    maximum = maximum.max(v);
+                }
+            }
+        }
+    }
+    if maximum <= REFLECTANCE_MAX {
+        Ok(false)
+    } else if maximum >= POURCENTAGE_MIN {
+        Ok(true)
+    } else {
+        erreur(format!(
+            "{ECHELLE_INDECIDABLE} : valeur maximale {maximum}, entre {REFLECTANCE_MAX} \
+             (réflectance de 0 à 1) et {POURCENTAGE_MIN} (pourcentage) ; rien n'est deviné"
+        ))
+    }
+}
+
 /// Pourcentage ramené à une réflectance de 0 à 1. Calculé en f64 : une valeur
 /// écrite par [`crate::ecrire`] (f32 × 100, en f64) se relit à l'identique.
 fn pourcent(texte: &str, quoi: &str) -> Result<f32, ErreurCgats> {
@@ -254,7 +303,14 @@ struct Lu {
 
 /// Emplacement et condition d'un tableau, sans rien deviner : mot-clé de
 /// myiro-libre, condition ISO 13655 écrite, ou source lumineuse du fabricant.
-fn emplacement(t: &Tableau, rang: usize) -> Result<(usize, Info<ConditionMesure>), ErreurCgats> {
+///
+/// Sans condition écrite, le tableau est refusé si `condition_exigee` ; sinon
+/// il prend l'emplacement `m0` avec une condition inconnue.
+fn emplacement(
+    t: &Tableau,
+    rang: usize,
+    condition_exigee: bool,
+) -> Result<(usize, Info<ConditionMesure>), ErreurCgats> {
     let ecrite = match t.mot_cle("MEASUREMENT_CONDITION") {
         Some(c) => Some(condition_depuis(c).ok_or_else(|| {
             ErreurCgats(format!(
@@ -294,14 +350,20 @@ fn emplacement(t: &Tableau, rang: usize) -> Result<(usize, Info<ConditionMesure>
     };
     match deduite {
         Some(c) => Ok((c as usize, Info::Supposee(c))),
+        None if !condition_exigee => Ok((0, Info::Inconnue)),
         None => erreur(format!(
             "tableau {rang} : condition de mesure introuvable (ni MEASUREMENT_CONDITION, ni MEASUREMENT_SOURCE M0, M1, M2, A, D50 ou UVCUT) ; rien n'est deviné"
         )),
     }
 }
 
-fn lire_tableau(t: &Tableau, rang: usize) -> Result<Lu, ErreurCgats> {
-    let (emplacement, condition) = emplacement(t, rang)?;
+fn lire_tableau(
+    t: &Tableau,
+    rang: usize,
+    condition_exigee: bool,
+    spectral_nm_pourcentage: bool,
+) -> Result<Lu, ErreurCgats> {
+    let (emplacement, condition) = emplacement(t, rang, condition_exigee)?;
     let colonne = |nom: &str| t.champs.iter().position(|c| c.eq_ignore_ascii_case(nom));
     let id = colonne("SAMPLE_ID");
     let lab = [colonne("LAB_L"), colonne("LAB_A"), colonne("LAB_B")];
@@ -313,10 +375,12 @@ fn lire_tableau(t: &Tableau, rang: usize) -> Result<Lu, ErreurCgats> {
 
     // Colonnes de spectre, chacune avec son échelle, jamais devinée :
     // `nm380` du fabricant (réflectance de 0 à 1), `SPEC_380` d'ArgyllCMS
-    // (pourcentage), `MYIRO_LIBRE_SPECTRE_1` de myiro-libre quand les
-    // longueurs d'onde sont inconnues (pourcentage).
+    // (pourcentage), `SPECTRAL_NM_380` de CGATS.17 (échelle décidée sur le
+    // fichier), `MYIRO_LIBRE_SPECTRE_1` de myiro-libre quand les longueurs
+    // d'onde sont inconnues (pourcentage).
     let mut nm: Vec<(u32, usize)> = Vec::new();
     let mut spec: Vec<(u32, usize)> = Vec::new();
+    let mut spectral: Vec<(u32, usize)> = Vec::new();
     let mut rangs: Vec<(u32, usize)> = Vec::new();
     for (i, champ) in t.champs.iter().enumerate() {
         let minuscule = champ.to_ascii_lowercase();
@@ -324,6 +388,8 @@ fn lire_tableau(t: &Tableau, rang: usize) -> Result<Lu, ErreurCgats> {
             nm.push((l, i));
         } else if let Some(l) = minuscule.strip_prefix("spec_").and_then(|l| l.parse().ok()) {
             spec.push((l, i));
+        } else if let Some(l) = colonne_spectral_nm(champ) {
+            spectral.push((l, i));
         } else if let Some(r) = champ
             .strip_prefix(&format!("{PREFIXE}SPECTRE_"))
             .and_then(|r| r.parse().ok())
@@ -331,14 +397,24 @@ fn lire_tableau(t: &Tableau, rang: usize) -> Result<Lu, ErreurCgats> {
             rangs.push((r, i));
         }
     }
-    let sortes = [!nm.is_empty(), !spec.is_empty(), !rangs.is_empty()];
+    let sortes = [
+        !nm.is_empty(),
+        !spec.is_empty(),
+        !spectral.is_empty(),
+        !rangs.is_empty(),
+    ];
     if sortes.iter().filter(|s| **s).count() > 1 {
         return erreur(format!(
             "tableau {rang} : deux sortes de colonnes de spectre"
         ));
     }
-    let pourcentage = nm.is_empty();
-    let nm = if nm.is_empty() { spec } else { nm };
+    let (nm, pourcentage) = if !nm.is_empty() {
+        (nm, false)
+    } else if !spectral.is_empty() {
+        (spectral, spectral_nm_pourcentage)
+    } else {
+        (spec, true)
+    };
     let (longueurs_onde, colonnes_spectre) = if !nm.is_empty() {
         let mut nm = nm;
         nm.sort();
@@ -450,6 +526,19 @@ fn declare(t: &Tableau, nom: &str) -> Info<String> {
 /// introuvable, tableaux qui ne portent pas les mêmes plages, fichier de
 /// myiro-libre d'une autre version ou à la provenance incomplète.
 pub fn lire(texte: &str) -> Result<MesureImportee, ErreurCgats> {
+    lire_avec(texte, true)
+}
+
+/// Comme [`lire`], mais un tableau sans condition de mesure écrite est lu
+/// quand même : ses plages vont dans l'emplacement `m0`, sous une condition
+/// **inconnue**. C'est le cas des mesures qu'ArgyllCMS embarque dans un profil
+/// (balise `targ`) : RVB et Lab suffisent pour juger le profil. À l'import
+/// dans la bibliothèque, c'est [`lire`] qui sert : la condition y est exigée.
+pub fn lire_sans_condition(texte: &str) -> Result<MesureImportee, ErreurCgats> {
+    lire_avec(texte, false)
+}
+
+fn lire_avec(texte: &str, condition_exigee: bool) -> Result<MesureImportee, ErreurCgats> {
     let tableaux = tableaux(texte)?;
     let premier = &tableaux[0];
     let mots_cles: HashMap<String, String> = premier.mots_cles.iter().cloned().collect();
@@ -468,8 +557,9 @@ pub fn lire(texte: &str) -> Result<MesureImportee, ErreurCgats> {
     let mut plages: Vec<PlageImportee> = Vec::new();
     let mut vus = [false; 3];
     let mut rvb: Vec<Option<[f64; 3]>> = Vec::new();
+    let spectral_nm_pourcentage = spectral_nm_en_pourcentage(&tableaux)?;
     for (i, t) in tableaux.iter().enumerate() {
-        let lu = lire_tableau(t, i + 1)?;
+        let lu = lire_tableau(t, i + 1, condition_exigee, spectral_nm_pourcentage)?;
         let e = lu.emplacement;
         if std::mem::replace(&mut vus[e], true) {
             return erreur(format!(
