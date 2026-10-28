@@ -1373,3 +1373,21 @@ fn une_seule_autre_plage_se_dit_au_singulier() {
     let script = lire("interface/calcul-profil.js");
     assert!(script.contains("c.autres === 1 ? t(\"profil.coherence.autre\")"));
 }
+
+/// Une saisie illisible de l'avancé (« abc ») est refusée sur place, avec sa
+/// raison sous le champ : rien n'est demandé au module `mires`, et elle ne
+/// revient jamais en silence à la valeur par défaut.
+#[test]
+fn une_saisie_illisible_de_la_mire_est_refusee_sur_place() {
+    let script = lire("interface/mire.js");
+    for attendu in [
+        "\"mire.saisie.nombre\"",
+        "\"mire.saisie.entier\"",
+        "if (saisieRefusee()) return;",
+        "input--error",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+    // Le côté minimal vient du module Rust, jamais d'un nombre écrit dans la page.
+    assert!(!script.contains("apercu.limites_cote[0] : 7"));
+}

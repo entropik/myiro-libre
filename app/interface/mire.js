@@ -46,6 +46,16 @@ window.PreparerMire = (() => {
     const v = String(texte).trim().replace(",", ".");
     return v === "" ? null : Number(v);
   };
+  // Clé de la raison qui refuse une saisie de l'avancé, ou "" : une saisie illisible (« abc »)
+  // n'est jamais remplacée en silence par la valeur par défaut.
+  function erreurSaisie(texte, entier) {
+    const v = lireNombre(texte);
+    if (v === null) return "";
+    if (!Number.isFinite(v)) return entier ? "mire.saisie.entier" : "mire.saisie.nombre";
+    return entier && !Number.isInteger(v) ? "mire.saisie.entier" : "";
+  }
+  const saisieRefusee = () => (choix.instrument === "myiro1"
+    ? erreurSaisie(choix.cote, false) || erreurSaisie(choix.nombre, true) : "");
   const nombreLocal = (v) => new Intl.NumberFormat(document.documentElement.lang).format(v);
   const pages = (n) => (n === 1 ? t("mire.pages.une") : t("mire.pages.plusieurs").replace("{n}", () => String(n)));
 
@@ -104,14 +114,17 @@ window.PreparerMire = (() => {
     return p;
   }
 
-  // Vide, une saisie montre en grisé la valeur retenue.
-  function saisie(valeur, retenue, modifier) {
-    const i = el("input", "input");
+  // Vide, une saisie montre en grisé la valeur retenue ; illisible, elle est marquée et sa
+  // raison est dite juste dessous.
+  function saisie(valeur, retenue, erreur, modifier) {
+    const i = el("input", erreur ? "input input--error" : "input");
     i.inputMode = "decimal";
     i.value = valeur;
     if (retenue !== null) i.placeholder = nombreLocal(retenue);
     i.addEventListener("change", () => changer(() => modifier(i.value)));
-    return i;
+    const raison = el("p", "why", erreur ? t(erreur) : "");
+    raison.hidden = !erreur;
+    return [i, raison];
   }
 
   // Avancé, replié : côté et nombre libre, avec leurs limites, et la commande équivalente.
@@ -124,10 +137,14 @@ window.PreparerMire = (() => {
       ? t("mire.avance.resume").replace("{cote}", () => nombreLocal(apercu.cote_mm))
         .replace("{plages}", () => nombreLocal(apercu.plages))
       : "";
-    const limites = apercu ? apercu.limites_cote[0] : 7;
-    const cote = champ("mire.cote", saisie(choix.cote, apercu ? apercu.cote_mm : null, (v) => { choix.cote = v; }),
-      el("p", "", t("mire.cote.limites").replace("{min}", () => nombreLocal(limites))));
-    const nombre = champ("mire.nombre", saisie(choix.nombre, apercu ? apercu.plages : null, (v) => { choix.nombre = v; }),
+    // Le côté minimal vient du module `mires` (aperçu), jamais d'un nombre écrit ici.
+    const limites = apercu
+      ? t("mire.cote.limites").replace("{min}", () => nombreLocal(apercu.limites_cote[0])) : "";
+    const cote = champ("mire.cote",
+      ...saisie(choix.cote, apercu ? apercu.cote_mm : null, erreurSaisie(choix.cote, false), (v) => { choix.cote = v; }),
+      el("p", "", limites));
+    const nombre = champ("mire.nombre",
+      ...saisie(choix.nombre, apercu ? apercu.plages : null, erreurSaisie(choix.nombre, true), (v) => { choix.nombre = v; }),
       el("p", "", t("mire.nombre.limites")));
     const commande = champ("mire.commande", el("pre", "", apercu ? apercu.commande : ""));
     avance.append(el("summary", "", `${t("mire.avance")} · ${resume}`), cote, nombre, commande);
@@ -148,6 +165,7 @@ window.PreparerMire = (() => {
   // Raison sous « Préparer la mire » : une erreur, la mire FD-9 absente, ou rien.
   function raisonPreparation() {
     if (erreurPreparation) return erreurPreparation;
+    if (saisieRefusee()) return t(saisieRefusee());
     if (erreurApercu) return erreurApercu;
     if (apercu && apercu.mire_fd9_attendue) {
       return `${t("mire.erreur.fd9_introuvable")} ${t("mire.fd9.attendu").replace("{chemin}", () => apercu.mire_fd9_attendue)}`;
@@ -218,7 +236,7 @@ window.PreparerMire = (() => {
     raison.setAttribute("role", "status");
     raison.textContent = raisonPreparation();
     raison.hidden = !raison.textContent;
-    if (!apercu || erreurApercu || apercu.mire_fd9_attendue) preparer.dataset.inactif = "";
+    if (!apercu || erreurApercu || apercu.mire_fd9_attendue || saisieRefusee()) preparer.dataset.inactif = "";
     preparer.addEventListener("click", () => parc.agir(preparerMire));
     actions.append(preparer);
     corps.append(actions, raison, ...resultat(), preparees(d));
@@ -229,6 +247,8 @@ window.PreparerMire = (() => {
   async function chargerApercu(d) {
     const n = ++demandeApercu;
     if (!ouvert) return;
+    // Une saisie refusée ne demande rien au module `mires`.
+    if (saisieRefusee()) return;
     let reponse = null;
     let erreur = "";
     const tailles = {};
@@ -263,6 +283,7 @@ window.PreparerMire = (() => {
   async function preparerMire(d) {
     const ici = () => parc.reglage()?.condition.id === d.condition.id;
     erreurPreparation = "";
+    if (saisieRefusee()) return;
     try {
       const r = await invoke("mire_preparer", { condition: d.condition.id, demande: demande() });
       if (ici()) preparee = r;

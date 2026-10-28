@@ -1142,6 +1142,14 @@ const FRANCAIS: Catalogue = &[
         "Nombre de plages (vide pour garder la taille choisie)",
     ),
     ("mire.nombre.limites", "De 24 à 3\u{202f}000 plages."),
+    (
+        "mire.saisie.nombre",
+        "Saisie refusée\u{202f}: écrivez un nombre, par exemple 8 ou 8,5. Rien n’est lancé.",
+    ),
+    (
+        "mire.saisie.entier",
+        "Saisie refusée\u{202f}: écrivez un nombre entier de plages, par exemple 500. Rien n’est lancé.",
+    ),
     ("mire.commande", "Commande équivalente"),
     ("mire.preparer", "Préparer la mire"),
     ("mire.fait", "Mire préparée et rangée avec cette résolution."),
@@ -2250,6 +2258,14 @@ const ANGLAIS: Catalogue = &[
         "Number of patches (empty to keep the chosen size)",
     ),
     ("mire.nombre.limites", "From 24 to 3,000 patches."),
+    (
+        "mire.saisie.nombre",
+        "Entry refused: write a number, for example 8 or 8.5. Nothing is started.",
+    ),
+    (
+        "mire.saisie.entier",
+        "Entry refused: write a whole number of patches, for example 500. Nothing is started.",
+    ),
     ("mire.commande", "Equivalent command"),
     ("mire.preparer", "Prepare the chart"),
     ("mire.fait", "Chart prepared and stored with this resolution."),
