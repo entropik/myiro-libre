@@ -3,7 +3,8 @@
 // toutes les formes sont triés par profondeur et peints du plus loin au plus proche (algorithme du
 // peintre) : c'est ce tri qui évite les fausses facettes en transparence. Ombrage plat. Les couleurs
 // de série sont des jetons (`--serie-1` à `--serie-4`), relus au changement de thème. Les chiffres
-// passent par Graphiques.nombre : un chiffre inconnu s'écrit « inconnu ».
+// passent par Graphiques.nombre : un chiffre inconnu s'écrit « inconnu ». Les axes et le blanc du
+// papier de chaque profil sont peints par vue3d-axes.js (Vue3dAxes).
 "use strict";
 
 window.Vue3d = (() => {
@@ -184,59 +185,6 @@ window.Vue3d = (() => {
       ctx.globalAlpha = 1;
     }
 
-    // Axes L*, a*, b*, gradués tous les 20, dans la couleur atténuée ; a* et b* au plancher L* = 0.
-    function dessinerAxes(ctx, r, k, avecTextes) {
-      const axes = [
-        { nom: "L*", de: [0, 0, 0], a: [100, 0, 0], pas: (v) => [v, 0, 0], debut: 0, fin: 100 },
-        { nom: "a*", de: [0, -120, 0], a: [0, 120, 0], pas: (v) => [0, v, 0], debut: -100, fin: 100 },
-        { nom: "b*", de: [0, 0, -120], a: [0, 0, 120], pas: (v) => [0, 0, v], debut: -100, fin: 100 },
-      ];
-      ctx.strokeStyle = jetons.attenue;
-      ctx.fillStyle = jetons.attenue;
-      ctx.lineWidth = 1;
-      ctx.font = `${Math.round(jetons.texte)}px ${jetons.fonte}`;
-      for (const axe of axes) {
-        const de = versEcran(tourner(axe.de, r), k);
-        const a = versEcran(tourner(axe.a, r), k);
-        if (!avecTextes) {
-          ctx.beginPath();
-          ctx.moveTo(de[0], de[1]);
-          ctx.lineTo(a[0], a[1]);
-          ctx.stroke();
-          continue;
-        }
-        ctx.fillText(axe.nom, a[0] + jetons.ecart, a[1]);
-        for (let v = axe.debut; v <= axe.fin; v += 20) {
-          if (v === 0 && axe.nom !== "L*") continue;
-          const q = versEcran(tourner(axe.pas(v), r), k);
-          ctx.fillRect(q[0] - 1.5, q[1] - 1.5, 3, 3);
-          ctx.fillText(nombre(v, 0), q[0] + jetons.ecart, q[1] - jetons.ecart);
-        }
-      }
-    }
-
-    // Blanc du papier de chaque forme : un trait sur l'axe L*, dans sa couleur de série, et son étiquette
-    // à gauche de l'axe (les graduations sont à droite) ; une étiquette trop proche descend d'une ligne.
-    function dessinerBlancs(ctx, r, k) {
-      const ligne = jetons.texte + jetons.ecart;
-      let bas = -Infinity;
-      const marques = formes.filter((f) => f.blanc !== null)
-        .map((f) => ({ f, q: versEcran(tourner([f.blanc, 0, 0], r), k) }))
-        .sort((u, v) => u.q[1] - v.q[1]);
-      ctx.lineWidth = 2 * (window.devicePixelRatio || 1);
-      [ctx.textAlign, ctx.textBaseline] = ["right", "middle"];
-      for (const { f, q } of marques) {
-        ctx.strokeStyle = ctx.fillStyle = rvb(jetons.series[f.serie - 1]);
-        ctx.beginPath();
-        ctx.moveTo(q[0] - jetons.marge, q[1]);
-        ctx.lineTo(q[0] + jetons.marge, q[1]);
-        ctx.stroke();
-        bas = Math.max(q[1], bas + ligne);
-        ctx.fillText(t("comparer.vue3d.blanc").replace("{l}", () => nombre(f.blanc, 1)), q[0] - jetons.marge - jetons.ecart, bas);
-      }
-      [ctx.textAlign, ctx.textBaseline] = ["start", "alphabetic"];
-    }
-
     // Sommet le plus proche de la souris, toutes formes confondues.
     function plusProche(k) {
       if (!survol) return null;
@@ -286,10 +234,11 @@ window.Vue3d = (() => {
       const r = rotation();
       const k = echelle();
       projeter(r);
-      dessinerAxes(ctx, r, k, false);
+      const ecran = (s) => versEcran(tourner(s, r), k);
+      window.Vue3dAxes.axes(ctx, jetons, ecran, false);
       dessinerTriangles(ctx, k);
-      dessinerAxes(ctx, r, k, true);
-      dessinerBlancs(ctx, r, k);
+      window.Vue3dAxes.axes(ctx, jetons, ecran, true);
+      window.Vue3dAxes.blancs(ctx, jetons, ecran, formes);
       dessinerBulle(ctx, k);
     }
 
@@ -342,7 +291,11 @@ window.Vue3d = (() => {
       redessiner();
     }
     const ecouteurs = {
-      pointerdown: (e) => { glisser = position(e); survol = null; canvas.setPointerCapture(e.pointerId); },
+      pointerdown: (e) => {
+        glisser = position(e);
+        survol = null;
+        canvas.setPointerCapture(e.pointerId);
+      },
       pointermove: (e) => {
         const p = position(e);
         if (glisser) {
@@ -354,9 +307,18 @@ window.Vue3d = (() => {
           redessiner();
         }
       },
-      pointerup: (e) => { glisser = null; if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId); },
-      pointerleave: () => { survol = null; redessiner(); },
-      wheel: (e) => { e.preventDefault(); zoome(e.deltaY < 0 ? PAS_ZOOM : 1 / PAS_ZOOM); },
+      pointerup: (e) => {
+        glisser = null;
+        if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      },
+      pointerleave: () => {
+        survol = null;
+        redessiner();
+      },
+      wheel: (e) => {
+        e.preventDefault();
+        zoome(e.deltaY < 0 ? PAS_ZOOM : 1 / PAS_ZOOM);
+      },
     };
     for (const [nom, f] of Object.entries(ecouteurs)) {
       canvas.addEventListener(nom, f, nom === "wheel" ? { passive: false } : undefined);
@@ -379,8 +341,15 @@ window.Vue3d = (() => {
     decrire();
 
     return {
-      afficher(nouvelles) { formes = (nouvelles || []).map(preparer); decrire(); redessiner(); },
-      regler(nouveaux) { reglages = { ...reglages, ...nouveaux }; redessiner(); },
+      afficher(nouvelles) {
+        formes = (nouvelles || []).map(preparer);
+        decrire();
+        redessiner();
+      },
+      regler(nouveaux) {
+        reglages = { ...reglages, ...nouveaux };
+        redessiner();
+      },
       detruire() {
         if (image) cancelAnimationFrame(image);
         image = 0;

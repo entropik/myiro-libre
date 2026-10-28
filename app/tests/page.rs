@@ -1375,7 +1375,13 @@ fn un_chiffre_inconnu_s_ecrit_inconnu() {
     assert!(graphiques.contains("nombre,"), "formateur non partagé");
     let vue3d = lire("interface/vue3d.js");
     assert!(vue3d.contains("window.Graphiques.nombre(v, decimales)"));
-    for (nom, script) in [("graphiques.js", &graphiques), ("vue3d.js", &vue3d)] {
+    let axes = lire("interface/vue3d-axes.js");
+    assert!(axes.contains("window.Graphiques.nombre(v, decimales)"));
+    for (nom, script) in [
+        ("graphiques.js", &graphiques),
+        ("vue3d.js", &vue3d),
+        ("vue3d-axes.js", &axes),
+    ] {
         assert!(
             !script.contains(".toFixed("),
             "{nom} écrit un chiffre sans le formateur"
@@ -1447,7 +1453,9 @@ fn les_graphiques_sont_des_composants_du_systeme() {
 #[test]
 fn les_textes_de_la_vue_3d_et_des_graphiques_existent_en_deux_langues() {
     use app::textes::{texte, Langue};
-    let script = lire("interface/vue3d.js") + &lire("interface/graphiques.js");
+    let script = lire("interface/vue3d.js")
+        + &lire("interface/vue3d-axes.js")
+        + &lire("interface/graphiques.js");
     let demandees: Vec<&str> = script
         .match_indices("t(\"")
         .filter(|(i, _)| {
@@ -1784,7 +1792,7 @@ fn la_comparaison_en_cours_ne_reste_pas_sur_une_vue_vide() {
 /// l'essai d'écran du 28 octobre 2026 : « les axes ne sont pas à 0 ? ».
 #[test]
 fn les_axes_de_la_vue_3d_partent_du_plancher_l_0() {
-    let script = lire("interface/vue3d.js");
+    let script = lire("interface/vue3d.js") + &lire("interface/vue3d-axes.js");
     for attendu in [
         "{ nom: \"L*\", de: [0, 0, 0], a: [100, 0, 0], pas: (v) => [v, 0, 0], debut: 0, fin: 100 },",
         "{ nom: \"a*\", de: [0, -120, 0], a: [0, 120, 0], pas: (v) => [0, v, 0], debut: -100, fin: 100 },",
@@ -1982,26 +1990,42 @@ fn la_vue_3d_marque_le_blanc_du_papier_de_chaque_profil() {
         .expect("dessiner absent");
     let dessiner = &dessiner[..dessiner.find("\n    }").unwrap_or(dessiner.len())];
     assert!(
-        dessiner.contains("dessinerAxes(ctx, r, k, true);\n      dessinerBlancs(ctx, r, k);"),
+        dessiner.contains(
+            "window.Vue3dAxes.axes(ctx, jetons, ecran, true);\n      window.Vue3dAxes.blancs(ctx, jetons, ecran, formes);"
+        ),
         "{dessiner}"
     );
-    let blancs = script
-        .split("function dessinerBlancs(ctx, r, k) {")
+    assert!(script.contains(".replace(\"{blanc}\", () => nombre(f.blanc, 1))"));
+
+    // Axes et marques vivent dans vue3d-axes.js.
+    let axes = lire("interface/vue3d-axes.js");
+    assert!(axes.contains("window.Vue3dAxes = "));
+    let blancs = axes
+        .split("function blancs(ctx, jetons, ecran, formes) {")
         .nth(1)
-        .expect("dessinerBlancs absent");
-    let blancs = &blancs[..blancs.find("\n    }").unwrap_or(blancs.len())];
+        .expect("blancs absent");
+    let blancs = &blancs[..blancs.find("\n  }").unwrap_or(blancs.len())];
     for attendu in [
         "formes.filter((f) => f.blanc !== null)",
-        "tourner([f.blanc, 0, 0], r)",
-        // Rangées de haut en bas, chacune au moins une ligne sous la précédente.
+        "ecran([f.blanc, 0, 0])",
+        // Rangées de haut en bas, chacune au moins une hauteur d'étiquette sous la précédente.
         ".sort((u, v) => u.q[1] - v.q[1])",
-        "Math.max(q[1], bas + ligne)",
+        "Math.max(q[1], bas + hauteur)",
         "jetons.series[f.serie - 1]",
         "t(\"comparer.vue3d.blanc\").replace(\"{l}\", () => nombre(f.blanc, 1))",
+        // Fond de la carte sous l'étiquette, marge par jeton, texte à l'encre.
+        "ctx.fillStyle = jetons.carte;",
+        "ctx.fillRect(droite - largeur, bas - hauteur / 2, largeur, hauteur);",
+        "jetons.ecart * 2",
+        "ctx.fillStyle = jetons.encre;",
+        // Une étiquette décalée est reliée à son trait par un filet de sa couleur.
+        "if (bas !== q[1]) {",
     ] {
         assert!(blancs.contains(attendu), "{attendu} :\n{blancs}");
     }
-    assert!(script.contains(".replace(\"{blanc}\", () => nombre(f.blanc, 1))"));
+    let fond = blancs.find("ctx.fillRect(").unwrap_or(usize::MAX);
+    let texte_peint = blancs.find("ctx.fillText(").unwrap_or(0);
+    assert!(fond < texte_peint, "le fond doit passer sous le texte");
 
     assert_eq!(
         texte(Langue::Francais, "comparer.vue3d.blanc"),
@@ -2014,4 +2038,16 @@ fn la_vue_3d_marque_le_blanc_du_papier_de_chaque_profil() {
     for langue in [Langue::Francais, Langue::Anglais] {
         assert!(texte(langue, "comparer.vue3d.aria.profil").contains("{blanc}"));
     }
+}
+
+/// Les axes de la vue 3D vivent dans vue3d-axes.js, chargé avant vue3d.js
+/// qui s'en sert.
+#[test]
+fn vue3d_axes_js_est_charge_avant_vue3d_js() {
+    let page = lire("interface/index.html");
+    let position = |nom: &str| page.find(&format!("<script src=\"{nom}\" defer>"));
+    let (axes, vue) = (position("vue3d-axes.js"), position("vue3d.js"));
+    assert!(axes.is_some() && vue.is_some());
+    assert!(axes < vue, "ordre des scripts");
+    assert!(lire("interface/vue3d.js").contains("window.Vue3dAxes"));
 }
