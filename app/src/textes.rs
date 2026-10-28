@@ -527,6 +527,66 @@ const FRANCAIS: Catalogue = &[
         "comparer.origine.fichier",
         "Fichier\u{202f}: {nom} (ouvert pour la comparaison, pas dans la bibliothèque)",
     ),
+    (
+        "comparer.inconnu",
+        "inconnu",
+    ),
+    (
+        "comparer.vue3d.aria",
+        "Gamuts en volume (flèches pour tourner, + et − pour zoomer, 0 pour revenir à la vue de départ)\u{202f}: {profils}.",
+    ),
+    (
+        "comparer.vue3d.aria.profil",
+        "{nom}, volume {volume} unités L*a*b* au cube",
+    ),
+    (
+        "comparer.vue3d.aria.vide",
+        "Gamuts en volume\u{202f}: aucun profil affiché.",
+    ),
+    (
+        "comparer.vue3d.bulle",
+        "{nom}\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "comparer.graphique.teinte",
+        "Teinte h (°)",
+    ),
+    (
+        "comparer.graphique.chroma",
+        "Saturation C*",
+    ),
+    (
+        "comparer.graphique.clarte",
+        "Clarté L*",
+    ),
+    (
+        "comparer.graphique.position",
+        "Position sur le chemin (0 à 255)",
+    ),
+    (
+        "comparer.graphique.mesures",
+        "Plages mesurées sur ce chemin",
+    ),
+    (
+        "comparer.graphique.valeurs",
+        "Valeurs",
+    ),
+    (
+        "comparer.graphique.teintes.aria",
+        "Saturation maximale C* par teinte, de 0 à 360°\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
+    ),
+    (
+        "comparer.graphique.coupe.aria",
+        "Coupe du gamut à clarté L* {l}, dans le plan a*b*\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
+    ),
+    (
+        "comparer.graphique.chemin.l.aria",
+        "Clarté L* le long du chemin du cube RVB\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
+    ),
+    (
+        "comparer.graphique.chemin.c.aria",
+        "Saturation C* le long du chemin du cube RVB\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
+    ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "Journal d’ArgyllCMS"),
     ("profil.rvb", "Valeurs RVB"),
@@ -1677,6 +1737,66 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.origine.fichier",
         "File: {nom} (opened for the comparison, not in the library)",
+    ),
+    (
+        "comparer.inconnu",
+        "unknown",
+    ),
+    (
+        "comparer.vue3d.aria",
+        "Gamuts in 3D (arrow keys to rotate, + and − to zoom, 0 to return to the starting view): {profils}.",
+    ),
+    (
+        "comparer.vue3d.aria.profil",
+        "{nom}, volume {volume} cubic L*a*b* units",
+    ),
+    (
+        "comparer.vue3d.aria.vide",
+        "Gamuts in 3D: no profile shown.",
+    ),
+    (
+        "comparer.vue3d.bulle",
+        "{nom}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "comparer.graphique.teinte",
+        "Hue h (°)",
+    ),
+    (
+        "comparer.graphique.chroma",
+        "Chroma C*",
+    ),
+    (
+        "comparer.graphique.clarte",
+        "Lightness L*",
+    ),
+    (
+        "comparer.graphique.position",
+        "Position along the path (0 to 255)",
+    ),
+    (
+        "comparer.graphique.mesures",
+        "Patches measured on this path",
+    ),
+    (
+        "comparer.graphique.valeurs",
+        "Values",
+    ),
+    (
+        "comparer.graphique.teintes.aria",
+        "Maximum chroma C* by hue, from 0 to 360°: {profils}. The values are in the “Values” table.",
+    ),
+    (
+        "comparer.graphique.coupe.aria",
+        "Gamut slice at lightness L* {l}, in the a*b* plane: {profils}. The values are in the “Values” table.",
+    ),
+    (
+        "comparer.graphique.chemin.l.aria",
+        "Lightness L* along the RGB cube path: {profils}. The values are in the “Values” table.",
+    ),
+    (
+        "comparer.graphique.chemin.c.aria",
+        "Chroma C* along the RGB cube path: {profils}. The values are in the “Values” table.",
     ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "ArgyllCMS log"),

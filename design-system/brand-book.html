@@ -18,7 +18,7 @@
   <div class="seg" role="group" aria-label="Thème"><button data-theme-choix="dark" aria-pressed="true">Sombre</button><button data-theme-choix="light" aria-pressed="false">Clair</button></div>
 </div></header>
 <main class="page">
-<section class="ds-intro"><span class="label">Couleurs</span><h1>Bleu nuit, un accent, trois verdicts</h1><p class="prose">Douze valeurs par thème, reprises du prototype validé du poste unique. Le thème sombre est celui par défaut. Les rapports de contraste ci-dessous sont calculés à partir de <code>tokens.css</code> (formule WCAG 2).</p></section>
+<section class="ds-intro"><span class="label">Couleurs</span><h1>Bleu nuit, un accent, trois verdicts</h1><p class="prose">Douze valeurs par thème, plus quatre couleurs de série pour comparer des profils, reprises du prototype validé du poste unique. Le thème sombre est celui par défaut. Les rapports de contraste ci-dessous sont calculés à partir de <code>tokens.css</code> (formule WCAG 2).</p></section>
 
 <section class="ds-block"><span class="label">Palette</span><h2>Valeurs et variables</h2><p>Chaque couleur a un rôle. Aucune couleur n’est ajoutée sans mise à jour de <code>tokens.css</code> et de cette page. Les pastilles suivent le thème choisi en haut à droite.</p>
 <div class="ds-demo"><div class="ds-swatches">
@@ -34,6 +34,10 @@
 <div class="ds-swatch"><div class="ds-swatch__color" style="--c:var(--conforme)"></div><div class="ds-swatch__meta"><b>Conforme</b>#2fbf71 · clair #13864b<br><span class="mute">--conforme · Verdict conforme, profil récent. Jamais seul.</span></div></div>
 <div class="ds-swatch"><div class="ds-swatch__color" style="--c:var(--limite)"></div><div class="ds-swatch__meta"><b>Limite</b>#e8a23a · clair #a8650a<br><span class="mute">--limite · Proche de la limite, profil ancien. Jamais seul.</span></div></div>
 <div class="ds-swatch"><div class="ds-swatch__color" style="--c:var(--hors)"></div><div class="ds-swatch__meta"><b>Hors tolérance</b>#ff5d64 · clair #cc1f29<br><span class="mute">--hors · Danger et hors tolérance uniquement.</span></div></div>
+<div class="ds-swatch"><div class="ds-swatch__color" style="--c:var(--serie-1)"></div><div class="ds-swatch__meta"><b>Série 1 (bleu)</b>#4c9aff · clair #1f6fe5<br><span class="mute">--serie-1 · Profil n°&#8239;1 d’une comparaison (graphiques, vue 3D). Toujours avec son nom.</span></div></div>
+<div class="ds-swatch"><div class="ds-swatch__color" style="--c:var(--serie-2)"></div><div class="ds-swatch__meta"><b>Série 2 (orange)</b>#f0773a · clair #c4501a<br><span class="mute">--serie-2 · Profil n°&#8239;2 d’une comparaison (graphiques, vue 3D). Toujours avec son nom.</span></div></div>
+<div class="ds-swatch"><div class="ds-swatch__color" style="--c:var(--serie-3)"></div><div class="ds-swatch__meta"><b>Série 3 (violet)</b>#b48cff · clair #7c4dd6<br><span class="mute">--serie-3 · Profil n°&#8239;3 d’une comparaison (graphiques, vue 3D). Toujours avec son nom.</span></div></div>
+<div class="ds-swatch"><div class="ds-swatch__color" style="--c:var(--serie-4)"></div><div class="ds-swatch__meta"><b>Série 4 (gris)</b>#c9d1dd · clair #5d6879<br><span class="mute">--serie-4 · Profil n°&#8239;4 d’une comparaison (graphiques, vue 3D). Toujours avec son nom.</span></div></div>
 </div></div></section>
 
 <section class="ds-block"><span class="label">Contrastes</span><h2>Combinaisons validées</h2><p>Le texte courant exige 4,5&#8239;:&#8239;1 au moins (AA)&#8239;; les grands corps (verdict, critères) et les textes en graisse 600 au-dessus de 18,66&#8239;px acceptent 3&#8239;:&#8239;1. Le texte posé sur l’accent est le fond en sombre (#141a26) et le blanc en clair (#ffffff).</p>
@@ -50,6 +54,10 @@
 <tr><td>Hors tolérance sur carte</td><td class="r num">4,67&#8239;:&#8239;1</td><td class="r num">5,20&#8239;:&#8239;1</td><td>AA</td></tr>
 <tr><td>Conforme sur panneau (âge du profil)</td><td class="r num">6,28&#8239;:&#8239;1</td><td class="r num">4,63&#8239;:&#8239;1</td><td>AA</td></tr>
 <tr><td>Limite sur panneau (âge du profil)</td><td class="r num">6,89&#8239;:&#8239;1</td><td class="r num">4,63&#8239;:&#8239;1</td><td>AA</td></tr>
+<tr><td>Série 1 sur carte (traits des graphiques)</td><td class="r num">4,92&#8239;:&#8239;1</td><td class="r num">4,42&#8239;:&#8239;1</td><td>AA (sombre), AA grands corps (clair)</td></tr>
+<tr><td>Série 2 sur carte (traits des graphiques)</td><td class="r num">4,94&#8239;:&#8239;1</td><td class="r num">4,38&#8239;:&#8239;1</td><td>AA (sombre), AA grands corps (clair)</td></tr>
+<tr><td>Série 3 sur carte (traits des graphiques)</td><td class="r num">5,42&#8239;:&#8239;1</td><td class="r num">5,07&#8239;:&#8239;1</td><td>AA</td></tr>
+<tr><td>Série 4 sur carte (traits des graphiques)</td><td class="r num">9,10&#8239;:&#8239;1</td><td class="r num">5,30&#8239;:&#8239;1</td><td>AA</td></tr>
 </tbody></table></div></section>
 
 <section class="ds-block"><span class="label">Dégradés et ombres</span><h2>Aucun, sauf une lumière</h2><p>Le système n’utilise ni dégradé, ni ombre, ni transparence décorative. Seule exception&#8239;: la lumière spectrale qui traverse la barre d’un calcul, signe que le calcul travaille (jetons <code>--spectre-1</code> à <code>--spectre-6</code>, voir les composants). Une couleur de référence comparée à une mesure partage un carré coupé net en deux, sans fondu.</p><div class="ds-demo"><p class="mute">Pas d’exemple&#8239;: c’est la règle.</p></div></section>

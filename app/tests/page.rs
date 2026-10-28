@@ -1179,3 +1179,294 @@ fn la_section_du_calcul_est_construite_par_calcul_profil_js() {
     let commentaire = &page[page[..section].rfind("<!--").unwrap_or(0)..section];
     assert!(commentaire.contains("calcul-profil.js"), "{commentaire}");
 }
+
+// ---- Comparer des profils : couleurs de série, vue 3D et graphiques (ticket #71) ----
+
+/// Les quatre couleurs de série (bleu, orange, violet, gris : ni vert ni
+/// rouge, réservés aux verdicts) sont des jetons, définis dans le bloc du
+/// thème sombre et dans celui du thème clair.
+#[test]
+fn les_couleurs_de_serie_sont_des_jetons_des_deux_themes() {
+    let jetons = lire("../design-system/tokens.css");
+    let (sombre, clair) = jetons
+        .split_once(":root[data-theme=\"light\"]")
+        .expect("thème clair");
+    let sombre = &sombre[sombre
+        .find(":root[data-theme=\"dark\"]")
+        .expect("thème sombre")..];
+    let clair = &clair[..clair.find('}').unwrap()];
+    for (n, valeur_sombre, valeur_claire) in [
+        (1, "#4c9aff", "#1f6fe5"),
+        (2, "#f0773a", "#c4501a"),
+        (3, "#b48cff", "#7c4dd6"),
+        (4, "#c9d1dd", "#5d6879"),
+    ] {
+        let nom = format!("--serie-{n}:");
+        for (theme, bloc, valeur) in [
+            ("sombre", sombre, valeur_sombre),
+            ("clair", clair, valeur_claire),
+        ] {
+            let ligne = bloc
+                .lines()
+                .find(|l| l.contains(&nom))
+                .unwrap_or_else(|| panic!("{nom} absent du thème {theme}"));
+            assert!(ligne.contains(valeur), "{theme} : {ligne}");
+        }
+    }
+    let readme = lire("../design-system/README.md");
+    assert!(
+        readme.contains("--serie-1"),
+        "README sans les couleurs de série"
+    );
+}
+
+/// Scripts de la page (`app/interface/*.js`), avec leur nom.
+fn scripts_de_la_page() -> Vec<(String, String)> {
+    let dossier = Path::new(env!("CARGO_MANIFEST_DIR")).join("interface");
+    let mut scripts: Vec<(String, String)> = std::fs::read_dir(dossier)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|nom| nom.ends_with(".js"))
+        .map(|nom| {
+            let texte = lire(&format!("interface/{nom}"));
+            (nom, texte)
+        })
+        .collect();
+    scripts.sort();
+    scripts
+}
+
+/// La vue 3D et les graphiques sont maison : aucun script ne vient d'un
+/// autre site, aucun module n'est chargé de loin.
+#[test]
+fn aucun_script_de_la_page_ne_vient_d_ailleurs() {
+    let page = lire("interface/index.html");
+    for (_, balise) in balises(&page) {
+        if let Some(src) = attribut(balise, "src") {
+            assert!(
+                !src.contains("http") && !src.starts_with("//"),
+                "script distant : {balise}"
+            );
+        }
+    }
+    let scripts = scripts_de_la_page();
+    for attendu in ["vue3d.js", "graphiques.js"] {
+        assert!(
+            scripts.iter().any(|(nom, _)| nom == attendu),
+            "{attendu} absent"
+        );
+    }
+    for (nom, texte) in &scripts {
+        for motif in [
+            "import(\"http",
+            "import('http",
+            "import(\"//",
+            "import('//",
+            "from \"http",
+            "from 'http",
+        ] {
+            assert!(!texte.contains(motif), "{nom} : {motif}");
+        }
+        let modules: Vec<&str> = texte.lines().filter(|l| l.contains("import(")).collect();
+        assert!(
+            modules.is_empty(),
+            "{nom} : chargement de module : {modules:?}"
+        );
+    }
+}
+
+/// La politique de sécurité de la page reste celle d'avant la comparaison :
+/// aucun script, style ni fonte d'ailleurs.
+#[test]
+fn la_csp_ne_change_pas() {
+    let conf: serde_json::Value = serde_json::from_str(&lire("tauri.conf.json")).unwrap();
+    assert_eq!(
+        conf["app"]["security"]["csp"],
+        "default-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; script-src 'self'; connect-src ipc: http://ipc.localhost"
+    );
+}
+
+/// La vue 3D se pilote au clavier : flèches pour tourner, `+` et `-` pour
+/// zoomer, `0` pour revenir à la vue de départ. Le canvas prend le focus et
+/// se présente comme une image décrite.
+#[test]
+fn la_vue_3d_se_pilote_au_clavier() {
+    let script = lire("interface/vue3d.js");
+    for touche in [
+        "ArrowLeft",
+        "ArrowRight",
+        "ArrowUp",
+        "ArrowDown",
+        "+",
+        "-",
+        "0",
+    ] {
+        assert!(
+            script.contains(&format!("case \"{touche}\":")),
+            "touche {touche} non traitée"
+        );
+    }
+    assert!(script.contains("addEventListener(\"keydown\""));
+    assert!(script.contains("canvas.tabIndex = 0;"));
+    assert!(script.contains("canvas.setAttribute(\"role\", \"img\");"));
+    assert!(script.contains("canvas.setAttribute(\"aria-label\""));
+}
+
+/// Un chiffre incalculable arrive en `null` dans le JSON (volume de la
+/// limite, valeur absente d'une série) : la vue 3D et les graphiques
+/// l'écrivent « inconnu », jamais « 0,00 », et ne plantent pas sur
+/// `null.toFixed`. Un seul formateur, `Graphiques.nombre`, écrit les chiffres,
+/// avec la virgule décimale de la langue.
+#[test]
+fn un_chiffre_inconnu_s_ecrit_inconnu() {
+    use app::textes::{texte, Langue};
+    let graphiques = lire("interface/graphiques.js");
+    let formateur = graphiques
+        .split("function nombre(valeur, decimales) {")
+        .nth(1)
+        .expect("formateur nombre absent");
+    let formateur = &formateur[..formateur.find("\n  }").unwrap_or(formateur.len())];
+    assert!(
+        formateur.contains(
+            "if (typeof valeur !== \"number\" || !Number.isFinite(valeur)) return t(\"comparer.inconnu\");"
+        ),
+        "{formateur}"
+    );
+    assert!(formateur.contains("Intl.NumberFormat"), "{formateur}");
+    assert!(graphiques.contains("window.Graphiques = "));
+    assert!(graphiques.contains("nombre,"), "formateur non partagé");
+    let vue3d = lire("interface/vue3d.js");
+    assert!(vue3d.contains("window.Graphiques.nombre(v, decimales)"));
+    for (nom, script) in [("graphiques.js", &graphiques), ("vue3d.js", &vue3d)] {
+        assert!(
+            !script.contains(".toFixed("),
+            "{nom} écrit un chiffre sans le formateur"
+        );
+        assert!(!script.contains("toLocaleString("), "{nom}");
+    }
+    // Une valeur absente d'une courbe la coupe, sans point inventé à zéro.
+    assert!(graphiques.contains("function connue(v)"));
+    assert_eq!(texte(Langue::Francais, "comparer.inconnu"), "inconnu");
+    assert_eq!(texte(Langue::Anglais, "comparer.inconnu"), "unknown");
+}
+
+/// Graphiques et vue 3D sont des composants du système graphique : chaque
+/// série prend son jeton par `data-serie`, avec un trait propre (plein,
+/// tirets, points, mixte) pour que la couleur ne parle pas seule ; axes,
+/// grille et textes en couleur atténuée ; la page d'exemple les montre.
+#[test]
+fn les_graphiques_sont_des_composants_du_systeme() {
+    let css = composants();
+    for n in 1..=4 {
+        let corps = regle(&css, &format!(".graphique [data-serie=\"{n}\"]")).join(";");
+        assert!(
+            corps.contains(&format!("--serie:var(--serie-{n})")),
+            "série {n} : {corps}"
+        );
+    }
+    for n in 2..=4 {
+        let corps = regle(&css, &format!(".graphique__trace[data-serie=\"{n}\"]")).join(";");
+        assert!(
+            corps.contains("stroke-dasharray:"),
+            "série {n} sans trait propre : {corps}"
+        );
+    }
+    let trace = regle(&css, ".graphique__trace").join(";");
+    assert!(
+        trace.contains("stroke:var(--serie)") && trace.contains("fill:none"),
+        "{trace}"
+    );
+    for (selecteur, attendu) in [
+        (".graphique__axe", "stroke:var(--attenue)"),
+        (".graphique__grille", "stroke:var(--filet)"),
+        (".graphique__texte", "fill:var(--attenue)"),
+        (".graphique__point", "fill:var(--serie"),
+    ] {
+        let corps = regle(&css, selecteur).join(";");
+        assert!(corps.contains(attendu), "{selecteur} : {corps}");
+    }
+    let vue = regle(&css, ".vue3d").join(";");
+    assert!(
+        vue.contains("aspect-ratio:") && vue.contains("width:100%"),
+        "{vue}"
+    );
+    assert!(regle(&css, ".vue3d:focus-visible")
+        .join(";")
+        .contains("outline:"));
+    let exemple = lire("../design-system/ui-kit.html");
+    assert!(
+        exemple.contains("class=\"graphique\""),
+        "graphique absent de ui-kit.html"
+    );
+    assert!(
+        exemple.contains("class=\"vue3d\""),
+        "vue 3D absente de ui-kit.html"
+    );
+}
+
+/// Chaque texte demandé par la vue 3D et les graphiques (`t("…")`) existe en
+/// français et en anglais.
+#[test]
+fn les_textes_de_la_vue_3d_et_des_graphiques_existent_en_deux_langues() {
+    use app::textes::{texte, Langue};
+    let script = lire("interface/vue3d.js") + &lire("interface/graphiques.js");
+    let demandees: Vec<&str> = script
+        .match_indices("t(\"")
+        .filter(|(i, _)| {
+            !script[..*i]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.')
+        })
+        .filter_map(|(i, _)| script[i + 3..].split('"').next())
+        .chain([
+            "comparer.graphique.chemin.l.aria",
+            "comparer.graphique.chemin.c.aria",
+        ])
+        .collect();
+    assert!(demandees.len() > 10, "clés lues : {demandees:?}");
+    let absentes: Vec<_> = demandees
+        .iter()
+        .filter(|c| {
+            [Langue::Francais, Langue::Anglais]
+                .iter()
+                .any(|l| texte(*l, c) == **c)
+        })
+        .collect();
+    assert!(absentes.is_empty(), "clés absentes : {absentes:?}");
+}
+
+/// La vue 3D trie, à chaque image, les triangles de toutes les formes par
+/// profondeur et les peint du plus loin au plus proche : sans ce tri, la
+/// transparence dessinait de fausses facettes (essai du 26 octobre 2026).
+/// Ombrage plat, opacité 0,35 en transparent ; les jetons de série sont lus
+/// dans la feuille de style et relus quand le thème change.
+#[test]
+fn la_vue_3d_trie_par_profondeur_et_suit_le_theme() {
+    let script = lire("interface/vue3d.js");
+    for attendu in [
+        "ordre.sort((u, v) => profondeurs[v] - profondeurs[u]);",
+        "const lumiere = 0.7 + 0.3 * Math.abs(",
+        "const OPACITE_TRANSPARENT = 0.35;",
+        "getComputedStyle(document.documentElement)",
+        "`--serie-${n}`",
+        "attributeFilter: [\"data-theme\"]",
+        "jetons = lireJetons();",
+        "document.addEventListener(\"langue-appliquee\", langue);",
+        "Vue3d = ",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+    // Le tri est fait dans dessiner(), donc à chaque image.
+    let dessiner = script
+        .split("function dessiner() {")
+        .nth(1)
+        .expect("dessiner absent");
+    let dessiner = &dessiner[..dessiner.find("\n    }").unwrap_or(dessiner.len())];
+    assert!(
+        dessiner.contains("dessinerTriangles(ctx, k);"),
+        "{dessiner}"
+    );
+    assert!(dessiner.contains("projeter(r);"), "{dessiner}");
+}
