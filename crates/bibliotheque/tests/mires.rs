@@ -186,3 +186,32 @@ fn une_base_en_organisation_5_passe_en_6_sans_rien_perdre() {
         .unwrap();
     assert_eq!(version, 6);
 }
+
+/// Le tirage n'est rangé qu'après l'écriture de ses fichiers : une écriture
+/// qui échoue annule tout, mire comprise, et dit pourquoi.
+#[test]
+fn une_ecriture_qui_echoue_ne_range_ni_tirage_ni_mire() {
+    let (_d, b, condition) = condition_rangee();
+    let mut vu = None;
+    let resultat = b
+        .enregistrer_mire_et_tirage_si(condition, &mire("aa", "2026-10-28T09:00:00Z"), 1, |t| {
+            vu = Some(t);
+            Err("disque plein")
+        })
+        .unwrap();
+    assert_eq!(resultat, Err("disque plein"));
+    assert!(
+        vu.is_some(),
+        "le numéro du tirage est connu avant l'écriture"
+    );
+    assert!(b.tirages(condition).unwrap().is_empty());
+    // La mire n'a pas été rangée non plus : la même empreinte redonne la mire n° 1.
+    let (id, tirage) = b
+        .enregistrer_mire_et_tirage_si(condition, &mire("aa", "2026-10-28T09:00:00Z"), 1, |_| {
+            Ok::<(), ()>(())
+        })
+        .unwrap()
+        .unwrap();
+    assert_eq!(id, IdMire(1));
+    assert_eq!(b.tirages(condition).unwrap()[0].id, tirage);
+}

@@ -2,7 +2,6 @@
 //! par `targen` hors du verrou de la bibliothèque, mise en page vérifiée,
 //! pages dessinées et écrites en TIFF.
 
-use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -13,7 +12,7 @@ use mires::{
 };
 use profilage::MoteurProfil;
 
-use super::{abandonner, ecrire_page, nom_fichier_page, DemandeMire, MirePreparee, NOMBRE_LIBRE};
+use super::{ecrire_fichier, nom_fichier_page, DemandeMire, MirePreparee, NOMBRE_LIBRE};
 use crate::colonne::BibliothequeOuverte;
 use crate::parc::instant_utc;
 
@@ -105,71 +104,62 @@ impl BibliothequeOuverte {
         let horodatage = instant_utc(maintenant);
         let nom = format!("MYIRO-1 {}", d.taille);
         let pages = mise.pages.len();
-        let (_, tirage) = self.avec(|b| {
-            b.enregistrer_mire_et_tirage(
-                condition,
-                &NouvelleMire {
-                    nom: &nom,
-                    instrument: "myiro1",
-                    plages: d.nombre,
-                    generation: &generation,
-                    valeurs: &valeurs_json,
-                    mise_en_page: &mise_json,
-                    empreinte: &empreinte,
-                    horodatage: &horodatage,
-                },
-                pages,
-            )
-        })?;
-
+        let nouvelle = NouvelleMire {
+            nom: &nom,
+            instrument: "myiro1",
+            plages: d.nombre,
+            generation: &generation,
+            valeurs: &valeurs_json,
+            mise_en_page: &mise_json,
+            empreinte: &empreinte,
+            horodatage: &horodatage,
+        };
         let date = horodatage.get(..10).unwrap_or(&horodatage);
         let mire = if d.taille == "libre" {
             format!("{} plages", d.nombre)
         } else {
             d.taille.to_string()
         };
-        fs::create_dir_all(dossier).map_err(|e| {
-            abandonner(
-                &[],
-                &ErreurMire::Ecriture(format!("{} : {e}", dossier.display())),
-            )
-        })?;
-        let mut fichiers = Vec::with_capacity(pages);
-        for page in &mise.pages {
-            let k = page.numero;
-            let etiquette = Etiquette {
-                lignes: vec![
-                    format!(
-                        "{} · {} · {}",
-                        detail.imprimante, detail.papier, detail.resolution
-                    ),
-                    format!(
-                        "Mire {mire} · {} plages · MYIRO-1 · page {k} sur {pages} · {date}",
-                        d.nombre
-                    ),
-                    "Imprimer à 100 %, sans gestion des couleurs".to_string(),
-                ],
-                code: contenu_qr(&CodeTirage {
-                    tirage: tirage.0,
-                    page: k,
-                    pages,
-                    empreinte: empreinte.clone(),
-                }),
-            };
-            let fichier = dossier.join(nom_fichier_page(
-                &detail.imprimante,
-                &detail.papier,
-                &detail.resolution,
-                date,
-                tirage.0,
-                k,
-                pages,
-            ));
-            rendre_page(&mise, &valeurs, k, &etiquette)
-                .and_then(|image| ecrire_page(&fichier, |f| ecrire_tiff(&image, f)))
-                .map_err(|e| abandonner(&fichiers, &e))?;
-            fichiers.push(fichier);
-        }
+        // Toutes les pages sont écrites avant que le tirage ne soit rangé.
+        let (tirage, fichiers) =
+            self.ranger_et_deposer(condition, &nouvelle, pages, dossier, |tirage, travail| {
+                let mut noms = Vec::with_capacity(pages);
+                for page in &mise.pages {
+                    let k = page.numero;
+                    let etiquette = Etiquette {
+                        lignes: vec![
+                            format!(
+                                "{} · {} · {}",
+                                detail.imprimante, detail.papier, detail.resolution
+                            ),
+                            format!(
+                                "Mire {mire} · {} plages · MYIRO-1 · page {k} sur {pages} · {date}",
+                                d.nombre
+                            ),
+                            "Imprimer à 100 %, sans gestion des couleurs".to_string(),
+                        ],
+                        code: contenu_qr(&CodeTirage {
+                            tirage: tirage.0,
+                            page: k,
+                            pages,
+                            empreinte: empreinte.clone(),
+                        }),
+                    };
+                    let nom = nom_fichier_page(
+                        &detail.imprimante,
+                        &detail.papier,
+                        &detail.resolution,
+                        date,
+                        tirage.0,
+                        k,
+                        pages,
+                    );
+                    let image = rendre_page(&mise, &valeurs, k, &etiquette)?;
+                    ecrire_fichier(&travail.join(&nom), |f| ecrire_tiff(&image, f))?;
+                    noms.push(nom);
+                }
+                Ok(noms)
+            })?;
         Ok(MirePreparee {
             tirage: tirage.0,
             fichiers,

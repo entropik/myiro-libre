@@ -14,7 +14,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use bibliotheque::{IdCondition, NouvelleMire};
+use bibliotheque::{IdCondition, IdTirage, NouvelleMire};
 use mires::{
     lire_mire_fd9, ErreurMire, Format, Gabarit, Instrument, MireFd9, TailleMire, RGB2520_FICHIER,
     RGB2520_NOM,
@@ -130,35 +130,90 @@ fn controler_fd9(demande: &DemandeMire) -> Result<(), String> {
         .ok_or_else(|| "mire.erreur.fd9_fixe".to_string())
 }
 
-/// Écrit une page sous un nom `.part`, renommé une fois écrit.
-fn ecrire_page(
+/// Écrit un fichier, avec la cause en cas d'échec.
+fn ecrire_fichier(
     fichier: &Path,
     ecrire: impl FnOnce(&mut fs::File) -> Result<(), ErreurMire>,
 ) -> Result<(), ErreurMire> {
-    let mut partiel = fichier.as_os_str().to_owned();
-    partiel.push(".part");
-    let partiel = PathBuf::from(partiel);
-    let resultat = fs::File::create(&partiel)
-        .map_err(|e| ErreurMire::Ecriture(format!("{} : {e}", partiel.display())))
+    fs::File::create(fichier)
+        .map_err(|e| ErreurMire::Ecriture(format!("{} : {e}", fichier.display())))
         .and_then(|mut f| ecrire(&mut f))
-        .and_then(|()| {
-            fs::rename(&partiel, fichier)
-                .map_err(|e| ErreurMire::Ecriture(format!("{} : {e}", fichier.display())))
-        });
+}
+
+/// Écrit les fichiers d'un tirage dans un dossier de travail placé dans
+/// `dossier` (`ecrire` y écrit et rend leurs noms), puis les met à leur
+/// place ; les fichiers déposés s'ajoutent à `deposes`. En cas d'échec, les
+/// fichiers déjà déposés sont retirés. Le dossier de travail est toujours
+/// effacé.
+fn deposer(
+    dossier: &Path,
+    tirage: IdTirage,
+    deposes: &mut Vec<PathBuf>,
+    ecrire: impl FnOnce(IdTirage, &Path) -> Result<Vec<String>, ErreurMire>,
+) -> Result<(), ErreurMire> {
+    let travail = dossier.join(format!(".preparation-T{}", tirage.0));
+    let ecriture = |chemin: &Path, e: std::io::Error| {
+        ErreurMire::Ecriture(format!("{} : {e}", chemin.display()))
+    };
+    let faire = || {
+        fs::create_dir_all(&travail).map_err(|e| ecriture(&travail, e))?;
+        for nom in ecrire(tirage, &travail)? {
+            let place = dossier.join(&nom);
+            fs::rename(travail.join(&nom), &place).map_err(|e| ecriture(&place, e))?;
+            deposes.push(place);
+        }
+        Ok(())
+    };
+    let resultat = faire();
+    if travail.exists() {
+        let _ = fs::remove_dir_all(&travail);
+    }
     if resultat.is_err() {
-        let _ = fs::remove_file(&partiel);
+        retirer(deposes);
     }
     resultat
 }
 
-/// Efface les pages déjà écrites d'un tirage dont une écriture a échoué, et
-/// rend la clé de l'erreur.
-fn abandonner(fichiers: &[PathBuf], erreur: &ErreurMire) -> String {
-    eprintln!("{erreur}");
-    for f in fichiers {
+fn retirer(fichiers: &mut Vec<PathBuf>) {
+    for f in fichiers.drain(..) {
         let _ = fs::remove_file(f);
     }
-    erreur.cle().to_string()
+}
+
+impl BibliothequeOuverte {
+    /// Range la mire et son tirage, et dépose ses fichiers dans `dossier`
+    /// ([`deposer`]) : la transaction de la bibliothèque n'est validée
+    /// qu'après le dépôt de tous les fichiers. Un tirage n'apparaît donc
+    /// jamais sans ses fichiers : en cas d'échec, rien n'est rangé, aucun
+    /// fichier ne reste, et la clé de l'erreur est rendue. Le verrou de la
+    /// bibliothèque est tenu pendant l'écriture des pages.
+    fn ranger_et_deposer(
+        &self,
+        condition: IdCondition,
+        mire: &NouvelleMire,
+        pages: usize,
+        dossier: &Path,
+        ecrire: impl FnOnce(IdTirage, &Path) -> Result<Vec<String>, ErreurMire>,
+    ) -> Result<(IdTirage, Vec<PathBuf>), String> {
+        let mut deposes = Vec::new();
+        let rangee = self.avec(|b| {
+            b.enregistrer_mire_et_tirage_si(condition, mire, pages, |tirage| {
+                deposer(dossier, tirage, &mut deposes, ecrire)
+            })
+        });
+        match rangee {
+            Ok(Ok((_, tirage))) => Ok((tirage, deposes)),
+            Ok(Err(e)) => {
+                eprintln!("{e}");
+                Err(e.cle().to_string())
+            }
+            // Validation refusée par la base après le dépôt : les fichiers partent.
+            Err(cle) => {
+                retirer(&mut deposes);
+                Err(cle)
+            }
+        }
+    }
 }
 
 impl BibliothequeOuverte {
@@ -197,8 +252,8 @@ impl BibliothequeOuverte {
 
     /// Prépare la mire demandée, range la mire et son tirage, et écrit ses
     /// pages dans `dossier`. Rien n'est rangé si la mire ne peut pas être
-    /// préparée ; si une page ne s'écrit pas, les pages de ce tirage sont
-    /// effacées et la mire reste rangée (elle se redessine à l'identique).
+    /// préparée, ni si une page ne peut pas être écrite : un tirage
+    /// n'apparaît jamais sans ses fichiers (voir `ranger_et_deposer`).
     pub fn preparer_mire(
         &self,
         condition: IdCondition,
@@ -258,44 +313,37 @@ impl BibliothequeOuverte {
         })))?;
         let valeurs = json(serde_json::to_string(&mire.valeurs))?;
         let geometrie = json(serde_json::to_string(&mire.geometrie))?;
-        let (_, tirage) = self.avec(|b| {
-            b.enregistrer_mire_et_tirage(
-                condition,
-                &NouvelleMire {
-                    nom: "RGB-2520",
-                    instrument: "fd9",
-                    plages: mire.valeurs.len(),
-                    generation: &generation,
-                    valeurs: &valeurs,
-                    mise_en_page: &geometrie,
-                    empreinte: &mire.empreinte,
-                    horodatage: &horodatage,
-                },
-                1,
-            )
-        })?;
         let date = horodatage.get(..10).unwrap_or(&horodatage);
-        let fichier = dossier.join(nom_fichier_page(
-            &detail.imprimante,
-            &detail.papier,
-            &detail.resolution,
-            date,
-            tirage.0,
-            1,
-            1,
-        ));
-        fs::create_dir_all(dossier)
-            .map_err(|e| ErreurMire::Ecriture(format!("{} : {e}", dossier.display())))
-            .and_then(|()| {
-                ecrire_page(&fichier, |f| {
+        let nouvelle = NouvelleMire {
+            nom: "RGB-2520",
+            instrument: "fd9",
+            plages: mire.valeurs.len(),
+            generation: &generation,
+            valeurs: &valeurs,
+            mise_en_page: &geometrie,
+            empreinte: &mire.empreinte,
+            horodatage: &horodatage,
+        };
+        let (tirage, fichiers) =
+            self.ranger_et_deposer(condition, &nouvelle, 1, dossier, |tirage, travail| {
+                let nom = nom_fichier_page(
+                    &detail.imprimante,
+                    &detail.papier,
+                    &detail.resolution,
+                    date,
+                    tirage.0,
+                    1,
+                    1,
+                );
+                ecrire_fichier(&travail.join(&nom), |f| {
                     std::io::Write::write_all(f, &mire.octets)
                         .map_err(|e| ErreurMire::Ecriture(e.to_string()))
-                })
-            })
-            .map_err(|e| abandonner(&[], &e))?;
+                })?;
+                Ok(vec![nom])
+            })?;
         Ok(MirePreparee {
             tirage: tirage.0,
-            fichiers: vec![fichier],
+            fichiers,
             dossier: dossier.to_path_buf(),
             plages: mire.valeurs.len(),
             pages: 1,

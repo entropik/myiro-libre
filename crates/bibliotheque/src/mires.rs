@@ -76,6 +76,27 @@ impl Bibliotheque {
         mire: &NouvelleMire,
         pages: usize,
     ) -> Resultat<(IdMire, IdTirage)> {
+        self.enregistrer_mire_et_tirage_si(condition, mire, pages, |_| {
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .map(|rangee| match rangee {
+            Ok(ids) => ids,
+            Err(jamais) => match jamais {},
+        })
+    }
+
+    /// Comme [`Self::enregistrer_mire_et_tirage`], mais la transaction n'est
+    /// validée qu'après `ecrire`, qui reçoit le numéro du tirage (il figure
+    /// dans le QR code et le nom des fichiers) : si `ecrire` échoue, rien
+    /// n'est rangé, ni tirage ni mire nouvelle, et son erreur est rendue
+    /// (résultat intérieur). Un tirage n'apparaît jamais sans ses fichiers.
+    pub fn enregistrer_mire_et_tirage_si<E>(
+        &self,
+        condition: IdCondition,
+        mire: &NouvelleMire,
+        pages: usize,
+        ecrire: impl FnOnce(IdTirage) -> Result<(), E>,
+    ) -> Resultat<Result<(IdMire, IdTirage), E>> {
         self.verifier_condition(condition)?;
         let invalide = |cause: &str| Err(ErreurBibliotheque::MireInvalide(cause.to_string()));
         if mire.nom.trim().is_empty() {
@@ -130,9 +151,13 @@ impl Bibliotheque {
             "INSERT INTO tirages (condition, mire, pages, horodatage) VALUES (?1, ?2, ?3, ?4)",
             params![condition.0, id_mire, entier(pages)?, mire.horodatage],
         )?;
-        let id_tirage = transaction.last_insert_rowid();
+        let id_tirage = IdTirage(transaction.last_insert_rowid());
+        if let Err(e) = ecrire(id_tirage) {
+            // La transaction est annulée en sortant de portée.
+            return Ok(Err(e));
+        }
         transaction.commit()?;
-        Ok((IdMire(id_mire), IdTirage(id_tirage)))
+        Ok(Ok((IdMire(id_mire), id_tirage)))
     }
 
     /// Les tirages de la condition, du plus récent au plus ancien.

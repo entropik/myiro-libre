@@ -460,6 +460,48 @@ fn une_ecriture_impossible_ne_laisse_aucun_fichier() {
             .map(|_| ()),
         Err("mire.erreur.ecriture".to_string())
     );
+    assert_eq!(b.tirages(), 0, "un tirage sans fichiers");
+}
+
+/// Un tirage n'apparaît jamais sans ses fichiers : si la deuxième page ne
+/// peut pas être déposée, la première est retirée, aucun dossier de travail
+/// ne reste et rien n'est rangé.
+#[test]
+fn une_page_qui_ne_se_depose_pas_ne_laisse_ni_tirage_ni_fichier() {
+    let b = banc();
+    // La place de la page 2 du premier tirage est prise par un dossier.
+    let page_2 =
+        "Canon PRO-4100 - Hahnemühle Photo Rag 308 - 720 dpi - 2026-10-23 - T1 - page 2 sur 2.tif";
+    std::fs::create_dir_all(b.mires().join(page_2).join("occupe")).unwrap();
+    assert_eq!(
+        b.preparer(&myiro1(TailleMire::Standard), &moteur(464), None)
+            .map(|_| ()),
+        Err("mire.erreur.ecriture".to_string())
+    );
+    assert_eq!(b.tirages(), 0);
+    assert_eq!(b.fichiers(), [page_2]);
+    // Une préparation suivante réussit, avec ses deux pages.
+    std::fs::remove_dir_all(b.mires().join(page_2)).unwrap();
+    let preparee = b
+        .preparer(&myiro1(TailleMire::Standard), &moteur(464), None)
+        .unwrap();
+    assert_eq!(preparee.fichiers.len(), 2);
+    assert_eq!(b.tirages(), 1);
+    assert_eq!(b.fichiers().len(), 2);
+}
+
+/// La mire FD-9 suit la même règle : copie impossible, rien n'est rangé.
+#[test]
+fn une_mire_fd9_qui_ne_se_copie_pas_ne_range_rien() {
+    let b = banc();
+    std::fs::write(b.mires(), b"occupe").unwrap();
+    assert_eq!(
+        b.ouverte
+            .preparer_mire_fd9(b.condition, lire_fictive().1, &b.mires(), maintenant())
+            .map(|_| ()),
+        Err("mire.erreur.ecriture".to_string())
+    );
+    assert_eq!(b.tirages(), 0);
 }
 
 #[test]
