@@ -292,7 +292,8 @@ impl SdkFd9 for Fd9Simule {
 
     fn deconnecter(&mut self) -> i32 {
         let code = self.appel("FD9_Disconnect", String::new());
-        if code == 0 {
+        // 1004 : la DLL n'avait plus de session (fiche FD9_Disconnect).
+        if code == 0 || code == 1004 {
             self.connecte = false;
         }
         code

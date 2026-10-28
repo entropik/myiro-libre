@@ -10,6 +10,9 @@ use fd9_sys::{
 use pont_protocole::{AdresseReseau, ErreurPont, Identite, Palier, RemiseAuRepos};
 use std::time::Duration;
 
+/// Code de `FD9_Disconnect` sans session ouverte dans la DLL.
+const CODE_AUCUNE_SESSION: i32 = 1004;
+
 impl<S: SdkFd9> Session<S> {
     /// Connexion à l'instrument n° `instrument` de la dernière détection.
     pub fn connecter(&mut self, instrument: usize) -> Result<Identite, ErreurPont> {
@@ -167,7 +170,9 @@ impl<S: SdkFd9> Session<S> {
         let fermeture = if self.connecte {
             let code = self.sdk.deconnecter();
             self.journal.push(format!("FD9_Disconnect : {code}"));
-            if code == 0 {
+            // 1004 : la DLL n'a plus de session, par exemple après une perte
+            // de liaison ; ce n'est pas une anomalie (fiche FD9_Disconnect).
+            if code == 0 || code == CODE_AUCUNE_SESSION {
                 self.connecte = false;
                 self.desinscrire();
                 Fermeture::Confirmee
