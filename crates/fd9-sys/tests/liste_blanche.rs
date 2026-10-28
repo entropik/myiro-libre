@@ -3,17 +3,32 @@
 use fd9_sys::EXPORTS_AUTORISES;
 
 #[test]
-fn les_exports_des_paliers_version_detection_connexion_sont_autorises() {
-    for nom in [
-        "FD9_GetLastError",
-        "FD9_GetDeviceList",
-        "FD9_RegisterDeviceEventHandler",
-        "FD9_Connect",
-        "FD9_GetSystemInfo",
-        "FD9_Disconnect",
-    ] {
-        assert!(EXPORTS_AUTORISES.contains(&nom), "manque : {nom}");
-    }
+fn la_liste_blanche_est_celle_de_la_mesure_d_une_feuille() {
+    // Plan 6, Global Constraints : exactement ces exports, dans cet ordre.
+    assert_eq!(
+        EXPORTS_AUTORISES,
+        [
+            "FD9_GetLastError",
+            "FD9_GetDeviceList",
+            "FD9_RegisterDeviceEventHandler",
+            "FD9_Connect",
+            "FD9_GetSystemInfo",
+            "FD9_GetStatus",
+            "FD9_Disconnect",
+            "FD9_StartCapture",
+            "FD9_GetCaptureResult",
+            "FD9_StartPatchRecognition",
+            "FD9_GetPatchRecognitionResult2",
+            "FD9_GetMeasurePoint",
+            "FD9_StartMeasurement2",
+            "FD9_GetData",
+            "FD9_SetOption",
+            "FD9_CalculateData",
+            "FD9_StopMeasurement",
+            "FD9_ExitMeasurement",
+            "FD9_GetPremeasurementError",
+        ]
+    );
 }
 
 #[test]
@@ -24,27 +39,48 @@ fn aucun_export_jig_n_est_autorise() {
 }
 
 #[test]
-fn aucun_export_set_n_est_autorise() {
-    // Aucune exception pour le FD-9 : SetOption et SetNetworkSetting restent
-    // dehors tant que leur contrat n'est pas établi.
-    for nom in EXPORTS_AUTORISES {
-        assert!(!nom.contains("_Set"), "export d'écriture autorisé : {nom}");
-    }
+fn set_option_est_la_seule_fonction_set_admise() {
+    // FD9_SetOption range quatre réglages de calcul dans la DLL, sans rien
+    // écrire dans l'instrument (fiche FD9_SetOption). Toute autre écriture
+    // reste dehors.
+    let ecritures: Vec<_> = EXPORTS_AUTORISES
+        .iter()
+        .filter(|nom| nom.contains("_Set"))
+        .collect();
+    assert_eq!(ecritures, [&"FD9_SetOption"]);
 }
 
 #[test]
-fn les_exports_a_risque_restent_interdits() {
+fn la_liste_blanche_n_a_ni_jig_ni_reglage_reseau() {
     for nom in [
         "JIG_GetSDKVersion",
         "JIG_TileMeasurement",
         "JIG_SetNetworkSetting",
         "JIG_SetFirstStartupDate",
         "FD9_SetNetworkSetting",
-        "FD9_SetOption",
         // Effet sur l'appareil inconnu : contrat non établi.
         "FD9_RegisterUserIlluminant",
         // Prise de main prioritaire : contrat non établi.
         "FD9_TAConnect",
+        // Travaux et images de mire : la RGB-2520 se mesure sans eux.
+        "FD9_RegisterJob",
+        "FD9_DeleteJob",
+        "FD9_GetJobList",
+        "FD9_MatchingChart",
+        "FD9_ClippingChart",
+        "FD9_GetChartImage",
+        "FD9_RegisterDisplayImage",
+        "FD9_CreateBarcodeImage",
+        "FD9_CreateChartImage",
+        "FD9_DeleteChartImage",
+        "FD9_WriteBmpFile",
+        // Anciennes formes, remplacées par StartMeasurement2 et
+        // GetPatchRecognitionResult2.
+        "FD9_StartMeasurement",
+        "FD9_StartPreMeasurement",
+        "FD9_GetPatchRecogResult",
+        "FD9_GetNetworkSetting",
+        "FD9_GetOption",
     ] {
         assert!(!EXPORTS_AUTORISES.contains(&nom), "autorisé à tort : {nom}");
     }

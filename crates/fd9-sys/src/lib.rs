@@ -3,40 +3,80 @@
 //! Tout ce qui est ici vient de l'analyse statique documentée dans `docs/abi/FD9_*`.
 //! Aucune fonction de ce crate ne charge la DLL.
 
+mod feuille;
+
+pub use feuille::*;
+
 /// Seuls exports que le pont FD-9 a le droit de résoudre dans la DLL.
 ///
 /// Un export absent de cette liste ne peut pas être appelé : le pont ne
 /// demande jamais son adresse. Les `JIG_*` (maintenance usine et tests de
-/// l'appareil) et les `FD9_Set*` n'y figurent pas et n'y entreront qu'avec un
-/// contrat établi et l'accord explicite du responsable du projet. On n'ajoute
-/// un export qu'avec sa fiche `docs/abi/`.
+/// l'appareil) n'y figurent pas. Seule écriture admise : `FD9_SetOption`, qui
+/// range des réglages de calcul dans la DLL sans rien écrire dans
+/// l'instrument (exception validée pour la mesure d'une feuille). Toute autre
+/// `FD9_Set*` reste dehors. On n'ajoute un export qu'avec sa fiche `docs/abi/`.
 ///
 /// FD9SDK n'a pas d'export de version hors `JIG_GetSDKVersion` : le palier
 /// Version lit la version dans la ressource du fichier DLL et n'appelle que
-/// `FD9_GetLastError` (fiche `docs/abi/FD9_GetLastError.md`).
+/// `FD9_GetLastError`.
 pub const EXPORTS_AUTORISES: &[&str] = &[
+    // Fiche docs/abi/FD9_GetLastError.md
     "FD9_GetLastError",
+    // Fiche docs/abi/FD9_GetDeviceList.md
     "FD9_GetDeviceList",
-    // À appeler avant la connexion : refusé une fois connecté.
+    // Fiche docs/abi/FD9_RegisterDeviceEventHandler.md ; à appeler avant la
+    // connexion : refusé une fois connecté.
     "FD9_RegisterDeviceEventHandler",
+    // Fiche docs/abi/FD9_Connect.md
     "FD9_Connect",
+    // Fiche docs/abi/FD9_GetSystemInfo.md
     "FD9_GetSystemInfo",
+    // Fiche docs/abi/FD9_GetStatus.md
+    "FD9_GetStatus",
+    // Fiche docs/abi/FD9_Disconnect.md
     "FD9_Disconnect",
+    // Fiche docs/abi/FD9_StartCapture.md
+    "FD9_StartCapture",
+    // Fiche docs/abi/FD9_GetCaptureResult.md
+    "FD9_GetCaptureResult",
+    // Fiche docs/abi/FD9_StartPatchRecognition.md
+    "FD9_StartPatchRecognition",
+    // Fiche docs/abi/FD9_GetPatchRecognitionResult2.md
+    "FD9_GetPatchRecognitionResult2",
+    // Fiche docs/abi/FD9_GetMeasurePoint.md
+    "FD9_GetMeasurePoint",
+    // Fiche docs/abi/FD9_StartMeasurement2.md
+    "FD9_StartMeasurement2",
+    // Fiche docs/abi/FD9_GetData.md
+    "FD9_GetData",
+    // Fiche docs/abi/FD9_SetOption.md ; aucun échange avec l'instrument.
+    "FD9_SetOption",
+    // Fiche docs/abi/FD9_CalculateData.md
+    "FD9_CalculateData",
+    // Fiche docs/abi/FD9_StopMeasurement.md
+    "FD9_StopMeasurement",
+    // Fiche docs/abi/FD9_ExitMeasurement.md
+    "FD9_ExitMeasurement",
+    // Fiche docs/abi/FD9_GetPremeasurementError.md ; en `extern "C"`, seule
+    // exception aux appels `extern "system"`.
+    "FD9_GetPremeasurementError",
 ];
 
 /// Codes publics renvoyés par les exports (fiche `docs/abi/FD9SDK.md`).
 /// `FD9_GetLastError`, lui, rend le code interne d'origine.
 pub const CODE_SUCCES: i32 = 0;
 pub const CODE_PARAMETRE_INVALIDE: i32 = 1001;
-/// Connecté, mais l'instrument demande sa calibration périodique (interne 8011).
-pub const CODE_CALIBRATION_PERIODIQUE_DUE: i32 = 1901;
+/// Connecté, mais l'instrument est à faire recertifier (interne 8011) :
+/// MYIROtools journalise « Instrument should be recertified ». Ce n'est pas
+/// un étalonnage demandé à l'opérateur.
+pub const CODE_RECERTIFICATION_DUE: i32 = 1901;
 /// Code interne absent de la table de regroupement.
 pub const CODE_NON_CLASSE: i32 = 1999;
 
 /// Vrai si `FD9_Connect` a ouvert la session : FD-S2w traite 1901 comme un
 /// succès, avec un avertissement.
 pub fn connexion_etablie(code: i32) -> bool {
-    code == CODE_SUCCES || code == CODE_CALIBRATION_PERIODIQUE_DUE
+    code == CODE_SUCCES || code == CODE_RECERTIFICATION_DUE
 }
 
 /// Rappel de `FD9_RegisterDeviceEventHandler`, appelé par la DLL en `__cdecl`
@@ -70,12 +110,12 @@ pub enum Liaison {
     Inconnue(u32),
 }
 
-fn texte_c(zone: &[u8]) -> String {
+pub(crate) fn texte_c(zone: &[u8]) -> String {
     let fin = zone.iter().position(|&o| o == 0).unwrap_or(zone.len());
     String::from_utf8_lossy(&zone[..fin]).into_owned()
 }
 
-/// Refus d'un paramètre de connexion avant tout appel à la DLL.
+/// Refus d'un paramètre avant tout appel à la DLL.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ErreurParametre {
     Vide,
@@ -85,6 +125,23 @@ pub enum ErreurParametre {
     },
     /// Zéro au milieu du texte ou caractère hors ASCII.
     CaractereInterdit,
+    /// Définition de feuille : plus de zones que le SDK n'en admet.
+    TropDeZones {
+        maximum: usize,
+    },
+    /// Définition de feuille : plus de plages que le SDK n'en admet.
+    TropDePlages {
+        maximum: usize,
+    },
+    /// Zone n° `zone` (comptée depuis 1) vide, ou hors des bornes du SDK
+    /// (1 à 250 rangées, 1 à 60 colonnes, pas et taille de plage non nuls).
+    ZoneHorsBornes {
+        zone: usize,
+    },
+    /// Zone n° `zone` (comptée depuis 1) qui déborde de la feuille.
+    ZoneHorsFeuille {
+        zone: usize,
+    },
 }
 
 /// Texte ASCII non vide, sans zéro, d'au plus `maximum` caractères.
