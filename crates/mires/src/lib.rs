@@ -15,11 +15,16 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 mod gabarit;
+mod rgb2520;
 
 pub use gabarit::{
     Gabarit, Rectangle, CONTRASTE_MIN_DE76, DISTANCE_TEXTE_MM, MYIRO1_BANDEAU_MM,
     MYIRO1_BANDE_MAX_MM, MYIRO1_BLANC_BOUT_MM, MYIRO1_COTE_MIN_MM, MYIRO1_COTE_PAR_DEFAUT_MM,
     MYIRO1_ECART_BANDES_MM, MYIRO1_MARGE_PAGE_MM,
+};
+pub use rgb2520::{
+    lire_mire_fd9, lire_mire_fd9_sans_empreinte, GeometrieFd9, MireFd9, RGB2520_EMPREINTE,
+    RGB2520_FICHIER, RGB2520_GEOMETRIE, RGB2520_NOM,
 };
 
 /// Instrument qui lira la mire.

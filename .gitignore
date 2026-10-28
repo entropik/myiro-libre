@@ -50,6 +50,8 @@ docs/sources/
 
 # ArgyllCMS (AGPL-3.0), posé à la main pour le développement et embarqué par l'installateur : jamais versionné
 argyll/
+# Mire FD-9 RGB-2520, posée à la main et embarquée par l'installateur : jamais versionnée
+mire-fd9/
 # Mires de tiers sans droit de redistribution, copie locale de travail
 docs/mires/
 

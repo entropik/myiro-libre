@@ -8,3 +8,9 @@ repository.workspace = true
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+tiff = { version = "0.11", default-features = false, features = ["lzw"] }
+
+[dev-dependencies]
+cgats = { path = "../cgats" }
+pont-protocole = { path = "../pont-protocole" }
