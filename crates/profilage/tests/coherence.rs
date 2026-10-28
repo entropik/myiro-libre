@@ -279,8 +279,24 @@ fn sans_gris_le_critere_est_dit_non_fait() {
 #[test]
 fn le_controle_de_2520_plages_tient_en_2_secondes() {
     // Grille 13 × 13 × 13, 300 plages au hasard, 23 doublons.
-    let saine = mesure_synthetique(13, 300, 23);
+    let mut saine = mesure_synthetique(13, 300, 23);
     assert_eq!(saine.plages.len(), 2520);
+    // Décalées de 60 plages, les 60 dernières plages du fichier n'ont plus
+    // de Lab associé : un gris, le blanc, le noir ou un doublon parmi elles
+    // rendrait son contrôle « non fait », et aucun décalage ne serait
+    // proposé. Ces plages sont donc placées en tête du fichier.
+    let repetee = |rvb: [f64; 3]| saine.plages.iter().filter(|p| p.rvb == rvb).count() > 1;
+    let speciales: Vec<bool> = saine
+        .plages
+        .iter()
+        .map(|p| {
+            let [r, g, b] = p.rvb;
+            r.max(g).max(b) - r.min(g).min(b) < 0.5 || repetee(p.rvb)
+        })
+        .collect();
+    let mut ordre: Vec<usize> = (0..saine.plages.len()).collect();
+    ordre.sort_by_key(|&i| !speciales[i]);
+    saine.plages = ordre.iter().map(|&i| saine.plages[i].clone()).collect();
     let decalee = decaler(&saine, 60);
     let debut = std::time::Instant::now();
     assert!(controler_coherence(&saine).accepte());
@@ -309,4 +325,96 @@ fn la_mesure_reelle_du_26_octobre_passe() {
         println!("plage {} : {:?}, écart {:.2}", s.rang, s.critere, s.ecart);
     }
     assert!(controle.accepte(), "décalage : {:?}", controle.decalage);
+}
+
+/// Le contrôle du blanc et du noir n'est fait que si les deux plages sont
+/// dans la mire. Sinon il est dit « non fait », mais la plage présente reste
+/// contrôlée et signalée.
+#[test]
+fn sans_blanc_le_blanc_et_noir_est_dit_non_fait() {
+    let mut mesure = mesure_saine();
+    mesure.plages.retain(|p| p.rvb != [100.0; 3]);
+    let controle = controler_coherence(&mesure);
+    assert!(controle.accepte(), "{:?}", controle.suspectes);
+    assert_eq!(controle.non_faits, [Critere::BlancNoir]);
+
+    // Le noir, présent, reste contrôlé.
+    let noir = rang(&mesure, [0.0; 3]);
+    let gris = rang(&mesure, [50.0; 3]);
+    mesure.plages[noir - 1].lab = mesure.plages[gris - 1].lab;
+    let controle = controler_coherence(&mesure);
+    assert!(!controle.accepte());
+    assert_eq!(controle.non_faits, [Critere::BlancNoir]);
+    assert!(rangs(&controle, Critere::BlancNoir).contains(&noir));
+}
+
+/// Rang de la plage de plus grand (ou plus petit) L*, hors des RVB donnés.
+fn extreme(mesure: &PlagesProfil, hors: [f64; 3], plus_clair: bool) -> usize {
+    let candidates = mesure
+        .plages
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.rvb != hors);
+    let (i, _) = if plus_clair {
+        candidates.max_by(|a, b| a.1.lab[0].total_cmp(&b.1.lab[0]))
+    } else {
+        candidates.min_by(|a, b| a.1.lab[0].total_cmp(&b.1.lab[0]))
+    }
+    .unwrap();
+    i + 1
+}
+
+/// Le plan veut le blanc « à moins de 2 L* » de la plage la plus claire et le
+/// noir « à moins de 5 L* » de la plus foncée : un écart égal au seuil est
+/// signalé.
+#[test]
+fn un_blanc_ou_un_noir_juste_au_seuil_est_signale() {
+    let mut mesure = mesure_saine();
+    let blanc = rang(&mesure, [100.0; 3]);
+    let plus_claire = extreme(&mesure, [100.0; 3], true);
+    mesure.plages[plus_claire - 1].lab[0] = 99.0;
+    mesure.plages[blanc - 1].lab[0] = 97.0;
+    let controle = controler_coherence(&mesure);
+    assert_eq!(rangs(&controle, Critere::BlancNoir), [blanc]);
+    assert_eq!(controle.suspectes[0].ecart, 2.0);
+
+    let mut mesure = mesure_saine();
+    let noir = rang(&mesure, [0.0; 3]);
+    let plus_foncee = extreme(&mesure, [0.0; 3], false);
+    mesure.plages[plus_foncee - 1].lab[0] = 10.0;
+    mesure.plages[noir - 1].lab[0] = 15.0;
+    let controle = controler_coherence(&mesure);
+    assert_eq!(rangs(&controle, Critere::BlancNoir), [noir]);
+    assert_eq!(controle.suspectes[0].ecart, 5.0);
+}
+
+/// Sous un décalage, un contrôle qui ne voit pas toutes ses plages n'est pas
+/// fait : sinon, un décalage qui met de côté la plage fautive passerait pour
+/// une explication.
+#[test]
+fn un_decalage_qui_met_de_cote_la_plage_fautive_n_est_pas_propose() {
+    // Un bloc de 41 plages (11 gris, dont le blanc et le noir, et 30 gris
+    // légèrement teintés) répété trois fois, dans le même ordre : décaler de
+    // 41 plages associe chaque RVB à une mesure du même RVB.
+    let mut bloc = Vec::new();
+    for k in 0..=10 {
+        let v = k as f64 * 10.0;
+        bloc.push([v; 3]);
+        if k > 0 {
+            bloc.push([v, v, v * 0.9]);
+            bloc.push([v * 0.9, v, v]);
+            bloc.push([v, v * 0.9, v]);
+        }
+    }
+    assert_eq!(bloc.len(), 41);
+    let rvb: Vec<[f64; 3]> = bloc.iter().cycle().take(123).copied().collect();
+    let mut mesure = plages(&rvb, 7);
+    assert!(controler_coherence(&mesure).accepte());
+
+    // Le premier blanc, seul fautif, est trop sombre.
+    let blanc = rang(&mesure, [100.0; 3]);
+    mesure.plages[blanc - 1].lab[0] -= 30.0;
+    let controle = controler_coherence(&mesure);
+    assert!(!controle.accepte());
+    assert_eq!(controle.decalage, None);
 }

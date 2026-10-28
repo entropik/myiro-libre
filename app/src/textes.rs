@@ -388,6 +388,7 @@ const FRANCAIS: Catalogue = &[
         "Les mesures ne correspondent pas aux plages de la mire\u{202f}: le profil serait faux. Plages en cause\u{202f}: {plages}. Relisez la mire, vérifiez le sens de la feuille et l’ordre de lecture, et que ce fichier est bien celui de cette mire.",
     ),
     ("profil.coherence.autres", "et {n} autres"),
+    ("profil.coherence.autre", "et 1 autre"),
     (
         "profil.coherence.decalage",
         "Les mesures semblent décalées de {n} plages.",
@@ -1412,6 +1413,7 @@ const ANGLAIS: Catalogue = &[
         "The measurements do not match the patches of the chart: the profile would be wrong. Patches involved: {plages}. Read the chart again, check the sheet orientation and the reading order, and that this file belongs to this chart.",
     ),
     ("profil.coherence.autres", "and {n} others"),
+    ("profil.coherence.autre", "and 1 other"),
     (
         "profil.coherence.decalage",
         "The measurements seem shifted by {n} patches.",

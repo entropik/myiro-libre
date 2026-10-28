@@ -161,7 +161,10 @@ window.CalculProfil = (() => {
   // puis les contrôles qui les signalent et, s'il y en a une, la piste du décalage.
   function texteCoherence(texte, c) {
     let plages = c.plages.join(", ");
-    if (c.autres) plages += ` ${t("profil.coherence.autres").replace("{n}", () => String(c.autres))}`;
+    if (c.autres) {
+      plages += ` ${c.autres === 1 ? t("profil.coherence.autre")
+        : t("profil.coherence.autres").replace("{n}", () => String(c.autres))}`;
+    }
     const morceaux = [texte.replace("{plages}", () => plages)];
     if (c.criteres.length) {
       morceaux.push(t("profil.coherence.criteres").replace("{criteres}", () => nomsCriteres(c.criteres)));

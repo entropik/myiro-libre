@@ -1266,3 +1266,19 @@ fn la_provenance_dit_si_les_mesures_ont_ete_controlees() {
     ));
     assert!(script.contains("cleValeur(\"profil.coherence.non_fait\", nomsCriteres(c.non_faits))"));
 }
+
+/// Une seule plage en cause au-delà des 10 nommées se dit au singulier.
+#[test]
+fn une_seule_autre_plage_se_dit_au_singulier() {
+    use app::textes::{texte, Langue};
+    assert_eq!(
+        texte(Langue::Francais, "profil.coherence.autre"),
+        "et 1 autre"
+    );
+    assert_eq!(
+        texte(Langue::Anglais, "profil.coherence.autre"),
+        "and 1 other"
+    );
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains("c.autres === 1 ? t(\"profil.coherence.autre\")"));
+}

@@ -18,11 +18,11 @@ use crate::plages::PlagesProfil;
 
 /// Recul de L* toléré d'un gris au suivant, RVB croissant (choix, à vérifier).
 pub const RETOUR_GRIS_MAX_L: f64 = 3.0;
-/// Écart de L* toléré entre le blanc RVB 100 et la plage la plus claire
-/// (choix, à vérifier).
+/// Le blanc RVB 100 doit être à moins de tant de L* de la plage la plus
+/// claire : un écart égal est signalé (choix, à vérifier).
 pub const ECART_BLANC_MAX_L: f64 = 2.0;
-/// Écart de L* toléré entre le noir RVB 0 et la plage la plus foncée
-/// (choix, à vérifier).
+/// Le noir RVB 0 doit être à moins de tant de L* de la plage la plus
+/// foncée : un écart égal est signalé (choix, à vérifier).
 pub const ECART_NOIR_MAX_L: f64 = 5.0;
 /// Écart ΔE00 toléré entre deux plages de même RVB (choix, à vérifier : entre
 /// MYIRO-1 et FD-9, les écarts mesurés le 7 octobre 2026 restaient sous 0,6).
@@ -78,8 +78,8 @@ pub struct PlageSuspecte {
 pub struct ControleCoherence {
     /// Contrôles faits.
     pub faits: Vec<Critere>,
-    /// Contrôles impossibles sur cette mesure : moins de 3 gris, ni blanc ni
-    /// noir, aucun doublon, moins de [`VOISINES`] voisines.
+    /// Contrôles impossibles sur cette mesure : moins de 3 gris, blanc ou
+    /// noir absent, aucun doublon, moins de [`VOISINES`] voisines.
     pub non_faits: Vec<Critere>,
     /// Plages signalées, triées par rang.
     pub suspectes: Vec<PlageSuspecte>,
@@ -119,6 +119,10 @@ fn distance(a: [f64; 3], b: [f64; 3]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
 }
 
+fn vers_lab([l, a, b]: [f64; 3]) -> Lab {
+    Lab { l, a, b }
+}
+
 /// Un écart incalculable rend la plage suspecte : le doute fait refuser.
 fn ecart_de00(a: Lab, b: Lab) -> f64 {
     delta_e00(a, b).unwrap_or(f64::INFINITY)
@@ -127,15 +131,7 @@ fn ecart_de00(a: Lab, b: Lab) -> f64 {
 impl Analyse {
     fn new(mesure: &PlagesProfil) -> Analyse {
         let rvb: Vec<[f64; 3]> = mesure.plages.iter().map(|p| p.rvb).collect();
-        let labs = mesure
-            .plages
-            .iter()
-            .map(|p| Lab {
-                l: p.lab[0],
-                a: p.lab[1],
-                b: p.lab[2],
-            })
-            .collect();
+        let labs = mesure.plages.iter().map(|p| vers_lab(p.lab)).collect();
         let cles: Vec<[i64; 3]> = rvb.iter().map(|&c| cle_rvb(c)).collect();
 
         let mut gris: Vec<usize> = (0..rvb.len())
@@ -179,8 +175,20 @@ impl Analyse {
         self.labs.get(j).copied()
     }
 
+    /// Toutes ces plages ont un Lab sous ce décalage : aucune n'est hors des
+    /// plages communes.
+    fn toutes_communes(&self, plages: &[usize], decalage: i64) -> bool {
+        plages.iter().all(|&i| self.lab(i, decalage).is_some())
+    }
+
     /// Les quatre contrôles, le RVB de la plage i associé au Lab de la plage
     /// i + `decalage`. `premiere` arrête à la première plage suspecte.
+    ///
+    /// Sous un décalage, le dégradé gris, le blanc et le noir et les doublons
+    /// ne sont faits que si toutes les plages qu'ils examinent sont communes.
+    /// Les voisines, elles, sont contrôlées sur les plages communes seulement
+    /// : les plages du bord, sans Lab associé, ne sont pas jugées, et une
+    /// voisine sans Lab associé est laissée de côté.
     fn evaluer(&self, decalage: i64, premiere: bool) -> ControleCoherence {
         let mut r = ControleCoherence {
             faits: Vec::new(),
@@ -222,7 +230,7 @@ impl Analyse {
             .iter()
             .filter_map(|&i| self.lab(i, decalage).map(|l| (i, l)))
             .collect();
-        if gris.len() < 3 {
+        if gris.len() < 3 || gris.len() < self.gris.len() {
             return false;
         }
         for paire in gris.windows(2) {
@@ -241,10 +249,9 @@ impl Analyse {
         true
     }
 
+    /// Fait seulement si le blanc et le noir sont tous deux dans la mire ; la
+    /// plage présente est contrôlée, et signalée, même si l'autre manque.
     fn blanc_noir(&self, decalage: i64, suspectes: &mut Vec<PlageSuspecte>) -> bool {
-        if self.blancs.is_empty() && self.noirs.is_empty() {
-            return false;
-        }
         let clartes = (0..self.labs.len()).filter_map(|i| self.lab(i, decalage).map(|l| l.l));
         let (min, max) = clartes.fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), l| {
             (min.min(l), max.max(l))
@@ -254,8 +261,9 @@ impl Analyse {
                 let Some(lab) = self.lab(i, decalage) else {
                     continue;
                 };
+                // « À moins de » le seuil : un écart égal au seuil est signalé.
                 let e = ecart(lab.l);
-                if e > seuil {
+                if e >= seuil {
                     suspectes.push(PlageSuspecte {
                         rang: i + 1,
                         critere: Critere::BlancNoir,
@@ -266,7 +274,10 @@ impl Analyse {
         };
         signaler(&self.blancs, &|l| max - l, ECART_BLANC_MAX_L);
         signaler(&self.noirs, &|l| l - min, ECART_NOIR_MAX_L);
-        true
+        !self.blancs.is_empty()
+            && !self.noirs.is_empty()
+            && self.toutes_communes(&self.blancs, decalage)
+            && self.toutes_communes(&self.noirs, decalage)
     }
 
     fn doublons(&self, decalage: i64, suspectes: &mut Vec<PlageSuspecte>) -> bool {
@@ -293,7 +304,9 @@ impl Analyse {
                 }
             }
         }
-        true
+        self.doublons
+            .iter()
+            .all(|groupe| self.toutes_communes(groupe, decalage))
     }
 
     fn voisines(&self, decalage: i64, premiere: bool, suspectes: &mut Vec<PlageSuspecte>) -> bool {
@@ -360,9 +373,10 @@ fn plus_proches(rvb: &[[f64; 3]], cles: &[[i64; 3]], i: usize) -> Vec<(usize, f6
 /// Contrôle que les mesures correspondent aux plages.
 ///
 /// Si des plages sont suspectes, essaie de décaler les mesures de 1 à
-/// [`DECALAGE_MAX`] plages, dans les deux sens : le premier décalage qui ne
-/// laisse aucune plage suspecte, avec les mêmes contrôles faits, est rendu
-/// comme piste. Rien n'est recalculé avec ce décalage.
+/// [`DECALAGE_MAX`] plages, dans les deux sens, du plus petit au plus grand
+/// et vers l'avant d'abord : le premier décalage qui ne laisse aucune plage
+/// suspecte, avec les mêmes contrôles faits, est rendu comme piste. Rien
+/// n'est recalculé avec ce décalage.
 pub fn controler_coherence(plages: &PlagesProfil) -> ControleCoherence {
     let analyse = Analyse::new(plages);
     let mut controle = analyse.evaluer(0, false);
@@ -374,7 +388,10 @@ pub fn controler_coherence(plages: &PlagesProfil) -> ControleCoherence {
         .flat_map(|k| [k as i64, -(k as i64)])
         .find(|&s| {
             let essai = analyse.evaluer(s, true);
-            // Un contrôle devenu impossible sur les plages communes ne prouve rien.
+            // Aucune plage suspecte, et les mêmes contrôles faits que sans
+            // décalage : un contrôle qui ne voit plus toutes ses plages (gris,
+            // blanc et noir, doublons) est « non fait » et le décalage est
+            // écarté. Les voisines restent faites sur les plages communes.
             essai.accepte() && essai.faits == controle.faits
         });
     controle
