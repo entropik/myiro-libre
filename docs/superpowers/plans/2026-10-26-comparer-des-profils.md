@@ -161,6 +161,7 @@ Valeurs fixées (prototype) :
 - `blanc` et `noir` : `lab_absolu` de (1,1,1) et (0,0,0). `dmax_approche` = −log₁₀(Y du noir absolu, blanc Y = 1). C'est **approché** : une densité tirée de Y, pas une densité ISO status T.
 - `volume_surface` : surface du cube à **33** points par arête, passée par `lab_absolu`.
 - Table de chroma (**approchée**) : grille RVB 33×33×33 ; case (L, h) avec L = ⌊L\*⌋ borné de 0 à 99 (100 lignes) et h = ⌊teinte / 2°⌋ (180 colonnes). Chaque case garde le C\* maximal. Une case vide entre deux cases non vides de la même ligne prend le plus petit des deux, avec la teinte qui boucle (`gbd()` de `calcul.py`). `coupes[L]` est la ligne L ; `chroma_par_teinte[h]` est le maximum de la colonne h. Les valeurs sont arrondies à 0,1.
+  - **Écart au plan (28 octobre 2026, commit 36e9d93)** : les coupes ne viennent plus de ce tri par cases. Chaque ligne L est la section de la surface du cube RVB (33 points par arête) par le plan L\* = L + 0,5, lue tous les 2° sur le rayon du milieu de chaque colonne (`surface::coupe_plan`), puis comblée et arrondie comme ci-dessus. `chroma_par_teinte[h]` garde le maximum des coupes et de la grille de points 33³ de la colonne h (le sommet du jaune tombe entre deux plans). Cause : des cases touchées seulement par des points intérieurs au gamut faisaient rentrer la coupe en pointes vers le centre.
 - `affichage` : surface du cube à **17** points par arête, soit 1 734 sommets et 3 072 triangles.
 
 - [ ] **Step 1 : Écrire les tests qui échouent** (profil d'essai linéaire de la tâche 1, blanc D50) :

@@ -969,7 +969,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "comparer.methode.approche",
-        "Chroma par teinte et coupes, par tranches de 1 L* et de 2°. Densité du noir tirée de Y, et non densité ISO status T. Pastilles d’écran\u{202f}: une couleur hors de l’écran est ramenée, et marquée «\u{202f}approchée\u{202f}».",
+        "Coupe\u{202f}: section du gamut à la clarté choisie, lue tous les 2°. Chroma par teinte\u{202f}: la plus forte trouvée dans chaque tranche de 2°. Densité du noir tirée de Y, et non densité ISO status T. Pastilles d’écran\u{202f}: une couleur hors de l’écran est ramenée, et marquée «\u{202f}approchée\u{202f}».",
     ),
     (
         "comparer.methode.volume",
@@ -2656,7 +2656,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "comparer.methode.approche",
-        "Chroma by hue and slices, in steps of 1 L* and 2°. Black density derived from Y, not an ISO status T density. Screen swatches: a colour outside the screen is brought back, and marked “approximate”.",
+        "Slice: section of the gamut at the chosen lightness, read every 2°. Chroma by hue: the highest found in each 2° step. Black density derived from Y, not an ISO status T density. Screen swatches: a colour outside the screen is brought back, and marked “approximate”.",
     ),
     (
         "comparer.methode.volume",

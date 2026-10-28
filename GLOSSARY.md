@@ -246,7 +246,7 @@ Taille du gamut en unités L\*a\*b\* au cube. Il dit l'étendue des couleurs d'u
 _Éviter_ : score, note
 
 **Coupe à clarté constante** :
-Tranche du gamut à une clarté L\* donnée, vue dans le plan a\*b\* : la chroma atteinte dans chaque teinte à cette clarté. Valeur approchée, par tranches de 1 L\* et de 2°.
+Tranche du gamut à une clarté L\* donnée, vue dans le plan a\*b\* : la chroma atteinte dans chaque teinte à cette clarté. C'est la section du gamut par cette clarté, lue tous les 2° : une valeur approchée.
 _Éviter_ : section, slice
 
 **Chroma par teinte** :
