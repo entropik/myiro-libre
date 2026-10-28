@@ -135,6 +135,16 @@ fn un_profil_sans_blanc_du_support_est_refuse() {
 }
 
 #[test]
+fn un_blanc_du_support_d_un_autre_type_est_refuse() {
+    let mut octets = profil_essai(&essai(D50_LAB, None));
+    let (position, _) = balise(&octets, b"wtpt");
+    octets[position..position + 4].copy_from_slice(b"text");
+    let erreur = ProfilIcc::lire(&octets).expect_err("blanc illisible");
+    assert_eq!(erreur, ErreurIcc::SansBlanc);
+    assert_eq!(erreur.cle(), "comparer.refus.sans_blanc");
+}
+
+#[test]
 fn un_profil_cmjn_est_refuse() {
     let mut octets = profil_essai(&essai(D50_LAB, None));
     octets[16..20].copy_from_slice(b"CMYK");

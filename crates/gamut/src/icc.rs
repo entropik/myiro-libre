@@ -98,12 +98,8 @@ impl ProfilIcc {
         };
         let blanc = match balises.trouver(b"wtpt")? {
             Some(d) if d.len() >= 20 && &d[0..4] == b"XYZ " => [s15(d, 8), s15(d, 12), s15(d, 16)],
-            Some(_) => {
-                return Err(ErreurIcc::Tronque {
-                    balise: "wtpt".into(),
-                })
-            }
-            None => return Err(ErreurIcc::SansBlanc),
+            // Un `wtpt` d'un autre type, ou trop court, ne donne aucun blanc.
+            Some(_) | None => return Err(ErreurIcc::SansBlanc),
         };
         if blanc.iter().any(|&v| v <= 0.0) {
             return Err(ErreurIcc::SansBlanc);
