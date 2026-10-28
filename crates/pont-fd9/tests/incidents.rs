@@ -339,3 +339,67 @@ fn un_arret_refuse_apres_un_incident_clot_la_feuille_et_le_dit() {
     let appels = appels(&session, depuis);
     assert_eq!(appels.last(), Some(&"FD9_ExitMeasurement 0 nul"));
 }
+
+#[test]
+fn un_arret_croise_avec_la_fin_de_mesure_clot_la_feuille() {
+    // Arrêt admis pendant la mesure (état 8), mais c'est la fin de mesure
+    // (9) qui arrive, pas la fin d'arrêt (10) : la feuille est close.
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.reactions.insert("FD9_StartMeasurement2", vec![8]);
+    sdk.reactions.insert("FD9_StopMeasurement", vec![9]);
+    let (mut session, depuis) = connectee_annulable(sdk);
+
+    assert_eq!(
+        session.mesurer_feuille(&six_plages()),
+        Err(ErreurPont::MesureAnnulee {
+            remise_au_repos: pont_protocole::RemiseAuRepos::AuRepos {}
+        })
+    );
+    let appels = appels(&session, depuis);
+    assert_eq!(
+        appels[appels.len() - 2..],
+        ["FD9_StopMeasurement faux", "FD9_ExitMeasurement 0 nul"]
+    );
+    assert!(!appels.iter().any(|a| a.starts_with("FD9_GetData")));
+}
+
+#[test]
+fn une_fin_de_mesure_annoncee_juste_apres_le_refus_de_l_arret_clot_la_feuille() {
+    // La DLL est déjà à l'état 9 quand l'arrêt est demandé (refus 1104),
+    // mais le rappel ne l'annonce qu'un peu plus tard.
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.reactions.insert("FD9_StartMeasurement2", vec![8]);
+    sdk.avant_arret_annonce_apres = Some(9);
+    let (mut session, depuis) = connectee_annulable(sdk);
+
+    assert!(matches!(
+        session.mesurer_feuille(&six_plages()),
+        Err(ErreurPont::MesureAnnulee { .. })
+    ));
+    let appels = appels(&session, depuis);
+    assert_eq!(appels.last(), Some(&"FD9_ExitMeasurement 0 nul"));
+}
+
+#[test]
+fn une_annulation_ne_passe_pas_d_une_feuille_a_la_suivante() {
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.a_venir.clear();
+    let (mut session, _) = connectee_annulable(sdk);
+    // Première feuille : annulée pendant l'attente de la feuille.
+    assert!(matches!(
+        session.prenumeriser(&six_plages()),
+        Err(ErreurPont::MesureAnnulee { .. })
+    ));
+    assert!(!session.annulation().demandee());
+
+    // Deuxième feuille, sans nouvelle annulation : elle va à son terme.
+    session.sdk_mut().a_venir = [2, 3].into();
+    assert_eq!(
+        session
+            .mesurer_feuille(&six_plages())
+            .unwrap()
+            .plages()
+            .len(),
+        6
+    );
+}

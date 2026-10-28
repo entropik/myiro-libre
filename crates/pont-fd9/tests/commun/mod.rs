@@ -75,6 +75,9 @@ pub struct Fd9Simule {
     /// État que l'instrument atteint juste avant le prochain
     /// `FD9_StopMeasurement` : l'arrêt croise la fin de la mesure.
     pub avant_arret: Option<u32>,
+    /// Comme `avant_arret`, mais le rappel n'annonce l'état qu'à l'attente
+    /// suivante : la DLL y est passée avant que l'événement arrive.
+    pub avant_arret_annonce_apres: Option<u32>,
     /// Valeurs qu'un spectre demande (`FD9_CalculateData`, 1005 au-delà de
     /// la sortie donnée).
     pub spectre_longueur: usize,
@@ -393,6 +396,10 @@ impl SdkFd9 for Fd9Simule {
     fn arreter(&mut self, feuille_suivante: bool) -> i32 {
         if let Some(etat) = self.avant_arret.take() {
             self.rappeler(etat);
+        }
+        if let Some(etat) = self.avant_arret_annonce_apres.take() {
+            self.etat = etat;
+            self.a_venir.push_back(etat);
         }
         let detail = if feuille_suivante { "vrai" } else { "faux" };
         self.appel_admis("FD9_StopMeasurement", detail.into(), |e| {

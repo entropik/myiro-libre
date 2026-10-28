@@ -110,6 +110,10 @@ impl<S: SdkFd9> Session<S> {
                 self.journaliser(&evenement, "");
                 match evenement.etat {
                     etat if etat == voulu => return Ok(()),
+                    // L'arrêt a croisé la fin de la mesure : la feuille est
+                    // finie, et `ExitMeasurement` est admis à l'état 9 comme
+                    // à l'état 10.
+                    EtatSdk::MesureFinie if attente == Attente::Arret => return Ok(()),
                     EtatSdk::Inconnu(code) => return Err(Fin::Inconnu(code)),
                     etat if etat.est_erreur() => return Err(Fin::Incident(etat)),
                     EtatSdk::Alimentation => engagee = true,

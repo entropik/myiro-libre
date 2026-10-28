@@ -9,6 +9,7 @@
 //! La session n'avance que sur un code de retour lu ou un événement reçu du
 //! rappel ; elle n'invente aucun état.
 
+mod arret;
 mod attente;
 mod connexion;
 pub mod dll;
@@ -18,6 +19,7 @@ mod fichier;
 mod plages;
 pub mod serveur;
 
+pub use arret::ATTENTE_APRES_ARRET_REFUSE;
 pub use attente::{Annulation, Delais};
 pub use feuille::{ECART_ADMIS, TAILLE_IMAGE_MAX};
 

@@ -8,12 +8,12 @@
 //! d'erreur sort sans arrêter. La session n'avance que sur un événement reçu
 //! ou un code de retour lu.
 
+use crate::arret::EchecArret;
 use crate::attente::{Attente, Fin};
 use crate::connexion::inattendue;
-use crate::{Evenement, SdkFd9, Session};
+use crate::{SdkFd9, Session};
 use fd9_sys::{CoordonneesMire, DonneesQr, EtatSdk, ResultatQr, ZONES_MAX};
 use pont_protocole::{DefinitionFeuille, ErreurPont, Info, LectureFeuille, Palier, RemiseAuRepos};
-use std::time::Duration;
 
 /// Écart d'origine ou de pas admis entre la reconnaissance et la
 /// définition : 3 mm, en 1/100 mm.
@@ -22,24 +22,6 @@ pub const ECART_ADMIS: u32 = 300;
 /// Plus grande image acceptée de `FD9_GetCaptureResult`, en octets : une
 /// taille au-delà est une réponse inattendue, pas une allocation.
 pub const TAILLE_IMAGE_MAX: u32 = 256 << 20;
-
-/// Échec d'un arrêt.
-pub(crate) enum EchecArret {
-    /// `FD9_StopMeasurement` refusé (code brut) : rien n'a été arrêté ni
-    /// clos, par exemple hors des états 1 à 8.
-    Refuse(i32),
-    /// Arrêt admis, puis délai, incident ou sortie refusée.
-    Apres(ErreurPont),
-}
-
-impl EchecArret {
-    pub(crate) fn erreur(self) -> ErreurPont {
-        match self {
-            EchecArret::Refuse(code) => erreur_sdk(code),
-            EchecArret::Apres(erreur) => erreur,
-        }
-    }
-}
 
 /// Codes publics de la fiche `FD9SDK.md` qui ont un nom dans le protocole.
 pub(crate) fn erreur_sdk(code: i32) -> ErreurPont {
@@ -230,81 +212,6 @@ impl<S: SdkFd9> Session<S> {
         Err(self.abandonner(erreur_sdk(code)))
     }
 
-    /// Arrête la feuille, puis rend `raison`. Un arrêt refusé d'emblée n'a
-    /// rien changé : la raison reste, et une annulation dit que l'arrêt a été
-    /// refusé. Un arrêt admis qui échoue ensuite rend son échec.
-    pub(crate) fn abandonner(&mut self, raison: ErreurPont) -> ErreurPont {
-        match self.arreter_feuille() {
-            Ok(()) => raison,
-            Err(EchecArret::Refuse(code)) => {
-                self.journal
-                    .push(format!("arrêt refusé ({code}) après {raison:?}"));
-                match raison {
-                    ErreurPont::MesureAnnulee { .. } => ErreurPont::MesureAnnulee {
-                        remise_au_repos: RemiseAuRepos::ArretRefuse { code },
-                    },
-                    raison => raison,
-                }
-            }
-            Err(EchecArret::Apres(echec)) => {
-                self.journal
-                    .push(format!("arrêt après {raison:?} : {echec:?}"));
-                echec
-            }
-        }
-    }
-
-    /// `FD9_StopMeasurement(faux)`, événement 10, puis `FD9_ExitMeasurement`.
-    /// Sans événement 10 : `Delai`, sans sortir.
-    fn arreter_feuille(&mut self) -> Result<(), EchecArret> {
-        let code = self.sdk.arreter(false);
-        self.journal
-            .push(format!("FD9_StopMeasurement(faux) : {code}"));
-        if code != 0 {
-            let interne = self.sdk.dernier_code();
-            self.journal.push(format!("code interne {interne}"));
-            return self.apres_arret_refuse(code);
-        }
-        let fin = match self.attendre(EtatSdk::AnnulationFinie, Attente::Arret) {
-            Ok(()) => self.sortir(),
-            Err(Fin::Incident(etat)) => Err(self.incident(etat)),
-            Err(Fin::Inconnu(code)) => Err(inattendue(format!(
-                "état {code} du SDK inconnu pendant l'arrêt"
-            ))),
-            Err(Fin::Delai | Fin::Annulee) => Err(ErreurPont::Delai {}),
-        };
-        fin.map_err(EchecArret::Apres)
-    }
-
-    /// L'arrêt a pu croiser la fin de la feuille : les événements pas encore
-    /// traités disent où elle en est. Mesure finie ou arrêt fini (9, 10) :
-    /// la feuille est close par `ExitMeasurement`. Incident : il est traité
-    /// et rendu. Sinon, rien n'a changé.
-    fn apres_arret_refuse(&mut self, code: i32) -> Result<(), EchecArret> {
-        let recus: Vec<Evenement> = self.recus.drain(..).collect();
-        for e in recus.into_iter().chain(self.sdk.evenements(Duration::ZERO)) {
-            self.journaliser(&e, " reçu pendant l'arrêt");
-        }
-        match self.dernier_etat {
-            Some(EtatSdk::MesureFinie | EtatSdk::AnnulationFinie) => {
-                self.sortir().map_err(EchecArret::Apres)
-            }
-            Some(etat) if etat.est_erreur() => Err(EchecArret::Apres(self.incident(etat))),
-            _ => Err(EchecArret::Refuse(code)),
-        }
-    }
-
-    pub(crate) fn sortir(&mut self) -> Result<(), ErreurPont> {
-        let code = self.sdk.sortir();
-        self.journal
-            .push(format!("FD9_ExitMeasurement(0, NULL) : {code}"));
-        if code == 0 {
-            Ok(())
-        } else {
-            Err(erreur_sdk(code))
-        }
-    }
-
     /// Attend `voulu`, ou conclut la feuille selon ce qui l'a interrompue.
     pub(crate) fn attendre_ou_conclure(
         &mut self,
@@ -323,51 +230,6 @@ impl<S: SdkFd9> Session<S> {
             Err(Fin::Incident(etat)) => Err(self.incident(etat)),
             Err(Fin::Inconnu(code)) => Err(self.etat_inconnu(code)),
         }
-    }
-
-    /// Événement d'erreur : la feuille sort sans arrêter (états de fin admis
-    /// par `FD9_ExitMeasurement`), après la cause de l'échec de préparation
-    /// pour 201.
-    fn incident(&mut self, etat: EtatSdk) -> ErreurPont {
-        let premesure = (etat == EtatSdk::Premesure).then(|| {
-            let mut systeme = 0i32;
-            let cause = self.sdk.erreur_premesure(&mut systeme);
-            self.journal.push(format!(
-                "FD9_GetPremeasurementError : cause {cause}, erreur système {systeme}"
-            ));
-            cause
-        });
-        if let Err(erreur) = self.sortir() {
-            self.journal
-                .push(format!("sortie après l'état {} : {erreur:?}", etat.code()));
-        }
-        if etat == EtatSdk::Communication {
-            self.perdu = true;
-            return ErreurPont::InstrumentPerdu {};
-        }
-        ErreurPont::IncidentFeuille {
-            etat: etat.code(),
-            premesure,
-        }
-    }
-
-    /// État absent de la table : arrêt si le SDK l'admet, sinon sortie, sans
-    /// rien en déduire.
-    fn etat_inconnu(&mut self, code: u32) -> ErreurPont {
-        let arret = self.sdk.arreter(false);
-        self.journal
-            .push(format!("FD9_StopMeasurement(faux) : {arret}"));
-        if arret == 0 {
-            if self
-                .attendre(EtatSdk::AnnulationFinie, Attente::Arret)
-                .is_ok()
-            {
-                let _ = self.sortir();
-            }
-        } else {
-            let _ = self.sortir();
-        }
-        inattendue(format!("état {code} du SDK inconnu"))
     }
 }
 

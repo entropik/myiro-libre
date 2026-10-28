@@ -40,6 +40,9 @@ D'après les contrôles ci-dessus, l'appel de l'événement 9 est refusé (1104)
 - Ne l'appeler que pour **annuler** pendant les états 1 à 8 (délai de la feuille dépassé, autre mire, mire non reconnue, annulation de l'opérateur), avec `faux`.
 - Après un arrêt admis, **attendre l'événement 10** avant [FD9_ExitMeasurement](FD9_ExitMeasurement.md) : appelée plus tôt, celle-ci est refusée. Sans événement 10 dans le délai, rendre `Delai` sans inventer d'état.
 - À l'événement 9, ne pas compter sur `FD9_StopMeasurement` : un 1104 à cet endroit est journalisé, pas traité comme une panne.
+- Un arrêt peut croiser la fin de la mesure (supposé, rien ne l'exclut dans le code lu) :
+  - si l'événement 9 arrive à la place de l'événement 10, la feuille est finie : le pont la clôt par `FD9_ExitMeasurement`, admis à l'état 9, et rend la raison de l'arrêt ;
+  - si l'arrêt est refusé (1104), le pont laisse au rappel jusqu'à 2 s pour annoncer l'état où la DLL est déjà passée. À 9 ou 10, il clôt la feuille ; sur un état d'erreur, il traite l'incident ; sinon, il rend le refus.
 
 ## À vérifier sur l'instrument
 
