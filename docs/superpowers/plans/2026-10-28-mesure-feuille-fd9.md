@@ -37,7 +37,7 @@ Niveaux : **confirmé** (lu dans le code), **supposé**, **à vérifier sur l'in
   4. `StartPatchRecognition` en mode 4, **COMBINE** (reconnaissance automatique et comparaison aux coordonnées de la définition) ;
   5. événement 7 : `GetPatchRecognitionResult2`, puis **comparaison du nombre de zones et de plages à la définition**, puis `GetMeasurePoint` et `StartMeasurement2(mode 1, avis 1)` ;
   6. événement 11 : nombre de plages déjà mesurées ;
-  7. événement 9 : `StopMeasurement(vrai)`, puis `ExitMeasurement(0, NULL)` ;
+  7. événement 9 : `StopMeasurement(vrai)` (refusé par le SDK à cet état, retour ignoré par MYIROtools), puis `ExitMeasurement(0, NULL)` ;
   8. erreurs 101–103, 201–206, 301 : `ExitMeasurement(0, NULL)` ; un appel refusé en cours de route : `StopMeasurement(faux)`.
 - **1901 = recertification due** (confirmé : MYIROtools journalise « Instrument should be recertified »). La connexion est faite. Ce n'est pas un étalonnage demandé à l'utilisateur. Le nom `CODE_CALIBRATION_PERIODIQUE_DUE` de `fd9-sys` est trompeur : à renommer à la tâche 2.
 - **QR** (confirmé dans `FD9SDK.dll`) : le texte est découpé sur `:`. Avec une version qui commence par `011`, on obtient `deviceName` (+0, 4 octets), `version` (+4, 4 octets) et un **texte libre à +0x294** (80 caractères au plus). `tFD9_BarcodeData` fait 1 172 octets. Pour la RGB-2520, le texte attendu est `RGB-2520 - 1P MY9*1+` : supposé, à vérifier à l'essai E3. C'est l'application qui le relit, pas le SDK.
@@ -54,6 +54,8 @@ Niveaux : **confirmé** (lu dans le code), **supposé**, **à vérifier sur l'in
   - les données brutes (option 3 = 0x0c) font 152 valeurs, soit **4 blocs de 38** ;
   - les autres types se calculent depuis ces 152 valeurs, avec le même calcul que `CalculateData` (entrée de 36 ou 152 valeurs).
 - **`FD9_SetOption` n'écrit rien dans l'instrument** (confirmé) : elle range quatre réglages de calcul dans la DLL (clé 0 < 16, clé 1 < 16, clé 2 < 2, clé 3 < 15). C'est la seule `FD9_Set*` admise par ce plan ; sa fiche le prouve.
+
+**Révision du 28 octobre 2026 (fiches de la tâche 1)** : la lecture des fonctions de travail du SDK a établi les états où `FD9_StopMeasurement` (1 à 8) et `FD9_ExitMeasurement` (9, 10, erreurs) sont admis. Les tâches 5 et 6 en tiennent compte : un arrêt attend l'événement 10 avant de sortir, et une mesure finie sort sans arrêter. Autres faits des fiches : état du SDK à +0x10 de `FD9_GetStatus`, spectre de 36 valeurs confirmé, `FD9_SetOption` sans contrôle de pointeur nul.
 
 ## Global Constraints
 
@@ -81,17 +83,17 @@ Niveaux : **confirmé** (lu dans le code), **supposé**, **à vérifier sur l'in
   - **origine et pas reconnus à 3 mm près** de la définition (300 en 1/100 mm), pour attraper une autre mire de même taille.
   Un écart est refusé en le disant (`MireNonReconnue`), et rien n'est mesuré.
 - **QR contrôlé, mais pas obligatoire.** Un QR lu doit avoir `deviceName = "FD-9"` et un texte qui commence par `RGB-2520 - 1P MY9`. Un autre texte refuse la feuille (`AutreMire { texte }`). Un QR absent ou illisible n'arrête pas : la reconnaissance tranche, et la provenance dit « QR non lu ».
-- **Plages lues en fin de mesure.** MYIROtools lit les plages au fil des avis (événement 11). Ce plan les lit **toutes à l'événement 9**, avant `StopMeasurement(vrai)` : une seule boucle, sans course entre deux fils. Si l'essai E4 montre que les données ne sont plus là à l'événement 9, on passe à la lecture au fil des avis (tâche 6, variante prévue).
+- **Plages lues en fin de mesure.** MYIROtools lit les plages au fil des avis (événement 11). Ce plan les lit **toutes à l'événement 9**, avant `ExitMeasurement` : une seule boucle, sans course entre deux fils. Si l'essai E4 montre que les données ne sont plus là à l'événement 9, on passe à la lecture au fil des avis (tâche 6, variante prévue).
 - **Spectres M0, M1, M2 calculés depuis les 152 données brutes.** On lit une fois les données brutes (`SetOption(3, 0x0c)`, `GetData` sur 152 valeurs). Puis, pour chaque condition, on pose `SetOption(0, …)` et on appelle `CalculateData` :
   - conditions : M0 = 0, M1 = 2, M2 = 15 (valeurs relevées dans FD-S2w ; supposé) ;
-  - spectre (`SetOption(3, 0x0b)`) : 36 valeurs supposées, 380–730 nm au pas de 10 ;
+  - spectre (`SetOption(3, 0x0b)`) : 36 valeurs (longueur confirmée par la fiche `FD9_CalculateData`), 380–730 nm au pas de 10 (supposé) ;
   - Lab : `SetOption(3, 0)`, avec D50 (`SetOption(1, 2)`) et 2° (`SetOption(2, 0)`).
 
   Les conditions restent « supposées » dans la provenance tant que l'essai E4 ne les a pas comparées à l'export de MYIROtools du 26 octobre (`Archivage/donnees/mesures-importees/RGB-2520_00025.txt`, local).
 - **Association aux valeurs nominales vérifiée.** La plage n° i de la mesure est la plage n° i de la mire : rangée `i / 42`, colonne `i % 42`, comptées depuis 0. On le vérifie par la position que rend `GetData` (zone 0, rangée, colonne), plage par plage. Un écart refuse la mesure entière.
 - **La mesure entre dans la bibliothèque comme un CGATS myiro-libre importé.** Elle a ses colonnes RVB de 0 à 100, avec une échelle confirmée pour un fichier écrit par myiro-libre, et sa provenance « pont FD-9 » dans l'en-tête. Ainsi, le calcul du plan 3 et la page des mesures marchent sans changement. Le JSON complet de la mesure (`myiro-libre/mesure/1`, données brutes comprises) est gardé à côté, dans le dossier de la bibliothèque. Une table « mesures de pont en feuille » attendra le plan 7.
 - **N° de série** : `Identite.numero_serie` est un `u32`. Le FD-9 rend 8 chiffres écrits en hexadécimal, supposés en BCD. Le pont les lit en décimal ; un texte non numérique refuse la connexion (`ReponseInattendue`), sans rien inventer. Le texte brut reste dans `brute_hex`.
-- **Délai d'attente de la feuille : 120 s** après l'armement. Au-delà, on arrête (`StopMeasurement(faux)`, `ExitMeasurement`) et on rend `Delai`. Le délai se règle par `--attente-feuille <s>`, pour les essais.
+- **Délai d'attente de la feuille : 120 s** après l'armement. Au-delà, on arrête (`StopMeasurement(faux)`, événement 10, `ExitMeasurement` : voir la tâche 5) et on rend `FeuilleAbsente`. Le délai se règle par `--attente-feuille <s>`, pour les essais.
 - **Journal du SDK** : le pont n'écrit jamais `DebugSDK/` de lui-même. L'opérateur peut créer ce dossier dans le dossier courant du pont pour un essai (fiche `FD9SDK.md`).
 
 ## Review Focus
@@ -342,17 +344,19 @@ En cas d'échec : `inscrire_rappel(faux)`. Fermeture : `deconnecter`, puis `insc
 Déroulé de `Session::prenumeriser(&DefinitionFeuille) -> Result<LectureFeuille, ErreurPont>` :
 
 1. `CoordonneesMire::depuis_definition`, sinon `ParametreRefuse` (aucun appel).
-2. Attendre les événements jusqu'à 3 (`AlimentationFinie`), pendant `attente_feuille`. Sinon : `arreter(faux)`, `sortir`, `FeuilleAbsente`.
+2. Attendre les événements jusqu'à 3 (`AlimentationFinie`), pendant `attente_feuille`. Sinon : **arrêt** (ci-dessous), puis `FeuilleAbsente`.
 3. `capturer` (StartCapture) ; attendre l'événement 5.
-4. `resultat_capture` deux fois (taille, puis image dans un `Vec<u8>` de la taille rendue). Le QR est rangé dans `DonneesQr::vide()`.
-5. QR trouvé avec un autre texte que `nom` : `arreter(faux)`, `sortir`, `AutreMire { texte }`.
-6. `reconnaitre(mode, &coord, couleurs = nul, &0, &0)` ; attendre l'événement 7.
-7. `resultat_reconnaissance(&fiabilité, nul, &coord_lue)`. Comparer zones, plages, origines et pas (écart ≤ 300). Sinon `MireNonReconnue`.
-8. Prénumérisation seule : `arreter(faux)`, puis `sortir(0, nul)`, puis rendre `LectureFeuille`.
+4. `resultat_capture` deux fois (taille, puis image dans un `Vec<u8>` de la taille rendue). Le QR est rangé dans `DonneesQr::vide()` ; un QR introuvable laisse ce tampon intact, et un `deviceName` `FAIL` rend « trouvé » : seul `deviceName == "FD-9"` compte comme un QR lu.
+5. QR trouvé avec un autre texte que `nom` : **arrêt**, puis `AutreMire { texte }`.
+6. `reconnaitre(mode, &coord, couleurs = nul, &0, &0)` : `mode`, `rangees` et `colonnes` ne sont **jamais des pointeurs nuls** (fiche `FD9_StartPatchRecognition`). Attendre l'événement 7.
+7. `resultat_reconnaissance(&fiabilité, nul, &coord_lue)`. Comparer zones, plages, origines et pas (écart ≤ 300). Sinon **arrêt**, puis `MireNonReconnue`.
+8. Prénumérisation seule : **arrêt**, puis rendre `LectureFeuille`.
+
+**Arrêt** (fiches `FD9_StopMeasurement` et `FD9_ExitMeasurement`, confirmé) : `arreter(faux)`, admis seulement dans les états 1 à 8 ; puis **attendre l'événement 10** (`AnnulationFinie`) ; puis `sortir(0, nul)`, admis seulement aux états 9, 10 et d'erreur. Sans événement 10 dans le délai : `Delai`, sans appeler `sortir` et sans inventer d'état.
 
 Pendant toute attente :
-- un événement d'erreur (101–103, 201–206, 301) donne `sortir`, puis `IncidentFeuille` (avec `erreur_premesure` pour 201) ;
-- une requête `annuler` lue par le serveur donne `arreter(faux)`, `sortir`, puis `MesureAnnulee`, comme le pont MYIRO-1 (#26) ;
+- un événement d'erreur (101–103, 201–206, 301) donne `sortir` directement (sans `arreter`), puis `IncidentFeuille` (avec `erreur_premesure` pour 201) ;
+- une requête `annuler` lue par le serveur donne **arrêt**, puis `MesureAnnulee`, comme le pont MYIRO-1 (#26) ;
 - l'image capturée n'est gardée que le temps de la requête : elle n'est ni écrite ni renvoyée (plus tard, #35).
 
 - [ ] **Step 1 : Tests d'abord** (scénarios simulés)
@@ -364,7 +368,9 @@ Pendant toute attente :
 #[test] fn un_qr_absent_n_empeche_pas_la_reconnaissance() {}    // qr: Inconnue
 #[test] fn une_geometrie_decalee_refuse_la_feuille() {}         // écart 400 > 300
 #[test] fn un_nombre_de_plages_different_refuse_la_feuille() {} // 2478 au lieu de 2520
-#[test] fn annuler_pendant_l_attente_arrete_et_sort() {}
+#[test] fn annuler_pendant_l_attente_arrete_et_sort() {}         // StopMeasurement(false), événement 10, puis ExitMeasurement
+#[test] fn sans_evenement_10_l_arret_rend_delai_sans_sortir() {}
+#[test] fn une_erreur_sort_sans_arreter() {}                     // état 102 : ExitMeasurement seul
 #[test] fn la_feuille_est_refusee_sous_le_plafond_sans_appel() {}
 #[test] fn la_capture_est_lue_en_deux_appels() {}               // image nulle, puis tampon de la taille rendue
 ```
@@ -392,7 +398,7 @@ Pendant toute attente :
 6. Puis, pour M0 (0), M1 (2) et M2 (15) :
    - `regler(Condition, c)`, `regler(TypeDonnees, 0x0b)`, `calculer(spectre, &n, brutes, &152)` ;
    - puis `regler(TypeDonnees, 0)`, `regler(Illuminant, 2)`, `regler(Observateur, 0)`, `calculer(lab, &3, brutes, &152)`.
-7. `attendre 1 s`, `arreter(vrai)`, `sortir(0, nul)`.
+7. `sortir(0, nul)`, admis à l'état 9. **Pas de `arreter(vrai)`** : il serait refusé (1104) à l'état 9 (fiche `FD9_StopMeasurement`, confirmé). MYIROtools l'appelle quand même et ignore son retour : ce plan ne le reprend pas.
 8. `Mesure::new(plages, provenance)` :
    - modèle `FD-9`, version du SDK, empreinte de la DLL ;
    - `etalonnage: Info::Inconnue` (pas d'étalonnage utilisateur ; libellé : « étalonnage automatique de l'instrument ») ;
@@ -408,7 +414,7 @@ Variante prévue (Choix de l'assistant) : si l'essai E4 montre que les données 
 #[test] fn chaque_plage_a_trois_spectres_et_ses_donnees_brutes() {}
 #[test] fn une_position_inattendue_refuse_la_mesure() {}
 #[test] fn un_spectre_de_longueur_inattendue_refuse_la_mesure() {}    // autre que 36 : refus, en le disant
-#[test] fn la_fin_arrete_avec_alimentation_suivante_puis_sort() {}    // StopMeasurement(true), ExitMeasurement(0, NULL)
+#[test] fn la_fin_lit_les_plages_puis_sort_sans_arreter() {}          // ExitMeasurement(0, NULL) après la dernière plage, aucun StopMeasurement
 #[test] fn la_provenance_dit_feuille_et_qr_lu() {}
 #[test] fn les_conditions_restent_supposees_tant_que_non_verifiees() {}
 #[test] fn mesurer_sans_prenumerisation_prealable_est_permis() {}     // Feuille exige Connexion, pas Prénumérisation
