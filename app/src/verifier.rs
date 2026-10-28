@@ -117,8 +117,17 @@ fn illisible(quoi: &str, e: serde_json::Error) -> ErreurProfil {
     ErreurProfil::sans_cause("bibliotheque.erreur.autre")
 }
 
-fn lire_criteres(jeu: &JeuTolerances) -> Result<Criteres, ErreurProfil> {
-    serde_json::from_str(&jeu.criteres).map_err(|e| illisible("jeu de tolérances", e))
+pub(crate) fn lire_criteres(jeu: &JeuTolerances) -> Result<Criteres, ErreurProfil> {
+    lire_json("jeu de tolérances", &jeu.criteres)
+}
+
+/// Relit un JSON rangé (fiche, calcul) ; illisible : erreur de la
+/// bibliothèque, jamais une valeur inventée.
+pub(crate) fn lire_json<T: serde::de::DeserializeOwned>(
+    quoi: &str,
+    texte: &str,
+) -> Result<T, ErreurProfil> {
+    serde_json::from_str(texte).map_err(|e| illisible(quoi, e))
 }
 
 fn lab([l, a, b]: [f64; 3]) -> colorimetrie::Lab {

@@ -13,6 +13,7 @@ pub mod mesurer;
 pub mod parc;
 pub mod pont;
 pub mod profiler;
+pub mod rapport;
 pub mod textes;
 pub mod verifier;
 
@@ -628,6 +629,8 @@ pub fn lancer() {
             verifier::commandes::verifier_historique,
             verifier::commandes::tolerances_lister,
             verifier::commandes::tolerances_enregistrer,
+            verifier::commandes::verifier_exporter_rapport,
+            verifier::commandes::verifier_exporter_profil,
             etalonner,
             repondre_geste
         ])

@@ -6,11 +6,14 @@ use std::time::SystemTime;
 use bibliotheque::{IdCondition, IdProfil, IdTolerances, IdVerification, JeuTolerances};
 use profilage::{ArgyllCms, Impression, MoteurVerification};
 use serde::Serialize;
+use tauri_plugin_dialog::DialogExt;
 use verification::Criteres;
 
 use super::{DemandeVerification, FicheTirage, ResultatVerification, ResumeVerification};
 use crate::colonne::BibliothequeOuverte;
+use crate::parc::si_choisi;
 use crate::profiler::{ErreurProfil, Moteur, SourceProfil};
+use crate::textes::Langue;
 
 /// Ce que la section « Avancé » montre : les commandes `xicclu`, et la
 /// raison qui empêchera la vérification si ArgyllCMS manque.
@@ -87,6 +90,73 @@ pub fn tolerances_lister(
     ouverte: tauri::State<'_, BibliothequeOuverte>,
 ) -> Result<Vec<JeuTolerances>, ErreurProfil> {
     ouverte.jeux_tolerances()
+}
+
+fn langue(code: &str) -> Langue {
+    Langue::depuis_code(code).unwrap_or(Langue::Francais)
+}
+
+/// Nom proposé pour le rapport : celui du profil, suivi de `_verification`.
+fn nom_rapport(profil: &str) -> String {
+    let base = profil.strip_suffix(".icc").unwrap_or(profil);
+    format!("{base}_verification.html")
+}
+
+/// Exporte le rapport là où l'opérateur le dit ; rend le nom du fichier
+/// écrit, ou `None` s'il a annulé.
+#[tauri::command(async)]
+pub fn verifier_exporter_rapport(
+    app: tauri::AppHandle,
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+    verification: i64,
+    langue: &str,
+    filtre: String,
+) -> Result<Option<String>, String> {
+    let v = IdVerification(verification);
+    let d = ouverte.donnees_rapport(v).map_err(|e| e.cle.to_string())?;
+    let fichier = app
+        .dialog()
+        .file()
+        .set_file_name(nom_rapport(&d.profil.nom))
+        .add_filter(filtre, &["html"])
+        .blocking_save_file()
+        .and_then(|f| f.into_path().ok());
+    let langue = self::langue(langue);
+    si_choisi(fichier, |f| {
+        ouverte.exporter_rapport(v, langue, f)?;
+        Ok(nom_fichier(f))
+    })
+}
+
+/// Exporte le profil vérifié et, à côté, son rapport.
+#[tauri::command(async)]
+pub fn verifier_exporter_profil(
+    app: tauri::AppHandle,
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+    verification: i64,
+    langue: &str,
+    filtre: String,
+) -> Result<Option<String>, String> {
+    let v = IdVerification(verification);
+    let d = ouverte.donnees_rapport(v).map_err(|e| e.cle.to_string())?;
+    let fichier = app
+        .dialog()
+        .file()
+        .set_file_name(d.profil.nom)
+        .add_filter(filtre, &["icc", "icm"])
+        .blocking_save_file()
+        .and_then(|f| f.into_path().ok());
+    let langue = self::langue(langue);
+    si_choisi(fichier, |f| {
+        ouverte.exporter_profil_et_rapport(v, langue, f)?;
+        Ok(nom_fichier(f))
+    })
+}
+
+fn nom_fichier(f: &std::path::Path) -> String {
+    f.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 #[tauri::command]
