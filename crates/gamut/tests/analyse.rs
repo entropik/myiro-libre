@@ -130,6 +130,12 @@ fn la_coupe_suit_la_section_du_gamut_sans_dents() {
     // g = (0,02 + tan 1°) / (2 + tan 1°), C* = 60·(1 − g) / cos 1° = 58,9.
     let c = analyse.coupes[50][0];
     assert!((c - 58.9).abs() <= 0.05, "C* à L* 50, teinte 1° : {c}");
+    // Tant que le plan coupe le gamut (du noir L* 25 au blanc L* 100), aucune
+    // teinte n'est vide.
+    for l in 25..=98 {
+        let vide = analyse.coupes[l].iter().position(|&c| c == 0.0);
+        assert_eq!(vide, None, "teinte vide à L* {l}");
+    }
     // Une coupe à clarté constante est un contour lisse : aucune case ne
     // rentre vers le centre entre ses deux voisines.
     for l in 30..=90 {
