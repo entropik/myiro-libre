@@ -4,7 +4,7 @@
 
 use colorimetrie::{xyz_vers_lab, Lab, Xyz};
 
-use crate::table::{lire_mft2, Lut};
+use crate::table::{lab16_vers_lab, lab_vers_lab16, lire_mft2, Lut, XYZ16};
 
 /// Illuminant D50 du PCS, tel que l'écrivent les profils (échelle Y = 1).
 pub(crate) const ILLUMINANT_D50: [f64; 3] = [0.9642, 1.0, 0.8249];
@@ -158,14 +158,8 @@ impl ProfilIcc {
     pub fn lab_relatif(&self, rvb: [f64; 3]) -> [f64; 3] {
         let v = self.lut.evaluer(rvb);
         match self.pcs {
-            Pcs::Lab => {
-                let w = v.map(|x| x * 65535.0);
-                [w[0] / 652.80, w[1] / 256.0 - 128.0, w[2] / 256.0 - 128.0]
-            }
-            Pcs::Xyz => {
-                let xyz = v.map(|x| x * 65535.0 / 32768.0);
-                vers_lab_pcs(xyz, self.illuminant)
-            }
+            Pcs::Lab => lab16_vers_lab(v),
+            Pcs::Xyz => vers_lab_pcs(v.map(|x| x * XYZ16), self.illuminant),
         }
     }
 
@@ -181,16 +175,10 @@ impl ProfilIcc {
     pub fn reproduire(&self, lab: [f64; 3]) -> Result<[f64; 3], ErreurIcc> {
         let inverse = self.inverse.as_ref().map_err(Clone::clone)?;
         let rvb = match self.pcs {
-            // Lab « hérité » 16 bits de la lut16 : l'inverse du décodage
-            // de `lab_relatif`.
-            Pcs::Lab => inverse.evaluer_inverse([
-                lab[0] * 652.80 / 65535.0,
-                (lab[1] + 128.0) * 256.0 / 65535.0,
-                (lab[2] + 128.0) * 256.0 / 65535.0,
-            ]),
+            Pcs::Lab => inverse.evaluer_inverse(lab_vers_lab16(lab)),
             Pcs::Xyz => {
                 let xyz = lab_vers_xyz(lab, self.illuminant);
-                inverse.evaluer_inverse_xyz(xyz.map(|x| x * 32768.0 / 65535.0))
+                inverse.evaluer_inverse_xyz(xyz.map(|x| x / XYZ16))
             }
         };
         Ok(self.lab_relatif(rvb))

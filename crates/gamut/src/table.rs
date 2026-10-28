@@ -4,6 +4,25 @@
 
 use crate::icc::{s15, signature, u16_at, ErreurIcc};
 
+/// XYZ (échelle Y = 1) d'une valeur 1 d'une lut16 au PCS XYZ : 65 535 / 32 768.
+pub(crate) const XYZ16: f64 = 65535.0 / 32768.0;
+
+/// L\*, a\*, b\* en Lab « hérité » 16 bits d'une lut16, ramené de 0 à 1 :
+/// L\* × 652,80 et (a\* + 128) × 256 sur 65 535.
+pub(crate) fn lab_vers_lab16(lab: [f64; 3]) -> [f64; 3] {
+    [
+        lab[0] * 652.80 / 65535.0,
+        (lab[1] + 128.0) * 256.0 / 65535.0,
+        (lab[2] + 128.0) * 256.0 / 65535.0,
+    ]
+}
+
+/// Inverse de `lab_vers_lab16`.
+pub(crate) fn lab16_vers_lab(v: [f64; 3]) -> [f64; 3] {
+    let w = v.map(|x| x * 65535.0);
+    [w[0] / 652.80, w[1] / 256.0 - 128.0, w[2] / 256.0 - 128.0]
+}
+
 /// Table `mft2` lue, valeurs ramenées de 0 à 1.
 #[derive(Debug, Clone)]
 pub(crate) struct Lut {
@@ -27,8 +46,9 @@ impl Lut {
     }
 
     /// Table B2A1 : courbes d'entrée, interpolation trilinéaire, courbes de
-    /// sortie. ArgyllCMS interpole ainsi la table inverse ; en tétraédrique,
-    /// l'aller-retour s'écarte de `xicclu` jusqu'à 0,6 ΔE00.
+    /// sortie. ArgyllCMS interpole ainsi la table inverse : sur deux profils
+    /// de l'atelier, l'aller-retour s'écarte de `xicclu` de 0,0001 ΔE00 au
+    /// plus, contre 0,58 en tétraédrique.
     pub(crate) fn evaluer_inverse(&self, x: [f64; 3]) -> [f64; 3] {
         let x = [0, 1, 2].map(|k| interpoler(&self.entree[k], x[k]));
         let y = self.trilineaire(x);

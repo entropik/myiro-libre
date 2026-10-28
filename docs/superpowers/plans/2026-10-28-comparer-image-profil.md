@@ -42,7 +42,7 @@ Ce plan est une nouvelle fonction demandée pendant l'essai de #71. Il passe apr
   - `ImageDecoder::icc_profile()` et `ImageDecoder::orientation()` ;
   - des limites de mémoire (`Limits`).
   Toutes ces crates sont en Rust pur, donc sans souci en 32 bits, et sous licence MIT/Apache. `tiff` existe déjà dans l'espace de travail (crate `mires`, 0.11) : une seconde version tirée par `image` est acceptée, et notée dans la PR.
-- **Aller-retour en Rust, pas par `xicclu`.** Le plan 7 interroge le profil par `xicclu`, en processus externe, pour une centaine de plages. Une photo donne des centaines de milliers de couleurs. Les passer par un programme externe obligerait à écrire leurs valeurs sur le disque, et serait lent pour quatre profils. La crate `gamut` lit déjà les tables `mft2` et les interpole en tétraédrique : elle lit B2A1 de la même façon. La concordance avec `xicclu` est tenue par un test `#[ignore]` (tâche 1, écart ≤ 0,1 ΔE00).
+- **Aller-retour en Rust, pas par `xicclu`.** Le plan 7 interroge le profil par `xicclu`, en processus externe, pour une centaine de plages. Une photo donne des centaines de milliers de couleurs. Les passer par un programme externe obligerait à écrire leurs valeurs sur le disque, et serait lent pour quatre profils. La crate `gamut` lit déjà les tables `mft2` et interpole A2B1 en tétraédrique. Elle lit B2A1 de la même façon, mais l'interpole en trilinéaire, comme ArgyllCMS. Sur les deux profils de l'atelier, l'écart à `xicclu` mesuré est de 0,0001 ΔE00 en trilinéaire, contre 0,58 en tétraédrique. La concordance avec `xicclu` est tenue par un test `#[ignore]` (tâche 1, écart ≤ 0,1 ΔE00).
 - **Image d'analyse d'au plus 2 048 pixels de côté, en sautant des pixels sans les mélanger.** Une moyenne de pixels voisins inventerait des couleurs moins saturées que la photo. Toutes les mesures partent de cette image d'analyse : le pourcentage, les classes, les teintes, le nuage et la surimpression. Une photo de 24 Mpx (6 000 × 4 000) donne une image d'analyse de 2 048 × 1 365, un pixel sur trois dans chaque sens. La page affiche « calculé sur 1 pixel sur 9 ».
 - **Calcul par couleur distincte.** Les pixels de l'image d'analyse sont regroupés par valeur RVB 8 bits. L'aller-retour se fait une fois par couleur distincte, puis l'écart est reporté sur chaque pixel. Une photo courante a de 100 000 à 500 000 couleurs distinctes.
 - **Teintes touchées** : teinte h de la couleur demandée (Lab relatif) en douze secteurs de 30°, plus « gris » (C\* < 5). Ce sont les mêmes douze teintes que le tableau « Chroma par teinte » de #71. Les noms de zones « Rouges saturés »… de #71 classent des valeurs RVB d'appareil, pas les couleurs d'une photo : ils ne sont pas repris ici.
@@ -99,11 +99,12 @@ Ce plan est une nouvelle fonction demandée pendant l'essai de #71. Il passe apr
 // profil d'essai dont A2B1 et B2A1 sont exactement inverses (cible linéaire) :
 // delta_e00(lab, reproduire(lab)) < 0,05 pour 50 couleurs tirées dans le gamut
 #[test] fn une_couleur_hors_gamut_revient_sur_la_limite() {}
-// B2A1 d'essai borne le chroma à 40 : lab = [50, 70, 0] → reproduite ≈ [50, 40, 0], écart > 10
+// B2A1 d'essai borne le chroma à 40 : lab = [50, 70, 0] → reproduite ≈ [50, 40, 0], écart > 5 (8,6 mesuré : ΔE00 resserre les écarts de chroma)
 #[test] fn un_profil_sans_b2a1_se_lit_mais_ne_reproduit_pas() {}
 // lire() Ok ; reproduire() == Err(ErreurIcc::SansTableInverse) ; inverse().is_err()
-#[test] fn un_b2a1_mab_est_dit_non_pris_en_charge() {}   // Err(StructureNonPriseEnCharge { structure: "mAB " })
-#[test] fn lab_relatif_puis_absolu_redonne_lab_absolu() {} // relatif_vers_absolu(lab_relatif(x)) ≈ lab_absolu(x) à 1e-6
+#[test] fn un_b2a1_mab_est_dit_non_pris_en_charge() {}   // Err(StructureNonPriseEnCharge { structure: "mAB" }), sans espace, comme le refus d'A2B1
+#[test] fn lab_relatif_et_absolu_valent_les_valeurs_calculees_a_la_main() {} // papier L* = 90 : valeurs attendues calculées à la main, PCS Lab et XYZ
+#[test] fn au_pcs_xyz_l_aller_retour_passe_par_la_matrice_puis_les_courbes() {} // profil_essai_xyz : matrice diagonale non identité, puis courbes
 #[test] #[ignore] fn l_aller_retour_concorde_avec_xicclu() {}
 // profil calculé par ArgyllCMS (argyll/ du worktree, MoteurProfil du plan 3 sur la mesure d'essai) :
 // 100 couleurs Lab, xicclu -fb -ir puis -ff -ir ; écart ≤ 0,1 ΔE00 avec reproduire()

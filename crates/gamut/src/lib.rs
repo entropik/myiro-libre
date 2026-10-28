@@ -41,7 +41,7 @@ pub use analyse::{analyser, chemin, Analyse, Primaire};
 pub use comparaison::{
     comparer, statistiques, EcartZone, Ecarts, Famille, PointEcart, Statistiques, Zone,
 };
-pub use essai::{profil_essai, ProfilEssai};
+pub use essai::{profil_essai, profil_essai_xyz, ProfilEssai};
 pub use icc::{ErreurIcc, ProfilIcc};
 pub use limite::lire_gam;
 pub use mesures::{fidelite, memes_mesures, points_du_chemin, repetabilite, Mesure, Repetabilite};

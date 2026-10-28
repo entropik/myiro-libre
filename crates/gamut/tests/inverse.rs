@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use colorimetrie::{delta_e00, Lab};
-use gamut::{profil_essai, ErreurIcc, ProfilEssai, ProfilIcc};
+use gamut::{profil_essai, profil_essai_xyz, ErreurIcc, ProfilEssai, ProfilIcc};
 
 /// L = 25 + 75·(r+g+b)/3, a = 60·(r−g), b = 60·(g−b).
 fn lineaire(rvb: [f64; 3]) -> [f64; 3] {
@@ -171,25 +171,60 @@ fn un_b2a1_tronque_n_empeche_pas_la_lecture() {
 }
 
 #[test]
-fn lab_relatif_puis_absolu_redonne_lab_absolu() {
-    let profil = lire(&essai(None));
-    for rvb in [[0.0; 3], [1.0; 3], [0.3, 0.55, 0.8], [1.0, 0.0, 0.2]] {
-        let par_relatif = profil.relatif_vers_absolu(profil.lab_relatif(rvb));
-        let absolu = profil.lab_absolu(rvb);
-        for k in 0..3 {
-            assert!(
-                (par_relatif[k] - absolu[k]).abs() < 1e-6,
-                "{par_relatif:?} contre {absolu:?}"
-            );
-        }
-    }
-    // Le relatif ne contient pas le blanc du papier : le blanc vaut L* = 100.
-    let blanc = lire(&ProfilEssai {
-        cible: |rvb| [100.0 * (rvb[0] + rvb[1] + rvb[2]) / 3.0, 0.0, 0.0],
+fn lab_relatif_et_absolu_valent_les_valeurs_calculees_a_la_main() {
+    // Papier de blanc L* = 90, a* = b* = 0 : en XYZ, chaque composante est
+    // multipliée par k = Y(90) / Y(100), et la racine cubique de Lab fait de
+    // k^(1/3) = (90 + 16) / 116. D'où L*abs = (L* + 16)·106/116 − 16 et
+    // a*abs = a*·106/116, b*abs = b*·106/116 (hors des très sombres).
+    // RVB (0,3 ; 0,55 ; 0,8) par `lineaire` : L* = 25 + 75 × 1,65 / 3 = 66,25,
+    // a* = 60 × (0,3 − 0,55) = −15, b* = 60 × (0,55 − 0,8) = −15.
+    let rvb = [0.3, 0.55, 0.8];
+    let relatif = [66.25, -15.0, -15.0];
+    let k = 106.0 / 116.0;
+    let absolu = [(66.25 + 16.0) * k - 16.0, -15.0 * k, -15.0 * k];
+    let papier = ProfilEssai {
+        blanc: [90.0, 0.0, 0.0],
         ..essai(None)
-    })
-    .lab_relatif([1.0; 3]);
-    assert!((blanc[0] - 100.0).abs() < 0.01, "{blanc:?}");
+    };
+    for (pcs, profil) in [
+        ("Lab", ProfilIcc::lire(&profil_essai(&papier))),
+        ("XYZ", ProfilIcc::lire(&profil_essai_xyz(&papier))),
+    ] {
+        let profil = profil.expect("profil d'essai lisible");
+        proche(pcs, profil.lab_relatif(rvb), relatif, 0.02);
+        proche(pcs, profil.relatif_vers_absolu(relatif), absolu, 0.02);
+        proche(pcs, profil.lab_absolu(rvb), absolu, 0.03);
+    }
+}
+
+fn proche(nom: &str, obtenu: [f64; 3], attendu: [f64; 3], tolerance: f64) {
+    for k in 0..3 {
+        assert!(
+            (obtenu[k] - attendu[k]).abs() <= tolerance,
+            "{nom} : obtenu {obtenu:?}, attendu {attendu:?} à {tolerance} près"
+        );
+    }
+}
+
+#[test]
+fn au_pcs_xyz_l_aller_retour_passe_par_la_matrice_puis_les_courbes() {
+    // B2A1 du profil d'essai XYZ : matrice diagonale (0,75 ; 0,875 ; 0,625),
+    // puis courbes d'entrée non linéaires. Sans la matrice, ou les courbes
+    // avant la matrice, l'aller-retour s'écarte de plusieurs ΔE00.
+    let profil =
+        ProfilIcc::lire(&profil_essai_xyz(&essai(Some(lineaire_inverse)))).expect("lisible");
+    assert_eq!(profil.inverse(), Ok(()));
+    let t = tirages(150);
+    for rvb in t.as_chunks::<3>().0 {
+        let rvb = rvb.map(|x| 0.3 + 0.4 * x);
+        proche("A2B1", profil.lab_relatif(rvb), lineaire(rvb), 0.02);
+        let lab = profil.lab_relatif(rvb);
+        let reproduite = profil.reproduire(lab).expect("table inverse lue");
+        assert!(
+            ecart(lab, reproduite) < 0.05,
+            "{lab:?} reproduite en {reproduite:?}"
+        );
+    }
 }
 
 fn racine_argyll() -> PathBuf {
