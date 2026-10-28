@@ -7,6 +7,8 @@ use bibliotheque::{
 };
 use tempfile::TempDir;
 
+mod commun;
+
 /// Une bibliothèque avec une condition rangée sous Canon PRO-4100 →
 /// Baryta → 600 ppp.
 fn condition_rangee() -> (TempDir, Bibliotheque, IdCondition) {
@@ -157,6 +159,27 @@ fn une_base_en_organisation_5_passe_en_6_sans_rien_perdre() {
             mesures: &[],
         })
         .unwrap();
+    // Des mesures de toutes les sortes : bande et ponctuelle d'un pont,
+    // mesure importée d'un fichier CGATS.
+    let bande = b
+        .enregistrer_mesure_nommee(condition, &commun::bande("2026-10-07T09:00:00Z"), "Bande")
+        .unwrap();
+    let ponctuelle = b
+        .enregistrer_mesure(
+            condition,
+            &commun::ponctuelle(12345678, "2026-10-07T09:15:00Z"),
+        )
+        .unwrap();
+    let cgats = "CGATS.17\nINSTRUMENTATION\t\"FD-9\"\nSERIAL\t\"12345678\"\n\
+                 MEASUREMENT_SOURCE\t\"D50\"\nNUMBER_OF_FIELDS\t4\nBEGIN_DATA_FORMAT\n\
+                 SAMPLE_ID\tLAB_L\tLAB_A\tLAB_B\nEND_DATA_FORMAT\nNUMBER_OF_SETS\t2\n\
+                 BEGIN_DATA\n1\t50.0\t1.0\t-2.0\n2\t80.5\t-3.0\t4.0\nEND_DATA\n";
+    let importee = b.importer_mesure(condition, "lab.txt", cgats).unwrap();
+    let mesures_avant = (
+        b.mesure(bande).unwrap(),
+        b.mesure(ponctuelle).unwrap(),
+        b.mesure_importee(importee).unwrap(),
+    );
     let parc_avant = b.parc("", std::time::SystemTime::UNIX_EPOCH).unwrap();
     drop(b);
 
@@ -177,6 +200,14 @@ fn une_base_en_organisation_5_passe_en_6_sans_rien_perdre() {
         parc_avant
     );
     assert_eq!(b.fichier_profil(profil).unwrap(), icc);
+    assert_eq!(
+        (
+            b.mesure(bande).unwrap(),
+            b.mesure(ponctuelle).unwrap(),
+            b.mesure_importee(importee).unwrap(),
+        ),
+        mesures_avant
+    );
     assert!(b.tirages(condition).unwrap().is_empty());
     b.enregistrer_mire_et_tirage(condition, &mire("aa", "2026-10-28T09:00:00Z"), 1)
         .unwrap();
