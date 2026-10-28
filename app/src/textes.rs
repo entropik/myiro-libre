@@ -524,6 +524,182 @@ const FRANCAIS: Catalogue = &[
         "Valeurs 16 bits ramenées à 8 bits",
     ),
     (
+        "image.titre",
+        "Image",
+    ),
+    (
+        "image.aide",
+        "Ouvrez une photo de client en RVB (JPEG, PNG ou TIFF)\u{202f}: pour chaque profil affiché, la page montre les pixels que l’imprimante ne pourra pas reproduire. L’image reste en mémoire le temps de la comparaison\u{202f}; elle n’est ni rangée ni copiée.",
+    ),
+    (
+        "image.remplacer",
+        "Ouvrir une autre image",
+    ),
+    (
+        "image.retirer",
+        "Retirer l’image",
+    ),
+    (
+        "image.en_cours",
+        "Analyse de l’image en cours…",
+    ),
+    (
+        "image.annuler",
+        "Annuler",
+    ),
+    (
+        "image.relancer",
+        "Relancer l’analyse",
+    ),
+    (
+        "image.taille",
+        "Image d’analyse de {l} × {h} pixels, tirée d’une photo de {lo} × {ho} pixels",
+    ),
+    (
+        "image.surimpression.profil",
+        "Profil de la surimpression",
+    ),
+    (
+        "image.surimpression.inconnue",
+        "Pas de surimpression pour ce profil\u{202f}: {raison}",
+    ),
+    (
+        "image.seuil.valeur",
+        "Seuil d’alerte {s}\u{202f}ΔE00",
+    ),
+    (
+        "image.affichage",
+        "Afficher",
+    ),
+    (
+        "image.affichage.image",
+        "Image",
+    ),
+    (
+        "image.affichage.les_deux",
+        "Image et alerte",
+    ),
+    (
+        "image.affichage.alerte",
+        "Alerte seule",
+    ),
+    (
+        "image.legende",
+        "Au-delà de {s}\u{202f}ΔE00 avec {profil}",
+    ),
+    (
+        "image.canvas.aria",
+        "{p}\u{202f}% de l’image au-delà de {s}\u{202f}ΔE00 avec {profil}",
+    ),
+    (
+        "image.chiffres",
+        "Chiffres de l’image",
+    ),
+    (
+        "image.chiffres.part",
+        "Part de l’image au-delà de {s}\u{202f}ΔE00",
+    ),
+    (
+        "image.classe.leger",
+        "Léger, de 2 à 5\u{202f}ΔE00",
+    ),
+    (
+        "image.classe.moyen",
+        "Moyen, de 5 à 10\u{202f}ΔE00",
+    ),
+    (
+        "image.classe.fort",
+        "Fort, plus de 10\u{202f}ΔE00",
+    ),
+    (
+        "image.chiffres.teintes",
+        "Teintes les plus touchées",
+    ),
+    (
+        "image.chiffres.inconnus",
+        "Pixels à l’écart inconnu",
+    ),
+    (
+        "image.chiffres.couleurs",
+        "Couleurs distinctes",
+    ),
+    (
+        "image.chiffres.raison",
+        "Raison",
+    ),
+    (
+        "image.valeur.pourcent",
+        "{p}\u{202f}%",
+    ),
+    (
+        "image.teinte.valeur",
+        "{nom} {p}\u{202f}%",
+    ),
+    (
+        "image.teintes.aucune",
+        "aucune",
+    ),
+    (
+        "image.inconnus.valeur",
+        "{n} pixels ({p}\u{202f}%), jamais comptés comme bons",
+    ),
+    (
+        "image.inconnus.aucun",
+        "aucun",
+    ),
+    (
+        "image.teinte.0",
+        "Roses (h 0 à 30°)",
+    ),
+    (
+        "image.teinte.1",
+        "Rouges (h 30 à 60°)",
+    ),
+    (
+        "image.teinte.2",
+        "Orangés (h 60 à 90°)",
+    ),
+    (
+        "image.teinte.3",
+        "Jaunes (h 90 à 120°)",
+    ),
+    (
+        "image.teinte.4",
+        "Verts (h 120 à 150°)",
+    ),
+    (
+        "image.teinte.5",
+        "Verts bleutés (h 150 à 180°)",
+    ),
+    (
+        "image.teinte.6",
+        "Cyans (h 180 à 210°)",
+    ),
+    (
+        "image.teinte.7",
+        "Bleus ciel (h 210 à 240°)",
+    ),
+    (
+        "image.teinte.8",
+        "Bleus azur (h 240 à 270°)",
+    ),
+    (
+        "image.teinte.9",
+        "Bleus (h 270 à 300°)",
+    ),
+    (
+        "image.teinte.10",
+        "Violets (h 300 à 330°)",
+    ),
+    (
+        "image.teinte.11",
+        "Magentas (h 330 à 360°)",
+    ),
+    (
+        "image.teinte.gris",
+        "Gris (C* < 5)",
+    ),
+    (
         "comparer.zone.gris",
         "Gris",
     ),
@@ -2367,6 +2543,182 @@ const ANGLAIS: Catalogue = &[
     (
         "image.seize_bits",
         "16-bit values reduced to 8 bits",
+    ),
+    (
+        "image.titre",
+        "Image",
+    ),
+    (
+        "image.aide",
+        "Open a customer photo in RGB (JPEG, PNG or TIFF): for each displayed profile, the page shows the pixels the printer will not be able to reproduce. The image stays in memory for the comparison only; it is neither stored nor copied.",
+    ),
+    (
+        "image.remplacer",
+        "Open another image",
+    ),
+    (
+        "image.retirer",
+        "Remove the image",
+    ),
+    (
+        "image.en_cours",
+        "Analysing the image…",
+    ),
+    (
+        "image.annuler",
+        "Cancel",
+    ),
+    (
+        "image.relancer",
+        "Analyse again",
+    ),
+    (
+        "image.taille",
+        "Analysis image of {l} × {h} pixels, taken from a {lo} × {ho} pixel photo",
+    ),
+    (
+        "image.surimpression.profil",
+        "Overlay profile",
+    ),
+    (
+        "image.surimpression.inconnue",
+        "No overlay for this profile: {raison}",
+    ),
+    (
+        "image.seuil.valeur",
+        "Alert threshold {s} ΔE00",
+    ),
+    (
+        "image.affichage",
+        "Show",
+    ),
+    (
+        "image.affichage.image",
+        "Image",
+    ),
+    (
+        "image.affichage.les_deux",
+        "Image and alert",
+    ),
+    (
+        "image.affichage.alerte",
+        "Alert only",
+    ),
+    (
+        "image.legende",
+        "Beyond {s} ΔE00 with {profil}",
+    ),
+    (
+        "image.canvas.aria",
+        "{p}% of the image beyond {s} ΔE00 with {profil}",
+    ),
+    (
+        "image.chiffres",
+        "Image figures",
+    ),
+    (
+        "image.chiffres.part",
+        "Share of the image beyond {s} ΔE00",
+    ),
+    (
+        "image.classe.leger",
+        "Slight, 2 to 5 ΔE00",
+    ),
+    (
+        "image.classe.moyen",
+        "Medium, 5 to 10 ΔE00",
+    ),
+    (
+        "image.classe.fort",
+        "Strong, over 10 ΔE00",
+    ),
+    (
+        "image.chiffres.teintes",
+        "Most affected hues",
+    ),
+    (
+        "image.chiffres.inconnus",
+        "Pixels with an unknown difference",
+    ),
+    (
+        "image.chiffres.couleurs",
+        "Distinct colours",
+    ),
+    (
+        "image.chiffres.raison",
+        "Reason",
+    ),
+    (
+        "image.valeur.pourcent",
+        "{p}%",
+    ),
+    (
+        "image.teinte.valeur",
+        "{nom} {p}%",
+    ),
+    (
+        "image.teintes.aucune",
+        "none",
+    ),
+    (
+        "image.inconnus.valeur",
+        "{n} pixels ({p}%), never counted as good",
+    ),
+    (
+        "image.inconnus.aucun",
+        "none",
+    ),
+    (
+        "image.teinte.0",
+        "Pinks (h 0 to 30°)",
+    ),
+    (
+        "image.teinte.1",
+        "Reds (h 30 to 60°)",
+    ),
+    (
+        "image.teinte.2",
+        "Oranges (h 60 to 90°)",
+    ),
+    (
+        "image.teinte.3",
+        "Yellows (h 90 to 120°)",
+    ),
+    (
+        "image.teinte.4",
+        "Greens (h 120 to 150°)",
+    ),
+    (
+        "image.teinte.5",
+        "Blue-greens (h 150 to 180°)",
+    ),
+    (
+        "image.teinte.6",
+        "Cyans (h 180 to 210°)",
+    ),
+    (
+        "image.teinte.7",
+        "Sky blues (h 210 to 240°)",
+    ),
+    (
+        "image.teinte.8",
+        "Azure blues (h 240 to 270°)",
+    ),
+    (
+        "image.teinte.9",
+        "Blues (h 270 to 300°)",
+    ),
+    (
+        "image.teinte.10",
+        "Violets (h 300 to 330°)",
+    ),
+    (
+        "image.teinte.11",
+        "Magentas (h 330 to 360°)",
+    ),
+    (
+        "image.teinte.gris",
+        "Greys (C* < 5)",
     ),
     (
         "comparer.zone.gris",

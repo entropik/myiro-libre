@@ -1,9 +1,9 @@
 // Vue « Comparer » de la bibliothèque (ticket #71) : de un à quatre profils RVB, rangés ou ouverts
 // depuis un fichier (jamais rangé), comparés par le module Rust `comparer`. Le premier sert de
-// référence. Au centre : profils, chiffres clés, gamut en volume (vue3d.js), chroma par teinte,
-// coupe, chemin (graphiques.js), couleurs de base et écarts (comparer-ecarts.js), méthode ; à
-// droite, la provenance de chaque profil et, sous « Avancé », la commande d'iccgamut
-// (comparer-details.js). Un chiffre `null` s'écrit « inconnu » (Graphiques.nombre). Les textes
+// référence. Au centre : profils, chiffres clés, image (comparer-image.js), gamut en volume
+// (vue3d.js), chroma par teinte, coupe, chemin (graphiques.js), couleurs de base et écarts
+// (comparer-ecarts.js), méthode ; à droite, la provenance de chaque profil et, sous « Avancé »,
+// la commande d'iccgamut (comparer-details.js). Un chiffre `null` s'écrit « inconnu » (Graphiques.nombre). Les textes
 // viennent du catalogue (app.js).
 "use strict";
 
@@ -14,6 +14,7 @@ window.Comparer = (() => {
   const { el } = window.Arbre;
   const { carreSerie } = window.ComparerEcarts;
   const { texteRefus, texteLimite, texteFidelite, section, chiffres, methode, provenance, avance } = window.ComparerDetails;
+  const image = window.ComparerImage;
 
   const vue = document.querySelector("[data-vue-comparer]");
   const details = document.querySelector("[data-details-comparer]");
@@ -168,6 +169,8 @@ window.Comparer = (() => {
     }
     if (n !== demande) return;
     enCours.hidden = true;
+    // L'image ouverte est analysée de nouveau face aux profils affichés.
+    image.profilsChanges(choisis.map((c) => c.source));
     dessinerPuces();
     dessiner();
   }
@@ -333,7 +336,7 @@ window.Comparer = (() => {
     if (!comparaison) return;
     const liste = analyses();
     if (liste.length) {
-      corps.append(chiffres(liste), volume3d(liste));
+      corps.append(chiffres(liste), image.section(liste), volume3d(liste));
       graphiques(liste);
       corps.append(section("comparer.primaires", window.ComparerEcarts.primaires(liste)));
     }
@@ -361,6 +364,7 @@ window.Comparer = (() => {
     enCours.hidden = true;
     vue.hidden = true;
     details.hidden = true;
+    image.fermer();
     dessiner();
     document.dispatchEvent(new CustomEvent("comparer-fermee"));
   }

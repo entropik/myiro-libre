@@ -181,6 +181,12 @@
 <div class="ds-demo"><ul class="profils-compares"><li><span class="swatch" style="--c: var(--serie-1)"></span><span>HFA Matt 200, profil calculé</span><span class="label">référence</span><button class="btn">Retirer</button></li><li><span class="swatch" style="--c: var(--serie-2)"></span><span>ecran.icc</span><button class="btn">Retirer</button><p class="why">Ce profil n’a pas de table colorimétrique (A2B1)&#8239;: c’est peut-être un profil d’écran. Il n’est pas comparé.</p></li></ul></div>
 <pre class="ds-code">&lt;ul class="profils-compares"&gt;&lt;li&gt;&lt;span class="swatch" style="--c: var(--serie-1)"&gt;&lt;/span&gt;…&lt;/li&gt;&lt;/ul&gt;</pre></section>
 
+<section class="ds-block"><span class="label">Composant</span><h2>Surimpression hors gamut</h2><p>Une image comparée à un profil, dans un canvas dessiné par <code>comparer-image.js</code> (pixels posés par <code>putImageData</code>, jamais par une URL)&#8239;: chaque pixel au-delà du seuil d’alerte prend le vert fluo <code>--couleur-hors-gamut</code>. Trois affichages&#8239;: l’image, l’image et l’alerte, l’alerte seule (les autres pixels en <code>--couleur-hors-gamut-fond</code>). La légende écrit toujours ce que veut dire le vert, et le canvas porte un <code>aria-label</code> qui dit la part de l’image au-delà du seuil.</p>
+<div class="ds-demo"><div class="seg" role="group" aria-label="Afficher"><button aria-pressed="false">Image</button><button aria-pressed="true">Image et alerte</button><button aria-pressed="false">Alerte seule</button></div>
+<p class="legende-alerte"><span class="swatch" style="--c: var(--couleur-hors-gamut)"></span>Au-delà de 2,0&#8239;ΔE00</p>
+<canvas class="surimpression" width="320" height="120" tabindex="0" role="img" aria-label="Exemple&#8239;: surimpression vide"></canvas></div>
+<pre class="ds-code">&lt;canvas class="surimpression"&gt;&lt;/canvas&gt;  ComparerImage.section(profils)</pre></section>
+
 <section class="ds-block"><span class="label">Composant</span><h2>Curseur</h2><p>Une valeur dans un intervalle (clarté L* d’une coupe), à l’accent. La valeur choisie est écrite à côté du libellé.</p>
 <div class="ds-demo"><div class="field"><label class="label" for="ds-curseur">Clarté L* 50</label><input class="curseur" id="ds-curseur" type="range" min="5" max="95" value="50"></div></div>
 <pre class="ds-code">&lt;input class="curseur" type="range" min="5" max="95"&gt;</pre></section>

@@ -377,5 +377,9 @@ select.input option { background: var(--panneau); color: var(--encre); }
 .profils-compares li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-2) 0; border-top: var(--rule) solid var(--filet); }
 .profils-compares li > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .profils-compares li > .why { flex-basis: 100%; margin-top: 0; }
+/* Image comparée à un profil : pixels posés par putImageData, à la largeur de la colonne. */
+.surimpression { display: block; width: 100%; height: auto; background: var(--carte); border: var(--rule) solid var(--filet); }
+.surimpression:focus-visible { outline: var(--rule-strong) solid var(--accent); outline-offset: var(--rule-strong); }
+.legende-alerte { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
 /* Curseur d'une valeur dans un intervalle (clarté d'une coupe). */
 .curseur { width: 100%; max-width: var(--measure); accent-color: var(--accent); }
