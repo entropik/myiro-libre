@@ -584,6 +584,38 @@ const FRANCAIS: Catalogue = &[
         "Alerte seule",
     ),
     (
+        "nuage.bascule",
+        "Couleurs de l’image",
+    ),
+    (
+        "nuage.aide",
+        "Chaque point est une couleur de l’image, placée sur le blanc du papier de {profil}. En vert fluo\u{202f}: au-delà de {s}\u{202f}ΔE00.",
+    ),
+    (
+        "nuage.indisponible",
+        "Les couleurs de l’image apparaissent ici quand une image est analysée face au profil choisi pour la surimpression.",
+    ),
+    (
+        "nuage.aria",
+        "Couleurs de l’image\u{202f}: {n} points, dont {a} au-delà du seuil d’alerte.",
+    ),
+    (
+        "nuage.legende",
+        "Couleurs de l’image, L* {l} ± {d}",
+    ),
+    (
+        "nuage.legende.alerte",
+        "Couleur de l’image au-delà du seuil d’alerte",
+    ),
+    (
+        "nuage.valeurs",
+        "Couleurs de l’image dans la coupe (points)",
+    ),
+    (
+        "nuage.valeurs.alerte",
+        "dont au-delà du seuil d’alerte",
+    ),
+    (
         "image.legende",
         "Au-delà de {s}\u{202f}ΔE00 avec {profil}",
     ),
@@ -2579,6 +2611,38 @@ const ANGLAIS: Catalogue = &[
     (
         "image.affichage.alerte",
         "Alert only",
+    ),
+    (
+        "nuage.bascule",
+        "Image colours",
+    ),
+    (
+        "nuage.aide",
+        "Each point is a colour of the image, placed on the paper white of {profil}. In fluorescent green: beyond {s} ΔE00.",
+    ),
+    (
+        "nuage.indisponible",
+        "The image colours appear here once an image is analysed against the profile chosen for the overlay.",
+    ),
+    (
+        "nuage.aria",
+        "Image colours: {n} points, {a} of them beyond the alert threshold.",
+    ),
+    (
+        "nuage.legende",
+        "Image colours, L* {l} ± {d}",
+    ),
+    (
+        "nuage.legende.alerte",
+        "Image colour beyond the alert threshold",
+    ),
+    (
+        "nuage.valeurs",
+        "Image colours in the slice (points)",
+    ),
+    (
+        "nuage.valeurs.alerte",
+        "of which beyond the alert threshold",
     ),
     (
         "image.legende",

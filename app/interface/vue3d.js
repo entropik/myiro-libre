@@ -4,7 +4,8 @@
 // peintre) : c'est ce tri qui évite les fausses facettes en transparence. Ombrage plat. Les couleurs
 // de série sont des jetons (`--serie-1` à `--serie-4`), relus au changement de thème. Les chiffres
 // passent par Graphiques.nombre : un chiffre inconnu s'écrit « inconnu ». Les axes et le blanc du
-// papier de chaque profil sont peints par vue3d-axes.js (Vue3dAxes).
+// papier de chaque profil sont peints par vue3d-axes.js (Vue3dAxes), les couleurs de l'image
+// (ticket #80), au-dessus des triangles, par nuage-image.js (NuageImage).
 "use strict";
 
 window.Vue3d = (() => {
@@ -44,6 +45,7 @@ window.Vue3d = (() => {
       texte: taille("--text-xs"), ecart: taille("--space-1"), marge: taille("--space-2"), bulle: taille("--space-5"),
       series: [1, 2, 3, 4].map((n) => hexVersRvb(jeton(`--serie-${n}`))),
       attenue: jeton("--attenue"),
+      alerte: jeton("--couleur-hors-gamut"),
       encre: jeton("--encre"),
       carte: jeton("--carte"),
       filet: jeton("--filet"),
@@ -56,6 +58,7 @@ window.Vue3d = (() => {
     let vue = { ...DEPART };
     let jetons = lireJetons();
     let formes = []; // formes préparées : sommets, triangles, couleurs moyennes
+    let nuage = []; // couleurs de l'image : { lab, couleur, alerte } (nuage-image.js)
     let projetes = []; // par forme : Float64Array (x, y, z) par sommet, dans le repère de la vue
     let image = 0; // demande d'image en attente
     let survol = null; // { x, y } de la souris, hors glisser
@@ -237,6 +240,10 @@ window.Vue3d = (() => {
       const ecran = (s) => versEcran(tourner(s, r), k);
       window.Vue3dAxes.axes(ctx, jetons, ecran, false);
       dessinerTriangles(ctx, k);
+      window.NuageImage.peindre(ctx, jetons, (s) => {
+        const p = tourner(s, r);
+        return [...versEcran(p, k), p[2]];
+      }, nuage);
       window.Vue3dAxes.axes(ctx, jetons, ecran, true);
       window.Vue3dAxes.blancs(ctx, jetons, ecran, formes);
       dessinerBulle(ctx, k);
@@ -253,7 +260,7 @@ window.Vue3d = (() => {
         .map((f) => t("comparer.vue3d.aria.profil").replace("{nom}", () => f.nom).replace("{volume}", () => nombre(f.volume, 0))
           .replace("{blanc}", () => nombre(f.blanc, 1)))
         .join(" ; ");
-      canvas.setAttribute("aria-label", t("comparer.vue3d.aria").replace("{profils}", () => profils));
+      canvas.setAttribute("aria-label", t("comparer.vue3d.aria").replace("{profils}", () => profils) + window.NuageImage.decrire(nuage));
     }
 
     // ---- Taille, thème, langue ----
@@ -346,6 +353,11 @@ window.Vue3d = (() => {
         decrire();
         redessiner();
       },
+      points(liste) {
+        nuage = liste || [];
+        decrire();
+        redessiner();
+      },
       regler(nouveaux) {
         reglages = { ...reglages, ...nouveaux };
         redessiner();
@@ -360,6 +372,7 @@ window.Vue3d = (() => {
         canvas.removeEventListener("keydown", clavier);
         formes = [];
         projetes = [];
+        nuage = [];
       },
     };
   }

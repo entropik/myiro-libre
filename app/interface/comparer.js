@@ -1,7 +1,7 @@
 // Vue « Comparer » de la bibliothèque (ticket #71) : de un à quatre profils RVB, rangés ou ouverts
 // depuis un fichier (jamais rangé), comparés par le module Rust `comparer`. Le premier sert de
 // référence. Au centre : profils, chiffres clés, image (comparer-image.js), gamut en volume
-// (vue3d.js), chroma par teinte, coupe, chemin (graphiques.js), couleurs de base et écarts
+// (vue3d.js, avec les couleurs de l'image de nuage-image.js), chroma par teinte, coupe, chemin (graphiques.js), couleurs de base et écarts
 // (comparer-ecarts.js), méthode ; à droite, la provenance de chaque profil et, sous « Avancé »,
 // la commande d'iccgamut (comparer-details.js). Un chiffre `null` s'écrit « inconnu » (Graphiques.nombre). Les textes
 // viennent du catalogue (app.js).
@@ -41,6 +41,9 @@ window.Comparer = (() => {
   let vue3d = null;
   let reglages = { couleur: "serie", rendu: "opaque", forme: null, l: 50, depart: "bleu", arrivee: "cyan" };
   const masques = new Set(); // rangs des profils décochés dans la vue 3D
+  // Le nuage de l'image (nuage-image.js) suit le seuil et le profil de la surimpression.
+  let coupeNuage = () => {};
+  window.NuageImage.suivre(() => { if (vue3d) vue3d.points(window.NuageImage.points()); coupeNuage(); });
 
   function annoncer(texte) {
     message.textContent = texte;
@@ -263,10 +266,11 @@ window.Comparer = (() => {
       aideCouleur,
       seg("comparer.volume.forme", ["limite", "surface"], reglages.forme, changerForme, inactives),
       seg("comparer.volume.rendu", ["opaque", "transparent"], reglages.rendu, regler("rendu")),
-      manques, canvas, el("p", "why", t("comparer.volume.aide")));
+      manques, window.NuageImage.champ(), canvas, el("p", "why", t("comparer.volume.aide")));
     dessinerManques();
     vue3d = window.Vue3d.creer(canvas, { couleur: reglages.couleur, rendu: reglages.rendu });
     vue3d.afficher(formes(liste));
+    vue3d.points(window.NuageImage.points());
     return bloc;
   }
 
@@ -287,8 +291,9 @@ window.Comparer = (() => {
     const serie = (p, valeurs) => ({ valeurs, serie: p.serie, nom: p.nom });
     const dessinerCoupe = () => {
       libelle.textContent = `${t("comparer.coupe.clarte")} ${nombre(reglages.l, 0)}`;
-      window.Graphiques.coupe(coupe, liste.map((p) => serie(p, p.analyse.coupes[reglages.l])), reglages.l);
+      window.Graphiques.coupe(coupe, liste.map((p) => serie(p, p.analyse.coupes[reglages.l])), reglages.l, window.NuageImage.points());
     };
+    coupeNuage = dessinerCoupe;
     curseur.addEventListener("input", () => { reglages.l = Number(curseur.value); dessinerCoupe(); });
 
     const selection = (cle) => {
@@ -329,6 +334,7 @@ window.Comparer = (() => {
   // ---- Dessin de toute la vue ----
   function dessiner() {
     if (vue3d) { vue3d.detruire(); vue3d = null; }
+    coupeNuage = () => {};
     corps.replaceChildren();
     details.replaceChildren();
     if (!ouverte) return;

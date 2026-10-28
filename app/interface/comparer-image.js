@@ -243,10 +243,14 @@ window.ComparerImage = (() => {
     if (legende) legende.lastChild.textContent = t("image.legende").replace("{s}", () => nombre(seuil, 1)).replace("{profil}", () => nom);
   }
 
+  // Le nuage du profil de la surimpression suit dans la vue 3D et la coupe (nuage-image.js).
+  const nuage = () => window.NuageImage.changer(analyseDe(choisi), seuil, (profils.find((x) => x.rang === choisi) || {}).nom || "");
+
   function changerSeuil(valeur) {
     seuil = valeur;
     calque();
     dessinerChiffres();
+    nuage();
   }
 
   // ---- Réglages : profil, seuil, affichage ----
@@ -276,6 +280,7 @@ window.ComparerImage = (() => {
       avisInconnu.textContent = avisInconnu.hidden ? "" : t("image.surimpression.inconnue").replace("{raison}", () => texteRefus(a.etat));
     }
     calque();
+    nuage();
   }
 
   function curseurSeuil() {
@@ -373,7 +378,7 @@ window.ComparerImage = (() => {
       contenu.push(el("span", "label", t("image.chiffres")), tableauChiffres);
     }
     racine.replaceChildren(section("image.titre", ...contenu));
-    choisirProfil(choisi); // calque et avis d'un profil inconnu
+    choisirProfil(choisi); // calque, avis d'un profil inconnu et nuage
     dessinerChiffres();
   }
 
