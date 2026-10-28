@@ -168,6 +168,17 @@ fn une_image_cmjn_est_refusee() {
     }
 }
 
+#[test]
+fn un_jpeg_cmjn_a_octets_parasites_est_refuse() {
+    // Des octets parasites entre deux segments : le décodeur les saute
+    // jusqu'au marqueur suivant, la recherche des composantes aussi.
+    let mut octets = jpeg_cmjn();
+    let apres_adobe = 2 + 16;
+    octets.splice(apres_adobe..apres_adobe, [0x00, 0x12, 0x34]);
+
+    assert_eq!(ouvrir(&octets).err(), Some(RefusPhoto::Cmjn));
+}
+
 /// Bloc Exif (TIFF petit-boutiste) qui ne porte que la balise Orientation.
 fn exif_orientation(valeur: u16) -> Vec<u8> {
     let mut o = b"II*\0".to_vec();
@@ -284,15 +295,15 @@ fn un_format_gif_est_refuse() {
     assert_eq!(ouvrir(&gif).err(), Some(RefusPhoto::FormatNonPrisEnCharge));
 }
 
-/// En-tête TIFF gris de 20 000 × 10 000 pixels, sans les pixels : le refus
-/// doit venir avant tout décodage.
-fn tiff_annonce(largeur: u32, hauteur: u32) -> Vec<u8> {
+/// En-tête TIFF à un canal de 8 bits, sans les pixels. `photometrie` :
+/// 1 pour du gris, 3 pour une palette.
+fn tiff_annonce(largeur: u32, hauteur: u32, photometrie: u32) -> Vec<u8> {
     let entrees: [(u16, u16, u32); 8] = [
         (256, 4, largeur),
         (257, 4, hauteur),
         (258, 3, 8),
         (259, 3, 1),
-        (262, 3, 1),
+        (262, 3, photometrie),
         (273, 4, 0),
         (278, 4, hauteur),
         (279, 4, largeur * hauteur),
@@ -317,7 +328,9 @@ fn tiff_annonce(largeur: u32, hauteur: u32) -> Vec<u8> {
 
 #[test]
 fn une_image_trop_grande_est_refusee_avant_decodage() {
-    let octets = tiff_annonce(20_000, 10_000);
+    // 20 000 × 10 000 pixels annoncés, aucun fourni : le refus doit venir
+    // avant tout décodage.
+    let octets = tiff_annonce(20_000, 10_000, 1);
 
     assert_eq!(
         ouvrir(&octets).err(),
@@ -344,4 +357,147 @@ fn chaque_refus_a_sa_cle_de_texte() {
             "image.refus.trop_grande",
         ]
     );
+}
+
+#[test]
+fn un_petit_tiff_garde_un_gros_profil() {
+    // 4 × 3 pixels (36 octets) et un profil de 200 000 octets : le profil
+    // est lu avant que les limites de décodage, calées sur la taille de
+    // l'image, ne s'appliquent.
+    let mut icc = profil(b"RGB ");
+    icc.resize(200_000, 7);
+    icc[0..4].copy_from_slice(&200_000u32.to_be_bytes());
+    let octets = tiff_rvb8(&unie(4, 3, [10, 20, 30]), 4, 3, Some(&icc));
+
+    let photo = ouvrir(&octets).expect("tiff ouvert");
+
+    assert_eq!(photo.icc.map(|p| p.len()), Some(200_000));
+}
+
+#[test]
+fn un_tiff_flottant_n_est_pas_dit_16_bits() {
+    let mut sortie = Cursor::new(Vec::new());
+    TiffEncoder::new(&mut sortie)
+        .expect("tiff ouvert")
+        .write_image::<colortype::RGB32Float>(1, 1, &[1.0, 0.0, 0.5])
+        .expect("tiff flottant écrit");
+
+    let photo = ouvrir(&sortie.into_inner()).expect("tiff ouvert");
+
+    assert!(!photo.seize_bits);
+    assert_eq!(photo.rvba, vec![[255, 0, 128, 255]]);
+}
+
+#[test]
+fn un_tiff_a_palette_n_est_pas_pris_en_charge() {
+    let octets = tiff_annonce(2, 2, 3);
+
+    assert_eq!(
+        ouvrir(&octets).err(),
+        Some(RefusPhoto::FormatNonPrisEnCharge)
+    );
+}
+
+/// CRC-32 d'un bloc PNG (type puis données).
+fn crc_png(octets: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFFu32;
+    for &octet in octets {
+        crc ^= u32::from(octet);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 {
+                (crc >> 1) ^ 0xEDB8_8320
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    !crc
+}
+
+/// Insère un bloc iCCP juste après l'en-tête IHDR d'un PNG.
+fn avec_iccp(png: &[u8], profil_compresse: &[u8]) -> Vec<u8> {
+    let mut corps = b"iCCP".to_vec();
+    corps.extend(b"essai\0\0");
+    corps.extend(profil_compresse);
+    let mut bloc = ((corps.len() - 4) as u32).to_be_bytes().to_vec();
+    bloc.extend(&corps);
+    bloc.extend(crc_png(&corps).to_be_bytes());
+    let apres_ihdr = 8 + 25;
+    let mut sortie = png[..apres_ihdr].to_vec();
+    sortie.extend(bloc);
+    sortie.extend(&png[apres_ihdr..]);
+    sortie
+}
+
+/// Segment APP2 « ICC_PROFILE » annoncé comme le premier de deux, sans le
+/// second : le profil est présent, mais incomplet.
+fn avec_app2_incomplet(jpeg: &[u8]) -> Vec<u8> {
+    let mut donnees = b"ICC_PROFILE\0".to_vec();
+    donnees.extend([1, 2]);
+    donnees.extend(profil(b"RGB "));
+    let mut sortie = jpeg[..2].to_vec();
+    sortie.extend([0xFF, 0xE2]);
+    sortie.extend(((donnees.len() + 2) as u16).to_be_bytes());
+    sortie.extend(donnees);
+    sortie.extend(&jpeg[2..]);
+    sortie
+}
+
+fn tiff_a_profil_en_mots(pixels: &[u8]) -> Vec<u8> {
+    let mut sortie = Cursor::new(Vec::new());
+    let mut encodeur = TiffEncoder::new(&mut sortie).expect("tiff ouvert");
+    let mut image = encodeur
+        .new_image::<colortype::RGB8>(4, 3)
+        .expect("image tiff");
+    image
+        .encoder()
+        .write_tag(Tag::IccProfile, &[1u16, 2, 3][..])
+        .expect("balise 34675 en mots de 16 bits");
+    image.write_data(pixels).expect("tiff écrit");
+    sortie.into_inner()
+}
+
+#[test]
+fn un_profil_embarque_abime_est_dit_illisible_et_non_absent() {
+    let pixels = unie(4, 3, [10, 20, 30]);
+    let png_abime = avec_iccp(&png(&pixels, 4, 3, None), b"pas du zlib");
+    let jpeg_abime = avec_app2_incomplet(&jpeg(&unie(16, 8, [10, 20, 30]), 16, 8, None, None));
+    let tiff_abime = tiff_a_profil_en_mots(&pixels);
+
+    for (format, octets) in [
+        ("png", png_abime),
+        ("jpeg", jpeg_abime),
+        ("tiff", tiff_abime),
+    ] {
+        let photo = ouvrir(&octets).unwrap_or_else(|e| panic!("{format} refusé : {e:?}"));
+        assert_eq!(photo.icc, None, "{format}");
+        assert!(photo.profil_illisible.is_some(), "{format}");
+        assert!(!photo.rvba.is_empty(), "{format}");
+    }
+}
+
+#[test]
+fn un_profil_lu_ou_absent_n_est_pas_dit_illisible() {
+    let pixels = unie(4, 3, [10, 20, 30]);
+    for octets in [
+        png(&pixels, 4, 3, Some(profil(b"RGB "))),
+        png(&pixels, 4, 3, None),
+        jpeg(&unie(16, 8, [1, 2, 3]), 16, 8, Some(profil(b"RGB ")), None),
+        tiff_rvb8(&pixels, 4, 3, None),
+    ] {
+        assert_eq!(ouvrir(&octets).expect("ouverte").profil_illisible, None);
+    }
+}
+
+#[test]
+fn un_profil_png_qui_se_decompresse_en_tres_gros_est_refuse_sans_tout_allouer() {
+    // 64 Mio de zéros, qui tiennent en quelques kilo-octets compressés.
+    let bombe = fdeflate::compress_to_vec(&vec![0u8; 64 << 20]);
+    assert!(bombe.len() < 1 << 20, "{} octets compressés", bombe.len());
+    let octets = avec_iccp(&png(&unie(4, 3, [10, 20, 30]), 4, 3, None), &bombe);
+
+    let photo = ouvrir(&octets).expect("png ouvert");
+
+    assert_eq!(photo.icc.map(|p| p.len()), None);
+    assert!(photo.profil_illisible.is_some());
 }

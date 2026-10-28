@@ -10,4 +10,5 @@ repository.workspace = true
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
 
 [dev-dependencies]
+fdeflate = "0.3"
 tiff = "0.11"

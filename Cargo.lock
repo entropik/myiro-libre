@@ -2400,6 +2400,7 @@ dependencies = [
 name = "photo"
 version = "0.1.0"
 dependencies = [
+ "fdeflate",
  "image",
  "tiff",
 ]
