@@ -80,6 +80,39 @@ fn sans_argyll_la_limite_est_introuvable() {
     assert_eq!(moteur.limite(b"profil"), Err(ErreurMoteur::Introuvable));
 }
 
+/// Un ArgyllCMS dont `colprof` est là mais pas `iccgamut` : l'outil manque,
+/// ArgyllCMS n'est pas « introuvable ». Rien n'est lancé.
+#[test]
+fn sans_iccgamut_l_outil_est_dit_manquant() {
+    let dossier = tempfile::tempdir().unwrap();
+    let bin = dossier.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(
+        bin.join(format!("colprof{}", std::env::consts::EXE_SUFFIX)),
+        b"",
+    )
+    .unwrap();
+    let moteur = ArgyllCms::new(dossier.path().to_path_buf());
+    let erreur = moteur.limite(b"profil").unwrap_err();
+    assert_eq!(
+        erreur,
+        ErreurMoteur::OutilManquant {
+            outil: "iccgamut".into()
+        }
+    );
+    assert_eq!(erreur.cle(), "profil.erreur.outil_manquant");
+    assert!(erreur.to_string().contains("iccgamut"), "{erreur}");
+    assert!(!erreur.to_string().contains("introuvable"), "{erreur}");
+}
+
+#[test]
+fn le_moteur_simule_rend_un_journal() {
+    let limite = MoteurGamutSimule::reussit(String::new())
+        .limite(b"profil")
+        .unwrap();
+    assert!(!limite.journal.is_empty());
+}
+
 fn racine_argyll() -> PathBuf {
     if let Some(r) = std::env::var_os("ARGYLL") {
         return PathBuf::from(r);
@@ -115,6 +148,11 @@ fn limite_reelle_d_un_profil_d_essai() {
     let limite = moteur.limite(&icc).unwrap_or_else(|e| panic!("{e}"));
     println!("volume iccgamut : {:?}", limite.volume);
     assert_eq!(limite.version, VERSION_ARGYLL);
+    assert!(
+        limite.journal.contains("$ iccgamut -v -ia -pl profil.icc"),
+        "{}",
+        limite.journal
+    );
     let maillage = gamut::lire_gam(&limite.gam).unwrap();
     let volume = gamut::volume(&maillage);
     println!(

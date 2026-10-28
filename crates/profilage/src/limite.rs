@@ -27,6 +27,8 @@ pub struct LimiteCalculee {
     pub volume: Option<f64>,
     /// Version d'ArgyllCMS qui a calculé la limite.
     pub version: String,
+    /// Sortie d'`iccgamut`, sous sa ligne de commande.
+    pub journal: String,
 }
 
 /// Un moteur qui calcule la limite du gamut d'un profil ICC.
@@ -63,15 +65,20 @@ impl MoteurGamut for ArgyllCms {
         ligne("iccgamut", &arguments_iccgamut())
     }
 
-    /// Version contrôlée, puis `iccgamut` lancé dans un dossier de travail
-    /// effacé à la fin, réussite ou échec. Un ArgyllCMS sans `iccgamut` est
-    /// dit introuvable.
+    /// Outils présents, version contrôlée, puis `iccgamut` lancé dans un
+    /// dossier de travail effacé à la fin, réussite ou échec. Sans `colprof`,
+    /// ArgyllCMS est introuvable ; sans `iccgamut`, seul cet outil manque.
     fn limite(&self, icc: &[u8]) -> Result<LimiteCalculee, ErreurMoteur> {
-        let version = self.version()?;
-        controler_version(&version)?;
-        if !self.outil("iccgamut").is_file() {
+        if !self.outil("colprof").is_file() {
             return Err(ErreurMoteur::Introuvable);
         }
+        if !self.outil("iccgamut").is_file() {
+            return Err(ErreurMoteur::OutilManquant {
+                outil: "iccgamut".to_string(),
+            });
+        }
+        let version = self.version()?;
+        controler_version(&version)?;
 
         let dossier = DossierTravail::creer()?;
         let chemin = dossier.chemin();
@@ -92,6 +99,7 @@ impl MoteurGamut for ArgyllCms {
             gam: String::from_utf8_lossy(&octets).into_owned(),
             volume: lire_volume_iccgamut(&sortie),
             version,
+            journal,
         })
     }
 }
@@ -126,6 +134,12 @@ impl MoteurGamut for MoteurGamutSimule {
             gam: self.resultat.clone()?,
             volume: None,
             version: VERSION_ARGYLL.to_string(),
+            journal: format!(
+                "$ {}
+moteur simulé
+",
+                self.commande_limite()
+            ),
         })
     }
 }

@@ -75,6 +75,9 @@ pub enum ErreurMoteur {
     Introuvable,
     /// ArgyllCMS est là, mais pas en version [`VERSION_ARGYLL`].
     VersionNonValidee { trouvee: String },
+    /// ArgyllCMS est là, mais il lui manque cet outil (par exemple
+    /// `iccgamut`, pour la limite du gamut).
+    OutilManquant { outil: String },
     /// Un outil a échoué ; `cause` est la dernière ligne non vide de sa
     /// sortie d'erreur.
     Echec { etape: Etape, cause: String },
@@ -88,6 +91,7 @@ impl ErreurMoteur {
         match self {
             ErreurMoteur::Introuvable => "profil.erreur.argyll_introuvable",
             ErreurMoteur::VersionNonValidee { .. } => "profil.erreur.argyll_version",
+            ErreurMoteur::OutilManquant { .. } => "profil.erreur.outil_manquant",
             ErreurMoteur::Echec {
                 etape: Etape::Version,
                 ..
@@ -117,6 +121,9 @@ impl fmt::Display for ErreurMoteur {
                 f,
                 "ArgyllCMS est en version {trouvee}, seule la version {VERSION_ARGYLL} est validée"
             ),
+            ErreurMoteur::OutilManquant { outil } => {
+                write!(f, "l'outil {outil} d'ArgyllCMS manque")
+            }
             ErreurMoteur::Echec { etape, cause } => {
                 let etape = match etape {
                     Etape::Version => "lecture de la version",
