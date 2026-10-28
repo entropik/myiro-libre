@@ -36,11 +36,12 @@ const ARGYLL_VERSION: &str = "comparer.limite.argyll_version";
 const ARGYLL_ILLISIBLE: &str = "comparer.limite.argyll_illisible";
 const LIMITE_FICHIER: &str = "comparer.limite.fichier";
 const LIMITE_ILLISIBLE: &str = "comparer.limite.illisible";
+const LIMITE_INTERROMPUE: &str = "comparer.limite.interrompue";
 /// Échec d'`iccgamut` lui-même (clé de `ErreurMoteur::cle`).
 const ERREUR_LIMITE: &str = "comparer.erreur.limite";
 
 /// Clés des refus et des limites indisponibles de la comparaison.
-pub const CLES_COMPARAISON: [&str; 13] = [
+pub const CLES_COMPARAISON: [&str; 14] = [
     AUCUN_PROFIL,
     TROP_DE_PROFILS,
     PROFIL_INCONNU,
@@ -53,6 +54,7 @@ pub const CLES_COMPARAISON: [&str; 13] = [
     ARGYLL_ILLISIBLE,
     LIMITE_FICHIER,
     LIMITE_ILLISIBLE,
+    LIMITE_INTERROMPUE,
     ERREUR_LIMITE,
 ];
 
@@ -68,7 +70,9 @@ pub fn cle_limite(erreur: &ErreurMoteur) -> &'static str {
             etape: Etape::Version,
             ..
         } => ARGYLL_ILLISIBLE,
-        ErreurMoteur::Echec { .. } => ERREUR_LIMITE,
+        // Une recette ne concerne que le calcul d'un profil : jamais rendue ici.
+        ErreurMoteur::Echec { .. } | ErreurMoteur::RecetteEnReglage => ERREUR_LIMITE,
+        ErreurMoteur::Interrompu { .. } => LIMITE_INTERROMPUE,
         ErreurMoteur::Fichier(_) => LIMITE_FICHIER,
     }
 }
@@ -79,7 +83,10 @@ fn cause_limite(erreur: &ErreurMoteur) -> Option<String> {
     match erreur {
         ErreurMoteur::Echec { cause, .. } | ErreurMoteur::Fichier(cause) => Some(cause.clone()),
         ErreurMoteur::VersionNonValidee { trouvee } => Some(trouvee.clone()),
-        ErreurMoteur::Introuvable | ErreurMoteur::OutilManquant { .. } => None,
+        ErreurMoteur::Introuvable
+        | ErreurMoteur::OutilManquant { .. }
+        | ErreurMoteur::RecetteEnReglage
+        | ErreurMoteur::Interrompu { .. } => None,
     }
 }
 

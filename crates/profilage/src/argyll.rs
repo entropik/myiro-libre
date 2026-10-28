@@ -143,12 +143,13 @@ fn executer(
         }
     }
     if !statut.success() {
-        let cause = if stderr.trim().is_empty() {
-            derniere_ligne(&stdout)
-        } else {
-            derniere_ligne(&stderr)
-        };
-        return Err(ErreurMoteur::Echec { etape, cause });
+        // ArgyllCMS écrit ses erreurs « outil: Error - … » sur la sortie
+        // d'erreur (relevé le 28 octobre 2026). Sans elle, l'outil a été
+        // arrêté : ses pourcentages ou un avertissement ne sont pas une cause.
+        return Err(match derniere_erreur(&stderr) {
+            Some(cause) => ErreurMoteur::Echec { etape, cause },
+            None => ErreurMoteur::Interrompu { etape },
+        });
     }
     Ok(format!("{stdout}{stderr}"))
 }
@@ -245,6 +246,15 @@ impl MoteurProfil for ArgyllCms {
         demande: &DemandeProfil,
         avancement: &mut dyn FnMut(Avancement),
     ) -> Result<ProfilCalcule, ErreurMoteur> {
+        // Avant toute recherche : une recette en réglage ne lance rien.
+        let colprof = arguments_colprof(
+            demande.recette,
+            demande.description,
+            Path::new(SRGB),
+            Path::new(PROFIL),
+            Path::new(BASE),
+        )
+        .ok_or(ErreurMoteur::RecetteEnReglage)?;
         let version = self.version()?;
         controler_version(&version)?;
 
@@ -256,13 +266,6 @@ impl MoteurProfil for ArgyllCms {
             .map_err(|e| ErreurMoteur::Fichier(format!("ref/{SRGB} d'ArgyllCMS : {e}")))?;
 
         let mut journal = String::new();
-        let colprof = arguments_colprof(
-            demande.recette,
-            demande.description,
-            Path::new(SRGB),
-            Path::new(PROFIL),
-            Path::new(BASE),
-        );
         avancement(Avancement::Etape(EtapeCalcul::Profil));
         self.lancer(
             "colprof",
@@ -370,19 +373,16 @@ pub fn description_argyll(description: &str) -> String {
 /// table perceptuelle à partir de sRGB (`-S … -cmt -dpp`), la description
 /// sans accents (`-D`, voir [`description_argyll`]), le profil produit
 /// (`-O`) et la base du `.ti3` lu. Chaque valeur reste un seul argument,
-/// quels que soient ses espaces ou guillemets.
+/// quels que soient ses espaces ou guillemets. Rien pour une recette en
+/// cours de réglage.
 pub fn arguments_colprof(
     recette: Recette,
     description: &str,
     srgb: &Path,
     sortie: &Path,
     base: &Path,
-) -> Vec<OsString> {
-    let qualite = match recette {
-        Recette::Rapide => "-qm",
-        Recette::Standard => "-qh",
-        Recette::Approfondi => "-qu",
-    };
+) -> Option<Vec<OsString>> {
+    let qualite = recette.qualite()?;
     let mut a: Vec<OsString> = ["-v", qualite, "-S"].map(OsString::from).into();
     a.push(srgb.into());
     a.extend(["-cmt", "-dpp", "-D"].map(OsString::from));
@@ -390,7 +390,7 @@ pub fn arguments_colprof(
     a.push("-O".into());
     a.push(sortie.into());
     a.push(base.into());
-    a
+    Some(a)
 }
 
 /// `profcheck -k` : écarts en ΔE00 entre le `.ti3` et le profil.
@@ -400,15 +400,17 @@ fn arguments_profcheck() -> Vec<OsString> {
 
 /// Les deux commandes du calcul, telles qu'elles sont lancées dans le
 /// dossier de travail. Rien n'est lancé : elles se construisent même sans
-/// ArgyllCMS.
+/// ArgyllCMS. Aucune pour une recette en cours de réglage.
 pub fn lignes_commandes(recette: Recette, description: &str) -> Vec<String> {
-    let colprof = arguments_colprof(
+    let Some(colprof) = arguments_colprof(
         recette,
         description,
         Path::new(SRGB),
         Path::new(PROFIL),
         Path::new(BASE),
-    );
+    ) else {
+        return Vec::new();
+    };
     vec![
         ligne("colprof", &colprof),
         ligne("profcheck", &arguments_profcheck()),
@@ -492,6 +494,15 @@ pub fn controler_version(trouvee: &str) -> Result<(), ErreurMoteur> {
             trouvee: trouvee.to_string(),
         })
     }
+}
+
+/// Dernière ligne d'erreur d'ArgyllCMS (« … Error - … ») d'une sortie.
+fn derniere_erreur(texte: &str) -> Option<String> {
+    texte
+        .lines()
+        .map(str::trim)
+        .rfind(|l| l.contains("Error - "))
+        .map(str::to_string)
 }
 
 /// Dernière ligne non vide d'une sortie, ou une phrase si elle est vide.
@@ -702,8 +713,9 @@ mod tests {
         }
     }
 
-    /// Un outil qui échoue : la cause est sa dernière ligne d'erreur, et le
-    /// journal garde tout ce qu'il a écrit.
+    /// Un outil qui échoue : la cause est sa dernière ligne « Error - »
+    /// (forme des erreurs d'ArgyllCMS, relevée le 28 octobre 2026 sur colprof
+    /// et profcheck 3.5.0), et le journal garde tout ce qu'il a écrit.
     #[cfg(windows)]
     #[test]
     fn un_outil_qui_echoue_donne_sa_derniere_ligne_d_erreur() {
@@ -714,8 +726,9 @@ mod tests {
             &[
                 "@echo off",
                 "echo debut du calcul",
-                "echo trop peu de plages 1>&2",
-                "exit /b 3",
+                "echo colprof: Error - trop peu de plages 1>&2",
+                "echo   45%%",
+                "exit /b 1",
             ],
         );
         let mut journal = String::new();
@@ -733,10 +746,59 @@ mod tests {
             erreur,
             ErreurMoteur::Echec {
                 etape: Etape::Profil,
-                cause: "trop peu de plages".into()
+                cause: "colprof: Error - trop peu de plages".into()
             }
         );
         assert!(journal.contains("debut du calcul") && journal.contains("trop peu de plages"));
+    }
+
+    /// Un outil arrêté de l'extérieur (programme fermé, poste en veille)
+    /// n'écrit pas d'erreur d'ArgyllCMS : le calcul est dit interrompu, sans
+    /// présenter ses pourcentages ni un avertissement comme une cause.
+    #[cfg(windows)]
+    #[test]
+    fn un_outil_arrete_sans_erreur_est_dit_interrompu() {
+        let dossier = tempfile::tempdir().unwrap();
+        script(
+            dossier.path(),
+            "arret.cmd",
+            &[
+                "@echo off",
+                "echo Creating B to A tables",
+                "echo   0%%",
+                "echo  40%%",
+                "echo Warning: un avertissement 1>&2",
+                "exit /b 1",
+            ],
+        );
+        let mut journal = String::new();
+        let erreur = executer(
+            Path::new("cmd"),
+            "arret",
+            &["/c".into(), r".\arret.cmd".into()],
+            dossier.path(),
+            Etape::Profil,
+            &mut journal,
+            &mut |_| {},
+        )
+        .unwrap_err();
+        assert_eq!(
+            erreur,
+            ErreurMoteur::Interrompu {
+                etape: Etape::Profil
+            }
+        );
+        assert!(journal.contains("40%") && journal.contains("un avertissement"));
+    }
+
+    #[test]
+    fn la_cause_est_la_derniere_erreur_d_argyll() {
+        assert_eq!(
+            derniere_erreur("Warning: x\ncolprof: Error - a\nprofcheck: Error - b\n 40%\n"),
+            Some("profcheck: Error - b".to_string())
+        );
+        assert_eq!(derniere_erreur("Warning: x\n  0%\n 40%\n"), None);
+        assert_eq!(derniere_erreur(""), None);
     }
 
     #[test]

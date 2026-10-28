@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 cgats = { path = "../cgats" }
+colorimetrie = { path = "../colorimetrie" }
 pont-protocole = { path = "../pont-protocole" }
 serde = { version = "1", features = ["derive"] }
 

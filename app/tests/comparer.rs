@@ -887,6 +887,10 @@ fn erreurs_moteur() -> Vec<ErreurMoteur> {
             cause: String::new(),
         },
         ErreurMoteur::Fichier(String::new()),
+        ErreurMoteur::RecetteEnReglage,
+        ErreurMoteur::Interrompu {
+            etape: Etape::Gamut,
+        },
     ]
 }
 

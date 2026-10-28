@@ -209,7 +209,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.recette.rapide",
-        "Rapide\u{202f}: pour un essai, le plus court (durée à mesurer)",
+        "Rapide\u{202f}: pour un essai, le plus court (environ 1\u{a0}min pour 2\u{202f}520 plages)",
     ),
     (
         "profil.recette.standard",
@@ -217,7 +217,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "profil.recette.approfondi",
-        "Approfondi\u{202f}: le plus fin, le plus long (durée à mesurer)",
+        "Approfondi\u{202f}: en cours de réglage, pas encore disponible",
     ),
     (
         "profil.avance",
@@ -334,6 +334,14 @@ const FRANCAIS: Catalogue = &[
     (
         "profil.erreur.calcul",
         "Le calcul du profil a échoué dans ArgyllCMS. Le profil actuel n’a pas changé. Vérifiez la mesure, puis réessayez.",
+    ),
+    (
+        "profil.erreur.recette_en_reglage",
+        "La recette Approfondi est en cours de réglage. Choisissez Rapide ou Standard.",
+    ),
+    (
+        "profil.erreur.interrompu",
+        "Le calcul a été interrompu avant la fin (programme ArgyllCMS arrêté, ou poste mis en veille). Le profil actuel n’a pas changé. Relancez le calcul.",
     ),
     (
         "profil.erreur.controle",
@@ -514,6 +522,10 @@ const FRANCAIS: Catalogue = &[
     (
         "comparer.limite.illisible",
         "La limite du gamut écrite par iccgamut ne se lit pas\u{202f}: elle n’est pas montrée, le reste de la comparaison est calculé.",
+    ),
+    (
+        "comparer.limite.interrompue",
+        "iccgamut s’est arrêté avant la fin, sans dire d’erreur\u{202f}: la limite du gamut n’est pas calculée, le reste de la comparaison l’est. Recommencez la comparaison.",
     ),
     (
         "comparer.erreur.limite",
@@ -1073,9 +1085,43 @@ const FRANCAIS: Catalogue = &[
         "L’action s’est arrêtée sur une erreur inattendue. Choisissez à nouveau cette résolution dans la bibliothèque, puis réessayez.",
     ),
     ("profil.precision", "Précision du calcul"),
+    ("profil.duree", "Durée du calcul"),
     (
         "profil.precision.valeur",
         "{moyenne} en moyenne, {max} au plus (ΔE00)",
+    ),
+    // Contrôle de cohérence des mesures (ticket #1)
+    (
+        "profil.refus.incoherent",
+        "Les mesures ne correspondent pas aux plages de la mire\u{202f}: le profil serait faux. Plages en cause\u{202f}: {plages}. Relisez la mire, vérifiez le sens de la feuille et l’ordre de lecture, et que ce fichier est bien celui de cette mire.",
+    ),
+    ("profil.coherence.autres", "et {n} autres"),
+    ("profil.coherence.autre", "et 1 autre"),
+    (
+        "profil.coherence.decalage",
+        "Les mesures semblent décalées de {n} plages.",
+    ),
+    (
+        "profil.coherence.decalage_une",
+        "Les mesures semblent décalées d’une plage.",
+    ),
+    (
+        "profil.coherence.criteres",
+        "Contrôles qui les signalent\u{202f}: {criteres}.",
+    ),
+    (
+        "profil.coherence.critere.degrade_gris",
+        "dégradé gris, du foncé au clair",
+    ),
+    ("profil.coherence.critere.blanc_noir", "blanc papier et noir"),
+    ("profil.coherence.critere.doublons", "plages répétées"),
+    ("profil.coherence.critere.voisines", "plages voisines"),
+    ("profil.coherence", "Mesures contrôlées"),
+    ("profil.coherence.accepte", "cohérentes"),
+    ("profil.coherence.non_fait", "Contrôles non faits"),
+    (
+        "profil.coherence.non_controle",
+        "non, profil calculé avant ce contrôle",
     ),
     // Installation dans Windows
     ("installation.installe", "Installé dans Windows"),
@@ -1896,7 +1942,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.recette.rapide",
-        "Fast: for a trial, the shortest (duration to be measured)",
+        "Fast: for a trial, the shortest (about 1 min for 2,520 patches)",
     ),
     (
         "profil.recette.standard",
@@ -1904,7 +1950,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "profil.recette.approfondi",
-        "Thorough: the finest, the longest (duration to be measured)",
+        "Thorough: being tuned, not available yet",
     ),
     (
         "profil.avance",
@@ -2021,6 +2067,14 @@ const ANGLAIS: Catalogue = &[
     (
         "profil.erreur.calcul",
         "Computing the profile failed in ArgyllCMS. The current profile has not changed. Check the measurement, then try again.",
+    ),
+    (
+        "profil.erreur.recette_en_reglage",
+        "The Thorough recipe is being tuned. Choose Fast or Standard.",
+    ),
+    (
+        "profil.erreur.interrompu",
+        "The computation was interrupted before the end (ArgyllCMS program stopped, or computer put to sleep). The current profile has not changed. Start the computation again.",
     ),
     (
         "profil.erreur.controle",
@@ -2201,6 +2255,10 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.limite.illisible",
         "The gamut boundary written by iccgamut cannot be read: it is not shown, the rest of the comparison is computed.",
+    ),
+    (
+        "comparer.limite.interrompue",
+        "iccgamut stopped before the end without reporting an error: the gamut boundary is not computed, the rest of the comparison is. Run the comparison again.",
     ),
     (
         "comparer.erreur.limite",
@@ -2760,9 +2818,40 @@ const ANGLAIS: Catalogue = &[
         "The action stopped on an unexpected error. Choose this resolution again in the library, then try again.",
     ),
     ("profil.precision", "Calculation accuracy"),
+    ("profil.duree", "Calculation time"),
     (
         "profil.precision.valeur",
         "{moyenne} on average, {max} at most (ΔE00)",
+    ),
+    // Measurement consistency check (ticket #1)
+    (
+        "profil.refus.incoherent",
+        "The measurements do not match the patches of the chart: the profile would be wrong. Patches involved: {plages}. Read the chart again, check the sheet orientation and the reading order, and that this file belongs to this chart.",
+    ),
+    ("profil.coherence.autres", "and {n} others"),
+    ("profil.coherence.autre", "and 1 other"),
+    (
+        "profil.coherence.decalage",
+        "The measurements seem shifted by {n} patches.",
+    ),
+    (
+        "profil.coherence.decalage_une",
+        "The measurements seem shifted by one patch.",
+    ),
+    ("profil.coherence.criteres", "Checks that flag them: {criteres}."),
+    (
+        "profil.coherence.critere.degrade_gris",
+        "grey ramp, dark to light",
+    ),
+    ("profil.coherence.critere.blanc_noir", "paper white and black"),
+    ("profil.coherence.critere.doublons", "repeated patches"),
+    ("profil.coherence.critere.voisines", "neighbouring patches"),
+    ("profil.coherence", "Measurements checked"),
+    ("profil.coherence.accepte", "consistent"),
+    ("profil.coherence.non_fait", "Checks not done"),
+    (
+        "profil.coherence.non_controle",
+        "no, profile calculated before this check",
     ),
     // Installing in Windows
     ("installation.installe", "Installed in Windows"),

@@ -692,6 +692,17 @@ fn le_bouton_calculer_inactif_dit_pourquoi() {
     assert!(reglage.contains("occupe.hidden = !enCours || calcul.raisonVisible();"));
 }
 
+/// Approfondi, en cours de réglage (28 octobre 2026), reste visible mais
+/// inactif, sa raison écrite dessous ; un clic ne le choisit pas.
+#[test]
+fn approfondi_est_inactif_avec_sa_raison() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains("const RECETTES_EN_REGLAGE = [\"approfondi\"];"));
+    assert!(script.contains("if (inactive(v)) b.dataset.inactif = \"\";"));
+    assert!(script.contains("if (!inactive(v)) changer(() => choisir(v));"));
+    assert!(script.contains("el(\"p\", \"why\", t(\"profil.recette.\" + r))"));
+}
+
 /// Un calcul fini alors que l'opérateur a changé de résolution n'annonce rien
 /// sur l'autre vue ; un rechargement qui échoue après un calcul réussi ne
 /// dit pas que le calcul a échoué.
@@ -719,6 +730,10 @@ fn la_commande_et_le_journal_restent_consultables() {
     let script = lire("interface/calcul-profil.js");
     assert!(script.contains("el(\"pre\", \"\", p.commandes.join(\"\\n\"))"));
     assert!(script.contains("el(\"pre\", \"\", p.journal)"));
+    // La durée du calcul, seulement si elle a été gardée, au format court
+    // (« 58 s », « 3 min 03 s »).
+    assert!(script.contains("if (typeof p.duree_s === \"number\")"));
+    assert!(script.contains("cleValeur(\"profil.duree\", duree(Math.round(p.duree_s) * 1000))"));
     assert!(script.contains("el(\"details\", \"replie\")"));
     assert!(script.contains("el(\"summary\", \"\", t(\"profil.avance.provenance\"))"));
     use app::textes::{texte, Langue};
@@ -1846,4 +1861,92 @@ fn glisser_vers_le_haut_montre_le_dessus() {
         .contains("tourne(((p.x - glisser.x) / ratio) * 0.5, ((glisser.y - p.y) / ratio) * 0.5);"));
     assert!(script.contains("case \"ArrowUp\": tourne(0, PAS_ANGLE); break;"));
     assert!(script.contains("case \"ArrowDown\": tourne(0, -PAS_ANGLE); break;"));
+}
+
+// ---- Contrôle de cohérence des mesures (ticket #1) ----
+
+/// Chaque texte du contrôle de cohérence existe en français et en anglais,
+/// y compris le nom de chaque contrôle tel que le module `profiler` l'envoie,
+/// et la page sait nommer chacun.
+#[test]
+fn toutes_les_cles_de_coherence_existent_en_deux_langues() {
+    use app::textes::{texte, Langue};
+    use profilage::Critere;
+    let script = lire("interface/calcul-profil.js");
+    let mut cles = vec![
+        "profil.refus.incoherent".to_string(),
+        "profil.coherence".to_string(),
+        "profil.coherence.autres".to_string(),
+        "profil.coherence.decalage".to_string(),
+        "profil.coherence.decalage_une".to_string(),
+        "profil.coherence.criteres".to_string(),
+        "profil.coherence.accepte".to_string(),
+        "profil.coherence.non_fait".to_string(),
+        "profil.coherence.non_controle".to_string(),
+    ];
+    for critere in [
+        Critere::DegradeGris,
+        Critere::BlancNoir,
+        Critere::Doublons,
+        Critere::Voisines,
+    ] {
+        let nom = serde_json::to_value(critere).unwrap();
+        let nom = nom.as_str().unwrap();
+        assert!(script.contains(&format!("{nom}: \"profil.coherence.critere.{nom}\"")));
+        cles.push(format!("profil.coherence.critere.{nom}"));
+    }
+    for cle in &cles {
+        if cle != "profil.refus.incoherent" {
+            assert!(
+                script.contains(&format!("\"{cle}\"")),
+                "{cle} absente de la page"
+            );
+        }
+        for langue in [Langue::Francais, Langue::Anglais] {
+            assert_ne!(texte(langue, cle), cle.as_str(), "{cle} ({langue:?})");
+        }
+    }
+}
+
+/// Un refus de cohérence nomme les plages en cause à la place de
+/// `{plages}`, compte les suivantes, dit les contrôles et la piste du
+/// décalage ; il remplace le bouton « Calculer le profil ».
+#[test]
+fn un_refus_de_coherence_nomme_ses_plages_a_la_place_du_bouton() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(
+        script.contains("if (erreur.coherence) texte = texteCoherence(texte, erreur.coherence);")
+    );
+    assert!(script.contains("texte.replace(\"{plages}\", () => plages)"));
+    assert!(script.contains("t(\"profil.coherence.autres\").replace(\"{n}\""));
+    assert!(script.contains("typeof c.decalage === \"number\""));
+    assert!(script.contains("boutonCalculer.remove();"));
+}
+
+/// La provenance d'un profil calculé dit si ses mesures ont été contrôlées,
+/// puis les contrôles non faits ; un profil plus ancien est dit « non
+/// contrôlé ».
+#[test]
+fn la_provenance_dit_si_les_mesures_ont_ete_controlees() {
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains(
+        "cleValeur(\"profil.coherence\", t(c ? \"profil.coherence.accepte\" : \"profil.coherence.non_controle\"))"
+    ));
+    assert!(script.contains("cleValeur(\"profil.coherence.non_fait\", nomsCriteres(c.non_faits))"));
+}
+
+/// Une seule plage en cause au-delà des 10 nommées se dit au singulier.
+#[test]
+fn une_seule_autre_plage_se_dit_au_singulier() {
+    use app::textes::{texte, Langue};
+    assert_eq!(
+        texte(Langue::Francais, "profil.coherence.autre"),
+        "et 1 autre"
+    );
+    assert_eq!(
+        texte(Langue::Anglais, "profil.coherence.autre"),
+        "and 1 other"
+    );
+    let script = lire("interface/calcul-profil.js");
+    assert!(script.contains("c.autres === 1 ? t(\"profil.coherence.autre\")"));
 }

@@ -16,9 +16,10 @@ use bibliotheque::{
 };
 use pont_protocole::ConditionMesure;
 use profilage::{
-    chercher_argyll, conditions_utilisables, ecrire_ti3, lignes_commandes, preparer_plages,
-    ArgyllCms, Avancement, DemandeProfil, ErreurMoteur, EtapeCalcul, EtatAvancement, MoteurGamut,
-    MoteurProfil, PlagesProfil, Recette, RefusPlages, SuiviAvancement,
+    chercher_argyll, conditions_utilisables, controler_coherence, ecrire_ti3, lignes_commandes,
+    preparer_plages, ArgyllCms, Avancement, ControleCoherence, Critere, DemandeProfil,
+    ErreurMoteur, EtapeCalcul, EtatAvancement, MoteurGamut, MoteurProfil, PlagesProfil, Recette,
+    RefusPlages, SuiviAvancement,
 };
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +51,9 @@ pub struct ResultatProfil {
     /// précision de calcul, pas une vérification.
     pub precision_moyenne: f64,
     pub precision_max: f64,
+    /// Durée réelle du calcul, en secondes, de la préparation des mesures à
+    /// la fin du contrôle de précision.
+    pub duree_s: f64,
 }
 
 /// Pourquoi un profil n'a pas été calculé, pour la page.
@@ -64,6 +68,54 @@ pub struct ErreurProfil {
     /// Version d'ArgyllCMS trouvée mais refusée : elle prend la place de
     /// `{version}` dans le texte de la clé.
     pub version: Option<String>,
+    /// Mesures qui ne correspondent pas aux plages (`profil.refus.incoherent`) :
+    /// les plages en cause, à la place de `{plages}`.
+    pub coherence: Option<Box<RefusCoherence>>,
+}
+
+/// Nombre de plages en cause nommées dans un refus de cohérence ; les
+/// suivantes sont seulement comptées.
+const PLAGES_NOMMEES: usize = 10;
+
+/// Pourquoi le contrôle de cohérence refuse une mesure, pour la page.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct RefusCoherence {
+    /// Identifiants de plage du fichier (`SAMPLE_ID`), dans l'ordre du
+    /// fichier, 10 au plus.
+    pub plages: Vec<String>,
+    /// Plages en cause au-delà des 10 nommées.
+    pub autres: usize,
+    /// Contrôles qui ont signalé des plages.
+    pub criteres: Vec<Critere>,
+    /// Piste seulement : les mesures semblent décalées de tant de plages.
+    pub decalage: Option<i64>,
+}
+
+impl RefusCoherence {
+    /// Rangs des plages suspectes traduits en identifiants du fichier.
+    fn new(controle: &ControleCoherence, identifiants: &[String]) -> Self {
+        let mut rangs: Vec<usize> = controle.suspectes.iter().map(|s| s.rang).collect();
+        rangs.dedup();
+        let mut criteres: Vec<Critere> = controle.suspectes.iter().map(|s| s.critere).collect();
+        criteres.sort();
+        criteres.dedup();
+        let plages = rangs
+            .iter()
+            .take(PLAGES_NOMMEES)
+            .map(|&r| {
+                r.checked_sub(1)
+                    .and_then(|i| identifiants.get(i))
+                    .cloned()
+                    .unwrap_or_else(|| r.to_string())
+            })
+            .collect();
+        RefusCoherence {
+            plages,
+            autres: rangs.len().saturating_sub(PLAGES_NOMMEES),
+            criteres,
+            decalage: controle.decalage,
+        }
+    }
 }
 
 impl ErreurProfil {
@@ -72,6 +124,7 @@ impl ErreurProfil {
             cle,
             cause: None,
             version: None,
+            coherence: None,
         }
     }
 
@@ -83,7 +136,9 @@ impl ErreurProfil {
             }
             ErreurMoteur::VersionNonValidee { trouvee } => e.version = Some(trouvee.clone()),
             ErreurMoteur::OutilManquant { outil } => e.cause = Some(outil.clone()),
-            ErreurMoteur::Introuvable => {}
+            ErreurMoteur::Introuvable
+            | ErreurMoteur::RecetteEnReglage
+            | ErreurMoteur::Interrompu { .. } => {}
         }
         e
     }
@@ -226,6 +281,12 @@ pub struct ProvenanceProfil {
     /// Journal d'ArgyllCMS pendant le calcul, astérisques regroupés pour
     /// l'affichage ([`journal_court`]) ; le journal enregistré reste complet.
     pub journal: String,
+    /// Durée réelle du calcul, en secondes ; rien pour un profil calculé
+    /// avant qu'elle soit gardée (rien n'est inventé).
+    pub duree_s: Option<f64>,
+    /// Contrôle de cohérence des mesures ; rien pour un profil calculé avant
+    /// ce contrôle (« mesures non contrôlées »).
+    pub coherence: Option<ControleCoherence>,
 }
 
 /// Paramètres conservés d'un profil calculé, tels que [`BibliothequeOuverte::calculer_profil`]
@@ -243,6 +304,10 @@ struct ParametresCalcul {
     precision: PrecisionLue,
     commandes: Vec<String>,
     journal: String,
+    #[serde(default)]
+    duree_s: Option<f64>,
+    #[serde(default)]
+    coherence: Option<ControleCoherence>,
 }
 
 #[derive(Deserialize)]
@@ -261,7 +326,20 @@ pub(crate) fn provenance_profil(
         return Ok(None);
     };
     let texte = b.parametres_profil(actif.id)?;
-    Ok(serde_json::from_str::<ParametresCalcul>(&texte)
+    Ok(provenance_depuis_parametres(&texte))
+}
+
+/// Durée d'un calcul arrondie au dixième de seconde, telle qu'elle est rangée
+/// (provenance du profil et `durees-calcul.json`) : elle se relit à
+/// l'identique.
+pub fn arrondir_duree(secondes: f64) -> f64 {
+    (secondes * 10.0).round() / 10.0
+}
+
+/// Provenance lue dans les paramètres conservés d'un profil ; rien pour un
+/// profil rangé tel quel ou des paramètres illisibles.
+pub fn provenance_depuis_parametres(texte: &str) -> Option<ProvenanceProfil> {
+    serde_json::from_str::<ParametresCalcul>(texte)
         .ok()
         .filter(|p| p.origine == "calcul")
         .map(|p| ProvenanceProfil {
@@ -276,7 +354,9 @@ pub(crate) fn provenance_profil(
             precision_max: p.precision.max_de00,
             commandes: p.commandes,
             journal: journal_court(&p.journal),
-        }))
+            duree_s: p.duree_s,
+            coherence: p.coherence,
+        })
 }
 
 /// Le moteur de calcul de l'application : ArgyllCMS, cherché une fois au
@@ -356,6 +436,7 @@ struct Preparation {
     horodatage: String,
     fichier: String,
     plages: PlagesProfil,
+    coherence: ControleCoherence,
     ti3: String,
 }
 
@@ -379,6 +460,21 @@ impl BibliothequeOuverte {
             eprintln!("{} : {e}", importee.fichier);
             ErreurProfil::sans_cause(e.cle())
         })?;
+        // Avant ArgyllCMS : des mesures qui ne correspondent pas aux plages
+        // donneraient un profil faux (ticket #1).
+        let coherence = controler_coherence(&plages);
+        if !coherence.accepte() {
+            eprintln!("{} : mesures incohérentes {coherence:?}", importee.fichier);
+            let identifiants: Vec<String> = importee
+                .mesure
+                .plages
+                .iter()
+                .map(|p| p.identifiant.clone())
+                .collect();
+            let mut e = ErreurProfil::sans_cause("profil.refus.incoherent");
+            e.coherence = Some(Box::new(RefusCoherence::new(&coherence, &identifiants)));
+            return Err(e);
+        }
         let horodatage = instant_utc(maintenant);
         let date = horodatage.get(..10).unwrap_or(&horodatage);
         let nom = nom_profil_propose(&detail.imprimante, &detail.papier, &detail.resolution, date);
@@ -393,6 +489,7 @@ impl BibliothequeOuverte {
             horodatage,
             fichier: importee.fichier,
             plages,
+            coherence,
             ti3,
         })
     }
@@ -441,6 +538,7 @@ impl BibliothequeOuverte {
         maintenant: SystemTime,
         avancement: &mut dyn FnMut(Avancement),
     ) -> Result<ResultatProfil, ErreurProfil> {
+        let debut = std::time::Instant::now();
         avancement(Avancement::Etape(EtapeCalcul::Preparation));
         let p = self.preparer_profil(condition, mesure, mesure_condition, maintenant)?;
         // Hors du verrou : la page et l'arbre restent utilisables.
@@ -457,6 +555,8 @@ impl BibliothequeOuverte {
                 eprintln!("{e}");
                 ErreurProfil::du_moteur(&e)
             })?;
+        // De la préparation à la fin du contrôle de précision.
+        let duree_s = arrondir_duree(debut.elapsed().as_secs_f64());
         let parametres = serde_json::json!({
             "origine": "calcul",
             "moteur": "ArgyllCMS",
@@ -471,6 +571,8 @@ impl BibliothequeOuverte {
             "precision": calcule.precision,
             "ti3": p.ti3,
             "journal": calcule.journal,
+            "duree_s": duree_s,
+            "coherence": p.coherence,
         })
         .to_string();
         let profil = self.avec(|b| {
@@ -488,6 +590,7 @@ impl BibliothequeOuverte {
             plages: p.plages.plages.len(),
             precision_moyenne: calcule.precision.moyenne_de00,
             precision_max: calcule.precision.max_de00,
+            duree_s,
         })
     }
 
@@ -592,7 +695,6 @@ pub fn profiler_calculer(
     calcul: u64,
 ) -> Result<ResultatProfil, ErreurProfil> {
     use tauri::Emitter;
-    let debut = std::time::Instant::now();
     let mut suivi = SuiviCalcul::new(calcul);
     let resultat = ouverte.calculer_profil(
         IdCondition(condition),
@@ -608,7 +710,8 @@ pub fn profiler_calculer(
     )?;
     if let Some(fichier) = fichier_durees(&app) {
         let mut historique = HistoriqueDurees::lire(&fichier);
-        historique.noter(recette, debut.elapsed().as_secs_f64(), resultat.plages);
+        // La même durée que celle gardée dans la provenance du profil.
+        historique.noter(recette, resultat.duree_s, resultat.plages);
         // Une estimation perdue n'empêche pas le profil d'être rangé.
         if let Err(e) = historique.ecrire(&fichier) {
             eprintln!("{} : {e}", fichier.display());
