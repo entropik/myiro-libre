@@ -536,7 +536,7 @@ Comportement :
 - [ ] **Step 3 : Contrôles** — `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, `cargo test --target i686-pc-windows-msvc`, `python outils/verifier_docs.py` → tout vert.
 - [ ] **Step 4 : Essai d'écran avec le mainteneur (geste humain, sur Epson pigmentaire / semigloss si possible)**
   1. Profil calculé (plan 3) depuis une mesure FD-S2w de la mire de profilage.
-  2. Imprimer la seconde mire choisie (voir « Décisions du mainteneur » : RGB-2520 réimprimée) depuis le logiciel de l'atelier, à travers ce profil, en colorimétrique relatif ; la mesurer avec FD-S2w et importer l'export dans la résolution.
+  2. Imprimer la seconde mire choisie (voir « Décisions du mainteneur » : mire de vérification FD-9 de la tâche 10, ouverte dans FD-S2w) depuis le logiciel de l'atelier, à travers ce profil, en colorimétrique relatif ; la mesurer avec FD-S2w et importer l'export dans la résolution.
   3. Enregistrer le jeu de tolérances, remplir et confirmer la fiche, vérifier.
   4. Noter les trois statistiques de chaque famille, le nombre de plages hors gamut et le verdict ; ouvrir le rapport exporté dans un navigateur et l'imprimer en PDF.
   5. Modifier le jeu (v2), recalculer : deux vérifications dans l'historique, la première intacte.
@@ -559,12 +559,31 @@ Comportement :
 
 ---
 
+### Tâche 10 : Mire de vérification FD-9, créée une fois et ouverte dans FD-S2w
+
+**Pourquoi :** décision du mainteneur du 28 octobre 2026 (« on la crée une fois et on l'enregistre dans l'app »). FD-S2w ouvre une mire définie depuis un fichier XML (manuel FD-S2w, menu Fichier, « Ouvrir le fichier de la charte » ; « Enregistrer » d'une charte définie écrit le même `*.xml`). Saisir 200 couleurs à la main dans « Create Chart » n'est pas envisageable : FD-S2w n'importe pas de liste de couleurs.
+
+**Format confirmé** (fichiers de FD-S2w du poste, lus le 28 octobre 2026, jamais copiés dans le dépôt) : `<Data Identifier="ChartDefinition" Application="FD-S2w" Version="00.00">` → `<Chart ChartName ChartPatchCount CreateTime Kind="Normal" SheetCount UUID="" UNIT="0">` → `<Sheet AreaCount Page Height Width PatchCount>` (1/100 mm) → `<Area Number RowCount ColumnCount LeftTopX LeftTopY PatchWidth PatchHeight PatchWidthGap PatchHeightGap PatchCount>` → `<Patch Column Row ColorValue1 ColorValue2 ColorValue3 …>` (valeurs × 100). **Supposé** : attributs restants de `Patch` (ID), espace RVB 0–255 × 100 et présence d'un QR : à relever sur un fichier enregistré par FD-S2w du poste avant d'écrire le test, et noter « confirmé » ou « supposé » dans l'ADR.
+
+**Files:**
+- Create: `crates/mires/src/fds2w.rs` si la crate `mires` (#33) est dans `dev`, sinon `crates/verification/src/mire_fd9.rs` (déplacé à la fusion de #33)
+- Modify: `app/src/verifier.rs`, `app/interface/verification.js`, `app/src/textes.rs`
+- Test: tests de la crate choisie, `app/tests/verifier.rs`
+
+- [ ] **Step 1 : Tests en échec** — `les_couleurs_de_verification_sont_toutes_hors_de_la_rgb2520` (aucune des ~200 couleurs n'est égale à une valeur RGB-2520 ; liste tirée de façon déterministe, même graine → même liste, comprend blanc papier, noir, primaires et secondaires, rampes de gris et tons chair) ; `le_xml_fds2w_relu_redonne_les_memes_couleurs_et_la_meme_geometrie` ; `la_mire_tient_dans_la_surface_numerisable_du_fd9` (A4 ou A3, marges du gabarit RGB-2520) ; `la_mire_de_verification_est_creee_une_seule_fois` (deuxième demande : même empreinte, aucun doublon dans la bibliothèque).
+- [ ] **Step 2 : Implémenter** la liste (graine figée et versionnée), l'écriture XML (échappement, UTF-8) et le rangement comme mire de la bibliothèque (organisation de #33 si fusionné, sinon table de la tâche 4).
+- [ ] **Step 3 : Application** — bouton « Mire de vérification FD-9 : enregistrer pour FD-S2w » dans la section « Vérifier le profil » ; la vérification importée retrouve ses couleurs demandées par les ID de la mire.
+- [ ] **Step 4 : Essai (mainteneur)** — ouvrir le XML dans FD-S2w : la mire s'affiche avec les bonnes couleurs et le bon nombre de plages. Sinon, relever l'écart et corriger avant l'essai d'écran de la tâche 8.
+- [ ] **Step 5 : Vérifier et commiter** — contrôles de la tâche 8, étape 3.
+
+---
+
 ## Décisions du mainteneur (28 octobre 2026)
 
 Réponses données au général le 28 octobre 2026 : « 1 oui, 2b, 3 ok, 4 oui, 5 HTML ».
 
 1. **Seconde mire imprimée** depuis le logiciel habituel, couleurs lues comme du sRVB, converties par le profil en **colorimétrique relatif, sans compensation du point noir** : validé.
-2. **Seconde mire pour l'essai au FD-9** : **RGB-2520 réimprimée à travers le profil** (mêmes couleurs que la mire du profil : contrôle moins exigeant, signalé dans le rapport).
+2. **Seconde mire pour le FD-9** : d'abord « RGB-2520 réimprimée » (2b), puis remplacé le même jour à la demande du mainteneur : « on la crée une fois et on l'enregistre dans l'app ». L'application crée **une fois** une mire de vérification FD-9 d'environ 200 couleurs différentes de la RGB-2520, la range dans la bibliothèque et l'écrit en XML « ChartDefinition » de FD-S2w. Le mainteneur l'ouvre dans FD-S2w (Fichier → Ouvrir le fichier de la charte), en tire le TIFF avec QR code, l'imprime à travers le profil et la mesure ; l'export CGATS est importé (tâche 10).
 3. **Valeurs de départ du jeu « Atelier »**, en ΔE00, validées :
    - prédiction : moyenne ≤ 1,5 · 95 % des plages ≤ 3,0 · maximum ≤ 5,0 ;
    - fidélité, couleurs dans le gamut : moyenne ≤ 2,0 · 95 % ≤ 4,0 · maximum ≤ 6,0.
