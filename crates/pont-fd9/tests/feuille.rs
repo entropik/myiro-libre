@@ -49,8 +49,11 @@ fn connectee(sdk: Fd9Simule, plafond: Palier) -> (Session<Fd9Simule>, usize) {
     (session, appels)
 }
 
+/// Appels de la feuille, après la lecture de l'état qui l'ouvre toujours.
 fn appels_de_la_feuille(session: &Session<Fd9Simule>, depuis: usize) -> Vec<&str> {
-    session.sdk().appels_dll()[depuis..].to_vec()
+    let appels = &session.sdk().appels_dll()[depuis..];
+    assert_eq!(appels.first(), Some(&"FD9_GetStatus"), "{appels:?}");
+    appels[1..].to_vec()
 }
 
 const ARRET: [&str; 2] = ["FD9_StopMeasurement faux", "FD9_ExitMeasurement 0 nul"];
@@ -123,22 +126,67 @@ fn sans_feuille_le_delai_rend_feuille_absente() {
 }
 
 #[test]
-fn un_evenement_3_recu_avant_la_requete_ne_lance_pas_la_capture() {
+fn une_feuille_glissee_avant_la_requete_est_prise() {
     let mut sdk = Fd9Simule::avec_une_rgb2520();
     sdk.a_venir.clear();
     let (mut session, depuis) = connectee(sdk, Palier::Prenumerisation);
-    // Reçu entre deux requêtes : il ne dit rien de la feuille à venir.
+    // L'opérateur a glissé la feuille avant la requête : événements 2 et 3
+    // reçus entre deux requêtes, état 3 lu par FD9_GetStatus.
+    session.sdk_mut().rappeler(2);
     session.sdk_mut().rappeler(3);
 
+    assert_eq!(session.prenumeriser(&rgb2520()).unwrap().plages, 2_520);
     assert_eq!(
-        session.prenumeriser(&rgb2520()),
-        Err(ErreurPont::FeuilleAbsente {})
+        appels_de_la_feuille(&session, depuis)[0],
+        "FD9_StartCapture"
     );
-    assert_eq!(appels_de_la_feuille(&session, depuis), ARRET);
     assert!(session
         .journal()
         .iter()
         .any(|l| l.contains("hors requête") && l.contains("état 3")));
+}
+
+#[test]
+fn une_feuille_en_cours_d_engagement_est_attendue() {
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.a_venir = [3].into();
+    let (mut session, depuis) = connectee(sdk, Palier::Prenumerisation);
+    session.sdk_mut().rappeler(2);
+
+    assert_eq!(session.prenumeriser(&rgb2520()).unwrap().plages, 2_520);
+    assert_eq!(
+        appels_de_la_feuille(&session, depuis)[0],
+        "FD9_StartCapture"
+    );
+}
+
+#[test]
+fn un_instrument_qui_n_attend_pas_de_feuille_est_refuse_sans_appel_de_mesure() {
+    // 0 : un autre logiciel a la main ; 7 : une reconnaissance déjà finie.
+    for etat in [0, 7, 77] {
+        let mut sdk = Fd9Simule::avec_une_rgb2520();
+        sdk.reactions.insert("FD9_Connect", vec![etat]);
+        let (mut session, depuis) = connectee(sdk, Palier::Prenumerisation);
+
+        assert_eq!(
+            session.prenumeriser(&rgb2520()),
+            Err(ErreurPont::InstrumentIndisponible { etat })
+        );
+        assert_eq!(appels_de_la_feuille(&session, depuis), [] as [&str; 0]);
+    }
+}
+
+#[test]
+fn un_etat_illisible_refuse_la_feuille_sans_appel_de_mesure() {
+    let sdk = Fd9Simule::avec_une_rgb2520();
+    let (mut session, depuis) = connectee(sdk, Palier::Prenumerisation);
+    session.sdk_mut().codes.insert("FD9_GetStatus", 1102);
+
+    assert_eq!(
+        session.prenumeriser(&rgb2520()),
+        Err(ErreurPont::Sdk { code: 1102 })
+    );
+    assert_eq!(appels_de_la_feuille(&session, depuis), [] as [&str; 0]);
 }
 
 #[test]
@@ -367,9 +415,9 @@ fn deux_feuilles_se_suivent_dans_la_meme_connexion() {
 
 #[test]
 fn sans_la_main_une_annulation_dit_l_arret_refuse() {
-    // Un autre logiciel a la main (état 0) : rien à arrêter, rien à clore.
+    // Un autre logiciel prend la main (état 0) pendant l'attente : rien à
+    // arrêter, rien à clore.
     let mut sdk = Fd9Simule::avec_une_rgb2520();
-    sdk.reactions.remove("FD9_Connect");
     sdk.a_venir = [0].into();
     let mut session = Session::new(sdk, Palier::Prenumerisation).avec_delais(Delais {
         feuille: Duration::from_secs(30),
@@ -403,7 +451,6 @@ fn sans_la_main_une_annulation_dit_l_arret_refuse() {
 #[test]
 fn sans_la_main_le_delai_rend_feuille_absente() {
     let mut sdk = Fd9Simule::avec_une_rgb2520();
-    sdk.reactions.remove("FD9_Connect");
     sdk.a_venir = [0].into();
     let (mut session, depuis) = connectee(sdk, Palier::Prenumerisation);
 

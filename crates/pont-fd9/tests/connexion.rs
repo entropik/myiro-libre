@@ -27,7 +27,10 @@ fn le_pont_fd9_va_jusqu_a_la_connexion() {
 
 #[test]
 fn la_connexion_inscrit_le_rappel_avant_connect() {
-    let mut session = detectee(Fd9Simule::avec_un_fd9(), Palier::Connexion);
+    let mut sdk = Fd9Simule::avec_un_fd9();
+    // La main est donnée à la connexion : état 1 rendu à +0x10.
+    sdk.reactions.insert("FD9_Connect", vec![1]);
+    let mut session = detectee(sdk, Palier::Connexion);
 
     let identite = session.connecter(0).unwrap();
 

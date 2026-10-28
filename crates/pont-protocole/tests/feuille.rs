@@ -276,6 +276,9 @@ fn la_prenumerisation_et_les_erreurs_de_feuille_traversent_le_protocole() {
             erreur: ErreurPont::FeuilleAbsente {},
         },
         Reponse::Erreur {
+            erreur: ErreurPont::InstrumentIndisponible { etat: 0 },
+        },
+        Reponse::Erreur {
             erreur: ErreurPont::IncidentFeuille {
                 etat: 201,
                 premesure: Some(3),

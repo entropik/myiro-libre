@@ -29,7 +29,7 @@ pub struct Fd9Simule {
     pub codes: HashMap<&'static str, i32>,
     /// Identité écrite par `FD9_GetSystemInfo` ; `None` : rien d'écrit.
     pub infos: Option<TamponInfosSysteme>,
-    /// Rendu par `FD9_GetStatus`.
+    /// Rendu par `FD9_GetStatus`, l'état du SDK à +0x10 (n° 4) en plus.
     pub statut: [u32; 8],
     /// Rappel inscrit, session ouverte : comme les drapeaux de la DLL.
     pub inscrit: bool,
@@ -116,7 +116,7 @@ impl Fd9Simule {
             version_fichier: Some([1, 3, 2, 3]),
             empreinte: Some(EMPREINTE_SIMULEE.repeat(32)),
             infos: Some(infos_fictives(b"12345678")),
-            statut: [0, 0, 0, 0, 1, 0, 0, 0],
+            statut: [0; 8],
             ..Default::default()
         }
     }
@@ -274,6 +274,7 @@ impl SdkFd9 for Fd9Simule {
         let code = self.appel("FD9_GetStatus", String::new());
         if code == 0 {
             *tampon = self.statut;
+            tampon[4] = self.etat;
         }
         code
     }

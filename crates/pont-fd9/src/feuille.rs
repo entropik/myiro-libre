@@ -88,7 +88,7 @@ impl<S: SdkFd9> Session<S> {
         mire: &DefinitionFeuille,
         coordonnees: &CoordonneesMire,
     ) -> Result<LectureFeuille, ErreurPont> {
-        self.attendre_ou_conclure(EtatSdk::AlimentationFinie, Attente::Feuille)?;
+        self.attendre_feuille()?;
         let code = self.sdk.capturer();
         self.verifier("FD9_StartCapture", code)?;
         self.attendre_ou_conclure(EtatSdk::CaptureFinie, Attente::Etape)?;
@@ -128,6 +128,37 @@ impl<S: SdkFd9> Session<S> {
             fiabilite,
             ecart_max,
         })
+    }
+
+    /// Lit l'état courant (`FD9_GetStatus`, +0x10, sans question à
+    /// l'instrument) : une feuille glissée avant la requête n'est pas perdue.
+    /// État 3 : feuille engagée, la capture suit ; état 2 : engagement en
+    /// cours ; état 1 : attente de la feuille ; autre : refus, rien n'est
+    /// lancé.
+    fn attendre_feuille(&mut self) -> Result<(), ErreurPont> {
+        let mut statut = [0u32; 8];
+        let code = self.sdk.statut(&mut statut);
+        self.journal
+            .push(format!("FD9_GetStatus : code {code}, {statut:?}"));
+        if code != 0 {
+            return Err(erreur_sdk(code));
+        }
+        match EtatSdk::depuis(statut[4]) {
+            EtatSdk::AlimentationFinie => Ok(()),
+            EtatSdk::Alimentation => {
+                self.attendre_ou_conclure(EtatSdk::AlimentationFinie, Attente::Etape)
+            }
+            EtatSdk::Attente => {
+                self.attendre_ou_conclure(EtatSdk::AlimentationFinie, Attente::Feuille)
+            }
+            etat => {
+                self.journal.push(format!(
+                    "l'instrument n'attend pas de feuille (état {})",
+                    etat.code()
+                ));
+                Err(ErreurPont::InstrumentIndisponible { etat: etat.code() })
+            }
+        }
     }
 
     /// QR et image, en deux appels : la taille, puis l'image dans un tampon
