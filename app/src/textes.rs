@@ -553,7 +553,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "comparer.graphique.chroma",
-        "Saturation C*",
+        "Chroma C*",
     ),
     (
         "comparer.graphique.clarte",
@@ -572,8 +572,12 @@ const FRANCAIS: Catalogue = &[
         "Valeurs",
     ),
     (
+        "comparer.graphique.plage_mesuree",
+        "{position} (plage mesurée)",
+    ),
+    (
         "comparer.graphique.teintes.aria",
-        "Saturation maximale C* par teinte, de 0 à 360°\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
+        "Chroma maximale C* par teinte, de 0 à 360°\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
     ),
     (
         "comparer.graphique.coupe.aria",
@@ -585,7 +589,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "comparer.graphique.chemin.c.aria",
-        "Saturation C* le long du chemin du cube RVB\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
+        "Chroma C* le long du chemin du cube RVB\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
     ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "Journal d’ArgyllCMS"),
@@ -1781,6 +1785,10 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.graphique.valeurs",
         "Values",
+    ),
+    (
+        "comparer.graphique.plage_mesuree",
+        "{position} (measured patch)",
     ),
     (
         "comparer.graphique.teintes.aria",

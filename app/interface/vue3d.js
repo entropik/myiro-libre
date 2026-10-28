@@ -31,11 +31,14 @@ window.Vue3d = (() => {
     return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
   }
 
-  // Jetons du thème courant : séries, texte atténué, encre, carte, filet.
+  // Jetons du thème courant : couleurs, fonte, et tailles en pixels du canvas (rem × corps de base).
   function lireJetons() {
     const style = getComputedStyle(document.documentElement);
     const jeton = (nom) => style.getPropertyValue(nom).trim();
+    const base = parseFloat(style.fontSize) || 16;
+    const taille = (nom) => (parseFloat(jeton(nom)) || 0) * (jeton(nom).endsWith("rem") ? base : 1) * (window.devicePixelRatio || 1);
     return {
+      texte: taille("--text-xs"), ecart: taille("--space-1"), marge: taille("--space-2"), bulle: taille("--space-5"),
       series: [1, 2, 3, 4].map((n) => hexVersRvb(jeton(`--serie-${n}`))),
       attenue: jeton("--attenue"),
       encre: jeton("--encre"),
@@ -58,7 +61,6 @@ window.Vue3d = (() => {
     canvas.tabIndex = 0;
     canvas.setAttribute("role", "img");
 
-    // ---- Préparation des formes ----
     function preparer(f) {
       const sommets = f.sommets || [];
       const triangles = f.triangles || [];
@@ -88,7 +90,6 @@ window.Vue3d = (() => {
       };
     }
 
-    // ---- Projection ----
     function rotation() {
       const l = (vue.lacet * Math.PI) / 180;
       // Tangage positif : le haut (L* 100) vient vers l'observateur, on voit le dessus.
@@ -122,7 +123,6 @@ window.Vue3d = (() => {
       });
     }
 
-    // ---- Dessin ----
     function dessinerTriangles(ctx, k) {
       const liste = [];
       formes.forEach((f, numero) => {
@@ -157,7 +157,8 @@ window.Vue3d = (() => {
         const u = [p[b] - p[a], p[b + 1] - p[a + 1], p[b + 2] - p[a + 2]];
         const v = [p[c] - p[a], p[c + 1] - p[a + 1], p[c + 2] - p[a + 2]];
         const n = normer([u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]);
-        const lumiere = 0.7 + 0.3 * Math.abs(n[0] * LUMIERE[0] + n[1] * LUMIERE[1] + n[2] * LUMIERE[2]);
+        // Plancher 0,8 : la face la plus sombre des séries 1 à 3 garde 3 : 1 au moins sur --carte.
+        const lumiere = 0.8 + 0.2 * Math.abs(n[0] * LUMIERE[0] + n[1] * LUMIERE[1] + n[2] * LUMIERE[2]);
         const base =
           reglages.couleur === "reelle" && f.reelles
             ? [f.reelles[i * 3], f.reelles[i * 3 + 1], f.reelles[i * 3 + 2]]
@@ -189,7 +190,7 @@ window.Vue3d = (() => {
       ctx.strokeStyle = jetons.attenue;
       ctx.fillStyle = jetons.attenue;
       ctx.lineWidth = 1;
-      ctx.font = `${Math.round(11 * (window.devicePixelRatio || 1))}px ${jetons.fonte}`;
+      ctx.font = `${Math.round(jetons.texte)}px ${jetons.fonte}`;
       for (const axe of axes) {
         const de = versEcran(tourner(axe.de, r), k);
         const a = versEcran(tourner(axe.a, r), k);
@@ -200,12 +201,12 @@ window.Vue3d = (() => {
           ctx.stroke();
           continue;
         }
-        ctx.fillText(axe.nom, a[0] + 4, a[1]);
+        ctx.fillText(axe.nom, a[0] + jetons.ecart, a[1]);
         for (let v = axe.debut; v <= axe.fin; v += 20) {
           if (v === 0 && axe.nom !== "L*") continue;
           const q = versEcran(tourner(axe.pas(v), r), k);
           ctx.fillRect(q[0] - 1.5, q[1] - 1.5, 3, 3);
-          ctx.fillText(nombre(v, 0), q[0] + 4, q[1] - 4);
+          ctx.fillText(nombre(v, 0), q[0] + jetons.ecart, q[1] - jetons.ecart);
         }
       }
     }
@@ -235,9 +236,8 @@ window.Vue3d = (() => {
         .replace("{l}", () => nombre(proche.s[0], 1))
         .replace("{a}", () => nombre(proche.s[1], 1))
         .replace("{b}", () => nombre(proche.s[2], 1));
-      const marge = 6 * (window.devicePixelRatio || 1);
+      const { marge, bulle: hauteur } = jetons;
       const largeur = ctx.measureText(texte).width + marge * 2;
-      const hauteur = 20 * (window.devicePixelRatio || 1);
       const x = Math.min(proche.e[0] + marge, canvas.width - largeur);
       const y = Math.max(proche.e[1] - hauteur - marge, 0);
       ctx.fillStyle = jetons.carte;

@@ -205,6 +205,8 @@ window.Graphiques = (() => {
     const TRACE = 200;
     const avecMesures = series.some((s) => (s.mesures || []).length > 0);
     const entrees = series.length + (avecMesures ? 1 : 0);
+    // Chaque graphique (L*, puis C*) dessine ses courbes et ses points, et pose son tableau « Valeurs » :
+    // la courbe de chaque profil tous les 32 pas, puis les plages mesurées du chemin, par position.
     const dessiner = (svg, indice, aria, titre, max) => {
       preparer(svg, hauteurAvecLegende(TRACE, entrees), t(aria).replace("{profils}", () => noms(series)));
       const z = zone(0, 255, 0, max, MARGE.gauche, LARGEUR - MARGE.droite, MARGE.haut, MARGE.haut + TRACE);
@@ -218,18 +220,22 @@ window.Graphiques = (() => {
         }
       }
       legende(svg, series, z.bas + MARGE.bas + 12, avecMesures);
+      const courbes = [0, 32, 64, 96, 128, 160, 192, 224, 255].map((i) => [
+        nombre(i, 0),
+        ...series.map((s) => nombre(((s.valeurs || [])[i] || [])[indice], 1)),
+      ]);
+      const plages = series
+        .flatMap((s, k) => (s.mesures || []).map((m) => ({ k, m })))
+        .sort((u, v) => u.m[0] - v.m[0])
+        .map(({ k, m }) => [
+          t("comparer.graphique.plage_mesuree").replace("{position}", () => nombre(m[0], 0)),
+          ...series.map((_, j) => (j === k ? nombre(m[indice + 1], 1) : "")),
+        ]);
+      valeurs(svg, [t("comparer.graphique.position"), ...series.map((s) => `${s.nom} (${indice ? "C*" : "L*"})`)], [...courbes, ...plages]);
     };
     dessiner(svgL, 0, "comparer.graphique.chemin.l.aria", t("comparer.graphique.clarte"), 100);
     const chromas = series.flatMap((s) => [...(s.valeurs || []).map((p) => p && p[1]), ...(s.mesures || []).map((m) => m[2])]);
     dessiner(svgC, 1, "comparer.graphique.chemin.c.aria", t("comparer.graphique.chroma"), hautChroma(chromas));
-    const lignes = [0, 32, 64, 96, 128, 160, 192, 224, 255].map((i) => [
-      nombre(i, 0),
-      ...series.flatMap((s) => {
-        const p = (s.valeurs || [])[i];
-        return [nombre(p && p[0], 1), nombre(p && p[1], 1)];
-      }),
-    ]);
-    valeurs(svgC, [t("comparer.graphique.position"), ...series.flatMap((s) => [`${s.nom} (L*)`, `${s.nom} (C*)`])], lignes);
   }
 
   return { nombre, teintes, coupe, chemin };

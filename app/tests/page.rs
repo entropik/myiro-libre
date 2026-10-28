@@ -1199,7 +1199,7 @@ fn les_couleurs_de_serie_sont_des_jetons_des_deux_themes() {
         (1, "#4c9aff", "#1f6fe5"),
         (2, "#f0773a", "#c4501a"),
         (3, "#b48cff", "#7c4dd6"),
-        (4, "#c9d1dd", "#5d6879"),
+        (4, "#c9d1dd", "#2f3642"),
     ] {
         let nom = format!("--serie-{n}:");
         for (theme, bloc, valeur) in [
@@ -1211,6 +1211,25 @@ fn les_couleurs_de_serie_sont_des_jetons_des_deux_themes() {
                 .find(|l| l.contains(&nom))
                 .unwrap_or_else(|| panic!("{nom} absent du thème {theme}"));
             assert!(ligne.contains(valeur), "{theme} : {ligne}");
+        }
+    }
+    // Une série ne prend jamais la couleur des axes (`--attenue`).
+    for (theme, bloc) in [("sombre", sombre), ("clair", clair)] {
+        let valeur = |nom: &str| {
+            bloc.lines()
+                .find(|l| l.trim_start().starts_with(nom))
+                .and_then(|l| l.split(':').nth(1))
+                .map(|v| v.trim().trim_end_matches(';').to_string())
+                .unwrap_or_default()
+        };
+        let attenue = valeur("--attenue:");
+        assert!(!attenue.is_empty(), "{theme} : --attenue absent");
+        for n in 1..=4 {
+            assert_ne!(
+                valeur(&format!("--serie-{n}:")),
+                attenue,
+                "{theme} : série {n}"
+            );
         }
     }
     let readme = lire("../design-system/README.md");
@@ -1447,7 +1466,7 @@ fn la_vue_3d_trie_par_profondeur_et_suit_le_theme() {
     let script = lire("interface/vue3d.js");
     for attendu in [
         "ordre.sort((u, v) => profondeurs[v] - profondeurs[u]);",
-        "const lumiere = 0.7 + 0.3 * Math.abs(",
+        "const lumiere = 0.8 + 0.2 * Math.abs(",
         "const OPACITE_TRANSPARENT = 0.35;",
         "getComputedStyle(document.documentElement)",
         "`--serie-${n}`",
@@ -1469,4 +1488,92 @@ fn la_vue_3d_trie_par_profondeur_et_suit_le_theme() {
         "{dessiner}"
     );
     assert!(dessiner.contains("projeter(r);"), "{dessiner}");
+}
+
+/// Le chemin a deux graphiques (L* et C*) : chacun a son tableau « Valeurs »,
+/// et les plages mesurées du chemin s'y lisent aussi, pas seulement en
+/// points.
+#[test]
+fn chaque_graphique_du_chemin_a_ses_valeurs_avec_les_plages_mesurees() {
+    use app::textes::{texte, Langue};
+    let script = lire("interface/graphiques.js");
+    let chemin = script
+        .split("function chemin(svgL, svgC, series) {")
+        .nth(1)
+        .expect("chemin absent");
+    let chemin = &chemin[..chemin.find("\n  }").unwrap_or(chemin.len())];
+    assert_eq!(chemin.matches("valeurs(svg, ").count(), 1, "{chemin}");
+    assert!(chemin.contains("dessiner(svgL, 0,") && chemin.contains("dessiner(svgC, 1,"));
+    assert!(
+        chemin.contains("t(\"comparer.graphique.plage_mesuree\")"),
+        "{chemin}"
+    );
+    assert!(chemin.contains("s.mesures"), "{chemin}");
+    assert_eq!(
+        texte(Langue::Francais, "comparer.graphique.plage_mesuree"),
+        "{position} (plage mesurée)"
+    );
+    assert_eq!(
+        texte(Langue::Anglais, "comparer.graphique.plage_mesuree"),
+        "{position} (measured patch)"
+    );
+}
+
+/// Le glossaire dit « chroma », jamais « saturation » : les textes de la
+/// comparaison suivent.
+#[test]
+fn la_comparaison_dit_chroma() {
+    use app::textes::{cles, texte, Langue};
+    assert_eq!(
+        texte(Langue::Francais, "comparer.graphique.chroma"),
+        "Chroma C*"
+    );
+    let fautes: Vec<_> = cles()
+        .filter(|c| c.starts_with("comparer."))
+        .filter(|c| {
+            texte(Langue::Francais, c)
+                .to_lowercase()
+                .contains("saturation")
+        })
+        .collect();
+    assert!(fautes.is_empty(), "{fautes:?}");
+    assert!(!lire("../design-system/ui-kit.html").contains("saturation par teinte"));
+}
+
+/// La vue 3D lit ses tailles (corps du texte, marges et hauteur de la bulle)
+/// dans les jetons, comme ses couleurs : aucune taille en dur.
+#[test]
+fn la_vue_3d_lit_ses_tailles_dans_les_jetons() {
+    let script = lire("interface/vue3d.js");
+    for jeton in [
+        "\"--text-xs\"",
+        "\"--space-1\"",
+        "\"--space-2\"",
+        "\"--space-5\"",
+    ] {
+        assert!(script.contains(&format!("taille({jeton})")), "{jeton}");
+    }
+    for en_dur in [
+        "Math.round(11",
+        "const marge = 6",
+        "const hauteur = 20",
+        "+ 4,",
+        "- 4)",
+    ] {
+        assert!(!script.contains(en_dur), "{en_dur}");
+    }
+}
+
+/// Les textes de remplacement des exemples suivent la typographie française
+/// (espace fine insécable avant le deux-points).
+#[test]
+fn les_exemples_du_systeme_ont_l_espace_fine_avant_les_deux_points() {
+    let exemple = lire("../design-system/ui-kit.html");
+    let fautes: Vec<_> = exemple
+        .split("aria-label=\"")
+        .skip(1)
+        .filter_map(|r| r.split('"').next())
+        .filter(|v| v.contains(" :") || v.contains(" ;"))
+        .collect();
+    assert!(fautes.is_empty(), "{fautes:?}");
 }
