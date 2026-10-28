@@ -25,6 +25,8 @@ window.Vue3d = (() => {
     return [v[0] / n, v[1] / n, v[2] / n];
   }
 
+  const rvb = (c) => `rgb(${c.map((x) => Math.round(x)).join(",")})`;
+
   function hexVersRvb(hex) {
     const h = String(hex).trim().replace("#", "");
     if (!/^[0-9a-fA-F]{6}$/.test(h)) return [128, 128, 128];
@@ -73,9 +75,7 @@ window.Vue3d = (() => {
         if (!tri.every((i) => Number.isInteger(i) && i >= 0 && i < sommets.length)) continue;
         indices.set(tri, gardes * 3);
         if (rvbSommets.length === sommets.length) {
-          for (let c = 0; c < 3; c++) {
-            reelles[gardes * 3 + c] = (rvbSommets[tri[0]][c] + rvbSommets[tri[1]][c] + rvbSommets[tri[2]][c]) / 3;
-          }
+          for (let c = 0; c < 3; c++) reelles[gardes * 3 + c] = (rvbSommets[tri[0]][c] + rvbSommets[tri[1]][c] + rvbSommets[tri[2]][c]) / 3;
         }
         gardes++;
       }
@@ -99,21 +99,14 @@ window.Vue3d = (() => {
 
     // (a*, b*, L*) vers le repère de la vue : x à droite, y en haut, z qui s'éloigne.
     function tourner(s, r) {
-      const x = s[1];
-      const y = s[0] - 50;
-      const z = s[2];
+      const [x, y, z] = [s[1], s[0] - 50, s[2]];
       const x1 = x * r.cl - z * r.sl;
       const z1 = x * r.sl + z * r.cl;
       return [x1, y * r.cp - z1 * r.sp, y * r.sp + z1 * r.cp];
     }
 
-    function echelle() {
-      return (vue.zoom * Math.min(canvas.width, canvas.height)) / ETENDUE;
-    }
-
-    function versEcran(p, k) {
-      return [canvas.width / 2 + p[0] * k, canvas.height / 2 - p[1] * k];
-    }
+    const echelle = () => (vue.zoom * Math.min(canvas.width, canvas.height)) / ETENDUE;
+    const versEcran = (p, k) => [canvas.width / 2 + p[0] * k, canvas.height / 2 - p[1] * k];
 
     function projeter(r) {
       projetes = formes.map((f) => {
@@ -142,8 +135,6 @@ window.Vue3d = (() => {
       ordre.sort((u, v) => profondeurs[v] - profondeurs[u]);
 
       const opaque = reglages.rendu !== "transparent";
-      ctx.globalAlpha = opaque ? 1 : OPACITE_TRANSPARENT;
-      ctx.lineWidth = 0.6;
       ctx.lineJoin = "round";
       const cx = canvas.width / 2;
       const cy = canvas.height / 2;
@@ -154,6 +145,21 @@ window.Vue3d = (() => {
         const a = f.indices[i * 3] * 3;
         const b = f.indices[i * 3 + 1] * 3;
         const c = f.indices[i * 3 + 2] * 3;
+        ctx.beginPath();
+        ctx.moveTo(cx + p[a] * k, cy - p[a + 1] * k);
+        ctx.lineTo(cx + p[b] * k, cy - p[b + 1] * k);
+        ctx.lineTo(cx + p[c] * k, cy - p[c + 1] * k);
+        ctx.closePath();
+        // En couleurs réelles, seule la référence (première forme) est pleine : les autres sont en
+        // fil de fer, arêtes dans leur couleur de série, pour qu'on les distingue.
+        const filaire = reglages.couleur === "reelle" && liste[j * 2] > 0;
+        if (filaire) {
+          ctx.globalAlpha = 1;
+          ctx.lineWidth = window.devicePixelRatio || 1;
+          ctx.strokeStyle = rvb(jetons.series[f.serie - 1]);
+          ctx.stroke();
+          continue;
+        }
         const u = [p[b] - p[a], p[b + 1] - p[a + 1], p[b + 2] - p[a + 2]];
         const v = [p[c] - p[a], p[c + 1] - p[a + 1], p[c + 2] - p[a + 2]];
         const n = normer([u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]);
@@ -163,12 +169,9 @@ window.Vue3d = (() => {
           reglages.couleur === "reelle" && f.reelles
             ? [f.reelles[i * 3], f.reelles[i * 3 + 1], f.reelles[i * 3 + 2]]
             : jetons.series[f.serie - 1];
-        const teinte = `rgb(${base.map((x) => Math.round(x * lumiere)).join(",")})`;
-        ctx.beginPath();
-        ctx.moveTo(cx + p[a] * k, cy - p[a + 1] * k);
-        ctx.lineTo(cx + p[b] * k, cy - p[b + 1] * k);
-        ctx.lineTo(cx + p[c] * k, cy - p[c + 1] * k);
-        ctx.closePath();
+        const teinte = rvb(base.map((x) => x * lumiere));
+        ctx.globalAlpha = opaque ? 1 : OPACITE_TRANSPARENT;
+        ctx.lineWidth = 0.6;
         ctx.fillStyle = teinte;
         ctx.fill();
         // En opaque, un trait de la même couleur ferme les joints entre triangles voisins.
@@ -272,10 +275,7 @@ window.Vue3d = (() => {
 
     // Texte de remplacement : les profils affichés et leurs volumes.
     function decrire() {
-      if (formes.length === 0) {
-        canvas.setAttribute("aria-label", t("comparer.vue3d.aria.vide"));
-        return;
-      }
+      if (formes.length === 0) return canvas.setAttribute("aria-label", t("comparer.vue3d.aria.vide"));
       const profils = formes
         .map((f) => t("comparer.vue3d.aria.profil").replace("{nom}", () => f.nom).replace("{volume}", () => nombre(f.volume, 0)))
         .join(" ; ");
@@ -295,15 +295,9 @@ window.Vue3d = (() => {
     }
     const taille = new ResizeObserver(ajusterTaille);
     taille.observe(canvas);
-    const theme = new MutationObserver(() => {
-      jetons = lireJetons();
-      redessiner();
-    });
+    const theme = new MutationObserver(() => { jetons = lireJetons(); redessiner(); });
     theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    const langue = () => {
-      decrire();
-      redessiner();
-    };
+    const langue = () => { decrire(); redessiner(); };
     document.addEventListener("langue-appliquee", langue);
 
     // ---- Souris et clavier ----

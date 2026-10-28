@@ -12,6 +12,8 @@ window.Graphiques = (() => {
   const LARGEUR = 640;
   const MARGE = { gauche: 52, droite: 16, haut: 16, bas: 44 };
   const LIGNE_LEGENDE = 18;
+  // Caractères d'un nom dans la légende, qui tient alors sur la largeur du graphique.
+  const NOM_MAX = 72;
 
   // Chiffre écrit dans la langue de la page (virgule décimale en français), ou « inconnu ».
   function nombre(valeur, decimales) {
@@ -103,22 +105,22 @@ window.Graphiques = (() => {
     if (d) svg.append(noeud("path", { class: "graphique__trace", "data-serie": serie(s), d: d.trim() }));
   }
 
-  // Légende sous le tracé, deux entrées par ligne : trait de la série et nom du profil.
+  // Légende sous le tracé, une ligne par profil : trait de la série et nom du profil, coupé par des
+  // points s'il est trop long (entier au survol). Rien ne chevauche le nom d'un autre profil.
   function legende(svg, series, y, avecMesures) {
     const entrees = series.map((s) => ({ nom: s.nom, serie: serie(s), point: false }));
     if (avecMesures) entrees.push({ nom: t("comparer.graphique.mesures"), serie: 0, point: true });
-    const colonne = (LARGEUR - MARGE.gauche - MARGE.droite) / 2;
     entrees.forEach((e, i) => {
-      const x = MARGE.gauche + (i % 2) * colonne;
-      const ligne = y + Math.floor(i / 2) * LIGNE_LEGENDE;
+      const x = MARGE.gauche;
+      const ligne = y + i * LIGNE_LEGENDE;
       if (e.point) svg.append(noeud("rect", { class: "graphique__point", x: x + 8, y: ligne - 6, width: 6, height: 6 }));
       else svg.append(noeud("line", { class: "graphique__trace", "data-serie": e.serie, x1: x, x2: x + 22, y1: ligne - 3, y2: ligne - 3 }));
-      const nom = e.nom.length > 44 ? `${e.nom.slice(0, 43)}…` : e.nom;
+      const nom = e.nom.length > NOM_MAX ? `${e.nom.slice(0, NOM_MAX - 1)}…` : e.nom;
       const texte = noeud("text", { class: "graphique__legende", x: x + 30, y: ligne }, nom);
       texte.append(noeud("title", {}, e.nom));
       svg.append(texte);
     });
-    return Math.ceil(entrees.length / 2) * LIGNE_LEGENDE;
+    return entrees.length * LIGNE_LEGENDE;
   }
 
   // Tableau replié « Valeurs », juste après le graphique : on y lit les chiffres.
@@ -155,7 +157,7 @@ window.Graphiques = (() => {
 
   // Hauteur d'un graphique cartésien : tracé, légende, marges.
   function hauteurAvecLegende(trace, entrees) {
-    return MARGE.haut + trace + MARGE.bas + Math.ceil(entrees / 2) * LIGNE_LEGENDE + 8;
+    return MARGE.haut + trace + MARGE.bas + entrees * LIGNE_LEGENDE + 8;
   }
 
   // Saturation maximale par teinte : 180 valeurs (une tous les 2°), teinte de 0 à 360°.
@@ -178,7 +180,7 @@ window.Graphiques = (() => {
   // Coupe à clarté constante, dans le plan a*b* (de −100 à +100, plus si un profil en sort).
   function coupe(svg, series, l) {
     const COTE = 420;
-    const hauteur = MARGE.haut + COTE + MARGE.bas + Math.ceil(series.length / 2) * LIGNE_LEGENDE + 8;
+    const hauteur = MARGE.haut + COTE + MARGE.bas + series.length * LIGNE_LEGENDE + 8;
     const aria = t("comparer.graphique.coupe.aria").replace("{l}", () => nombre(l, 0)).replace("{profils}", () => noms(series));
     preparer(svg, hauteur, aria);
     const borne = Math.max(100, hautChroma(series.flatMap((s) => s.valeurs || [])));

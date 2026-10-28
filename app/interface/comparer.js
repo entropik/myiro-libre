@@ -253,8 +253,11 @@ window.Comparer = (() => {
         .replace("{nom}", () => p.nom).replace("{raison}", () => texteLimite(p.limite))))));
     const changerForme = (v) => { reglages.forme = v; vue3d.afficher(formes(liste)); dessinerManques(); };
     const canvas = el("canvas", "vue3d");
+    // En couleurs réelles, la vue 3D habille la référence seule ; l'aide dit pourquoi les autres sont en fil de fer.
+    const aideCouleur = seg("comparer.volume.couleur", ["serie", "reelle"], reglages.couleur, regler("couleur"));
+    aideCouleur.append(el("p", "", t("comparer.volume.couleur.aide")));
     const bloc = section("comparer.volume", affiches,
-      seg("comparer.volume.couleur", ["serie", "reelle"], reglages.couleur, regler("couleur")),
+      aideCouleur,
       seg("comparer.volume.forme", ["limite", "surface"], reglages.forme, changerForme, inactives),
       seg("comparer.volume.rendu", ["opaque", "transparent"], reglages.rendu, regler("rendu")),
       manques, canvas, el("p", "why", t("comparer.volume.aide")));

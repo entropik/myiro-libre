@@ -736,6 +736,10 @@ const FRANCAIS: Catalogue = &[
         "Couleurs réelles",
     ),
     (
+        "comparer.volume.couleur.aide",
+        "En couleurs réelles, seul le premier profil affiché est habillé de ses couleurs\u{202f}: le profil de référence, quand il est coché. Les autres profils affichés sont dessinés en fil de fer, dans leur couleur de profil, pour qu’on les distingue.",
+    ),
+    (
         "comparer.volume.forme",
         "Forme",
     ),
@@ -2417,6 +2421,10 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.volume.couleur.reelle",
         "Real colours",
+    ),
+    (
+        "comparer.volume.couleur.aide",
+        "In real colours, only the first profile shown is dressed in its colours: the reference profile, when it is ticked. The other profiles shown are drawn as a wireframe, in their profile colour, so they can be told apart.",
     ),
     (
         "comparer.volume.forme",

@@ -1774,8 +1774,60 @@ fn les_axes_de_la_vue_3d_partent_du_plancher_l_0() {
         "{ nom: \"L*\", de: [0, 0, 0], a: [100, 0, 0], pas: (v) => [v, 0, 0], debut: 0, fin: 100 },",
         "{ nom: \"a*\", de: [0, -120, 0], a: [0, 120, 0], pas: (v) => [0, v, 0], debut: -100, fin: 100 },",
         "{ nom: \"b*\", de: [0, 0, -120], a: [0, 0, 120], pas: (v) => [0, 0, v], debut: -100, fin: 100 },",
-        "const y = s[0] - 50;",
+        "const [x, y, z] = [s[1], s[0] - 50, s[2]];",
     ] {
         assert!(script.contains(attendu), "{attendu}");
     }
+}
+
+/// En « couleurs réelles », un seul profil est habillé de ses couleurs : le
+/// premier affiché, la référence. Les autres sont dessinés en fil de fer,
+/// arêtes dans leur couleur de série, sans faces pleines, pour qu'on les
+/// distingue (essai d'écran du 28 octobre 2026 : « j'ai du mal à distinguer
+/// visuellement les deux »). En « couleur par profil », rien ne change.
+/// L'aide de l'option le dit.
+#[test]
+fn en_couleurs_reelles_seule_la_reference_est_pleine() {
+    use app::textes::{texte, Langue};
+    let script = lire("interface/vue3d.js");
+    assert!(script.contains("const filaire = reglages.couleur === \"reelle\" && liste[j * 2] > 0;"));
+    let filaire = script
+        .split("if (filaire) {")
+        .nth(1)
+        .expect("branche filaire absente");
+    let filaire = &filaire[..filaire.find('}').unwrap_or(filaire.len())];
+    assert!(filaire.contains("jetons.series[f.serie - 1]"), "{filaire}");
+    assert!(filaire.contains("ctx.stroke();"), "{filaire}");
+    assert!(!filaire.contains("ctx.fill();"), "{filaire}");
+    let comparer = lire("interface/comparer.js");
+    assert!(comparer.contains("t(\"comparer.volume.couleur.aide\")"));
+    assert!(texte(Langue::Francais, "comparer.volume.couleur.aide").contains("fil de fer"));
+    assert!(texte(Langue::Anglais, "comparer.volume.couleur.aide").contains("wireframe"));
+}
+
+/// Une ligne par profil dans les légendes des graphiques : le trait d'un
+/// profil ne chevauche jamais le nom du précédent (essai d'écran du
+/// 28 octobre 2026 : « mettre à la ligne les profils »). Un nom trop long
+/// finit par des points, entier au survol. La vue 3D n'a pas de légende
+/// dessinée : ses profils sont nommés par les cases « Profils affichés ».
+#[test]
+fn les_legendes_ont_une_ligne_par_profil() {
+    let script = lire("interface/graphiques.js");
+    let legende = script
+        .split("function legende(svg, series, y, avecMesures) {")
+        .nth(1)
+        .expect("legende absente");
+    let legende = &legende[..legende.find("\n  }").unwrap_or(legende.len())];
+    assert!(
+        legende.contains("const ligne = y + i * LIGNE_LEGENDE;"),
+        "{legende}"
+    );
+    assert!(legende.contains("const x = MARGE.gauche;"), "{legende}");
+    assert!(legende.contains("noeud(\"title\", {}, e.nom)"), "{legende}");
+    assert!(legende.contains("NOM_MAX"), "{legende}");
+    assert!(
+        !script.contains("/ 2) * LIGNE_LEGENDE"),
+        "légende sur deux colonnes"
+    );
+    assert!(!lire("interface/vue3d.js").contains("legende"));
 }
