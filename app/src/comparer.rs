@@ -9,6 +9,7 @@
 //! Ce qui n'est pas connu reste « inconnu », avec la clé de sa raison.
 
 pub mod embarquees;
+pub mod image;
 mod sources;
 
 use gamut::{Analyse, Ecarts, ErreurIcc, MaillageAffiche, ProfilIcc, Repetabilite, Statistiques};

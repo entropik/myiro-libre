@@ -444,6 +444,82 @@ const FRANCAIS: Catalogue = &[
         "Le profil embarqué dans cette image est incomplet\u{202f}: une partie ({detail}) sort du profil.",
     ),
     (
+        "image.ouvrir",
+        "Ajouter une image",
+    ),
+    (
+        "image.filtre",
+        "Images JPEG, PNG ou TIFF",
+    ),
+    (
+        "image.traiter_srvb",
+        "Traiter comme sRVB",
+    ),
+    (
+        "image.refus.cmjn",
+        "Cette image est en CMJN. La comparaison des images CMJN viendra dans une seconde étape. Ouvrez une version RVB de la photo.",
+    ),
+    (
+        "image.refus.profil",
+        "Le profil intégré à l’image ne se lit pas ({detail}). Choisissez «\u{202f}Traiter comme sRVB\u{202f}» si la photo vient d’un appareil ou d’un site en sRVB.",
+    ),
+    (
+        "image.refus.trop_grande",
+        "Cette image est trop grande pour être ouverte (plus de 120 millions de pixels, ou un fichier de plus de 1\u{202f}Go). Ouvrez une version réduite de la photo.",
+    ),
+    (
+        "image.refus.illisible",
+        "Ce fichier ne se lit pas comme une image. Vérifiez qu’il existe toujours et qu’il s’ouvre dans un autre logiciel, puis ouvrez-le de nouveau.",
+    ),
+    (
+        "image.refus.format",
+        "Ce format d’image n’est pas pris en charge. Ouvrez la photo en JPEG, PNG ou TIFF.",
+    ),
+    (
+        "image.refus.aucune",
+        "Aucune image n’est ouverte. Ajoutez-en une, puis recommencez.",
+    ),
+    (
+        "image.refus.sans_ecarts",
+        "Les écarts de ce profil ne sont pas calculés. Relancez l’analyse de l’image.",
+    ),
+    (
+        "image.annulee",
+        "Analyse de l’image annulée.",
+    ),
+    (
+        "image.erreur.calcul",
+        "Le calcul de ce profil s’est arrêté sur une erreur de myiro-libre. Ce point reste inconnu.",
+    ),
+    (
+        "image.profil.embarque",
+        "Profil de l’image\u{202f}: {nom}",
+    ),
+    (
+        "image.profil.sans_nom",
+        "profil intégré sans nom",
+    ),
+    (
+        "image.profil.ecartee",
+        "Table {table} du profil de l’image non utilisée\u{202f}: {raison}",
+    ),
+    (
+        "image.profil.srvb",
+        "Profil de l’image\u{202f}: sRVB (aucun profil intégré)",
+    ),
+    (
+        "image.profil.suppose",
+        "sRVB, supposé\u{202f}: choisi par vous",
+    ),
+    (
+        "image.approche",
+        "Calculé sur 1 pixel sur {n}",
+    ),
+    (
+        "image.seize_bits",
+        "Valeurs 16 bits ramenées à 8 bits",
+    ),
+    (
         "comparer.zone.gris",
         "Gris",
     ),
@@ -2207,6 +2283,82 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.image.refus.tronque",
         "The profile embedded in this image is incomplete: a part ({detail}) goes beyond the end of the profile.",
+    ),
+    (
+        "image.ouvrir",
+        "Add an image",
+    ),
+    (
+        "image.filtre",
+        "JPEG, PNG or TIFF images",
+    ),
+    (
+        "image.traiter_srvb",
+        "Treat as sRGB",
+    ),
+    (
+        "image.refus.cmjn",
+        "This image is in CMYK. Comparing CMYK images will come in a second stage. Open an RGB version of the photo.",
+    ),
+    (
+        "image.refus.profil",
+        "The profile embedded in the image cannot be read ({detail}). Choose “Treat as sRGB” if the photo comes from a camera or a website in sRGB.",
+    ),
+    (
+        "image.refus.trop_grande",
+        "This image is too large to open (more than 120 million pixels, or a file over 1 GB). Open a reduced version of the photo.",
+    ),
+    (
+        "image.refus.illisible",
+        "This file cannot be read as an image. Check that it still exists and opens in another program, then open it again.",
+    ),
+    (
+        "image.refus.format",
+        "This image format is not supported. Open the photo as JPEG, PNG or TIFF.",
+    ),
+    (
+        "image.refus.aucune",
+        "No image is open. Add one, then start again.",
+    ),
+    (
+        "image.refus.sans_ecarts",
+        "The differences for this profile are not computed. Run the image analysis again.",
+    ),
+    (
+        "image.annulee",
+        "Image analysis cancelled.",
+    ),
+    (
+        "image.erreur.calcul",
+        "The computation for this profile stopped on a myiro-libre error. This stays unknown.",
+    ),
+    (
+        "image.profil.embarque",
+        "Image profile: {nom}",
+    ),
+    (
+        "image.profil.sans_nom",
+        "unnamed embedded profile",
+    ),
+    (
+        "image.profil.ecartee",
+        "Table {table} of the image profile not used: {raison}",
+    ),
+    (
+        "image.profil.srvb",
+        "Image profile: sRGB (no embedded profile)",
+    ),
+    (
+        "image.profil.suppose",
+        "sRGB, assumed: chosen by you",
+    ),
+    (
+        "image.approche",
+        "Computed on 1 pixel in {n}",
+    ),
+    (
+        "image.seize_bits",
+        "16-bit values reduced to 8 bits",
     ),
     (
         "comparer.zone.gris",

@@ -55,6 +55,8 @@ dependencies = [
  "cgats",
  "colorimetrie",
  "gamut",
+ "image",
+ "photo",
  "pont-protocole",
  "profilage",
  "serde",
