@@ -21,6 +21,9 @@ pub const OCTETS_MAX_IMAGE: u64 = 1 << 30;
 
 const AUCUNE: &str = "image.refus.aucune";
 const PROFIL_REFUSE: &str = "image.refus.profil";
+/// Profil présent dans le fichier, que le décodeur n'a pas pu en tirer
+/// (`photo::Photo::profil_illisible`) : refusé comme un profil illisible.
+const PROFIL_ILLISIBLE: &str = "comparer.image.refus.illisible";
 const TROP_GRANDE: &str = "image.refus.trop_grande";
 const ILLISIBLE: &str = "image.refus.illisible";
 const SANS_ECARTS: &str = "image.refus.sans_ecarts";
@@ -30,9 +33,10 @@ const CALCUL_INTERROMPU: &str = "image.erreur.calcul";
 
 /// Clés des refus de l'image propres à l'application (ceux du décodage
 /// viennent de `photo::RefusPhoto::cle`).
-pub const CLES_IMAGE: [&str; 7] = [
+pub const CLES_IMAGE: [&str; 8] = [
     AUCUNE,
     PROFIL_REFUSE,
+    PROFIL_ILLISIBLE,
     TROP_GRANDE,
     ILLISIBLE,
     SANS_ECARTS,
@@ -50,8 +54,9 @@ struct ImageEnMemoire {
     numero: u64,
     resume: ImageResume,
     pixels: Arc<Vec<[u8; 4]>>,
-    /// Profil de l'image, ou pourquoi celui qu'elle embarque est refusé.
-    profil: Result<Arc<ProfilSource>, ErreurIcc>,
+    /// Profil de l'image ; `None` quand celui qu'elle embarque est refusé
+    /// (la raison est dans `resume.profil`).
+    profil: Option<Arc<ProfilSource>>,
     /// Codes d'écart de la dernière analyse, profil par profil (`None` pour
     /// un profil inconnu).
     ecarts: Vec<Option<Vec<u8>>>,
@@ -197,10 +202,22 @@ impl ImageOuverte {
             eprintln!("{refus:?}");
             refus.cle().to_string()
         })?;
-        let profil = photo
-            .icc
-            .as_deref()
-            .map_or_else(|| Ok(ProfilSource::srvb()), ProfilSource::lire);
+        let (profil, etat) = match &photo.profil_illisible {
+            // Jamais pris pour une absence de profil, donc jamais pour sRVB.
+            Some(raison) => (
+                None,
+                EtatProfilImage::Refuse {
+                    cle: PROFIL_ILLISIBLE,
+                    detail: Some(raison.clone()),
+                },
+            ),
+            None => {
+                let icc = photo.icc.as_deref();
+                let lu = icc.map_or_else(|| Ok(ProfilSource::srvb()), ProfilSource::lire);
+                let etat = etat_profil(icc, &lu);
+                (lu.ok().map(Arc::new), etat)
+            }
+        };
         let resume = ImageResume {
             nom: nom.to_string(),
             largeur: photo.largeur,
@@ -209,7 +226,7 @@ impl ImageOuverte {
             hauteur_origine: photo.hauteur_origine,
             pas: photo.pas,
             seize_bits: photo.seize_bits,
-            profil: etat_profil(photo.icc.as_deref(), &profil),
+            profil: etat,
         };
         let mut image = self.verrou();
         let numero = image.as_ref().map_or(0, |i| i.numero) + 1;
@@ -217,7 +234,7 @@ impl ImageOuverte {
             numero,
             resume: resume.clone(),
             pixels: Arc::new(photo.rvba),
-            profil: profil.map(Arc::new),
+            profil,
             ecarts: Vec::new(),
         });
         Ok(resume)
@@ -229,8 +246,8 @@ impl ImageOuverte {
     pub fn traiter_comme_srvb(&self) -> Result<ImageResume, String> {
         let mut image = self.verrou();
         let image = image.as_mut().ok_or_else(|| AUCUNE.to_string())?;
-        if image.profil.is_err() {
-            image.profil = Ok(Arc::new(ProfilSource::srvb()));
+        if image.profil.is_none() {
+            image.profil = Some(Arc::new(ProfilSource::srvb()));
             image.resume.profil = EtatProfilImage::Srvb { suppose: true };
             image.ecarts.clear();
         }
@@ -327,7 +344,7 @@ impl BibliothequeOuverte {
             let profil = image
                 .profil
                 .as_ref()
-                .map_err(|_| PROFIL_REFUSE.to_string())?;
+                .ok_or_else(|| PROFIL_REFUSE.to_string())?;
             (image.numero, Arc::clone(&image.pixels), Arc::clone(profil))
         };
         let lus = self.lire_sources(sources, fichiers)?;

@@ -444,6 +444,10 @@ const FRANCAIS: Catalogue = &[
         "Le profil embarqué dans cette image est incomplet\u{202f}: une partie ({detail}) sort du profil.",
     ),
     (
+        "comparer.image.refus.illisible",
+        "Le profil embarqué dans cette image est abîmé ou incomplet\u{202f}: il ne se lit pas ({detail}).",
+    ),
+    (
         "image.ouvrir",
         "Ajouter une image",
     ),
@@ -2283,6 +2287,10 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.image.refus.tronque",
         "The profile embedded in this image is incomplete: a part ({detail}) goes beyond the end of the profile.",
+    ),
+    (
+        "comparer.image.refus.illisible",
+        "The profile embedded in this image is damaged or incomplete: it cannot be read ({detail}).",
     ),
     (
         "image.ouvrir",

@@ -354,3 +354,58 @@ fn les_textes_de_l_image_sont_au_catalogue() {
         "{profil}"
     );
 }
+
+/// CRC-32 d'un bloc PNG (type puis données).
+fn crc_png(octets: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFFu32;
+    for &octet in octets {
+        crc ^= u32::from(octet);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 {
+                (crc >> 1) ^ 0xEDB8_8320
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    !crc
+}
+
+/// Le PNG de `png`, avec un bloc iCCP dont le profil n'est pas du zlib : le
+/// décodeur ne rend aucun profil, la crate `photo` le dit illisible.
+fn png_au_profil_abime(largeur: u32, hauteur: u32) -> Vec<u8> {
+    let png = png(largeur, hauteur, None);
+    let mut corps = b"iCCP".to_vec();
+    corps.extend(b"essai\0\0pas du zlib");
+    let mut bloc = ((corps.len() - 4) as u32).to_be_bytes().to_vec();
+    bloc.extend(&corps);
+    bloc.extend(crc_png(&corps).to_be_bytes());
+    let apres_ihdr = 8 + 25;
+    let mut sortie = png[..apres_ihdr].to_vec();
+    sortie.extend(bloc);
+    sortie.extend(&png[apres_ihdr..]);
+    sortie
+}
+
+#[test]
+fn un_profil_embarque_que_le_decodeur_ne_lit_pas_est_refuse_et_non_pris_pour_srvb() {
+    let b = banc();
+    let source = b.ranger("avec.icc", &essai(Some(lineaire_inverse)));
+    let resume = b
+        .image
+        .ouvrir_octets("photo.png", &png_au_profil_abime(4, 3))
+        .unwrap();
+    let EtatProfilImage::Refuse { cle, detail } = &resume.profil else {
+        panic!("profil abîmé pris pour sRVB : {:?}", resume.profil);
+    };
+    assert_eq!(*cle, "comparer.image.refus.illisible");
+    assert!(detail.is_some());
+    assert_eq!(b.analyser(&[source]).unwrap_err(), "image.refus.profil");
+
+    let resume = b.image.traiter_comme_srvb().unwrap();
+    assert_eq!(resume.profil, EtatProfilImage::Srvb { suppose: true });
+    assert!(matches!(
+        b.analyser(&[source]).unwrap()[0].etat,
+        EtatAnalyse::Calculee { .. }
+    ));
+}
