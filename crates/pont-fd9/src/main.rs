@@ -4,7 +4,7 @@
 //! Usage : `pont-fd9 --dll <chemin de FD9SDK.dll> [--plafond <palier>]
 //! [--attente-feuille <secondes>] [--reconnaissance combine|coordinate]`
 //! Paliers déclarés par ce pont : version (par défaut), detection, connexion,
-//! prenumerisation. Tout autre palier est refusé au lancement.
+//! prenumerisation, feuille. Tout autre palier est refusé au lancement.
 
 use fd9_sys::ModeReconnaissance;
 use pont_fd9::dll::Fd9Dll;
@@ -20,6 +20,7 @@ fn palier(nom: &str) -> Option<Palier> {
         "detection" => Palier::Detection,
         "connexion" => Palier::Connexion,
         "prenumerisation" => Palier::Prenumerisation,
+        "feuille" => Palier::Feuille,
         _ => return None,
     })
 }
@@ -43,7 +44,7 @@ fn arguments() -> Result<Arguments, String> {
             "--plafond" => {
                 let nom = args.next().unwrap_or_default();
                 plafond = palier(&nom).ok_or(format!(
-                    "palier non déclaré par le pont FD-9 : {nom} (version, detection, connexion ou prenumerisation)"
+                    "palier non déclaré par le pont FD-9 : {nom} (version, detection, connexion, prenumerisation ou feuille)"
                 ))?;
             }
             "--attente-feuille" => {

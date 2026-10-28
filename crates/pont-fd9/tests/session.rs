@@ -135,25 +135,19 @@ fn la_detection_attend_la_version_et_respecte_le_plafond() {
 }
 
 #[test]
-fn les_paliers_du_fd9_s_arretent_a_la_prenumerisation() {
-    assert_eq!(PALIER_MAX, Palier::Prenumerisation);
-    // Même lancé avec un plafond plus haut, le pont ne va pas au-delà de ses
-    // propres paliers : ni étalonnage, ni mesure ponctuelle, ni bande, ni
-    // (pour l'instant) feuille.
+fn les_paliers_du_fd9_s_arretent_a_la_feuille() {
+    assert_eq!(PALIER_MAX, Palier::Feuille);
+    // Le pont refuse les paliers du MYIRO-1 : ni étalonnage, ni mesure
+    // ponctuelle, ni bande.
     let mut session = Session::new(Fd9Simule::avec_un_fd9(), Palier::Feuille);
     session.version().unwrap();
     session.detecter().unwrap();
-    for palier in [
-        Palier::Etalonnage,
-        Palier::MesurePonctuelle,
-        Palier::Bande,
-        Palier::Feuille,
-    ] {
+    for palier in [Palier::Etalonnage, Palier::MesurePonctuelle, Palier::Bande] {
         assert_eq!(
             session.hors_paliers(palier),
             ErreurPont::PalierNonAutorise {
                 demande: palier,
-                plafond: Palier::Prenumerisation,
+                plafond: Palier::Feuille,
             }
         );
     }

@@ -2,9 +2,9 @@
 //!
 //! La session impose l'ordre des paliers et le plafond fixé au lancement,
 //! avant tout appel à la DLL (ADR 0005, fiches `docs/abi/FD9_*`). Le pont FD-9
-//! déclare ses propres paliers : Version, Détection, Connexion et
-//! Prénumérisation. Il n'a ni étalonnage par l'utilisateur ni mesure
-//! ponctuelle. Tout palier au-delà est refusé sans appel à la DLL.
+//! déclare ses propres paliers : Version, Détection, Connexion,
+//! Prénumérisation et Feuille. Il n'a ni étalonnage par l'utilisateur ni
+//! mesure ponctuelle. Tout palier au-delà est refusé sans appel à la DLL.
 //!
 //! La session n'avance que sur un code de retour lu ou un événement reçu du
 //! rappel ; elle n'invente aucun état.
@@ -15,21 +15,24 @@ pub mod dll;
 pub mod evenements;
 mod feuille;
 mod fichier;
+mod plages;
 pub mod serveur;
 
 pub use attente::{Annulation, Delais};
 pub use feuille::{ECART_ADMIS, TAILLE_IMAGE_MAX};
 
+pub use plages::{CONDITIONS, LONGUEUR_SPECTRE};
+
 use fd9_sys::{
-    Appareil, CoordonneesMire, DonneesQr, EtatSdk, ModeReconnaissance, NomApplication,
-    TamponInfosSysteme,
+    Appareil, CleOption, CoordonneesMire, DonneesQr, EtatSdk, ModeReconnaissance, NomApplication,
+    PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES,
 };
-use pont_protocole::{ErreurPont, Palier, RemiseAuRepos};
+use pont_protocole::{ErreurPont, Identite, Palier, RemiseAuRepos};
 use std::collections::VecDeque;
 use std::time::Duration;
 
 /// Dernier palier que ce pont sait franchir, quel que soit le plafond demandé.
-pub const PALIER_MAX: Palier = Palier::Prenumerisation;
+pub const PALIER_MAX: Palier = Palier::Feuille;
 
 /// Entrées passées à `FD9_GetDeviceList` : comme FD-S2w (la DLL admet 1 à 100).
 pub const CAPACITE_DETECTION: usize = 10;
@@ -96,6 +99,25 @@ pub trait SdkFd9 {
     fn sortir(&mut self) -> i32;
     /// `FD9_GetPremeasurementError` (`__cdecl`), sans texte : rend la cause.
     fn erreur_premesure(&mut self, erreur_systeme: &mut i32) -> i32;
+    /// `FD9_GetMeasurePoint`, un point de 20 octets par plage reconnue.
+    fn points_mesure(&mut self, points: &mut [PointMesure]) -> i32;
+    /// `FD9_StartMeasurement2(1, 1)`, comme MYIROtools : le type n'admet pas
+    /// d'autre mode.
+    fn mesurer(&mut self) -> i32;
+    /// `FD9_SetOption` : un réglage de calcul rangé dans la DLL, sans
+    /// échange avec l'instrument.
+    fn regler(&mut self, cle: CleOption, valeur: u32) -> i32;
+    /// `FD9_GetData` : les 152 données brutes de la plage `demandee`, et la
+    /// position que la DLL en déduit.
+    fn donnees(
+        &mut self,
+        rendue: &mut PositionPlage,
+        donnees: &mut [f32; DONNEES_BRUTES],
+        demandee: &PositionPlage,
+    ) -> i32;
+    /// `FD9_CalculateData` depuis 152 données brutes, selon les réglages ;
+    /// la longueur de sortie est celle du tableau.
+    fn calculer(&mut self, sortie: &mut [f32], brutes: &[f32; DONNEES_BRUTES]) -> i32;
 }
 
 /// Un appel du rappel d'événements : les quatre nombres de la DLL, l'état
@@ -141,6 +163,9 @@ pub struct Session<S: SdkFd9> {
     /// Rappel inscrit dans la DLL, session de la DLL ouverte.
     inscrit: bool,
     connecte: bool,
+    /// Identité et version du SDK lues à la connexion, pour la provenance.
+    identite: Option<Identite>,
+    version_sdk: [u32; 3],
     /// Liaison perdue (état 103) : plus rien ne part vers l'instrument.
     perdu: bool,
     delais: Delais,
@@ -169,6 +194,8 @@ impl<S: SdkFd9> Session<S> {
             detectes: Vec::new(),
             inscrit: false,
             connecte: false,
+            identite: None,
+            version_sdk: [0; 3],
             perdu: false,
             delais: Delais::default(),
             annulation: Annulation::default(),

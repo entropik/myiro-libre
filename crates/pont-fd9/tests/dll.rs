@@ -45,7 +45,11 @@ fn dialoguer_avec(plafond: &str, arguments: &[&str], requetes: &[&str]) -> Vec<S
     drop(entree);
     let sortie = enfant.wait_with_output().unwrap();
     let texte = String::from_utf8(sortie.stdout).unwrap();
-    println!("{texte}");
+    // Une mesure fait plusieurs mégaoctets : seul le début de chaque ligne
+    // s'affiche.
+    for ligne in texte.lines() {
+        println!("{}", ligne.chars().take(400).collect::<String>());
+    }
     assert!(sortie.status.success(), "code {:?}", sortie.status.code());
     texte.lines().map(String::from).collect()
 }
@@ -138,6 +142,48 @@ fn palier_prenumerisation() {
     assert!(lignes[1].contains(r#""rep":"connecte""#), "{}", lignes[1]);
     // E3 : `prenumerisee` ; E2 : `feuille_absente` ; E3 bis : refus nommé.
     println!("prénumérisation : {}", lignes[2]);
+    assert!(lignes[3].contains(r#""rep":"ferme""#), "{}", lignes[3]);
+}
+
+/// Palier Feuille (essai E4) : la RGB-2520 déjà mesurée le 26 octobre est
+/// glissée, mesurée, ses 2 520 plages lues. La mesure (JSON) va dans le
+/// dossier `FD9_SORTIE` (sous `Archivage/donnees/`, local, jamais versionné) ;
+/// le Lab M1 des plages 1, 42, 2479 et 2520 s'affiche pour la comparaison.
+#[test]
+#[ignore = "mesure une feuille au FD-9 avec la DLL Konica Minolta du poste"]
+fn palier_feuille() {
+    let sortie = std::path::PathBuf::from(
+        std::env::var("FD9_SORTIE").expect("FD9_SORTIE : dossier local de la mesure"),
+    );
+    let connecter = format!(r#"{{"cmd":"connecter_adresse","adresse":"{}"}}"#, adresse());
+    let mesurer = format!(r#"{{"cmd":"mesurer_feuille","mire":{RGB2520}}}"#);
+    let lignes = dialoguer(
+        "feuille",
+        &[
+            r#"{"cmd":"version"}"#,
+            &connecter,
+            &mesurer,
+            r#"{"cmd":"fermer"}"#,
+        ],
+    );
+    assert_eq!(lignes.len(), 4);
+    let Ok(pont_protocole::Reponse::Mesure { mesure, .. }) =
+        pont_protocole::lire_reponse(&lignes[2])
+    else {
+        panic!("{}", lignes[2])
+    };
+    assert_eq!(mesure.plages().len(), 2_520);
+    std::fs::create_dir_all(&sortie).unwrap();
+    let nom = format!(
+        "fd9-rgb2520-{}.json",
+        mesure.provenance().horodatage.texte().replace(':', "-")
+    );
+    std::fs::write(sortie.join(&nom), pont_protocole::ecrire_mesure(&mesure)).unwrap();
+    println!("mesure écrite : {}", sortie.join(&nom).display());
+    for n in [1, 42, 2_479, 2_520] {
+        let [_, m1, _] = mesure.plages()[n - 1].lab();
+        println!("plage {n} : Lab M1 {:?}", m1.valeurs());
+    }
     assert!(lignes[3].contains(r#""rep":"ferme""#), "{}", lignes[3]);
 }
 

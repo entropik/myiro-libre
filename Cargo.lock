@@ -2387,6 +2387,7 @@ dependencies = [
 name = "pont-fd9"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "fd9-sys",
  "libloading 0.8.9",
  "pont-protocole",

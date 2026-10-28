@@ -4,8 +4,9 @@
 #![allow(dead_code)]
 
 use fd9_sys::{
-    Appareil, CoordonneesMire, DonneesQr, EtatSdk, ModeReconnaissance, NomApplication,
-    TamponInfosSysteme,
+    Appareil, CleOption, CoordonneesMire, DonneesQr, EtatSdk, ModeReconnaissance, NomApplication,
+    PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES, DONNEES_BRUTES_TYPE, LAB_TYPE,
+    SPECTRE_TYPE,
 };
 use pont_fd9::{Annulation, Evenement, SdkFd9};
 use std::collections::{HashMap, VecDeque};
@@ -63,6 +64,15 @@ pub struct Fd9Simule {
     pub premesure: i32,
     /// Annulation de l'opérateur, faite pendant l'attente d'un événement.
     pub annuler_pendant_l_attente: Option<Annulation>,
+    /// Points demandés par `FD9_GetMeasurePoint` : les plages à mesurer.
+    pub points: u32,
+    /// Réglages de `FD9_SetOption`, par clé (rangés dans la DLL).
+    pub options: [u32; 4],
+    /// Plage dont `FD9_GetData` rend une autre position.
+    pub position_fausse: Option<u32>,
+    /// Valeurs qu'un spectre demande (`FD9_CalculateData`, 1005 au-delà de
+    /// la sortie donnée).
+    pub spectre_longueur: usize,
 }
 
 /// Motif répété 32 fois : empreinte SHA-256 fictive de la DLL simulée.
@@ -130,6 +140,7 @@ impl Fd9Simule {
             qr_texte: "RGB-2520 - 1P MY9*1+".into(),
             taille_image: 1_000,
             fiabilite: 97,
+            spectre_longueur: 36,
             reactions: [
                 // Supposé : la main est obtenue dès la connexion (état 1).
                 ("FD9_Connect", vec![1]),
@@ -394,5 +405,99 @@ impl SdkFd9 for Fd9Simule {
         self.appels.push("FD9_GetPremeasurementError".into());
         *erreur_systeme = 0;
         self.premesure
+    }
+
+    fn points_mesure(&mut self, points: &mut [PointMesure]) -> i32 {
+        let code = self.appel_admis("FD9_GetMeasurePoint", points.len().to_string(), |e| e == 7);
+        if code == 0 {
+            self.points = points.len() as u32;
+        }
+        code
+    }
+
+    fn mesurer(&mut self) -> i32 {
+        let code = self.appel_admis("FD9_StartMeasurement2", "1 1".into(), |e| e == 7);
+        // Sans réaction imposée : mesure, nombre de plages mesurées, fin.
+        if code == 0 && !self.reactions.contains_key("FD9_StartMeasurement2") {
+            self.rappeler(8);
+            if self.inscrit {
+                self.recus.push_back(Evenement {
+                    compte: self.points,
+                    ..evenement(11)
+                });
+            }
+            self.rappeler(9);
+        }
+        code
+    }
+
+    fn regler(&mut self, cle: CleOption, valeur: u32) -> i32 {
+        let code = self.appel("FD9_SetOption", format!("{} {valeur}", cle as u32));
+        // Bornes de la DLL (fiche FD9_SetOption) : refus 1001.
+        let borne = [16, 16, 2, 15][cle as usize];
+        if code != 0 || valeur >= borne {
+            return 1001;
+        }
+        self.options[cle as usize] = valeur;
+        0
+    }
+
+    fn donnees(
+        &mut self,
+        rendue: &mut PositionPlage,
+        donnees: &mut [f32; DONNEES_BRUTES],
+        demandee: &PositionPlage,
+    ) -> i32 {
+        let i = demandee.zone_ou_index;
+        let code = self.appel("FD9_GetData", i.to_string());
+        if code != 0 {
+            return code;
+        }
+        if self.options[CleOption::TypeDonnees as usize] != DONNEES_BRUTES_TYPE {
+            // Le simulé ne calcule pas dans GetData.
+            return 1001;
+        }
+        let colonnes = self
+            .coordonnees_recues
+            .as_ref()
+            .map_or(1, |c| c.compte_zones[0].colonnes.max(1));
+        let decalage = i32::from(self.position_fausse == Some(i));
+        *rendue = PositionPlage {
+            zone_ou_index: 0,
+            rangee: (i / colonnes) as i32,
+            colonne: (i % colonnes) as i32 + decalage,
+        };
+        for (k, valeur) in donnees.iter_mut().enumerate() {
+            *valeur = 1_000.0 + i as f32 + k as f32;
+        }
+        0
+    }
+
+    fn calculer(&mut self, sortie: &mut [f32], brutes: &[f32; DONNEES_BRUTES]) -> i32 {
+        let code = self.appel("FD9_CalculateData", sortie.len().to_string());
+        if code != 0 {
+            return code;
+        }
+        let [condition, illuminant, observateur, type_donnees] = self.options;
+        match type_donnees {
+            SPECTRE_TYPE => {
+                if sortie.len() < self.spectre_longueur {
+                    return 1005;
+                }
+                for (k, valeur) in sortie.iter_mut().enumerate() {
+                    *valeur = condition as f32 + k as f32 / 4.0;
+                }
+                0
+            }
+            LAB_TYPE if sortie.len() >= 3 => {
+                sortie[..3].copy_from_slice(&[
+                    (illuminant * 10 + observateur) as f32,
+                    condition as f32,
+                    brutes[0],
+                ]);
+                0
+            }
+            _ => 1005,
+        }
     }
 }

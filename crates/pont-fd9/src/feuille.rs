@@ -23,7 +23,7 @@ pub const ECART_ADMIS: u32 = 300;
 pub const TAILLE_IMAGE_MAX: u32 = 256 << 20;
 
 /// Échec d'un arrêt.
-enum EchecArret {
+pub(crate) enum EchecArret {
     /// `FD9_StopMeasurement` refusé (code brut) : rien n'a été arrêté ni
     /// clos, par exemple hors des états 1 à 8.
     Refuse(i32),
@@ -32,7 +32,7 @@ enum EchecArret {
 }
 
 impl EchecArret {
-    fn erreur(self) -> ErreurPont {
+    pub(crate) fn erreur(self) -> ErreurPont {
         match self {
             EchecArret::Refuse(code) => erreur_sdk(code),
             EchecArret::Apres(erreur) => erreur,
@@ -41,7 +41,7 @@ impl EchecArret {
 }
 
 /// Codes publics de la fiche `FD9SDK.md` qui ont un nom dans le protocole.
-fn erreur_sdk(code: i32) -> ErreurPont {
+pub(crate) fn erreur_sdk(code: i32) -> ErreurPont {
     match code {
         1001 => ErreurPont::ParametreRefuse {},
         1104 => ErreurPont::EtatIncompatible {},
@@ -68,7 +68,7 @@ impl<S: SdkFd9> Session<S> {
         Ok(lecture)
     }
 
-    fn exiger_connexion(&self) -> Result<(), ErreurPont> {
+    pub(crate) fn exiger_connexion(&self) -> Result<(), ErreurPont> {
         if self.perdu {
             Err(ErreurPont::InstrumentPerdu {})
         } else if !self.connecte {
@@ -83,7 +83,7 @@ impl<S: SdkFd9> Session<S> {
     /// Étapes communes aux paliers Prénumérisation et Feuille, jusqu'à la
     /// reconnaissance contrôlée. Toute sortie en erreur a déjà arrêté ou
     /// clos la feuille.
-    fn lire_feuille(
+    pub(crate) fn lire_feuille(
         &mut self,
         mire: &DefinitionFeuille,
         coordonnees: &CoordonneesMire,
@@ -195,7 +195,7 @@ impl<S: SdkFd9> Session<S> {
     }
 
     /// Un code non nul arrête la feuille et rend l'erreur du SDK.
-    fn verifier(&mut self, appel: &str, code: i32) -> Result<(), ErreurPont> {
+    pub(crate) fn verifier(&mut self, appel: &str, code: i32) -> Result<(), ErreurPont> {
         if code == 0 {
             return Ok(());
         }
@@ -208,7 +208,7 @@ impl<S: SdkFd9> Session<S> {
     /// Arrête la feuille, puis rend `raison`. Un arrêt refusé d'emblée n'a
     /// rien changé : la raison reste, et une annulation dit que l'arrêt a été
     /// refusé. Un arrêt admis qui échoue ensuite rend son échec.
-    fn abandonner(&mut self, raison: ErreurPont) -> ErreurPont {
+    pub(crate) fn abandonner(&mut self, raison: ErreurPont) -> ErreurPont {
         match self.arreter_feuille() {
             Ok(()) => raison,
             Err(EchecArret::Refuse(code)) => {
@@ -251,7 +251,7 @@ impl<S: SdkFd9> Session<S> {
         fin.map_err(EchecArret::Apres)
     }
 
-    fn sortir(&mut self) -> Result<(), ErreurPont> {
+    pub(crate) fn sortir(&mut self) -> Result<(), ErreurPont> {
         let code = self.sdk.sortir();
         self.journal
             .push(format!("FD9_ExitMeasurement(0, NULL) : {code}"));
@@ -263,7 +263,11 @@ impl<S: SdkFd9> Session<S> {
     }
 
     /// Attend `voulu`, ou conclut la feuille selon ce qui l'a interrompue.
-    fn attendre_ou_conclure(&mut self, voulu: EtatSdk, attente: Attente) -> Result<(), ErreurPont> {
+    pub(crate) fn attendre_ou_conclure(
+        &mut self,
+        voulu: EtatSdk,
+        attente: Attente,
+    ) -> Result<(), ErreurPont> {
         match self.attendre(voulu, attente) {
             Ok(()) => Ok(()),
             Err(Fin::Delai) if attente == Attente::Feuille => {

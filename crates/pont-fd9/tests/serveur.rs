@@ -313,22 +313,35 @@ fn la_feuille_est_refusee_au_plafond_connexion_sans_appel_a_la_dll() {
 }
 
 #[test]
-fn la_mesure_d_une_feuille_reste_refusee_au_dela_de_la_prenumerisation() {
-    let (lignes, session) = dialoguer(
+fn mesurer_feuille_rend_la_mesure_de_toutes_les_plages() {
+    // 2 rangées × 3 colonnes : six plages.
+    let mire = MIRE.replace(
+        r#""rangees":60,"colonnes":42"#,
+        r#""rangees":2,"colonnes":3"#,
+    );
+    let (lignes, _) = dialoguer(
         Fd9Simule::avec_une_rgb2520(),
         Palier::Feuille,
-        &[&format!(r#"{{"cmd":"mesurer_feuille","mire":{MIRE}}}"#)],
+        &[
+            r#"{"cmd":"version"}"#,
+            r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#,
+            &format!(r#"{{"cmd":"mesurer_feuille","mire":{mire}}}"#),
+            r#"{"cmd":"fermer"}"#,
+        ],
     );
-    assert_eq!(
-        reponses(&lignes),
-        [Reponse::Erreur {
-            erreur: ErreurPont::PalierNonAutorise {
-                demande: Palier::Feuille,
-                plafond: PALIER_MAX,
-            }
-        }]
-    );
-    assert!(session.sdk().appels.is_empty());
+    let reponses = reponses(&lignes);
+    let Reponse::Mesure {
+        mesure,
+        remise_au_repos,
+    } = &reponses[2]
+    else {
+        panic!("{}", lignes[2])
+    };
+    assert_eq!(mesure.plages().len(), 6);
+    assert!(mesure.provenance().feuille.is_some());
+    // La feuille est close avant la réponse.
+    assert_eq!(*remise_au_repos, Info::Confirmee(RemiseAuRepos::AuRepos {}));
+    assert_eq!(reponses[3], Reponse::Ferme {});
 }
 
 #[test]

@@ -63,6 +63,7 @@ impl<S: SdkFd9> Session<S> {
         });
         match self.lire_identite(recertification_due) {
             Ok(identite) => {
+                self.identite = Some(identite.clone());
                 let mut statut = [0u32; 8];
                 let code = self.sdk.statut(&mut statut);
                 self.journal
@@ -88,6 +89,7 @@ impl<S: SdkFd9> Session<S> {
             return Err(ErreurPont::Sdk { code });
         }
         let infos = tampon.infos;
+        self.version_sdk = infos.version_sdk;
         if !infos.est_rempli() {
             return Err(inattendue("FD9_GetSystemInfo n'a rien écrit".into()));
         }

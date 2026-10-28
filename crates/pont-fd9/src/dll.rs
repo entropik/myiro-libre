@@ -8,8 +8,9 @@
 
 use crate::{evenements, Evenement, SdkFd9};
 use fd9_sys::{
-    Appareil, CoordonneesMire, DonneesQr, GestionnaireEvenements, ImageFd9, ModeReconnaissance,
-    NomApplication, TamponInfosSysteme, EXPORTS_AUTORISES,
+    Appareil, CleOption, CoordonneesMire, DonneesQr, GestionnaireEvenements, ImageFd9,
+    ModeReconnaissance, NomApplication, PointMesure, PositionPlage, TamponInfosSysteme,
+    DONNEES_BRUTES, EXPORTS_AUTORISES,
 };
 use libloading::Library;
 use std::ffi::{c_char, c_void};
@@ -66,6 +67,15 @@ type FnSortir = unsafe extern "system" fn(*const u32, *const c_void) -> i32;
 /// Seul export en `__cdecl` de la liste blanche (fiche
 /// FD9_GetPremeasurementError).
 type FnErreurPremesure = unsafe extern "C" fn(*mut i32, *mut *const c_char) -> i32;
+type FnPointsMesure = unsafe extern "system" fn(*mut PointMesure, *const u32) -> i32;
+type FnDeuxNombres = unsafe extern "system" fn(*const u32, *const u32) -> i32;
+type FnDonnees = unsafe extern "system" fn(
+    *mut PositionPlage,
+    *mut f32,
+    *const u32,
+    *const PositionPlage,
+) -> i32;
+type FnCalculer = unsafe extern "system" fn(*mut f32, *const u32, *const f32, *const u32) -> i32;
 
 pub struct Fd9Dll {
     dernier_code: FnDernierCode,
@@ -82,6 +92,11 @@ pub struct Fd9Dll {
     arreter: FnArreter,
     sortir: FnSortir,
     erreur_premesure: FnErreurPremesure,
+    points_mesure: FnPointsMesure,
+    mesurer: FnDeuxNombres,
+    regler: FnDeuxNombres,
+    donnees: FnDonnees,
+    calculer: FnCalculer,
     /// Événements du rappel, tant qu'il est inscrit.
     reception: Option<Receiver<Evenement>>,
     version_fichier: Option<[u32; 4]>,
@@ -122,6 +137,11 @@ impl Fd9Dll {
             arreter: resoudre(&bibliotheque, "FD9_StopMeasurement")?,
             sortir: resoudre(&bibliotheque, "FD9_ExitMeasurement")?,
             erreur_premesure: resoudre(&bibliotheque, "FD9_GetPremeasurementError")?,
+            points_mesure: resoudre(&bibliotheque, "FD9_GetMeasurePoint")?,
+            mesurer: resoudre(&bibliotheque, "FD9_StartMeasurement2")?,
+            regler: resoudre(&bibliotheque, "FD9_SetOption")?,
+            donnees: resoudre(&bibliotheque, "FD9_GetData")?,
+            calculer: resoudre(&bibliotheque, "FD9_CalculateData")?,
             reception: None,
             version_fichier,
             empreinte,
@@ -339,5 +359,55 @@ impl SdkFd9 for Fd9Dll {
         // SAFETY : `__cdecl` ; texte nul admis, rien de la DLL n'est gardé
         // (fiche FD9_GetPremeasurementError).
         unsafe { (self.erreur_premesure)(erreur_systeme, std::ptr::null_mut()) }
+    }
+
+    fn points_mesure(&mut self, points: &mut [PointMesure]) -> i32 {
+        // Un nombre nul serait refusé (1001) ; le pont n'en demande jamais.
+        let nombre = points.len() as u32;
+        // SAFETY : `nombre` points de 20 octets, remplis pendant l'appel
+        // (fiche FD9_GetMeasurePoint).
+        unsafe { (self.points_mesure)(points.as_mut_ptr(), &nombre) }
+    }
+
+    fn mesurer(&mut self) -> i32 {
+        let (mode, avis) = (1u32, 1u32);
+        // SAFETY : deux nombres lus pendant l'appel, jamais nuls (fiche
+        // FD9_StartMeasurement2).
+        unsafe { (self.mesurer)(&mode, &avis) }
+    }
+
+    fn regler(&mut self, cle: CleOption, valeur: u32) -> i32 {
+        let cle = cle as u32;
+        // SAFETY : deux nombres lus pendant l'appel, jamais nuls ; aucun
+        // échange avec l'instrument (fiche FD9_SetOption).
+        unsafe { (self.regler)(&cle, &valeur) }
+    }
+
+    fn donnees(
+        &mut self,
+        rendue: &mut PositionPlage,
+        donnees: &mut [f32; DONNEES_BRUTES],
+        demandee: &PositionPlage,
+    ) -> i32 {
+        let longueur = DONNEES_BRUTES as u32;
+        // SAFETY : la DLL écrit au plus 152 flottants et une position de
+        // 12 octets, pendant l'appel (fiche FD9_GetData).
+        unsafe { (self.donnees)(rendue, donnees.as_mut_ptr(), &longueur, demandee) }
+    }
+
+    fn calculer(&mut self, sortie: &mut [f32], brutes: &[f32; DONNEES_BRUTES]) -> i32 {
+        let longueur_sortie = sortie.len() as u32;
+        let longueur_entree = DONNEES_BRUTES as u32;
+        // SAFETY : sortie de `longueur_sortie` flottants (la DLL refuse 1005
+        // une sortie trop courte pour le type), entrée de 152 recopiée avant
+        // le calcul (fiche FD9_CalculateData).
+        unsafe {
+            (self.calculer)(
+                sortie.as_mut_ptr(),
+                &longueur_sortie,
+                brutes.as_ptr(),
+                &longueur_entree,
+            )
+        }
     }
 }

@@ -15,13 +15,7 @@ fn sans_dll_le_pont_s_arrete_avec_un_message() {
 
 #[test]
 fn un_palier_que_le_pont_fd9_ne_declare_pas_est_refuse_au_lancement() {
-    for palier in [
-        "etalonnage",
-        "mesure_ponctuelle",
-        "bande",
-        "feuille",
-        "tout",
-    ] {
+    for palier in ["etalonnage", "mesure_ponctuelle", "bande", "tout"] {
         let sortie = pont()
             .args(["--dll", "x.dll", "--plafond", palier])
             .output()
@@ -47,18 +41,15 @@ fn une_dll_introuvable_est_signalee() {
 }
 
 #[test]
-fn le_palier_connexion_est_accepte_au_lancement() {
+fn les_paliers_du_fd9_sont_acceptes_au_lancement() {
     // Plafond accepté : le pont va jusqu'au chargement de la DLL (absente ici).
-    let sortie = pont()
-        .args([
-            "--dll",
-            "C:/nulle-part/FD9SDK.dll",
-            "--plafond",
-            "connexion",
-        ])
-        .output()
-        .unwrap();
-    assert_eq!(sortie.status.code(), Some(3));
+    for palier in ["connexion", "prenumerisation", "feuille"] {
+        let sortie = pont()
+            .args(["--dll", "C:/nulle-part/FD9SDK.dll", "--plafond", palier])
+            .output()
+            .unwrap();
+        assert_eq!(sortie.status.code(), Some(3), "{palier}");
+    }
 }
 
 #[test]

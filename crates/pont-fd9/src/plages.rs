@@ -1,0 +1,242 @@
+//! Palier Feuille : mesure des plages de la feuille reconnue, lecture des 152
+//! données brutes de chaque plage, puis spectres et Lab M0, M1, M2 calculés
+//! par la DLL (fiches `docs/abi/FD9_GetMeasurePoint.md`,
+//! `FD9_StartMeasurement2.md`, `FD9_GetData.md`, `FD9_SetOption.md`,
+//! `FD9_CalculateData.md`).
+//!
+//! La mesure finie (état 9), `FD9_StopMeasurement` est refusé : la feuille
+//! est close par `FD9_ExitMeasurement` seul, après la lecture de toutes les
+//! plages. Les calculs, sans échange avec l'instrument, viennent ensuite.
+
+use crate::attente::Attente;
+use crate::connexion::inattendue;
+use crate::feuille::erreur_sdk;
+use crate::{SdkFd9, Session};
+use fd9_sys::{
+    CleOption, CoordonneesMire, EtatSdk, PointMesure, PositionPlage, DONNEES_BRUTES,
+    DONNEES_BRUTES_TYPE, LAB_TYPE, SPECTRE_TYPE,
+};
+use pont_protocole::{
+    Calcul, ConditionMesure, ConditionsCalcul, DefinitionFeuille, DonneesBrutes, Echantillonnage,
+    Empreinte, ErreurPont, Geometrie, Horodatage, Illuminant, Info, InstrumentMesurant, Lab,
+    LectureFeuille, Mesure, Observateur, Palier, Plage, Provenance, Spectre, MODELE_FD9,
+};
+
+/// Valeur de la clé 0 de `FD9_SetOption` pour chaque condition de mesure,
+/// relevée dans FD-S2w (supposé, à comparer à l'essai E4).
+pub const CONDITIONS: [(ConditionMesure, u32); 3] = [
+    (ConditionMesure::M0, 0),
+    (ConditionMesure::M1, 2),
+    (ConditionMesure::M2, 15),
+];
+
+/// Valeurs d'un spectre (fiche `FD9_CalculateData`, confirmé).
+pub const LONGUEUR_SPECTRE: usize = 36;
+
+/// Clés 1 et 2 de `FD9_SetOption` : D50 et 2°.
+const ILLUMINANT_D50: u32 = 2;
+const OBSERVATEUR_2_DEGRES: u32 = 0;
+
+const LIBELLE_CALCUL: &str = "étalonnage automatique de l'instrument ; spectres : condition \
+     0/2/15 = M0/M1/M2 (supposé), 380-730 nm par 10 nm (supposé) ; Lab : D50, 2°";
+
+/// Données brutes d'une plage, telles que `FD9_GetData` les rend.
+type Brutes = [f32; DONNEES_BRUTES];
+
+impl<S: SdkFd9> Session<S> {
+    /// Mêmes étapes que la prénumérisation, puis mesure de toutes les plages.
+    /// La plage n° i de la mesure est la plage n° i de `mire` : vérifié par
+    /// la position que rend la DLL, plage par plage.
+    pub fn mesurer_feuille(&mut self, mire: &DefinitionFeuille) -> Result<Mesure, ErreurPont> {
+        self.autoriser(Palier::Feuille, Some(Palier::Connexion))?;
+        self.exiger_connexion()?;
+        let coordonnees = CoordonneesMire::depuis_definition(mire).map_err(|e| {
+            self.journal
+                .push(format!("définition de feuille refusée : {e:?}"));
+            ErreurPont::ParametreRefuse {}
+        })?;
+        self.vider_hors_requete();
+        self.recus.clear();
+        let lecture = self.lire_feuille(mire, &coordonnees)?;
+        let mut points = vec![PointMesure([0; 20]); lecture.plages as usize];
+        let code = self.sdk.points_mesure(&mut points);
+        self.verifier("FD9_GetMeasurePoint", code)?;
+        let code = self.sdk.mesurer();
+        self.verifier("FD9_StartMeasurement2", code)?;
+        self.attendre_ou_conclure(EtatSdk::MesureFinie, Attente::Mesure)?;
+        let lues = self.lire_plages(mire);
+        // Toutes les plages lues, ou la lecture refusée : la feuille est
+        // close dans les deux cas.
+        let sortie = self.sortir();
+        let brutes = lues?;
+        sortie?;
+        let plages = self.calculer_plages(&brutes)?;
+        let provenance = self.provenance(lecture)?;
+        let mesure = Mesure::new(plages, provenance).map_err(|e| inattendue(e.to_string()))?;
+        self.franchir(Palier::Feuille);
+        Ok(mesure)
+    }
+
+    /// Les 152 données brutes de chaque plage, demandée par son numéro ; la
+    /// position rendue doit être celle de la mire, sinon tout est refusé.
+    fn lire_plages(&mut self, mire: &DefinitionFeuille) -> Result<Vec<Brutes>, ErreurPont> {
+        let attendues = positions(mire);
+        let mut toutes = Vec::with_capacity(attendues.len());
+        for (i, attendue) in attendues.iter().enumerate() {
+            self.regler(CleOption::TypeDonnees, DONNEES_BRUTES_TYPE)?;
+            let mut brutes = [0f32; DONNEES_BRUTES];
+            let mut rendue = PositionPlage::default();
+            // Bornée par PLAGES_MAX : le numéro tient dans un u32.
+            let demandee = PositionPlage::numero(i as u32);
+            let code = self.sdk.donnees(&mut rendue, &mut brutes, &demandee);
+            if code != 0 {
+                // Après un GetData, GetLastError ne dit rien de lui (fiche).
+                self.journal
+                    .push(format!("FD9_GetData plage n° {} : code {code}", i + 1));
+                return Err(erreur_sdk(code));
+            }
+            if rendue != *attendue {
+                return Err(inattendue(format!(
+                    "plage n° {} : position (zone {}, rangée {}, colonne {}) au lieu de \
+                     (zone {}, rangée {}, colonne {})",
+                    i + 1,
+                    rendue.zone_ou_index,
+                    rendue.rangee,
+                    rendue.colonne,
+                    attendue.zone_ou_index,
+                    attendue.rangee,
+                    attendue.colonne
+                )));
+            }
+            toutes.push(brutes);
+        }
+        self.journal.push(format!(
+            "{} plage(s) lue(s), dans l'ordre de la mire",
+            toutes.len()
+        ));
+        Ok(toutes)
+    }
+
+    /// Spectres et Lab M0, M1, M2 de chaque plage, réglages reposés avant
+    /// chaque calcul.
+    fn calculer_plages(&mut self, toutes: &[Brutes]) -> Result<Vec<Plage>, ErreurPont> {
+        let mut plages = Vec::with_capacity(toutes.len());
+        for (i, brutes) in toutes.iter().enumerate() {
+            let mut spectres = Vec::with_capacity(3);
+            let mut labs = Vec::with_capacity(3);
+            for (condition, valeur) in CONDITIONS {
+                self.regler(CleOption::Condition, valeur)?;
+                self.regler(CleOption::TypeDonnees, SPECTRE_TYPE)?;
+                let mut spectre = [0f32; LONGUEUR_SPECTRE];
+                let code = self.sdk.calculer(&mut spectre, brutes);
+                if code != 0 {
+                    return Err(inattendue(format!(
+                        "plage n° {}, {condition:?} : spectre de {LONGUEUR_SPECTRE} valeurs \
+                         refusé par la DLL (code {code})",
+                        i + 1
+                    )));
+                }
+                self.regler(CleOption::TypeDonnees, LAB_TYPE)?;
+                self.regler(CleOption::Illuminant, ILLUMINANT_D50)?;
+                self.regler(CleOption::Observateur, OBSERVATEUR_2_DEGRES)?;
+                let mut lab = [0f32; 3];
+                let code = self.sdk.calculer(&mut lab, brutes);
+                if code != 0 {
+                    return Err(inattendue(format!(
+                        "plage n° {}, {condition:?} : Lab refusé par la DLL (code {code})",
+                        i + 1
+                    )));
+                }
+                let invalide = |e: pont_protocole::ErreurMesure| {
+                    inattendue(format!("plage n° {}, {condition:?} : {e}", i + 1))
+                };
+                spectres.push(Spectre::new(spectre.to_vec()).map_err(invalide)?);
+                labs.push(Lab::new(lab).map_err(invalide)?);
+            }
+            let invalide =
+                |e: pont_protocole::ErreurMesure| inattendue(format!("plage n° {} : {e}", i + 1));
+            let brutes = DonneesBrutes::new(brutes.to_vec()).map_err(invalide)?;
+            let (Ok(spectres), Ok(labs)) = (spectres.try_into(), labs.try_into()) else {
+                return Err(inattendue(format!("plage n° {} incomplète", i + 1)));
+            };
+            plages.push(Plage::new(spectres, brutes, labs).map_err(invalide)?);
+        }
+        Ok(plages)
+    }
+
+    fn regler(&mut self, cle: CleOption, valeur: u32) -> Result<(), ErreurPont> {
+        let code = self.sdk.regler(cle, valeur);
+        if code == 0 {
+            return Ok(());
+        }
+        self.journal.push(format!(
+            "FD9_SetOption({}, {valeur}) : code {code}",
+            cle as u32
+        ));
+        Err(erreur_sdk(code))
+    }
+
+    /// Ce que le pont atteste : instrument et SDK lus à la connexion, pas
+    /// d'étalonnage par l'utilisateur, conditions supposées tant que l'essai
+    /// E4 ne les a pas comparées à une mesure de référence.
+    fn provenance(&self, lecture: LectureFeuille) -> Result<Provenance, ErreurPont> {
+        let identite = self
+            .identite
+            .clone()
+            .ok_or_else(|| inattendue("identité de l'instrument absente".into()))?;
+        let maintenant = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
+        let horodatage = Horodatage::new(maintenant).map_err(|e| inattendue(e.to_string()))?;
+        Ok(Provenance {
+            instrument: InstrumentMesurant {
+                modele: MODELE_FD9.into(),
+                numero_serie: identite.numero_serie,
+                micrologiciel: identite.micrologiciel,
+                code_produit: identite.code_produit,
+            },
+            version_sdk: self.version_sdk,
+            empreinte_dll: self
+                .sdk
+                .empreinte()
+                .and_then(|texte| Empreinte::new(texte).ok())
+                .map_or(Info::Inconnue, Info::Confirmee),
+            version_pont: env!("CARGO_PKG_VERSION").into(),
+            architecture: std::env::consts::ARCH.into(),
+            horodatage,
+            etalonnage: Info::Inconnue,
+            geometrie: Geometrie::Feuille {},
+            calcul: Calcul {
+                libelle: LIBELLE_CALCUL.into(),
+                demande: Info::Confirmee(ConditionsCalcul {
+                    conditions_spectres: CONDITIONS.map(|(c, _)| Info::Supposee(c)),
+                    longueurs_onde: Info::Supposee(Echantillonnage {
+                        debut_nm: 380,
+                        pas_nm: 10,
+                    }),
+                    illuminant_lab: Info::Confirmee(Illuminant::D50),
+                    observateur_lab: Info::Confirmee(Observateur::DeuxDegres),
+                }),
+                observe: Info::Inconnue,
+            },
+            feuille: Some(lecture),
+        })
+    }
+}
+
+/// Position de chaque plage de la mire, dans l'ordre de lecture : zones dans
+/// l'ordre, puis rangées de haut en bas, puis colonnes de gauche à droite.
+fn positions(mire: &DefinitionFeuille) -> Vec<PositionPlage> {
+    mire.zones
+        .iter()
+        .enumerate()
+        .flat_map(|(zone, z)| {
+            (0..z.rangees).flat_map(move |rangee| {
+                (0..z.colonnes).map(move |colonne| PositionPlage {
+                    // Bornés par ZONES_MAX, RANGEES_MAX et COLONNES_MAX.
+                    zone_ou_index: zone as u32,
+                    rangee: rangee as i32,
+                    colonne: colonne as i32,
+                })
+            })
+        })
+        .collect()
+}

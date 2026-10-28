@@ -19,6 +19,8 @@ pub struct Delais {
     pub feuille: Duration,
     /// Attente de chaque étape suivante (capture, reconnaissance, arrêt).
     pub etape: Duration,
+    /// Attente de la fin de la mesure de toutes les plages.
+    pub mesure: Duration,
 }
 
 impl Default for Delais {
@@ -26,6 +28,8 @@ impl Default for Delais {
         Delais {
             feuille: Duration::from_secs(120),
             etape: Duration::from_secs(30),
+            // Supposé : une RGB-2520 se mesure en quelques minutes (essai E4).
+            mesure: Duration::from_secs(600),
         }
     }
 }
@@ -75,6 +79,8 @@ pub(crate) enum Attente {
     Feuille,
     /// Une étape : annulable.
     Etape,
+    /// La mesure des plages : annulable, avec son propre délai.
+    Mesure,
     /// La fin d'un arrêt : rien ne l'interrompt.
     Arret,
 }
@@ -94,6 +100,7 @@ impl<S: SdkFd9> Session<S> {
         let delai = match attente {
             Attente::Feuille => self.delais.feuille,
             Attente::Etape | Attente::Arret => self.delais.etape,
+            Attente::Mesure => self.delais.mesure,
         };
         let fin = Instant::now() + delai;
         let mut engagee = false;

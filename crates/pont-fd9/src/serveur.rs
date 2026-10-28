@@ -6,7 +6,7 @@ use crate::{Annulation, Fermeture, SdkFd9, Session};
 use fd9_sys::Liaison;
 use pont_protocole::{
     ecrire_reponse, lire_requete, EffetAnnulation, Empreinte, ErreurPont, Info, InstrumentFd9,
-    LiaisonFd9, Palier, Reponse, Requete,
+    LiaisonFd9, Palier, RemiseAuRepos, Reponse, Requete,
 };
 use std::io::{self, BufRead, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -168,7 +168,16 @@ fn traiter<S: SdkFd9>(session: &mut Session<S>, requete: Requete) -> (Reponse, b
         Requete::Prenumeriser { mire } => session
             .prenumeriser(&mire)
             .map(|lecture| Reponse::Prenumerisee { lecture }),
-        Requete::MesurerFeuille { .. } => Err(session.hors_paliers(Palier::Feuille)),
+        // La feuille est close (ExitMeasurement) avant la réponse : rien ne
+        // reste armé dans l'instrument.
+        Requete::MesurerFeuille { mire } => {
+            session
+                .mesurer_feuille(&mire)
+                .map(|mesure| Reponse::Mesure {
+                    mesure,
+                    remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
+                })
+        }
         // Déconnexion puis désinscription du rappel ; une déconnexion
         // refusée arrête aussi le pont, sans nouvel essai.
         Requete::Fermer {} => {

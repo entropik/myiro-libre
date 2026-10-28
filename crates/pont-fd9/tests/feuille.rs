@@ -35,6 +35,7 @@ fn rgb2520() -> DefinitionFeuille {
 const COURTS: Delais = Delais {
     feuille: Duration::from_millis(50),
     etape: Duration::from_millis(50),
+    mesure: Duration::from_millis(50),
 };
 
 /// Session connectée au plafond donné ; rend aussi le nombre d'appels faits
@@ -275,6 +276,7 @@ fn annuler_pendant_l_attente_arrete_et_sort() {
     let mut session = Session::new(sdk, Palier::Prenumerisation).avec_delais(Delais {
         feuille: Duration::from_secs(30),
         etape: Duration::from_secs(5),
+        mesure: Duration::from_secs(5),
     });
     session.version().unwrap();
     session
@@ -422,6 +424,7 @@ fn sans_la_main_une_annulation_dit_l_arret_refuse() {
     let mut session = Session::new(sdk, Palier::Prenumerisation).avec_delais(Delais {
         feuille: Duration::from_secs(30),
         etape: Duration::from_secs(5),
+        mesure: Duration::from_secs(5),
     });
     session.version().unwrap();
     session
