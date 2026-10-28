@@ -359,6 +359,158 @@ const FRANCAIS: Catalogue = &[
         "profil.sans_mesure",
         "Importez d’abord un export CGATS de FD-S2w ou de MYIROtools dans cette résolution.",
     ),
+    (
+        "profil.erreur.outil_manquant",
+        "Un outil d’ArgyllCMS manque dans le dossier argyll à côté de l’application. Remplacez ce dossier par une copie complète d’ArgyllCMS 3.5.0, puis relancez l’application.",
+    ),
+    (
+        "comparer.refus.en_tete",
+        "Ce fichier n’est pas un profil ICC lisible.",
+    ),
+    (
+        "comparer.refus.pas_rvb",
+        "Ce profil n’est pas un profil RVB. La comparaison CMJN n’est pas encore prévue.",
+    ),
+    (
+        "comparer.refus.sans_table",
+        "Ce profil n’a pas de table colorimétrique (A2B1)\u{202f}: c’est peut-être un profil d’écran. Il n’est pas comparé.",
+    ),
+    (
+        "comparer.refus.structure",
+        "La table colorimétrique de ce profil est d’une structure que myiro-libre ne lit pas encore ({detail}). Il n’est pas comparé.",
+    ),
+    (
+        "comparer.refus.tronque",
+        "Ce profil est incomplet\u{202f}: une partie ({detail}) sort du fichier. Il n’est pas comparé.",
+    ),
+    (
+        "comparer.refus.sans_blanc",
+        "Ce profil ne dit pas quel est le blanc du support\u{202f}: ses couleurs absolues ne se calculent pas. Il n’est pas comparé.",
+    ),
+    (
+        "comparer.refus.trop_de_profils",
+        "On compare quatre profils au plus. Retirez-en un, puis recommencez.",
+    ),
+    (
+        "comparer.refus.fichier_ferme",
+        "Ce fichier n’est plus ouvert. Ouvrez-le de nouveau.",
+    ),
+    (
+        "comparer.zone.gris",
+        "Gris",
+    ),
+    (
+        "comparer.zone.ombres",
+        "Ombres",
+    ),
+    (
+        "comparer.zone.clairs",
+        "Tons clairs",
+    ),
+    (
+        "comparer.zone.saturee.rouge",
+        "Rouges saturés",
+    ),
+    (
+        "comparer.zone.saturee.jaune",
+        "Jaunes saturés",
+    ),
+    (
+        "comparer.zone.saturee.vert",
+        "Verts saturés",
+    ),
+    (
+        "comparer.zone.saturee.cyan",
+        "Cyans saturés",
+    ),
+    (
+        "comparer.zone.saturee.bleu",
+        "Bleus saturés",
+    ),
+    (
+        "comparer.zone.saturee.magenta",
+        "Magentas saturés",
+    ),
+    (
+        "comparer.zone.moyenne.rouge",
+        "Rouges moyens",
+    ),
+    (
+        "comparer.zone.moyenne.jaune",
+        "Jaunes moyens",
+    ),
+    (
+        "comparer.zone.moyenne.vert",
+        "Verts moyens",
+    ),
+    (
+        "comparer.zone.moyenne.cyan",
+        "Cyans moyens",
+    ),
+    (
+        "comparer.zone.moyenne.bleu",
+        "Bleus moyens",
+    ),
+    (
+        "comparer.zone.moyenne.magenta",
+        "Magentas moyens",
+    ),
+    (
+        "comparer.fidelite.sans_mesures",
+        "Inconnue\u{202f}: ce profil n’embarque pas ses mesures.",
+    ),
+    (
+        "comparer.fidelite.illisible",
+        "Inconnue\u{202f}: les mesures embarquées dans ce profil ne se lisent pas.",
+    ),
+    (
+        "comparer.fidelite.rvb_inconnus",
+        "Inconnue\u{202f}: les mesures embarquées ne disent pas quelles valeurs RVB ont été imprimées, ou dans quelle échelle.",
+    ),
+    (
+        "comparer.fidelite.rvb_hors_echelle",
+        "Inconnue\u{202f}: une plage des mesures embarquées a une valeur RVB hors de l’échelle prévue.",
+    ),
+    (
+        "comparer.fidelite.lab_inconnu",
+        "Inconnue\u{202f}: une plage des mesures embarquées n’a ni Lab ni spectre utilisable.",
+    ),
+    (
+        "comparer.limite.sans_argyll",
+        "La limite du gamut demande ArgyllCMS 3.5.0, introuvable à côté de l’application. La surface brute est montrée, et le reste de la comparaison est calculé.",
+    ),
+    (
+        "comparer.limite.sans_iccgamut",
+        "L’outil iccgamut d’ArgyllCMS manque\u{202f}: la limite du gamut n’est pas calculée, le reste de la comparaison l’est. Remplacez le dossier argyll par une copie complète d’ArgyllCMS 3.5.0.",
+    ),
+    (
+        "comparer.limite.argyll_version",
+        "ArgyllCMS {version} a été trouvé, mais seule la version 3.5.0 est validée\u{202f}: la limite du gamut n’est pas calculée, le reste de la comparaison l’est.",
+    ),
+    (
+        "comparer.limite.argyll_illisible",
+        "ArgyllCMS ne répond pas comme prévu\u{202f}: la limite du gamut n’est pas calculée, le reste de la comparaison l’est.",
+    ),
+    (
+        "comparer.limite.fichier",
+        "Un fichier de travail d’iccgamut n’a pas pu être lu ou écrit\u{202f}: la limite du gamut n’est pas calculée, le reste de la comparaison l’est. Réessayez.",
+    ),
+    (
+        "comparer.limite.illisible",
+        "La limite du gamut écrite par iccgamut ne se lit pas\u{202f}: elle n’est pas montrée, le reste de la comparaison est calculé.",
+    ),
+    (
+        "comparer.erreur.limite",
+        "Le calcul de la limite du gamut a échoué dans ArgyllCMS (iccgamut)\u{202f}: elle n’est pas montrée, le reste de la comparaison est calculé.",
+    ),
+    (
+        "comparer.origine.bibliotheque",
+        "Bibliothèque\u{202f}: {chemin}, profil du {date}",
+    ),
+    (
+        "comparer.origine.fichier",
+        "Fichier\u{202f}: {nom} (ouvert pour la comparaison, pas dans la bibliothèque)",
+    ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "Journal d’ArgyllCMS"),
     ("profil.rvb", "Valeurs RVB"),
@@ -1341,6 +1493,158 @@ const ANGLAIS: Catalogue = &[
     (
         "profil.sans_mesure",
         "First import a CGATS export from FD-S2w or MYIROtools into this resolution.",
+    ),
+    (
+        "profil.erreur.outil_manquant",
+        "A tool of ArgyllCMS is missing from the argyll folder next to the application. Replace this folder with a complete copy of ArgyllCMS 3.5.0, then restart the application.",
+    ),
+    (
+        "comparer.refus.en_tete",
+        "This file is not a readable ICC profile.",
+    ),
+    (
+        "comparer.refus.pas_rvb",
+        "This profile is not an RGB profile. CMYK comparison is not planned yet.",
+    ),
+    (
+        "comparer.refus.sans_table",
+        "This profile has no colorimetric table (A2B1): it may be a display profile. It is not compared.",
+    ),
+    (
+        "comparer.refus.structure",
+        "The colorimetric table of this profile has a structure myiro-libre does not read yet ({detail}). It is not compared.",
+    ),
+    (
+        "comparer.refus.tronque",
+        "This profile is incomplete: a part ({detail}) goes beyond the end of the file. It is not compared.",
+    ),
+    (
+        "comparer.refus.sans_blanc",
+        "This profile does not give the media white: its absolute colours cannot be computed. It is not compared.",
+    ),
+    (
+        "comparer.refus.trop_de_profils",
+        "At most four profiles are compared. Remove one, then start again.",
+    ),
+    (
+        "comparer.refus.fichier_ferme",
+        "This file is no longer open. Open it again.",
+    ),
+    (
+        "comparer.zone.gris",
+        "Greys",
+    ),
+    (
+        "comparer.zone.ombres",
+        "Shadows",
+    ),
+    (
+        "comparer.zone.clairs",
+        "Highlights",
+    ),
+    (
+        "comparer.zone.saturee.rouge",
+        "Saturated reds",
+    ),
+    (
+        "comparer.zone.saturee.jaune",
+        "Saturated yellows",
+    ),
+    (
+        "comparer.zone.saturee.vert",
+        "Saturated greens",
+    ),
+    (
+        "comparer.zone.saturee.cyan",
+        "Saturated cyans",
+    ),
+    (
+        "comparer.zone.saturee.bleu",
+        "Saturated blues",
+    ),
+    (
+        "comparer.zone.saturee.magenta",
+        "Saturated magentas",
+    ),
+    (
+        "comparer.zone.moyenne.rouge",
+        "Medium reds",
+    ),
+    (
+        "comparer.zone.moyenne.jaune",
+        "Medium yellows",
+    ),
+    (
+        "comparer.zone.moyenne.vert",
+        "Medium greens",
+    ),
+    (
+        "comparer.zone.moyenne.cyan",
+        "Medium cyans",
+    ),
+    (
+        "comparer.zone.moyenne.bleu",
+        "Medium blues",
+    ),
+    (
+        "comparer.zone.moyenne.magenta",
+        "Medium magentas",
+    ),
+    (
+        "comparer.fidelite.sans_mesures",
+        "Unknown: this profile does not embed its measurements.",
+    ),
+    (
+        "comparer.fidelite.illisible",
+        "Unknown: the measurements embedded in this profile cannot be read.",
+    ),
+    (
+        "comparer.fidelite.rvb_inconnus",
+        "Unknown: the embedded measurements do not say which RGB values were printed, or on which scale.",
+    ),
+    (
+        "comparer.fidelite.rvb_hors_echelle",
+        "Unknown: a patch of the embedded measurements has an RGB value outside the expected scale.",
+    ),
+    (
+        "comparer.fidelite.lab_inconnu",
+        "Unknown: a patch of the embedded measurements has neither Lab nor a usable spectrum.",
+    ),
+    (
+        "comparer.limite.sans_argyll",
+        "The gamut boundary needs ArgyllCMS 3.5.0, which cannot be found next to the application. The raw surface is shown, and the rest of the comparison is computed.",
+    ),
+    (
+        "comparer.limite.sans_iccgamut",
+        "The iccgamut tool of ArgyllCMS is missing: the gamut boundary is not computed, the rest of the comparison is. Replace the argyll folder with a complete copy of ArgyllCMS 3.5.0.",
+    ),
+    (
+        "comparer.limite.argyll_version",
+        "ArgyllCMS {version} was found, but only version 3.5.0 is validated: the gamut boundary is not computed, the rest of the comparison is.",
+    ),
+    (
+        "comparer.limite.argyll_illisible",
+        "ArgyllCMS does not answer as expected: the gamut boundary is not computed, the rest of the comparison is.",
+    ),
+    (
+        "comparer.limite.fichier",
+        "A working file of iccgamut could not be read or written: the gamut boundary is not computed, the rest of the comparison is. Try again.",
+    ),
+    (
+        "comparer.limite.illisible",
+        "The gamut boundary written by iccgamut cannot be read: it is not shown, the rest of the comparison is computed.",
+    ),
+    (
+        "comparer.erreur.limite",
+        "Computing the gamut boundary failed in ArgyllCMS (iccgamut): it is not shown, the rest of the comparison is computed.",
+    ),
+    (
+        "comparer.origine.bibliotheque",
+        "Library: {chemin}, profile of {date}",
+    ),
+    (
+        "comparer.origine.fichier",
+        "File: {nom} (opened for the comparison, not in the library)",
     ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "ArgyllCMS log"),

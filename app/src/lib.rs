@@ -6,6 +6,7 @@
 //! fichier fait le lien avec la fenêtre.
 
 pub mod colonne;
+pub mod comparer;
 pub mod demonstration;
 pub mod installation;
 pub mod instrument;
@@ -579,6 +580,7 @@ pub fn lancer() {
         .manage(Instruments::default())
         .manage(PareFeuFd9::default())
         .manage(profiler::Moteur::au_lancement())
+        .manage(comparer::FichiersOuverts::default())
         .setup(ouvrir_bibliotheque)
         .manage(GesteEnAttente::default())
         .invoke_handler(tauri::generate_handler![
@@ -619,6 +621,10 @@ pub fn lancer() {
             parc::parc_installer_profil,
             profiler::profiler_commandes,
             profiler::profiler_calculer,
+            comparer::comparer_profils_comparables,
+            comparer::comparer_ouvrir_fichier,
+            comparer::comparer_analyser,
+            comparer::comparer_chemin,
             etalonner,
             repondre_geste
         ])

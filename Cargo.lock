@@ -54,6 +54,7 @@ dependencies = [
  "bibliotheque",
  "cgats",
  "colorimetrie",
+ "gamut",
  "pont-protocole",
  "profilage",
  "serde",
