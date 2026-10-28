@@ -119,7 +119,7 @@ impl RefusCoherence {
 }
 
 impl ErreurProfil {
-    fn sans_cause(cle: &'static str) -> Self {
+    pub(crate) fn sans_cause(cle: &'static str) -> Self {
         ErreurProfil {
             cle,
             cause: None,
@@ -128,7 +128,7 @@ impl ErreurProfil {
         }
     }
 
-    fn du_moteur(erreur: &ErreurMoteur) -> Self {
+    pub(crate) fn du_moteur(erreur: &ErreurMoteur) -> Self {
         let mut e = ErreurProfil::sans_cause(erreur.cle());
         match erreur {
             ErreurMoteur::Echec { cause, .. } | ErreurMoteur::Fichier(cause) => {
@@ -383,6 +383,14 @@ impl Moteur {
             .as_ref()
             .map(|a| a as &dyn MoteurProfil)
             .ok_or_else(|| ErreurProfil::du_moteur(&ErreurMoteur::Introuvable))
+    }
+
+    /// Le moteur de la vérification d'un profil (`xicclu`) : le même
+    /// ArgyllCMS ; rien s'il est introuvable.
+    pub fn verification(&self) -> Option<&dyn profilage::MoteurVerification> {
+        self.0
+            .as_ref()
+            .map(|a| a as &dyn profilage::MoteurVerification)
     }
 
     /// Pourquoi le calcul sera refusé avant même d'être lancé ; rien si

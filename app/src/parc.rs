@@ -21,6 +21,7 @@ use crate::installation::{
     self, est_installe, EtatInstallation, InstallationProfils, InstallationWindows,
 };
 use crate::profiler::{provenance_profil, sources_profil, ProvenanceProfil, SourceProfil};
+use crate::verifier::{derniere_verification, ResumeVerification};
 
 /// Taille au-delà de laquelle un fichier n'est pas lu comme un profil :
 /// 64 Mio, bien plus qu'un profil d'imprimante.
@@ -109,6 +110,9 @@ pub struct DetailReglage {
     /// Le profil actif est installé dans Windows, à l'identique. Faux tant
     /// que le système n'a pas été regardé ([`BibliothequeOuverte::detail_reglage_installe`]).
     pub installe: bool,
+    /// La vérification la plus récente du profil actif ; rien sans profil
+    /// ou avant sa première vérification.
+    pub verification: Option<ResumeVerification>,
 }
 
 /// Après une fenêtre de choix de fichier : rien si l'opérateur a annulé
@@ -244,6 +248,10 @@ impl BibliothequeOuverte {
                 .collect::<Result<Vec<_>, ErreurBibliotheque>>()?;
             let sources = sources_profil(b, &importees)?;
             let provenance = provenance_profil(b, r.profil.as_ref())?;
+            let verification = match &r.profil {
+                Some(p) => derniere_verification(b, p.id)?,
+                None => None,
+            };
             Ok(Some(DetailReglage {
                 origine,
                 provenance,
@@ -259,6 +267,7 @@ impl BibliothequeOuverte {
                 importees,
                 sources,
                 installe: false,
+                verification,
             }))
         })?;
         detail.ok_or_else(|| "parc.erreur.reglage_inconnu".to_string())

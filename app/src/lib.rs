@@ -14,6 +14,7 @@ pub mod parc;
 pub mod pont;
 pub mod profiler;
 pub mod textes;
+pub mod verifier;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -619,6 +620,14 @@ pub fn lancer() {
             parc::parc_installer_profil,
             profiler::profiler_commandes,
             profiler::profiler_calculer,
+            verifier::commandes::verifier_sources,
+            verifier::commandes::verifier_commandes,
+            verifier::commandes::verifier_fiche,
+            verifier::commandes::verifier_lancer,
+            verifier::commandes::verifier_recalculer,
+            verifier::commandes::verifier_historique,
+            verifier::commandes::tolerances_lister,
+            verifier::commandes::tolerances_enregistrer,
             etalonner,
             repondre_geste
         ])
