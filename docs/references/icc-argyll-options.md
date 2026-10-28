@@ -56,7 +56,7 @@ Dans les tableaux, la barre oblique « / » sépare les lettres possibles d'une 
 
 | Option | Effet |
 |---|---|
-| `-q l/m/h/u` | qualité (finesse des tables) : basse, moyenne (défaut), haute, ultra |
+| `-q l/m/h/u` | qualité (finesse des tables) : basse, moyenne (défaut), haute, ultra. La documentation de `colprof` conseille de partir de `-qm` et dit de `-qu` : « a test mode, and shouldn't be used, except to prove that it is not worth using ». Constaté le 28 octobre 2026 : `-qu` sur 2 520 plages tournait encore après 12 minutes, sur un seul cœur ; myiro-libre ne le lance jamais |
 | `-b l/m/h/u/n` | qualité de la table inverse B2A seule ; `-bn` la supprime |
 | `-k z/h/x/r` | génération du noir CMJN : minimum (`z`), 0,5 (`h`), maximum (`x`), rampe linéaire (`r`) (le défaut diffère selon la lecture de la page : `h` ou `r`, à vérifier avec `colprof -?`) ; `-k p ...` courbe personnalisée ; `-K` : mêmes réglages en proportion du maximum |
 | `-l n` | limite d'encre totale en % (0 à 400, défaut pris dans le `.ti3` ; 220 à 300 usuel) |
