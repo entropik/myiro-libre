@@ -262,41 +262,54 @@ pub enum CleOption {
     TypeDonnees = 3,
 }
 
-/// État du SDK reçu par le rappel d'événements (`FD9_eSDKStatus`).
+/// État du SDK reçu par le rappel d'événements (`FD9_eSDKStatus`). Noms du
+/// SDK entre parenthèses, sans leur préfixe `SDK_` ou `SDK_WAIT_` (table de la
+/// fiche `docs/abi/FD9_RegisterDeviceEventHandler.md`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EtatSdk {
-    /// 0 : en attente, sans la main sur l'instrument.
+    /// 0 (`WAIT_NO_AUTHORITY`) : un autre logiciel a la main sur l'instrument.
     AttenteSansMain,
-    /// 1 : en attente, la main prise.
+    /// 1 (`WAIT_AUTHORITY`) : main obtenue, attente d'une feuille.
     Attente,
-    /// 2, 3 : entraînement de la feuille, puis fini.
+    /// 2 (`RUN_FEED`) : feuille en cours d'engagement.
     Alimentation,
+    /// 3 (`WAIT_FEED_COMPLETION`) : feuille engagée.
     AlimentationFinie,
-    /// 4, 5 : capture de l'image, puis finie.
+    /// 4 (`RUN_CAPTURE`) : image en cours.
     Capture,
+    /// 5 (`WAIT_CAPTURE_COMPLETION`) : image prise.
     CaptureFinie,
-    /// 6, 7 : reconnaissance des plages, puis finie.
+    /// 6 (`RUN_PATCHRECOG`) : reconnaissance des plages en cours.
     Reconnaissance,
+    /// 7 (`WAIT_PATCHRECOG_COMPLETION`) : plages reconnues.
     ReconnaissanceFinie,
-    /// 8, 9 : mesure, puis finie.
+    /// 8 (`RUN_MEASURE`) : mesure en cours.
     Mesure,
+    /// 9 (`WAIT_MEASURE_COMPLETION`) : mesure finie.
     MesureFinie,
-    /// 10 : annulation finie.
+    /// 10 (`WAIT_CANCEL_COMPLETION`) : arrêt fini.
     AnnulationFinie,
-    /// 11 : nombre de plages déjà mesurées.
+    /// 11 (`NOTYFY_PATCHCOUNT`) : nombre de plages déjà mesurées.
     AvisPlages,
-    /// 101 à 103.
+    /// 101 (`ERROR_COVEROPEN`) : capot ouvert.
     CouvercleOuvert,
+    /// 102 (`ERROR_PAPERJAM`) : bourrage.
     Bourrage,
+    /// 103 (`ERROR_COMMUNICATION`) : liaison perdue.
     Communication,
-    /// 201 à 206.
+    /// 201 (`ERROR_PREMEASURE`) : échec de la préparation.
     Premesure,
+    /// 202 (`ERROR_MEASURE`) : échec de la mesure.
     ErreurMesure,
+    /// 203 (`ERROR_SENSOR`) : erreur du capteur.
     Capteur,
+    /// 204 (`ERROR_CALCULATION`) : erreur de calcul.
     Calcul,
+    /// 205 (`ERROR_CHARTTOOLONG`) : feuille trop longue.
     FeuilleTropLongue,
+    /// 206 (`ERROR_MEMORY`) : mémoire insuffisante.
     Memoire,
-    /// 301.
+    /// 301 (`ERROR_FATAL`) : erreur fatale.
     Fatale,
     /// Code absent de la table du SDK : gardé brut, jamais interprété.
     Inconnu(u32),

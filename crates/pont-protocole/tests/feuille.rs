@@ -296,3 +296,41 @@ fn la_prenumerisation_et_les_erreurs_de_feuille_traversent_le_protocole() {
     );
     assert!(lire_reponse(r#"{"rep":"erreur","erreur":{"type":"feuille_absente","x":1}}"#).is_err());
 }
+
+// --- Identité du FD-9 : recertification due (code 1901 de FD9_Connect) ---
+
+#[test]
+fn la_recertification_due_s_ecrit_seulement_quand_elle_l_est() {
+    use pont_protocole::Identite;
+    let identite = |recertification_due| Identite {
+        numero_serie: 12345678,
+        micrologiciel: "1.02.0005".into(),
+        code_produit: "9C1A".into(),
+        adresse_mac: "02:00:00:00:00:01".into(),
+        date_initiale: None,
+        anomalie_date_initiale: false,
+        brute_hex: "00".into(),
+        recertification_due,
+    };
+    let ordinaire = ecrire_reponse(&Reponse::Connecte {
+        identite: identite(false),
+    });
+    // Une identité écrite avant ce champ se relit sans recertification due.
+    assert!(!ordinaire.contains("recertification"), "{ordinaire}");
+    assert_eq!(
+        lire_reponse(&ordinaire),
+        Ok(Reponse::Connecte {
+            identite: identite(false)
+        })
+    );
+    let due = ecrire_reponse(&Reponse::Connecte {
+        identite: identite(true),
+    });
+    assert!(due.contains(r#""recertification_due":true"#), "{due}");
+    assert_eq!(
+        lire_reponse(&due),
+        Ok(Reponse::Connecte {
+            identite: identite(true)
+        })
+    );
+}

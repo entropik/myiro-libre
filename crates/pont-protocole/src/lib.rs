@@ -284,8 +284,19 @@ pub struct Identite {
     /// AAAAMMJJ ; absente si l'instrument porte encore la date d'usine.
     pub date_initiale: Option<u32>,
     pub anomalie_date_initiale: bool,
-    /// Les 40 octets bruts, en hexadécimal, pour réinterprétation ultérieure.
+    /// Les octets bruts de l'identité, en hexadécimal, pour réinterprétation
+    /// ultérieure (40 pour le MYIRO-1, 100 pour le FD-9).
     pub brute_hex: String,
+    /// FD-9 : connexion faite avec le code 1901, instrument à faire
+    /// recertifier (fiche `docs/abi/FD9_Connect.md`). Ce n'est pas un
+    /// étalonnage demandé à l'opérateur. Absent des identités écrites avant
+    /// ce champ : relu faux.
+    #[serde(default, skip_serializing_if = "est_faux")]
+    pub recertification_due: bool,
+}
+
+fn est_faux(valeur: &bool) -> bool {
+    !*valeur
 }
 
 /// Remise au repos : résultat d'un désarmement (`FDX_StopMeasurement`) et de

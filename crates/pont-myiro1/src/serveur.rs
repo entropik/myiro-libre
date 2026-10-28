@@ -318,6 +318,8 @@ fn identite(connexion: &Connexion) -> Identite {
             .iter()
             .map(|octet| format!("{octet:02x}"))
             .collect(),
+        // Code 1901 du FD-9 : le MYIRO-1 n'en a pas.
+        recertification_due: false,
     }
 }
 

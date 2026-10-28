@@ -83,3 +83,26 @@ fn palier_detection() {
     assert!(lignes[2].contains("palier_non_autorise"));
     assert!(lignes[3].contains(r#""rep":"ferme""#));
 }
+
+/// Adresse du FD-9 pour un essai réel, donnée par l'opérateur au moment de
+/// l'essai (variable `FD9_ADRESSE`) : jamais écrite dans un fichier.
+fn adresse() -> String {
+    std::env::var("FD9_ADRESSE").expect("FD9_ADRESSE : adresse du FD-9 pour cet essai")
+}
+
+/// Palier Connexion (essai E1) : rappel inscrit, `FD9_Connect` (0 ou 1901),
+/// identité, état, puis déconnexion. Aucun geste de l'opérateur. FD-S2w et
+/// MYIROtools fermés.
+#[test]
+#[ignore = "se connecte au FD-9 avec la DLL Konica Minolta du poste"]
+fn palier_connexion() {
+    let connecter = format!(r#"{{"cmd":"connecter_adresse","adresse":"{}"}}"#, adresse());
+    let lignes = dialoguer(
+        "connexion",
+        &[r#"{"cmd":"version"}"#, &connecter, r#"{"cmd":"fermer"}"#],
+    );
+    assert_eq!(lignes.len(), 3);
+    assert!(lignes[0].contains(r#""rep":"version_dll""#));
+    assert!(lignes[1].contains(r#""rep":"connecte""#), "{}", lignes[1]);
+    assert!(lignes[2].contains(r#""rep":"ferme""#), "{}", lignes[2]);
+}

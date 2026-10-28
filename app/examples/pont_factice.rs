@@ -173,6 +173,7 @@ fn main() -> ExitCode {
                         date_initiale: None,
                         anomalie_date_initiale: false,
                         brute_hex: String::new(),
+                        recertification_due: false,
                     },
                 },
                 Ok(Requete::Fermer {}) => {

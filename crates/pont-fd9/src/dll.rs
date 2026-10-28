@@ -6,15 +6,19 @@
 //! `docs/abi/FD9SDK.md`. La DLL de FD-S2w est 32 bits : elle demande le pont
 //! compilé pour `i686-pc-windows-msvc`.
 
-use crate::SdkFd9;
-use fd9_sys::{Appareil, EXPORTS_AUTORISES};
+use crate::{evenements, Evenement, SdkFd9};
+use fd9_sys::{
+    Appareil, GestionnaireEvenements, NomApplication, TamponInfosSysteme, EXPORTS_AUTORISES,
+};
 use libloading::Library;
 use std::path::Path;
+use std::sync::mpsc::Receiver;
+use std::time::Duration;
 
 /// Exports dont l'adapter demande l'adresse au chargement : toute la liste
 /// blanche, pour vérifier que la DLL est complète (fiche
-/// `docs/abi/FD9_GetLastError.md`, palier Version). Seuls `FD9_GetLastError`
-/// et `FD9_GetDeviceList` sont appelés par les paliers de ce pont.
+/// `docs/abi/FD9_GetLastError.md`, palier Version). Seuls ceux des paliers
+/// déclarés par ce pont reçoivent une forme d'appel.
 pub const EXPORTS_RESOLUS: &[&str] = EXPORTS_AUTORISES;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -37,10 +41,22 @@ pub fn autoriser_export(nom: &str) -> Result<(), ErreurChargement> {
 
 type FnDernierCode = unsafe extern "system" fn() -> i32;
 type FnLister = unsafe extern "system" fn(*mut Appareil, *mut u32, *const u32) -> i32;
+type FnInscrire = unsafe extern "system" fn(GestionnaireEvenements) -> i32;
+type FnConnecter = unsafe extern "system" fn(*const Appareil, *const u8) -> i32;
+type FnInfos = unsafe extern "system" fn(*mut TamponInfosSysteme) -> i32;
+type FnStatut = unsafe extern "system" fn(*mut [u32; 8]) -> i32;
+type FnSansArgument = unsafe extern "system" fn() -> i32;
 
 pub struct Fd9Dll {
     dernier_code: FnDernierCode,
     lister: FnLister,
+    inscrire: FnInscrire,
+    connecter: FnConnecter,
+    infos: FnInfos,
+    statut: FnStatut,
+    deconnecter: FnSansArgument,
+    /// Événements du rappel, tant qu'il est inscrit.
+    reception: Option<Receiver<Evenement>>,
     version_fichier: Option<[u32; 4]>,
     empreinte: Option<String>,
     // Déclarée en dernier : la DLL reste chargée tant que les pointeurs vivent.
@@ -67,6 +83,12 @@ impl Fd9Dll {
         Ok(Fd9Dll {
             dernier_code: resoudre(&bibliotheque, "FD9_GetLastError")?,
             lister: resoudre(&bibliotheque, "FD9_GetDeviceList")?,
+            inscrire: resoudre(&bibliotheque, "FD9_RegisterDeviceEventHandler")?,
+            connecter: resoudre(&bibliotheque, "FD9_Connect")?,
+            infos: resoudre(&bibliotheque, "FD9_GetSystemInfo")?,
+            statut: resoudre(&bibliotheque, "FD9_GetStatus")?,
+            deconnecter: resoudre(&bibliotheque, "FD9_Disconnect")?,
+            reception: None,
             version_fichier,
             empreinte,
             _bibliotheque: bibliotheque,
@@ -144,6 +166,72 @@ impl SdkFd9 for Fd9Dll {
 
     fn empreinte(&self) -> Option<String> {
         self.empreinte.clone()
+    }
+
+    fn inscrire_rappel(&mut self, actif: bool) -> i32 {
+        if actif {
+            // Le canal s'ouvre avant l'inscription : aucun événement perdu.
+            self.reception = Some(evenements::ouvrir());
+            let rappel: GestionnaireEvenements = Some(evenements::rappel);
+            // SAFETY : fonction statique `extern "C"`, valide jusqu'au
+            // déchargement ; la DLL en garde l'adresse jusqu'à la
+            // désinscription (fiche FD9_RegisterDeviceEventHandler).
+            let code = unsafe { (self.inscrire)(rappel) };
+            if code != 0 {
+                evenements::fermer();
+                self.reception = None;
+            }
+            code
+        } else {
+            // SAFETY : le pointeur nul désinscrit.
+            let code = unsafe { (self.inscrire)(None) };
+            if code == 0 {
+                evenements::fermer();
+                self.reception = None;
+            }
+            code
+        }
+    }
+
+    fn connecter(&mut self, appareil: &Appareil, nom: &NomApplication) -> i32 {
+        // SAFETY : entrée `#[repr(C)]` de 44 octets et texte terminé par zéro,
+        // lus pendant l'appel seulement (fiche FD9_Connect).
+        unsafe { (self.connecter)(appareil, nom.octets().as_ptr()) }
+    }
+
+    fn infos(&mut self, tampon: &mut TamponInfosSysteme) -> i32 {
+        // SAFETY : la DLL écrit 100 octets ; le tampon en a 256 (fiche
+        // FD9_GetSystemInfo).
+        unsafe { (self.infos)(tampon) }
+    }
+
+    fn statut(&mut self, tampon: &mut [u32; 8]) -> i32 {
+        // SAFETY : 32 octets écrits pendant l'appel (fiche FD9_GetStatus).
+        unsafe { (self.statut)(tampon) }
+    }
+
+    fn deconnecter(&mut self) -> i32 {
+        // SAFETY : aucun argument (fiche FD9_Disconnect).
+        unsafe { (self.deconnecter)() }
+    }
+
+    fn evenements(&mut self, attente: Duration) -> Vec<Evenement> {
+        let Some(reception) = &self.reception else {
+            std::thread::sleep(attente);
+            return Vec::new();
+        };
+        let mut recus: Vec<Evenement> = reception.try_iter().collect();
+        if recus.is_empty() && !attente.is_zero() {
+            if let Ok(premier) = reception.recv_timeout(attente) {
+                recus.push(premier);
+                recus.extend(reception.try_iter());
+            }
+        }
+        recus
+    }
+
+    fn rappels_orphelins(&self) -> u64 {
+        evenements::orphelins()
     }
 }
 

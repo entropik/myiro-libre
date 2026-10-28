@@ -2,8 +2,8 @@
 //! l'entrée et la sortie standard (ADR 0005), comme `pont-myiro1`.
 //!
 //! Usage : `pont-fd9 --dll <chemin de FD9SDK.dll> [--plafond <palier>]`
-//! Paliers déclarés par ce pont : version (par défaut), detection. Tout autre
-//! palier est refusé au lancement.
+//! Paliers déclarés par ce pont : version (par défaut), detection, connexion.
+//! Tout autre palier est refusé au lancement.
 
 use pont_fd9::dll::Fd9Dll;
 use pont_fd9::serveur::servir;
@@ -15,6 +15,7 @@ fn palier(nom: &str) -> Option<Palier> {
     Some(match nom {
         "version" => Palier::Version,
         "detection" => Palier::Detection,
+        "connexion" => Palier::Connexion,
         _ => return None,
     })
 }
@@ -29,7 +30,7 @@ fn arguments() -> Result<(String, Palier), String> {
             "--plafond" => {
                 let nom = args.next().unwrap_or_default();
                 plafond = palier(&nom).ok_or(format!(
-                    "palier non déclaré par le pont FD-9 : {nom} (version ou detection)"
+                    "palier non déclaré par le pont FD-9 : {nom} (version, detection ou connexion)"
                 ))?;
             }
             autre => return Err(format!("argument inconnu : {autre}")),
@@ -61,6 +62,10 @@ fn main() -> ExitCode {
     );
     for ligne in session.journal() {
         eprintln!("pont-fd9 : {ligne}");
+    }
+    let orphelins = session.rappels_orphelins();
+    if orphelins > 0 {
+        eprintln!("pont-fd9 : {orphelins} rappel(s) de la DLL reçu(s) sans session, ignoré(s)");
     }
     match resultat {
         Ok(()) => ExitCode::SUCCESS,

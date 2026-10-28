@@ -2,7 +2,7 @@
 //! session et écrit une réponse JSON par ligne (ADR 0005), avec le même
 //! protocole que le pont MYIRO-1.
 
-use crate::{SdkFd9, Session};
+use crate::{Fermeture, SdkFd9, Session};
 use fd9_sys::Liaison;
 use pont_protocole::{
     ecrire_reponse, lire_requete, EffetAnnulation, Empreinte, Info, InstrumentFd9, LiaisonFd9,
@@ -67,19 +67,27 @@ fn traiter<S: SdkFd9>(session: &mut Session<S>, requete: Requete) -> (Reponse, b
                 })
                 .collect(),
         }),
-        Requete::Connecter { .. } | Requete::ConnecterAdresse { .. } => {
-            Err(session.hors_paliers(Palier::Connexion))
-        }
+        Requete::Connecter { instrument } => session
+            .connecter(instrument as usize)
+            .map(|identite| Reponse::Connecte { identite }),
+        Requete::ConnecterAdresse { adresse } => session
+            .connecter_adresse(&adresse)
+            .map(|identite| Reponse::Connecte { identite }),
         Requete::Etalonner {} => Err(session.hors_paliers(Palier::Etalonnage)),
         Requete::MesurerPonctuelle { .. } => Err(session.hors_paliers(Palier::MesurePonctuelle)),
         Requete::MesurerBande { .. } => Err(session.hors_paliers(Palier::Bande)),
         Requete::Prenumeriser { .. } => Err(session.hors_paliers(Palier::Prenumerisation)),
         Requete::MesurerFeuille { .. } => Err(session.hors_paliers(Palier::Feuille)),
-        // Aucune session n'est ouverte avec l'instrument : rien à désarmer ni
-        // à déconnecter, la fermeture est confirmée.
+        // Déconnexion puis désinscription du rappel ; une déconnexion
+        // refusée arrête aussi le pont, sans nouvel essai.
         Requete::Fermer {} => {
-            session.fermer();
-            return (Reponse::Ferme {}, true);
+            let reponse = match session.fermer() {
+                Fermeture::Confirmee => Reponse::Ferme {},
+                Fermeture::Incertaine { remise_au_repos } => {
+                    Reponse::FermetureIncertaine { remise_au_repos }
+                }
+            };
+            return (reponse, true);
         }
         // Le FD-9 ne mesure pas encore : il n'y a jamais rien à interrompre.
         Requete::Annuler {} => Ok(Reponse::Annulation {
