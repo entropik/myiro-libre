@@ -4,7 +4,10 @@
 // sont posés par putImageData. Un code d'écart est un dixième de ΔE00 (0 à 254), 255 = inconnu ou
 // transparent : un pixel est au-delà du seuil si son code vaut au moins round(10 × seuil). Changer
 // le seuil, le profil de la surimpression ou l'affichage ne relance aucune commande. Les pixels à
-// l'écart inconnu sont dits à part, jamais comptés comme bons. Les textes viennent du catalogue.
+// l'écart inconnu sont dits à part, jamais comptés comme bons. Changer la compensation du point
+// noir relance l'analyse. Deux colonnes : l'image à gauche, à droite les réglages
+// (reglages-image.js), le point cliqué et les pastilles (pastilles-image.js) et les chiffres ;
+// « Agrandir » montre l'image en grand (image-agrandie.js). Les textes viennent du catalogue.
 "use strict";
 
 window.ComparerImage = (() => {
@@ -20,7 +23,6 @@ window.ComparerImage = (() => {
   const CLASSES = [["leger", 20, 50], ["moyen", 50, 100], ["fort", 100, 255]];
   // Familles de teinte, dans l'ordre des lignes de `par_teinte` (gamut::FAMILLES_TEINTE).
   const FAMILLES = ["rouge", "jaune", "vert", "cyan", "bleu", "magenta", "gris"];
-  const AFFICHAGES = ["image", "les_deux", "alerte"];
   const code = (s) => Math.round(s * 10);
 
   // La section reste la même d'un dessin de la vue à l'autre ; seul son contenu change.
@@ -37,6 +39,7 @@ window.ComparerImage = (() => {
   let seuil = 2;
   let choisi = 0; // rang du profil de la surimpression
   let affichage = "les_deux";
+  let pointNoir = true; // compensation du point noir, cochée par défaut
   let canvas = null;
   let legende = null;
   let tableauChiffres = null;
@@ -75,6 +78,7 @@ window.ComparerImage = (() => {
       demande++;
       [resume, apercu, analyses, ecarts] = [r, null, null, []];
       window.NuageImage.oublier(); // nouvelle image : nuage libéré, case recochée
+      window.PastillesImage.oublier(); // et le point cliqué de l'ancienne image oublié
       apercu = new Uint8ClampedArray(await invoke("image_apercu"));
     } catch (cle) {
       message = t(String(cle));
@@ -100,7 +104,7 @@ window.ComparerImage = (() => {
     message = ""; // un ancien « annulée » ou une ancienne erreur ne reste pas au-dessus de chiffres justes
     const n = ++demande;
     [analyses, ecarts] = [null, []];
-    window.PastillesImage.oublier(); // le point cliqué de la pipette ne survit pas à l'analyse
+    window.PastillesImage.reprendre(); // le point cliqué est redemandé avec les nouveaux réglages
     if (!resume || resume.profil.etat === "refuse" || !sources.length) {
       enCours = false;
       dessiner();
@@ -109,7 +113,7 @@ window.ComparerImage = (() => {
     enCours = true;
     dessiner();
     try {
-      const reponse = await invoke("image_analyser", { sources });
+      const reponse = await invoke("image_analyser", { sources, compensation: pointNoir });
       if (n !== demande) return; // périmée : la demande plus récente tient « en cours »
       const octets = await Promise.all(reponse.profils.map((a, index) => (a.etat.etat === "calculee"
         ? invoke("image_ecarts", { analyse: reponse.numero, index }).then((b) => new Uint8Array(b))
@@ -141,7 +145,7 @@ window.ComparerImage = (() => {
   function fermer() {
     const ouverte = resume !== null;
     oublier();
-    [sources, profils, seuil, affichage] = [[], [], 2, "les_deux"];
+    [sources, profils, seuil, affichage, pointNoir] = [[], [], 2, "les_deux", true];
     racine.replaceChildren();
     imageCalque = canvas = legende = tableauChiffres = avisInconnu = null;
     window.NuageImage.oublier();
@@ -241,7 +245,7 @@ window.ComparerImage = (() => {
     const a = analyseDe(choisi);
     canvas.setAttribute("aria-label", t("image.canvas.aria").replace("{p}", () => nombre(a ? part(a, k, 255) : null, 1))
       .replace("{s}", () => nombre(seuil, 1)).replace("{profil}", () => nom));
-    if (legende) legende.lastChild.textContent = t("image.legende").replace("{s}", () => nombre(seuil, 1)).replace("{profil}", () => nom);
+    if (legende) legende.lastChild.textContent = t(pointNoir ? "image.legende.point_noir" : "image.legende").replace("{s}", () => nombre(seuil, 1)).replace("{profil}", () => nom);
   }
 
   // Le nuage (nuage-image.js) et les pastilles sous l'image (pastilles-image.js) suivent la surimpression.
@@ -258,22 +262,11 @@ window.ComparerImage = (() => {
     nuage();
   }
 
-  // ---- Réglages : profil, seuil, affichage ----
-  function choixProfil() {
-    const champ = el("div", "field");
-    const s = el("select", "input");
-    s.id = "image-profil";
-    for (const p of profils) {
-      const o = el("option", "", p.nom);
-      o.value = String(p.rang);
-      o.selected = p.rang === choisi;
-      s.append(o);
-    }
-    // Seuls le calque et son avis changent : le choix garde le focus du clavier.
-    s.addEventListener("change", () => choisirProfil(Number(s.value)));
-    const l = Object.assign(el("label", "label", t("image.surimpression.profil")), { htmlFor: s.id });
-    champ.append(l, s);
-    return champ;
+  // ---- Réglages (reglages-image.js) ----
+  // La compensation du point noir change le calcul : l'analyse est relancée.
+  function changerPointNoir(coche) {
+    pointNoir = coche;
+    analyser();
   }
 
   function choisirProfil(rang) {
@@ -285,39 +278,6 @@ window.ComparerImage = (() => {
     }
     calque();
     nuage();
-  }
-
-  function curseurSeuil() {
-    const champ = el("div", "field");
-    const curseur = el("input", "curseur");
-    Object.assign(curseur, { type: "range", min: 0.5, max: 10, step: 0.5, value: seuil, id: "image-seuil" });
-    const libelle = Object.assign(el("label", "label"), { htmlFor: curseur.id });
-    const ecrire = () => { libelle.textContent = t("image.seuil.valeur").replace("{s}", () => nombre(seuil, 1)); };
-    ecrire();
-    curseur.addEventListener("input", () => { changerSeuil(Number(curseur.value)); ecrire(); });
-    champ.append(libelle, curseur);
-    return champ;
-  }
-
-  function choixAffichage() {
-    const champ = el("div", "field");
-    const libelle = el("span", "label", t("image.affichage"));
-    libelle.id = "image-affichage";
-    const groupe = el("div", "seg");
-    groupe.setAttribute("role", "group");
-    groupe.setAttribute("aria-labelledby", libelle.id);
-    for (const v of AFFICHAGES) {
-      const b = el("button", "", t("image.affichage." + v));
-      b.setAttribute("aria-pressed", String(v === affichage));
-      b.addEventListener("click", () => {
-        affichage = v;
-        for (const autre of groupe.children) autre.setAttribute("aria-pressed", String(autre === b));
-        calque();
-      });
-      groupe.append(b);
-    }
-    champ.append(libelle, groupe);
-    return champ;
   }
 
   // ---- Dessin de la section ----
@@ -346,11 +306,21 @@ window.ComparerImage = (() => {
     return bloc;
   }
 
+  // Deux colonnes : à gauche l'image (légende, « Agrandir », surimpression) ; à droite, collé en haut
+  // au défilement, les réglages, le point cliqué, les pastilles et les chiffres. Empilées si étroit.
   function surimpression() {
-    const bloc = el("div");
     if (!profils.some((p) => p.rang === choisi)) choisi = profils.length ? profils[0].rang : 0;
+    const R = window.ReglagesImage;
     avisInconnu = el("p", "why");
-    bloc.append(choixProfil(), curseurSeuil(), choixAffichage(), avisInconnu);
+    const panneau = el("div", "image-comparee__panneau");
+    panneau.append(R.profil(profils, choisi, choisirProfil), R.seuil(seuil, changerSeuil),
+      R.affichage(affichage, (v) => { affichage = v; calque(); }), R.pointNoir(pointNoir, changerPointNoir),
+      avisInconnu, window.PastillesImage.section());
+    if (analyses) {
+      tableauChiffres = el("div");
+      panneau.append(el("span", "label", t("image.chiffres")),
+        el("p", "why", t(pointNoir ? "image.rendu.point_noir" : "image.rendu.relatif")), tableauChiffres);
+    }
     legende = el("p", "legende-alerte");
     const carre = el("span", "swatch");
     carre.style.setProperty("--c", "var(--couleur-hors-gamut)");
@@ -359,11 +329,22 @@ window.ComparerImage = (() => {
     canvas = el("canvas", "surimpression");
     Object.assign(canvas, { width: resume.largeur, height: resume.hauteur, tabIndex: 0 });
     canvas.setAttribute("role", "img");
-    bloc.append(legende, window.PastillesImage.cadre(canvas, () => sources), window.PastillesImage.section());
+    const cadre = window.PastillesImage.cadre(canvas, () => ({ sources, compensation: pointNoir }));
+    const barre = el("div", "image-comparee__barre");
+    barre.append(legende, window.ImageAgrandie.bouton(cadre, window.PastillesImage.lecture));
+    const image = el("div", "image-comparee__image");
+    image.append(barre, cadre);
+    const colonnes = el("div", "image-comparee__colonnes");
+    colonnes.append(image, panneau);
+    const bloc = el("div", "image-comparee");
+    bloc.append(colonnes);
     return bloc;
   }
 
   function dessiner() {
+    // L'image agrandie se ferme (son cadre est remplacé) ; le champ qui avait le focus le retrouve.
+    window.ImageAgrandie.fermer();
+    const focus = racine.contains(document.activeElement) ? document.activeElement.id : "";
     canvas = legende = tableauChiffres = avisInconnu = null;
     const contenu = [];
     if (!resume) contenu.push(el("p", "prose", t("image.aide")));
@@ -376,13 +357,10 @@ window.ComparerImage = (() => {
       contenu.push(actions(["image.relancer", analyser]));
     }
     if (resume && apercu && profils.length) contenu.push(surimpression());
-    if (resume && analyses && profils.length) {
-      tableauChiffres = el("div");
-      contenu.push(el("span", "label", t("image.chiffres")), tableauChiffres);
-    }
     racine.replaceChildren(section("image.titre", ...contenu));
     choisirProfil(choisi); // calque, avis d'un profil inconnu et nuage
     dessinerChiffres();
+    if (focus) document.getElementById(focus)?.focus();
   }
 
   // La vue « Comparer » range la section sous les chiffres clés, avec ses profils analysés.

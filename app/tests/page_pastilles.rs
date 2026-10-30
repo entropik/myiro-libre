@@ -63,18 +63,32 @@ fn pastilles_image_js_est_charge_avant_comparer_image_et_sans_couleur_en_dur() {
     assert!(lignes < 400, "comparer-image.js : {lignes} lignes");
 }
 
-/// La section des pastilles se place sous l'image (sous la surimpression),
-/// et le clic sur l'image passe par le cadre de la pipette.
+/// Deux colonnes : à gauche l'image (légende, « Agrandir », surimpression
+/// dans le cadre de la pipette) ; à droite le panneau des réglages, du point
+/// cliqué, des pastilles et des chiffres. La pipette demande le pixel avec
+/// les sources et la compensation de l'analyse affichée.
 #[test]
-fn les_pastilles_sont_sous_l_image() {
+fn les_pastilles_sont_dans_le_panneau_a_cote_de_l_image() {
     let image = lire("interface/comparer-image.js");
     let surimpression = corps(&image, "function surimpression() {");
-    assert!(
-        surimpression.contains(
-            "bloc.append(legende, window.PastillesImage.cadre(canvas, () => sources), window.PastillesImage.section());"
-        ),
-        "{surimpression}"
-    );
+    for attendu in [
+        "window.PastillesImage.cadre(canvas, () => ({ sources, compensation: pointNoir }))",
+        "avisInconnu, window.PastillesImage.section());",
+        "el(\"div\", \"image-comparee__panneau\")",
+        "el(\"div\", \"image-comparee__image\")",
+        "colonnes.append(image, panneau);",
+        "tableauChiffres = el(\"div\");",
+    ] {
+        assert!(
+            surimpression.contains(attendu),
+            "{attendu} :\n{surimpression}"
+        );
+    }
+    let panneau = surimpression
+        .find("image-comparee__panneau")
+        .unwrap_or(usize::MAX);
+    let chiffres = surimpression.find("t(\"image.chiffres\")").unwrap_or(0);
+    assert!(panneau < chiffres, "les chiffres sont dans le panneau");
 }
 
 /// Au plus 12 paires, celles au-delà du seuil courant (code d'écart du
@@ -113,7 +127,7 @@ fn les_pastilles_suivent_le_seuil_et_le_profil_sans_commande() {
         assert!(corps(&image, entete).contains("nuage();"), "{entete}");
     }
     // Le plus petit seuil du curseur est celui des pastilles de `gamut`.
-    assert!(image.contains("min: 0.5, max: 10, step: 0.5,"));
+    assert!(lire("interface/reglages-image.js").contains("min: 0.5, max: 10, step: 0.5,"));
     assert_eq!(gamut::SEUIL_PASTILLES, 0.5);
     assert_eq!(gamut::PASTILLES, 48);
 }
@@ -140,22 +154,29 @@ fn chaque_pastille_a_son_texte_de_remplacement() {
 /// couleur du pixel touché au module Rust, en coordonnées de l'image
 /// affichée ; la dernière demande l'emporte, un refus n'affiche rien. Le
 /// résultat suit le profil et le seuil sans nouveau clic. Le point cliqué
-/// est marqué sur l'image ; une nouvelle analyse l'oublie.
+/// est marqué sur l'image ; une nouvelle analyse (autres profils,
+/// compensation changée) le redemande, une autre image l'oublie. Le cadre
+/// garde les proportions de l'image.
 #[test]
 fn un_clic_sur_l_image_montre_la_couleur_du_point() {
     let script = lire("interface/pastilles-image.js");
-    let cliquer = corps(&script, "async function cliquer(");
-    for attendu in [
-        "invoke(\"image_pixel\", { sources: sources(), point })",
-        "e.offsetX",
-        "canvas.clientWidth",
-        "if (n !== demande) return;",
-    ] {
+    let cliquer = corps(&script, "function cliquer(e, canvas) {");
+    for attendu in ["e.offsetX", "canvas.clientWidth", "demanderPixel("] {
         assert!(cliquer.contains(attendu), "{attendu} :\n{cliquer}");
     }
-    let cadre = corps(&script, "function cadre(canvas, sources) {");
+    let demander = corps(&script, "async function demanderPixel(clic) {");
+    for attendu in [
+        "invoke(\"image_pixel\", { ...demandeur(), point: clic.point })",
+        "if (n !== demande) return;",
+    ] {
+        assert!(demander.contains(attendu), "{attendu} :\n{demander}");
+    }
+    let reprendre = corps(&script, "function reprendre() {");
+    assert!(reprendre.contains("demanderPixel(dernier);"), "{reprendre}");
+    let cadre = corps(&script, "function cadre(canvas, demandeurPixel) {");
     assert!(cadre.contains("addEventListener(\"click\""), "{cadre}");
     assert!(cadre.contains("pipette__repere"), "{cadre}");
+    assert!(cadre.contains("setProperty(\"--ratio\", "), "{cadre}");
     let resultat = corps(&script, "function pipette() {");
     for attendu in [
         "pixel.profils[rang]",
@@ -170,8 +191,13 @@ fn un_clic_sur_l_image_montre_la_couleur_du_point() {
     let image = lire("interface/comparer-image.js");
     let analyser = corps(&image, "async function analyser() {");
     assert!(
-        analyser.contains("window.PastillesImage.oublier();"),
+        analyser.contains("window.PastillesImage.reprendre();"),
         "{analyser}"
+    );
+    let ouvrir = corps(&image, "async function ouvrir() {");
+    assert!(
+        ouvrir.contains("window.PastillesImage.oublier();"),
+        "{ouvrir}"
     );
 
     let css = lire("../design-system/components.css");
@@ -215,7 +241,14 @@ fn les_textes_des_pastilles_existent_en_deux_langues() {
     let avant = demandees.len();
     demandees.retain(|c| c != "pastilles.aria.");
     assert!(demandees.len() < avant, "début de clé des rôles absent");
-    demandees.extend(["pastilles.aria.image", "pastilles.aria.imprimee"].map(String::from));
+    demandees.extend(
+        [
+            "pastilles.aria.image",
+            "pastilles.aria.imprimee",
+            "pastilles.aria.visee",
+        ]
+        .map(String::from),
+    );
     for cle in &demandees {
         assert!(!cle.ends_with('.'), "début de clé inattendu : {cle}");
         for langue in [Langue::Francais, Langue::Anglais] {
@@ -226,6 +259,7 @@ fn les_textes_des_pastilles_existent_en_deux_langues() {
         for cle in [
             "pastilles.aria.image",
             "pastilles.aria.imprimee",
+            "pastilles.aria.visee",
             "pastilles.lab",
         ] {
             let t = texte(langue, cle);

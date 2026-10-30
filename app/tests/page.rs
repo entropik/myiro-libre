@@ -2239,7 +2239,9 @@ fn corps_de<'a>(script: &'a str, entete: &str) -> &'a str {
 #[test]
 fn les_textes_de_la_section_image_existent_en_deux_langues() {
     use app::textes::{texte, Langue};
-    let script = lire("interface/comparer-image.js");
+    let image = lire("interface/comparer-image.js");
+    let script =
+        image.clone() + &lire("interface/reglages-image.js") + &lire("interface/image-agrandie.js");
     let mut demandees: Vec<String> = script
         .match_indices("\"image.")
         .filter_map(|(i, _)| script[i + 1..].split('"').next())
@@ -2315,16 +2317,18 @@ fn les_textes_de_la_section_image_existent_en_deux_langues() {
 fn le_seuil_se_regle_sans_relancer_le_calcul() {
     let script = lire("interface/comparer-image.js");
     for attendu in [
-        "type: \"range\", min: 0.5, max: 10, step: 0.5,",
         "let seuil = 2;",
         "const code = (s) => Math.round(s * 10);",
         "const INCONNU = 255;",
         "e !== INCONNU && e >= k",
         "a.pixels_comptes - a.pixels_inconnus",
         "t(\"image.inconnus.valeur\")",
+        "R.seuil(seuil, changerSeuil)",
     ] {
         assert!(script.contains(attendu), "{attendu}");
     }
+    let reglages = lire("interface/reglages-image.js");
+    assert!(reglages.contains("type: \"range\", min: 0.5, max: 10, step: 0.5,"));
     let changer = corps_de(&script, "function changerSeuil(valeur) {");
     assert!(!changer.contains("invoke("), "{changer}");
     for attendu in ["calque();", "dessinerChiffres();"] {
@@ -2352,7 +2356,9 @@ fn la_vue_comparer_porte_la_section_image() {
     assert!(script.contains("invoke(\"image_annuler\")"));
     // Les écarts se demandent par le numéro de l'analyse qui les a calculés.
     assert!(script.contains("invoke(\"image_ecarts\", { analyse: reponse.numero, index })"));
-    assert!(script.contains("const reponse = await invoke(\"image_analyser\", { sources });"));
+    assert!(script.contains(
+        "const reponse = await invoke(\"image_analyser\", { sources, compensation: pointNoir });"
+    ));
     assert!(script.contains("t(\"image.en_cours\")"));
     // Un profil intégré refusé n'est jamais remplacé sans le choix de l'opérateur.
     assert!(script.contains("invoke(\"image_traiter_comme_srvb\")"));
@@ -2411,8 +2417,10 @@ fn la_section_image_ne_garde_rien_de_perime() {
         ouvrir.contains("[resume, apercu, analyses, ecarts] = [r, null, null, []];"),
         "{ouvrir}"
     );
-    let choix = corps_de(&script, "function choixProfil() {");
-    assert!(choix.contains("choisirProfil(Number(s.value))"), "{choix}");
+    let reglages = lire("interface/reglages-image.js");
+    let choix = corps_de(&reglages, "function profil(profils, choisi, choisir) {");
+    assert!(choix.contains("choisir(Number(s.value))"), "{choix}");
+    assert!(script.contains("R.profil(profils, choisi, choisirProfil)"));
     let choisir = corps_de(&script, "function choisirProfil(rang) {");
     assert!(choisir.contains("calque();"), "{choisir}");
     assert!(!choisir.contains("dessiner()"), "{choisir}");

@@ -5,8 +5,11 @@
 // par sa couleur RVB la plus fréquente) ; la page en montre au plus 12, celles au-delà du seuil
 // courant, les plus présentes d'abord. Changer le seuil ou le profil ne relance aucune commande.
 // Pipette : un clic sur l'image demande au module Rust (`image_pixel`) la couleur du point touché et
-// sa couleur imprimée par chaque profil ; la paire s'affiche en tête de la section et suit le profil
-// et le seuil sans nouveau clic. Les couleurs à l'écran sont approchées : la page le dit.
+// sa couleur imprimée par chaque profil ; la paire s'affiche en tête de la section (et sous l'image
+// agrandie) et suit le profil et le seuil sans nouveau clic. Avec la compensation du point noir, la
+// pastille « Image » reste la couleur de l'image, « Imprimé » la couleur reproduite de la couleur
+// visée, et la paire du point cliqué dit la couleur visée. Les couleurs à l'écran sont approchées :
+// la page le dit.
 "use strict";
 
 window.PastillesImage = (() => {
@@ -25,8 +28,11 @@ window.PastillesImage = (() => {
   let rang = 0; // rang de ce profil parmi les profils analysés
   let nom = ""; // nom de ce profil
   let pixel = null; // dernier point cliqué : PixelImage, avec la taille de l'image d'analyse
+  let dernier = null; // { point, largeur, hauteur } du dernier clic, pour le redemander
+  let demandeur = () => ({}); // sources et compensation de l'analyse affichée (comparer-image.js)
   let demande = 0; // la dernière demande de la pipette l'emporte
   let racine = null; // section affichée
+  let zoneAgrandie = null; // le point cliqué, sous l'image agrandie
   let repere = null; // repère du point cliqué sur l'image affichée
 
   // L'analyse, le seuil ou le profil de la surimpression a changé (comparer-image.js).
@@ -35,23 +41,43 @@ window.PastillesImage = (() => {
     ecrire();
   }
 
-  // Une nouvelle analyse (autres profils, autre image) : le point cliqué est oublié.
+  // Une autre image : le point cliqué est oublié.
   function oublier() {
     demande++;
-    pixel = null;
+    [pixel, dernier] = [null, null];
     placer();
     ecrire();
   }
 
+  // Une nouvelle analyse (autres profils, compensation changée) : le point cliqué est redemandé.
+  function reprendre() {
+    if (!dernier) return oublier();
+    pixel = null;
+    placer();
+    ecrire();
+    demanderPixel(dernier);
+  }
+
   // ---- Pipette : le cadre de l'image, son repère et le clic ----
-  function cadre(canvas, sources) {
+  // `demandeurPixel()` donne les sources et la compensation de l'analyse affichée. Le cadre garde
+  // les proportions de l'image (--ratio) : sa hauteur suit la largeur, bornée par la mise en page.
+  function cadre(canvas, demandeurPixel) {
+    demandeur = demandeurPixel;
     const bloc = el("div", "pipette");
+    bloc.style.setProperty("--ratio", String(canvas.width / Math.max(canvas.height, 1)));
     repere = el("span", "pipette__repere");
     repere.setAttribute("aria-hidden", "true");
-    canvas.addEventListener("click", (e) => cliquer(e, canvas, sources));
+    canvas.addEventListener("click", (e) => cliquer(e, canvas));
     bloc.append(canvas, repere);
     placer();
     return bloc;
+  }
+
+  // Le point cliqué, pour l'image agrandie (image-agrandie.js).
+  function lecture() {
+    zoneAgrandie = el("div", "agrandie__lecture");
+    ecrire();
+    return zoneAgrandie;
   }
 
   // Le repère se place au centre du pixel cliqué, en fraction de l'image affichée.
@@ -63,19 +89,24 @@ window.PastillesImage = (() => {
     repere.style.setProperty("--y", String((pixel.y + 0.5) / pixel.hauteur));
   }
 
-  // Coordonnées du clic dans l'image affichée (sans son filet) ; le module Rust les ramène au pixel
-  // de l'image d'analyse. En dehors de l'image ou sur un pixel transparent : refus, rien d'affiché.
-  async function cliquer(e, canvas, sources) {
-    const n = ++demande;
+  // Coordonnées du clic dans la boîte de l'image (sans son filet) ; le module Rust les ramène au
+  // pixel de l'image d'analyse, image centrée dans sa boîte comprise (object-fit: contain). En dehors
+  // de l'image ou sur un pixel transparent : refus, rien d'affiché.
+  function cliquer(e, canvas) {
     const point = { x: e.offsetX, y: e.offsetY, largeur: canvas.clientWidth, hauteur: canvas.clientHeight };
+    demanderPixel({ point, largeur: canvas.width, hauteur: canvas.height });
+  }
+
+  async function demanderPixel(clic) {
+    const n = ++demande;
     let r = null;
     try {
-      r = await invoke("image_pixel", { sources: sources(), point });
+      r = await invoke("image_pixel", { ...demandeur(), point: clic.point });
     } catch {
       r = null;
     }
     if (n !== demande) return;
-    pixel = r && { ...r, largeur: canvas.width, hauteur: canvas.height };
+    [pixel, dernier] = [r && { ...r, largeur: clic.largeur, hauteur: clic.hauteur }, r ? clic : null];
     placer();
     ecrire();
   }
@@ -147,7 +178,18 @@ window.PastillesImage = (() => {
     const resultat = paire(p, [ecart(p), t(cle).replace("{s}", () => nombre(seuil, 1))], "paire--pipette");
     resultat.insertBefore(noms, resultat.children[1] || null);
     bloc.append(resultat);
+    if (p.visee) bloc.append(visee(p));
     return bloc;
+  }
+
+  // Avec la compensation du point noir : la couleur visée, dont l'écart à l'imprimé est mesuré, ou
+  // une ligne qui dit qu'elle est celle de l'image.
+  function visee(p) {
+    if (!(p.ecart_visee >= 0.1)) return el("p", "why", t("pastilles.pipette.visee_identique"));
+    const ligne = el("p", "paire__visee");
+    ligne.append(pastille(p.visee, p.couleur_visee, "visee"), el("span", "", t("pastilles.pipette.visee")
+      .replace("{lab}", () => lab(p.visee)).replace("{e}", () => nombre(p.ecart_visee, 1))));
+    return ligne;
   }
 
   // ---- La section, sous l'image ----
@@ -158,6 +200,7 @@ window.PastillesImage = (() => {
   }
 
   function ecrire() {
+    if (zoneAgrandie) zoneAgrandie.replaceChildren(pipette());
     if (!racine) return;
     const contenu = [el("span", "label", t("pastilles.titre")), pipette()];
     if (analyse) contenu.push(...grille());
@@ -165,5 +208,5 @@ window.PastillesImage = (() => {
     racine.replaceChildren(...contenu);
   }
 
-  return { changer, oublier, cadre, section };
+  return { changer, oublier, reprendre, cadre, lecture, section };
 })();

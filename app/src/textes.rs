@@ -704,6 +704,54 @@ const FRANCAIS: Catalogue = &[
         "Gris (C* < 5)",
     ),
     (
+        "image.point_noir",
+        "Compensation du point noir",
+    ),
+    (
+        "image.point_noir.aide",
+        "Le noir de l’image est ramené sur le noir le plus profond du papier, comme le fait le pilote d’impression en colorimétrique relatif avec compensation. Changer ce réglage relance l’analyse.",
+    ),
+    (
+        "image.legende.point_noir",
+        "Au-delà de {s}\u{202f}ΔE00 avec {profil}, avec compensation du point noir",
+    ),
+    (
+        "image.rendu.point_noir",
+        "Colorimétrique relatif, avec compensation du point noir",
+    ),
+    (
+        "image.rendu.relatif",
+        "Colorimétrique relatif, sans compensation du point noir",
+    ),
+    (
+        "image.agrandir",
+        "Agrandir",
+    ),
+    (
+        "image.agrandie.titre",
+        "Image agrandie",
+    ),
+    (
+        "image.agrandie.fermer",
+        "Fermer",
+    ),
+    (
+        "image.agrandie.aide",
+        "Cliquez sur l’image pour voir la couleur d’un point. Échap ou un clic à côté de l’image pour revenir.",
+    ),
+    (
+        "pastilles.pipette.visee",
+        "Couleur visée après compensation du point noir\u{202f}: {lab}, à {e}\u{202f}ΔE00 de la couleur de l’image",
+    ),
+    (
+        "pastilles.pipette.visee_identique",
+        "Compensation du point noir\u{202f}: la couleur visée est celle de l’image.",
+    ),
+    (
+        "pastilles.aria.visee",
+        "Couleur visée\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
         "image.pixel.hors_image",
         "Ce point est en dehors de l’image.",
     ),
@@ -2911,6 +2959,54 @@ const ANGLAIS: Catalogue = &[
     (
         "image.teinte.gris",
         "Greys (C* < 5)",
+    ),
+    (
+        "image.point_noir",
+        "Black point compensation",
+    ),
+    (
+        "image.point_noir.aide",
+        "The image black is brought onto the deepest black of the paper, as the printer driver does in relative colorimetric with compensation. Changing this setting runs the analysis again.",
+    ),
+    (
+        "image.legende.point_noir",
+        "Beyond {s} ΔE00 with {profil}, with black point compensation",
+    ),
+    (
+        "image.rendu.point_noir",
+        "Relative colorimetric, with black point compensation",
+    ),
+    (
+        "image.rendu.relatif",
+        "Relative colorimetric, without black point compensation",
+    ),
+    (
+        "image.agrandir",
+        "Enlarge",
+    ),
+    (
+        "image.agrandie.titre",
+        "Enlarged image",
+    ),
+    (
+        "image.agrandie.fermer",
+        "Close",
+    ),
+    (
+        "image.agrandie.aide",
+        "Click the image to see the colour of a point. Escape or a click beside the image to go back.",
+    ),
+    (
+        "pastilles.pipette.visee",
+        "Target colour after black point compensation: {lab}, {e} ΔE00 from the image colour",
+    ),
+    (
+        "pastilles.pipette.visee_identique",
+        "Black point compensation: the target colour is the image colour.",
+    ),
+    (
+        "pastilles.aria.visee",
+        "Target colour: L* {l}, a* {a}, b* {b}",
     ),
     (
         "image.pixel.hors_image",
