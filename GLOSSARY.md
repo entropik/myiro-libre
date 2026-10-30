@@ -268,7 +268,7 @@ Nouvelle conclusion d'une vérification avec un autre jeu de tolérances, à par
 _Éviter_ : remesure, correction de la vérification
 
 **Mire de vérification FD-9** :
-Mire de 210 couleurs créée une seule fois par myiro-libre, différentes de celles de la RGB-2520, rangée dans la bibliothèque et écrite pour FD-S2w, qui l'ouvre et en tire le fichier à imprimer.
+Mire de 210 couleurs créée une seule fois par myiro-libre, différentes de celles de la RGB-2520, rangée dans la bibliothèque avec les mires de profilage (mais sans tirage) et écrite pour FD-S2w, qui l'ouvre et en tire le fichier à imprimer.
 _Éviter_ : seconde RGB-2520, mire de contrôle
 
 **Recette de calcul** :
