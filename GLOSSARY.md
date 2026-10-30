@@ -391,6 +391,10 @@ _Éviter_ : déployer, enregistrer le profil
 Copie complète de la bibliothèque en un seul fichier, à garder en lieu sûr ou à restaurer sur un autre poste. La restaurer remplace toute la bibliothèque, après accord de l'opérateur.
 _Éviter_ : backup, archive (réservé à `Archivage/`), export (réservé à CGATS)
 
+**Bibliothèque d'essai** :
+Copie de la bibliothèque, ouverte au lancement par `--bibliotheque <dossier>` à la place de celle du poste, pour essayer une version de l'application sans toucher à la vraie ; le titre de la fenêtre le dit. Sans dossier, l'application ne démarre pas. `--demo` l'emporte sur elle.
+_Éviter_ : bibliothèque de test, bac à sable, bibliothèque de démonstration (réservé à `--demo` et ses données fictives)
+
 **État vide** :
 Ce qu'affiche une tâche qui n'a encore rien à montrer : une phrase et une seule action (« Aucune mesure. Mesurer une couleur »).
 _Éviter_ : écran blanc, placeholder
