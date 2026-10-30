@@ -147,6 +147,7 @@ fn type_erreur(erreur: &ErreurPont) -> &'static str {
         ErreurPont::ReconnaissanceDouteuse { .. } => "reconnaissance_douteuse",
         ErreurPont::MesureInvraisemblable { .. } => "mesure_invraisemblable",
         ErreurPont::PositionsPlages { .. } => "positions_plages",
+        ErreurPont::ComposantQrIntrouvable { .. } => "composant_qr_introuvable",
         ErreurPont::Sdk { .. } => "sdk",
     }
 }
@@ -206,6 +207,13 @@ fn mesurer_avec<P: Pont>(
             {
                 Ok(mesure)
             }
+            // L'installation est incomplète, pas la feuille : le problème
+            // de l'instrument, avec ses textes.
+            Reponse::Erreur {
+                erreur: ErreurPont::ComposantQrIntrouvable { chemin },
+            } => Err(ErreurFeuille::Instrument(
+                Probleme::ComposantQrIntrouvable { detail: chemin },
+            )),
             Reponse::Erreur { erreur } => Err(ErreurFeuille::Feuille(erreur)),
             autre => Err(ErreurFeuille::Instrument(inattendue(autre))),
         }

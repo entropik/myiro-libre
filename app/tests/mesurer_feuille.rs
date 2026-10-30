@@ -204,6 +204,7 @@ impl Pont for PontFeuilleSimule {
                 _ => Reponse::Mesure {
                     mesure: mesure_de(mire),
                     remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
+                    calage: None,
                 },
             },
             Requete::Fermer {} => Reponse::Ferme {},
@@ -578,6 +579,40 @@ fn une_definition_refusee_n_est_pas_une_mire_illisible() {
         .unwrap()
         .contains("2519 couleurs pour 2520 plages"));
     assert_eq!(b.plafonds(), vec![Palier::Connexion]);
+}
+
+/// Sans `zxing.dll` à côté du pont, la feuille est refusée avant d'être
+/// lancée (ticket #87) : c'est l'installation qui est incomplète, dite par
+/// le problème `composant_qr_introuvable` et ses textes ; rien n'est rangé
+/// et le pont ordinaire est relancé.
+#[test]
+fn une_feuille_refusee_faute_de_zxing_ne_range_rien_et_dit_le_composant_manquant() {
+    let mut b = banc();
+    let chemin = r"C:\Program Files\myiro-libre\zxing.dll";
+    *b.feuille.borrow_mut() = Some(Ok(Reponse::Erreur {
+        erreur: ErreurPont::ComposantQrIntrouvable {
+            chemin: chemin.into(),
+        },
+    }));
+    let echec = b.mesurer(Ok(mire())).0.unwrap_err();
+    assert_eq!(echec.cle, "probleme.composant_qr_introuvable");
+    assert_eq!(echec.detail.as_deref(), Some(chemin));
+    for suite in ["cause", "action"] {
+        let cle = format!("{}.{suite}", echec.cle);
+        assert!(app::textes::cles().any(|c| c == cle), "{cle}");
+    }
+    assert_eq!(
+        b.plafonds(),
+        vec![Palier::Connexion, Palier::Feuille, Palier::Connexion]
+    );
+    assert!(matches!(b.instrument.etat(), Etat::Detecte { .. }));
+    assert!(b
+        .ouverte
+        .detail_reglage(b.condition)
+        .unwrap()
+        .importees
+        .is_empty());
+    assert!(!b.bibliotheque().join(DOSSIER_MESURES_FD9).exists());
 }
 
 #[test]

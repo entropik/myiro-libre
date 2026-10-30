@@ -591,6 +591,9 @@ impl<P: Pont> Instrument<P> {
                     | ErreurPont::Sdk { .. } => Probleme::EtalonnageEchoue { detail },
                     ErreurPont::InstrumentPerdu {} => Probleme::InstrumentPerdu { detail },
                     ErreurPont::SessionInexploitable {} => Probleme::ConnexionImpossible { detail },
+                    ErreurPont::ComposantQrIntrouvable { chemin } => {
+                        Probleme::ComposantQrIntrouvable { detail: chemin }
+                    }
                     _ => Probleme::PontEnPanne { detail },
                 }
             }
@@ -766,6 +769,9 @@ impl<P: Pont> Instrument<P> {
                     ErreurPont::ReposIncertain { .. } => Probleme::ReposIncertain { detail },
                     ErreurPont::InstrumentPerdu {} => Probleme::InstrumentPerdu { detail },
                     ErreurPont::SessionInexploitable {} => Probleme::ConnexionImpossible { detail },
+                    ErreurPont::ComposantQrIntrouvable { chemin } => {
+                        Probleme::ComposantQrIntrouvable { detail: chemin }
+                    }
                     _ => Probleme::PontEnPanne { detail },
                 }
             }

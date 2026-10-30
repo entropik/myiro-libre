@@ -1040,6 +1040,29 @@ fn mesurer_avec(nom: &str, resultat: Result<Reponse, Panne>) -> Instrument<PontS
     instrument
 }
 
+/// `composant_qr_introuvable` rendu par un pont à l'étalonnage ou à la
+/// mesure : l'installation est incomplète, et c'est ce que l'écran dit (le
+/// problème et ses textes), jamais « pont en panne ».
+#[test]
+fn un_composant_qr_introuvable_est_dit_tel_quel() {
+    let chemin = r"C:\Program Files\myiro-libre\zxing.dll";
+    let refus = || {
+        erreur(ErreurPont::ComposantQrIntrouvable {
+            chemin: chemin.into(),
+        })
+    };
+    let etalonne = etalonner_avec("composant-qr-etalonnage", refus());
+    let mesure = mesurer_avec("composant-qr-mesure", refus());
+    for instrument in [etalonne, mesure] {
+        assert_eq!(
+            instrument.probleme(),
+            Some(&Probleme::ComposantQrIntrouvable {
+                detail: chemin.into()
+            })
+        );
+    }
+}
+
 /// Échec signalé par l'instrument, ou lecture inexploitable : l'instrument
 /// reste étalonné, l'avis s'affiche sur la feuille Mesurer et une nouvelle
 /// mesure est possible.
