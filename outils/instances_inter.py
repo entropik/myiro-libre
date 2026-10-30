@@ -30,6 +30,27 @@ CARACTERES = (
 GRAISSES = {"Regular": 400, "SemiBold": 600}
 
 
+def nommer(police: TTFont, nom: str) -> None:
+    """Noms d'une police statique : famille « Inter », style `nom`. Sans eux,
+    l'instance garde les noms de la police variable (« Inter Variable
+    Text »), et le texte des graphiques SVG ne trouve pas sa police."""
+    table = police["name"]
+    table.names = [r for r in table.names if r.nameID not in (1, 2, 3, 4, 6, 16, 17, 21, 22, 25)]
+    style = "Regular" if nom == "Regular" else nom
+    for identifiant, valeur in {
+        1: "Inter" if nom == "Regular" else f"Inter {nom}",
+        2: "Regular",
+        3: f"Inter-{nom};instance statique myiro-libre",
+        4: f"Inter {style}",
+        6: f"Inter-{nom}",
+        16: "Inter",
+        17: style,
+    }.items():
+        table.setName(valeur, identifiant, 3, 1, 0x409)
+    if "STAT" in police:
+        del police["STAT"]
+
+
 def main() -> None:
     for nom, graisse in GRAISSES.items():
         police = instancer.instantiateVariableFont(
@@ -44,6 +65,7 @@ def main() -> None:
         reduction = subset.Subsetter(options)
         reduction.populate(unicodes=subset.parse_unicodes(CARACTERES))
         reduction.subset(police)
+        nommer(police, nom)
         police.save(DESTINATION / f"Inter-{nom}.ttf")
         print(f"Inter-{nom}.ttf écrite")
 

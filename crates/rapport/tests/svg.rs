@@ -42,3 +42,37 @@ fn un_style_sans_lien_passe() {
     let svg = r##"<svg><rect style="fill:#123456;stroke:none"/></svg>"##;
     assert_eq!(nettoyer_svg(svg).as_deref(), Ok(svg));
 }
+
+/// `SVG_PAGE` : des fichiers SVG sérialisés par la page (`rapport-image.js`),
+/// séparés par `;`, passent la liste blanche et se mettent en page.
+#[test]
+#[ignore]
+fn un_svg_serialise_par_la_page_passe() {
+    let liste = std::env::var("SVG_PAGE").unwrap();
+    let mut blocs = Vec::new();
+    for fichier in liste.split(';') {
+        let svg = std::fs::read_to_string(fichier).unwrap();
+        let propre = nettoyer_svg(&svg).unwrap_or_else(|e| panic!("{fichier} : {e:?}"));
+        blocs.push(rapport::Bloc::Svg {
+            svg: propre,
+            legende: fichier.into(),
+        });
+    }
+    let document = rapport::Document {
+        langue: "fr".into(),
+        sections: vec![rapport::Section {
+            titre: "Graphiques".into(),
+            blocs,
+        }],
+        ..Default::default()
+    };
+    let pdf = rapport::pdf(&document).unwrap();
+    if let Ok(sortie) = std::env::var("APERCU_RAPPORT") {
+        std::fs::write(
+            std::path::Path::new(&sortie).join("graphiques.pdf"),
+            &pdf.octets,
+        )
+        .unwrap();
+    }
+    println!("{} pages", pdf.pages.len());
+}
