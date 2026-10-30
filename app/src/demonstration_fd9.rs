@@ -346,12 +346,14 @@ fn image(mire: &DefinitionFeuille) -> ImageFeuille {
                         as u8
                 });
                 n += 1;
-                let x0 = (z.gauche + z.pas_x * colonne) as i32 + DECALAGE[0];
-                let y0 = (z.haut + z.pas_y * rangee) as i32 + DECALAGE[1];
-                let (x0, y0) = (px(x0.max(0) as u32), px(y0.max(0) as u32));
+                // Bords arrondis chacun depuis la feuille : pas de jour entre
+                // deux plages jointives.
+                let gauche = ((z.gauche + z.pas_x * colonne) as i32 + DECALAGE[0]).max(0) as u32;
+                let haut = ((z.haut + z.pas_y * rangee) as i32 + DECALAGE[1]).max(0) as u32;
+                let (x0, y0) = (px(gauche), px(haut));
                 let (x1, y1) = (
-                    (x0 + px(z.largeur_plage)).min(largeur),
-                    (y0 + px(z.hauteur_plage)).min(hauteur),
+                    px(gauche + z.largeur_plage).min(largeur),
+                    px(haut + z.hauteur_plage).min(hauteur),
                 );
                 for y in y0..y1 {
                     for x in x0..x1 {

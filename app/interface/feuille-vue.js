@@ -67,10 +67,11 @@ window.FeuilleVue = (() => {
     const px = (centiemes) => Math.round((centiemes / 100) * PX_PAR_MM);
     liste.forEach((p, i) => {
       const [r, v, b] = mire.couleurs[i];
-      const x0 = px(p.z.gauche + p.z.pas_x * p.colonne);
-      const y0 = px(p.z.haut + p.z.pas_y * p.rangee);
-      const x1 = Math.min(l, x0 + px(p.z.largeur_plage));
-      const y1 = Math.min(h, y0 + px(p.z.hauteur_plage));
+      // Bords arrondis chacun depuis la feuille : deux plages jointives ne laissent aucun jour.
+      const [gauche, haut] = [p.z.gauche + p.z.pas_x * p.colonne, p.z.haut + p.z.pas_y * p.rangee];
+      const [x0, y0] = [px(gauche), px(haut)];
+      const x1 = Math.min(l, px(gauche + p.z.largeur_plage));
+      const y1 = Math.min(h, px(haut + p.z.hauteur_plage));
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
           const k = (y * l + x) * 4;
