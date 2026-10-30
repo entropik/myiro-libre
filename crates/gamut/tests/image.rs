@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use gamut::{
     analyser_pixels, familles_teinte, profil_essai, Annulee, ErreurIcc, ProfilEssai, ProfilIcc,
-    ProfilSource, ECART_INCONNU, FAMILLES_TEINTE, POINTS_NUAGE, SECTEURS_TEINTE,
+    ProfilSource, Rendu, ECART_INCONNU, FAMILLES_TEINTE, POINTS_NUAGE, SECTEURS_TEINTE,
 };
 
 /// L = 25 + 75·(r+g+b)/3, a = 60·(r−g), b = 60·(g−b).
@@ -69,6 +69,7 @@ fn une_image_dans_le_gamut_n_a_aucun_pixel_au_dela_du_seuil() {
         &pixels,
         &ProfilSource::srvb(),
         &sortie(Some(lineaire_inverse)),
+        Rendu::Relatif,
         &jamais,
     )
     .expect("non annulée")
@@ -87,6 +88,7 @@ fn une_image_saturee_sur_un_gamut_etroit_est_comptee_hors_gamut() {
         &pixels,
         &ProfilSource::srvb(),
         &sortie(Some(inverse_chroma_40)),
+        Rendu::Relatif,
         &jamais,
     )
     .expect("non annulée")
@@ -133,6 +135,7 @@ fn les_six_couleurs_srvb_pures_sont_rangees_dans_leur_famille() {
             &pixels,
             &ProfilSource::srvb(),
             &sortie(Some(lineaire_inverse)),
+            Rendu::Relatif,
             &jamais,
         )
         .expect("non annulée")
@@ -182,6 +185,7 @@ fn un_gris_va_dans_le_secteur_gris() {
         &pixels,
         &ProfilSource::srvb(),
         &sortie(Some(lineaire_inverse)),
+        Rendu::Relatif,
         &jamais,
     )
     .expect("non annulée")
@@ -202,6 +206,7 @@ fn les_pixels_transparents_ne_comptent_pas() {
         &pixels,
         &ProfilSource::srvb(),
         &sortie(Some(inverse_chroma_40)),
+        Rendu::Relatif,
         &jamais,
     )
     .expect("non annulée")
@@ -226,6 +231,7 @@ fn deux_pixels_de_meme_couleur_ne_sont_calcules_qu_une_fois() {
         &pixels,
         &ProfilSource::srvb(),
         &sortie(Some(lineaire_inverse)),
+        Rendu::Relatif,
         &jamais,
     )
     .expect("non annulée")
@@ -252,6 +258,7 @@ fn le_nuage_ne_depasse_pas_4000_points_et_garde_les_plus_peuples() {
         &pixels,
         &ProfilSource::srvb(),
         &sortie(Some(lineaire_inverse)),
+        Rendu::Relatif,
         &jamais,
     )
     .expect("non annulée")
@@ -265,9 +272,15 @@ fn le_nuage_ne_depasse_pas_4000_points_et_garde_les_plus_peuples() {
 fn le_nuage_est_en_colorimetrie_absolue_sur_le_blanc_du_papier() {
     let pixels = vec![[255, 255, 255, 255]; 3];
     let profil = sortie(Some(lineaire_inverse));
-    let analyse = analyser_pixels(&pixels, &ProfilSource::srvb(), &profil, &jamais)
-        .expect("non annulée")
-        .expect("table inverse lue");
+    let analyse = analyser_pixels(
+        &pixels,
+        &ProfilSource::srvb(),
+        &profil,
+        Rendu::Relatif,
+        &jamais,
+    )
+    .expect("non annulée")
+    .expect("table inverse lue");
     let blanc = profil.blanc_support();
     for k in 0..3 {
         assert!(
@@ -281,7 +294,13 @@ fn le_nuage_est_en_colorimetrie_absolue_sur_le_blanc_du_papier() {
 #[test]
 fn sans_b2a1_l_analyse_est_refusee_avec_sa_raison() {
     let pixels = vec![[10, 20, 30, 255]; 4];
-    let resultat = analyser_pixels(&pixels, &ProfilSource::srvb(), &sortie(None), &jamais);
+    let resultat = analyser_pixels(
+        &pixels,
+        &ProfilSource::srvb(),
+        &sortie(None),
+        Rendu::Relatif,
+        &jamais,
+    );
     assert!(matches!(resultat, Ok(Err(ErreurIcc::SansTableInverse))));
 }
 
@@ -292,6 +311,7 @@ fn l_analyse_s_arrete_quand_on_annule() {
         &pixels,
         &ProfilSource::srvb(),
         &sortie(Some(lineaire_inverse)),
+        Rendu::Relatif,
         &|| true,
     );
     assert!(matches!(resultat, Err(Annulee)));
@@ -310,7 +330,7 @@ fn une_image_d_un_million_de_couleurs_tient_en_dix_secondes() {
     let profil = sortie(Some(inverse_chroma_40));
     let source = ProfilSource::srvb();
     let debut = Instant::now();
-    let analyse = analyser_pixels(&pixels, &source, &profil, &jamais)
+    let analyse = analyser_pixels(&pixels, &source, &profil, Rendu::Relatif, &jamais)
         .expect("non annulée")
         .expect("table inverse lue");
     let duree = debut.elapsed();

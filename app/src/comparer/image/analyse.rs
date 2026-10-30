@@ -5,7 +5,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use gamut::{ErreurIcc, ProfilIcc, ProfilSource};
+use gamut::{ErreurIcc, ProfilIcc, ProfilSource, Rendu};
 
 use super::{
     detail_refus, AnalyseProfil, Analyses, EcartsRanges, EtatAnalyse, ImageOuverte, ANNULEE,
@@ -81,6 +81,7 @@ fn analyser_un(
     icc: &[u8],
     pixels: &[[u8; 4]],
     source: &ProfilSource,
+    rendu: Rendu,
     jeton: &AtomicBool,
 ) -> Resultat {
     let inconnue = |e: &ErreurIcc| EtatAnalyse::Inconnue {
@@ -91,7 +92,9 @@ fn analyser_un(
         Ok(p) => p,
         Err(e) => return Ok((inconnue(&e), None)),
     };
-    match gamut::analyser_pixels(pixels, source, &sortie, &|| jeton.load(Ordering::Relaxed)) {
+    match gamut::analyser_pixels(pixels, source, &sortie, rendu, &|| {
+        jeton.load(Ordering::Relaxed)
+    }) {
         Err(gamut::Annulee) => Err(()),
         Ok(Err(e)) => Ok((inconnue(&e), None)),
         Ok(Ok(mut analyse)) => {
@@ -103,7 +106,8 @@ fn analyser_un(
 
 impl BibliothequeOuverte {
     /// Écarts de l'image ouverte à chaque profil de `sources`, dans leur
-    /// ordre. Pixels et octets des profils sont copiés sous les verrous,
+    /// ordre, en `rendu` (colorimétrique relatif, avec ou sans compensation
+    /// du point noir). Pixels et octets des profils sont copiés sous les verrous,
     /// puis chaque profil est calculé à part, en parallèle. Un profil
     /// illisible ou sans table inverse est « inconnu » sans empêcher les
     /// autres. Une analyse arrêtée, ou devenue caduque (autre analyse, autre
@@ -113,6 +117,7 @@ impl BibliothequeOuverte {
         image: &ImageOuverte,
         sources: &[SourceComparaison],
         fichiers: &FichiersOuverts,
+        rendu: Rendu,
     ) -> Result<Analyses, String> {
         let depart = image.demarrer()?;
         let lus = match self.lire_sources(sources, fichiers) {
@@ -127,7 +132,9 @@ impl BibliothequeOuverte {
             let fils: Vec<_> = lus
                 .iter()
                 .map(|l| {
-                    s.spawn(|| analyser_un(&l.icc, &depart.pixels, &depart.profil, &depart.jeton))
+                    s.spawn(|| {
+                        analyser_un(&l.icc, &depart.pixels, &depart.profil, rendu, &depart.jeton)
+                    })
                 })
                 .collect();
             fils.into_iter()

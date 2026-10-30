@@ -118,7 +118,7 @@ impl Banc {
 
     fn analyser(&self, sources: &[SourceComparaison]) -> Result<Analyses, String> {
         self.ouverte
-            .analyser_image(&self.image, sources, &self.fichiers)
+            .analyser_image(&self.image, sources, &self.fichiers, gamut::Rendu::Relatif)
     }
 }
 

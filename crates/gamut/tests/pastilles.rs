@@ -5,7 +5,7 @@
 
 use gamut::{
     analyser_pixels, paire_couleur, profil_essai, AnalyseImage, ErreurIcc, ProfilEssai, ProfilIcc,
-    ProfilSource, PASTILLES, SEUIL_PASTILLES,
+    ProfilSource, Rendu, PASTILLES, SEUIL_PASTILLES,
 };
 
 /// L = 25 + 75·(r+g+b)/3, a = 60·(r−g), b = 60·(g−b).
@@ -50,6 +50,7 @@ fn analyser(pixels: &[[u8; 4]]) -> AnalyseImage {
         pixels,
         &ProfilSource::srvb(),
         &sortie(Some(inverse_chroma_40)),
+        Rendu::Relatif,
         &|| false,
     )
     .expect("non annulée")
@@ -153,6 +154,7 @@ fn la_paire_d_un_pixel_est_celle_de_sa_pastille() {
         [255, 0, 0],
         &ProfilSource::srvb(),
         &sortie(Some(inverse_chroma_40)),
+        Rendu::Relatif,
     )
     .expect("table inverse lue")
     .expect("écart calculable");
@@ -161,6 +163,11 @@ fn la_paire_d_un_pixel_est_celle_de_sa_pastille() {
 
 #[test]
 fn sans_b2a1_la_paire_d_un_pixel_est_refusee_avec_sa_raison() {
-    let resultat = paire_couleur([10, 20, 30], &ProfilSource::srvb(), &sortie(None));
+    let resultat = paire_couleur(
+        [10, 20, 30],
+        &ProfilSource::srvb(),
+        &sortie(None),
+        Rendu::Relatif,
+    );
     assert!(matches!(resultat, Err(ErreurIcc::SansTableInverse)));
 }

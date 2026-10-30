@@ -1,16 +1,17 @@
 //! Écarts des pixels d'une image à un profil de sortie (ticket #80) : pour
 //! chaque couleur distincte, couleur demandée (profil de l'image), couleur
 //! reproduite (aller-retour B2A1 puis A2B1 du profil de sortie, en
-//! colorimétrique relatif) et ΔE00 entre les deux.
+//! colorimétrique relatif) et ΔE00 entre les deux. Avec la compensation du
+//! point noir, l'aller-retour part de la couleur visée (`point_noir`).
 
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 
-use colorimetrie::delta_e00;
 use serde::Serialize;
 
-use crate::icc::{vers_lab, ErreurIcc, ProfilIcc};
-use crate::pastille::{pastilles, Pastille, Representant};
+use crate::icc::{ErreurIcc, ProfilIcc};
+use crate::pastille::{aller_retour, pastilles, Pastille, Representant};
+use crate::point_noir::{compensation, PointNoir, Rendu};
 use crate::source::ProfilSource;
 use crate::surface::couleur_ecran;
 use crate::teinte::{famille, familles_teinte, SECTEURS_TEINTE};
@@ -89,16 +90,27 @@ pub struct AnalyseImage {
 pub struct Annulee;
 
 /// Écarts des pixels RVBA d'une image d'analyse au profil `sortie`. Les
-/// couleurs demandées viennent de `source`. `annuler` est regardé toutes
-/// les 65 536 couleurs distinctes, dès la première. Un profil sans table
-/// inverse lisible rend `Ok(Err(..))` avec sa raison.
+/// couleurs demandées viennent de `source`. Avec `Rendu::PointNoir`, l'écart
+/// se mesure entre la couleur visée (couleur demandée après compensation du
+/// point noir) et sa couleur reproduite ; avec `Rendu::Relatif`, la couleur
+/// visée est la couleur demandée. `annuler` est regardé toutes les 65 536
+/// couleurs distinctes, dès la première. Un profil sans table inverse
+/// lisible rend `Ok(Err(..))` avec sa raison.
 pub fn analyser_pixels(
     pixels: &[[u8; 4]],
     source: &ProfilSource,
     sortie: &ProfilIcc,
+    rendu: Rendu,
     annuler: &dyn Fn() -> bool,
 ) -> Result<Result<AnalyseImage, ErreurIcc>, Annulee> {
-    analyser(pixels, &|rvb| source.demande(rvb), sortie, annuler)
+    let point_noir = compensation(rendu, source, sortie);
+    analyser(
+        pixels,
+        &|rvb| source.demande(rvb),
+        point_noir,
+        sortie,
+        annuler,
+    )
 }
 
 /// Analyse, la couleur demandée donnée par `demande` (les tests y glissent
@@ -106,6 +118,7 @@ pub fn analyser_pixels(
 fn analyser(
     pixels: &[[u8; 4]],
     demande: &dyn Fn([f64; 3]) -> [f64; 3],
+    point_noir: Option<PointNoir>,
     sortie: &ProfilIcc,
     annuler: &dyn Fn() -> bool,
 ) -> Result<Result<AnalyseImage, ErreurIcc>, Annulee> {
@@ -139,14 +152,10 @@ fn analyser(
         }
         let rvb = [c >> 16, c >> 8, c].map(|v| f64::from(v & 0xff) / 255.0);
         let demandee = demande(rvb);
-        let calcul = sortie.reproduire(demandee).ok().and_then(|reproduite| {
-            delta_e00(vers_lab(demandee), vers_lab(reproduite))
-                .ok()
-                .map(|ecart| (reproduite, ecart))
-        });
-        let code = calcul.map_or(ECART_INCONNU, |(_, ecart)| code_ecart(ecart));
+        let calcul = aller_retour(demandee, point_noir.as_ref(), sortie);
+        let code = calcul.map_or(ECART_INCONNU, |(_, _, ecart)| code_ecart(ecart));
         codes.insert(c, code);
-        let Some((reproduite, ecart)) = calcul else {
+        let Some((visee, reproduite, ecart)) = calcul else {
             pixels_inconnus += u64::from(n);
             continue;
         };
@@ -162,6 +171,7 @@ fn analyser(
                     rvb: c,
                     pixels: n,
                     demandee,
+                    visee: point_noir.map(|_| visee),
                     reproduite,
                     ecart,
                 },
@@ -335,7 +345,7 @@ mod tests {
             }
         };
         let pixels = [[0, 0, 0, 255], [128, 128, 128, 255], [0, 0, 0, 255]];
-        let analyse = analyser(&pixels, &demande, &sortie, &|| false)
+        let analyse = analyser(&pixels, &demande, None, &sortie, &|| false)
             .expect("non annulée")
             .expect("table inverse lue");
         assert_eq!(analyse.pixels_comptes, 3);

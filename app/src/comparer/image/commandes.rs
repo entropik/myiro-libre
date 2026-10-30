@@ -1,6 +1,7 @@
 //! Commandes de la page pour l'image ouverte : les pixels et les codes
 //! d'écart partent en binaire (`tauri::ipc::Response`), jamais en JSON.
 
+use gamut::Rendu;
 use tauri::ipc::Response;
 use tauri_plugin_dialog::DialogExt;
 
@@ -44,16 +45,27 @@ pub fn image_apercu(image: tauri::State<'_, ImageOuverte>) -> Result<Response, S
     image.apercu().map(Response::new)
 }
 
+/// Rendu demandé par la case « Compensation du point noir ».
+fn rendu(compensation: bool) -> Rendu {
+    if compensation {
+        Rendu::PointNoir
+    } else {
+        Rendu::Relatif
+    }
+}
+
 /// Analyse l'image face aux profils affichés, à la place de l'analyse en
-/// cours. Hors du fil de la fenêtre.
+/// cours, avec ou sans compensation du point noir. Hors du fil de la
+/// fenêtre.
 #[tauri::command(async)]
 pub fn image_analyser(
     ouverte: tauri::State<'_, BibliothequeOuverte>,
     image: tauri::State<'_, ImageOuverte>,
     fichiers: tauri::State<'_, FichiersOuverts>,
     sources: Vec<SourceComparaison>,
+    compensation: bool,
 ) -> Result<Analyses, String> {
-    ouverte.analyser_image(&image, &sources, &fichiers)
+    ouverte.analyser_image(&image, &sources, &fichiers, rendu(compensation))
 }
 
 /// Codes d'écart du profil `index` de l'analyse `analyse` (la dernière
@@ -77,8 +89,9 @@ pub fn image_pixel(
     fichiers: tauri::State<'_, FichiersOuverts>,
     sources: Vec<SourceComparaison>,
     point: PointAffiche,
+    compensation: bool,
 ) -> Result<PixelImage, String> {
-    ouverte.couleur_pixel(&image, &sources, &fichiers, point)
+    ouverte.couleur_pixel(&image, &sources, &fichiers, point, rendu(compensation))
 }
 
 #[tauri::command]

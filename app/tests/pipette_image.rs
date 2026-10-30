@@ -6,9 +6,9 @@ use std::io::Cursor;
 use std::path::Path;
 
 use app::colonne::{emplacement, BibliothequeOuverte};
-use app::comparer::image::{pixel_affiche, EtatPixel, ImageOuverte, PointAffiche};
+use app::comparer::image::{pixel_affiche, EtatPixel, ImageOuverte, PixelImage, PointAffiche};
 use app::comparer::{FichiersOuverts, SourceComparaison};
-use gamut::{ProfilEssai, ProfilIcc, ProfilSource};
+use gamut::{ProfilEssai, ProfilIcc, ProfilSource, Rendu};
 use image::codecs::png::PngEncoder;
 use image::{ExtendedColorType, ImageEncoder};
 use tempfile::TempDir;
@@ -91,13 +91,19 @@ impl Banc {
         }
     }
 
-    /// Clic au point (x, y) d'une image affichée en 500 × 300.
-    fn cliquer(
+    /// Clic au point (x, y) d'une image affichée en 500 × 300, en
+    /// colorimétrique relatif seul.
+    fn cliquer(&self, sources: &[SourceComparaison], x: f64, y: f64) -> Result<PixelImage, String> {
+        self.cliquer_en(sources, x, y, Rendu::Relatif)
+    }
+
+    fn cliquer_en(
         &self,
         sources: &[SourceComparaison],
         x: f64,
         y: f64,
-    ) -> Result<app::comparer::image::PixelImage, String> {
+        rendu: Rendu,
+    ) -> Result<PixelImage, String> {
         let point = PointAffiche {
             x,
             y,
@@ -105,7 +111,7 @@ impl Banc {
             hauteur: 300.0,
         };
         self.ouverte
-            .couleur_pixel(&self.image, sources, &self.fichiers, point)
+            .couleur_pixel(&self.image, sources, &self.fichiers, point, rendu)
     }
 }
 
@@ -153,6 +159,66 @@ fn un_clic_est_ramene_au_pixel_de_l_image_d_analyse() {
     assert_eq!(pixel_affiche(point(0.0, 0.0, 500.0, 300.0), 0, 3), None);
 }
 
+/// L'image est montrée entière dans sa boîte (`object-fit: contain`) : si la
+/// boîte n'a pas les proportions de l'image, l'image est centrée entre deux
+/// bandes vides, et un clic dans une bande est hors de l'image.
+#[test]
+fn un_clic_dans_une_image_centree_dans_sa_boite_tombe_sur_le_bon_pixel() {
+    // 5 × 3 dans 500 × 500 : 100 points par pixel, bandes de 100 en haut et en bas.
+    assert_eq!(pixel_affiche(point(250.0, 50.0, 500.0, 500.0), 5, 3), None);
+    assert_eq!(
+        pixel_affiche(point(250.0, 150.0, 500.0, 500.0), 5, 3),
+        Some((2, 0))
+    );
+    assert_eq!(
+        pixel_affiche(point(499.9, 399.9, 500.0, 500.0), 5, 3),
+        Some((4, 2))
+    );
+    assert_eq!(pixel_affiche(point(250.0, 400.0, 500.0, 500.0), 5, 3), None);
+    // 5 × 3 dans 800 × 300 : bandes de 150 à gauche et à droite.
+    assert_eq!(pixel_affiche(point(100.0, 10.0, 800.0, 300.0), 5, 3), None);
+    assert_eq!(
+        pixel_affiche(point(150.0, 0.0, 800.0, 300.0), 5, 3),
+        Some((0, 0))
+    );
+    assert_eq!(
+        pixel_affiche(point(649.9, 299.9, 800.0, 300.0), 5, 3),
+        Some((4, 2))
+    );
+    assert_eq!(pixel_affiche(point(650.0, 10.0, 800.0, 300.0), 5, 3), None);
+}
+
+#[test]
+fn la_compensation_du_point_noir_va_jusqu_a_la_pipette() {
+    let b = banc();
+    let avec = b.ouvrir_profil("avec.icc", &essai(Some(lineaire_inverse)));
+    b.image.ouvrir_octets("photo.png", &png()).unwrap();
+    // Pixel (0, 0) : v = 0, soit RVB (0, 255, 0).
+    let pixel = b.cliquer_en(&[avec], 10.0, 10.0, Rendu::PointNoir).unwrap();
+    let sortie = ProfilIcc::lire(&essai(Some(lineaire_inverse))).unwrap();
+    let attendue = gamut::paire_couleur(
+        [0, 255, 0],
+        &ProfilSource::srvb(),
+        &sortie,
+        Rendu::PointNoir,
+    )
+    .unwrap()
+    .unwrap();
+    assert!(attendue.visee.is_some());
+    match &pixel.profils[0] {
+        EtatPixel::Calcule { paire } => assert_eq!(*paire, attendue),
+        autre => panic!("non calculé : {autre:?}"),
+    }
+    let analyses = b
+        .ouverte
+        .analyser_image(&b.image, &[avec], &b.fichiers, Rendu::PointNoir)
+        .unwrap();
+    assert_eq!(
+        b.image.ecarts(analyses.numero, 0).unwrap()[0],
+        attendue.code
+    );
+}
+
 #[test]
 fn un_pixel_clique_a_la_paire_de_chaque_profil() {
     let b = banc();
@@ -165,9 +231,14 @@ fn un_pixel_clique_a_la_paire_de_chaque_profil() {
     assert_eq!(pixel.rvb, [37, 218, 18]);
     assert_eq!(pixel.profils.len(), 2);
     let sortie = ProfilIcc::lire(&essai(Some(lineaire_inverse))).unwrap();
-    let attendue = gamut::paire_couleur([37, 218, 18], &ProfilSource::srvb(), &sortie)
-        .unwrap()
-        .unwrap();
+    let attendue = gamut::paire_couleur(
+        [37, 218, 18],
+        &ProfilSource::srvb(),
+        &sortie,
+        Rendu::Relatif,
+    )
+    .unwrap()
+    .unwrap();
     match &pixel.profils[0] {
         EtatPixel::Calcule { paire } => assert_eq!(*paire, attendue),
         autre => panic!("profil avec B2A1 non calculé : {autre:?}"),
@@ -179,7 +250,7 @@ fn un_pixel_clique_a_la_paire_de_chaque_profil() {
     // Même code d'écart que le pixel de la surimpression.
     let analyses = b
         .ouverte
-        .analyser_image(&b.image, &[avec], &b.fichiers)
+        .analyser_image(&b.image, &[avec], &b.fichiers, Rendu::Relatif)
         .unwrap();
     assert_eq!(
         b.image.ecarts(analyses.numero, 0).unwrap()[1],
