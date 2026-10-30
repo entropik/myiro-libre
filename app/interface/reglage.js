@@ -15,7 +15,7 @@ window.Reglage = (() => {
   // Ce que parc.js prête à la vue : la résolution affichée et de quoi recharger.
   let parc = { reglage: () => null, rafraichir: async () => {}, recharger: async () => {} };
 
-  const { el, date } = window.Arbre;
+  const { el, date, reperesProfil } = window.Arbre;
 
   // Verdict : couleur, icône et mot, jamais la couleur seule.
   const TRACES = {
@@ -50,9 +50,11 @@ window.Reglage = (() => {
   // la vue sont inactifs et la raison « en cours » est dite juste à côté : un double clic ne
   // fait rien. Pendant un calcul, seule sa raison à lui est dite, sous son bouton. Un bouton
   // marqué data-inactif l'est aussi hors de toute action. « Comparer » et « Comparer à
-  // l'actuel » en font partie.
-  const BOUTONS = "[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-comparer-ouvrir], [data-comparer-actuel], [data-calcul-profil] button, [data-calcul-profil] input";
+  // l'actuel » en font partie, comme la vérification.
+  const BOUTONS = "[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-comparer-ouvrir], [data-comparer-actuel], [data-calcul-profil] button, [data-calcul-profil] input, [data-verif-ouvrir], [data-verification] button, [data-verification] input";
   const BOUTONS_MIRE = "[data-mire-ouvrir], [data-mire] button, [data-mire] input";
+  // Vérification d'un profil : section, résultat et provenance (verification.js).
+  const verification = window.Verification;
   const occupe = vue.querySelector("[data-reglage-occupe]");
   let enCours = false;
 
@@ -86,13 +88,16 @@ window.Reglage = (() => {
     vue.querySelector("[data-exporter-profil]").hidden = !actif;
     vue.querySelector("[data-comparer-ouvrir]").hidden = !actif;
     calcul.dessiner(d);
+    verification.dessiner(d);
     mire.dessiner(d);
     dessinerOccupation(!actif);
 
     const historique = vue.querySelector("[data-historique]");
     historique.replaceChildren(...d.historique.map((p) => {
       const ligne = el("div", "cle-valeur mute");
-      const quand = el("span", "", `${date(p.horodatage)} · ${t(p.actif ? "parc.historique.actuel" : "parc.historique.remplace")}`);
+      // Même repères que la liste « Profil à vérifier » : date et heure, recette, puis actuel ou
+      // remplacé ; l'état reste à droite.
+      const quand = el("span", "", [...reperesProfil(p), t(p.actif ? "parc.historique.actuel" : "parc.historique.remplace")].join(" · "));
       quand.title = p.nom;
       const etat = textes[p.libelle] ? p.libelle : "parc.etat.non_verifie";
       const droite = el("span", "", t(etat));
@@ -136,7 +141,8 @@ window.Reglage = (() => {
     return l;
   }
 
-  // Instrument d'un profil calculé : celui que déclare le fichier de la mesure source.
+  // Instrument d'un profil calculé : le modèle que déclare le fichier de la mesure source,
+  // déjà réduit par Rust (« FD-9 »), jamais son numéro de série (ticket #84).
   function instrumentDeclare(d) {
     const source = d.provenance && d.importees.find((m) => m.id === d.provenance.mesure);
     const info = source ? source.instrument : null;
@@ -159,6 +165,7 @@ window.Reglage = (() => {
       : [el("p", "", t("parc.verdict.aucun"))];
     details.replaceChildren(
       section("parc.provenance", provenance),
+      section("verif.titre", a ? verification.provenance(d, cleValeur) : [el("p", "", t("parc.verdict.aucun"))]),
       section("parc.fiche", [cleValeur("parc.fiche.reglages", t("parc.inconnue"))]),
       section("parc.windows", [cleValeur("parc.windows.etat",
         t(!a ? "parc.windows.sans_profil" : d.installe ? "installation.installe" : "parc.windows.non_installe"))]),
@@ -209,6 +216,14 @@ window.Reglage = (() => {
     annoncer,
     agir,
     occupation: () => dessinerOccupation(!(parc.reglage() || {}).actif),
+  });
+  verification.brancher({
+    reglage: () => parc.reglage(),
+    recharger: () => parc.recharger(),
+    annoncer,
+    agir,
+    occupation: () => dessinerOccupation(!(parc.reglage() || {}).actif),
+    texteErreur,
   });
 
   // La préparation d'une mire agit sur la résolution affichée, avec le même mécanisme.

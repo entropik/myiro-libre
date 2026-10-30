@@ -118,6 +118,8 @@ fn ranger_un_profil_existant_le_rend_actif_avec_le_nom_propose() {
         detail.historique[0].libelle,
         "parc.verdict.importe_a_verifier"
     );
+    // Rangé tel quel : pas de recette.
+    assert_eq!(detail.historique[0].recette, None);
     assert!(detail.mesures.is_empty() && detail.importees.is_empty());
 }
 

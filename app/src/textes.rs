@@ -35,6 +35,8 @@ type Catalogue = &'static [(&'static str, &'static str)];
 // Typographie française : apostrophe courbe (’), espace fine insécable
 // (\u{202f}) avant `: ; ! ?` et entre un nombre et son unité.
 const FRANCAIS: Catalogue = &[
+    // Titre de la fenêtre, avec `--bibliotheque <dossier>`
+    ("fenetre.titre.essai", "myiro-libre — bibliothèque d’essai"),
     // Barre du haut
     ("nav.libelle", "Tâches"),
     ("tache.mesurer", "Mesurer"),
@@ -1833,7 +1835,6 @@ const FRANCAIS: Catalogue = &[
     ("details.condition", "Condition d’impression"),
     ("details.lecture", "Lecture"),
     ("details.instruments", "Instruments"),
-    ("details.numero", "n°"),
     ("details.a_confirmer", "à confirmer"),
     ("details.valeurs", "Valeurs Lab"),
     ("details.valeurs.libelle", "Condition de mesure des valeurs"),
@@ -2216,6 +2217,203 @@ const FRANCAIS: Catalogue = &[
         "probleme.repos_incertain.action",
         "Pour mesurer de nouveau, cliquez sur «\u{202f}Réessayer\u{202f}»\u{202f}: l’instrument sera reconnecté, puis à étalonner.",
     ),
+    // Vérification d'un profil (ticket #41)
+    ("verif.titre", "Vérifier le profil"),
+    ("verif.profil", "Profil à vérifier"),
+    ("verif.mesure", "Mesure de la seconde mire"),
+    ("verif.condition", "Condition de mesure"),
+    ("verif.tolerances", "Tolérances"),
+    ("verif.fiche", "Fiche d’impression"),
+    ("verif.fiche.impression", "Impression de la seconde mire"),
+    (
+        "verif.fiche.impression.a_travers_le_profil",
+        "À travers ce profil, depuis des couleurs sRVB, en colorimétrique relatif",
+    ),
+    (
+        "verif.fiche.impression.sans_gestion",
+        "Sans gestion des couleurs",
+    ),
+    ("verif.fiche.logiciel", "Logiciel d’impression"),
+    ("verif.fiche.support_pilote", "Support choisi dans le pilote"),
+    ("verif.fiche.qualite", "Qualité et résolution"),
+    ("verif.fiche.encres", "Encres"),
+    ("verif.fiche.remarques", "Remarques"),
+    ("verif.fiche.confirmer", "Je confirme ces réglages"),
+    ("verif.lancer", "Vérifier"),
+    ("verif.en_cours", "Vérification en cours…"),
+    ("verif.avance", "Avancé"),
+    ("verif.fidelite", "Fidélité aux couleurs demandées"),
+    ("verif.prediction", "Accord avec la prédiction du profil"),
+    ("verif.hors_gamut", "Couleurs hors gamut"),
+    (
+        "verif.inconnu.sans_demande",
+        "inconnue\u{202f}: la mire a été imprimée sans gestion des couleurs, aucune couleur n’était demandée",
+    ),
+    (
+        "verif.inconnu.aucune_plage_dans_le_gamut",
+        "inconnue\u{202f}: aucune couleur demandée n’est dans le gamut du profil",
+    ),
+    ("verif.inconnu.aucune_plage", "aucune plage"),
+    ("verif.inconnu", "inconnu"),
+    ("verif.etat.non_verifie", "À vérifier"),
+    ("verif.etat.accepte", "Accepté selon {tolerances}"),
+    ("verif.etat.hors_tolerance", "Hors tolérance"),
+    ("verif.etat.incomplet", "Vérification incomplète"),
+    ("verif.critere.moyenne", "ΔE00 moyen"),
+    ("verif.critere.p95", "95\u{202f}% des plages"),
+    ("verif.critere.max", "ΔE00 maximum"),
+    ("verif.plages", "Plages"),
+    ("verif.pires", "Plages les plus éloignées"),
+    ("verif.respecte", "respecté"),
+    ("verif.depasse", "dépassé"),
+    ("verif.calculee", "calculée par ArgyllCMS"),
+    (
+        "verif.appareil.calculee",
+        "Valeur après transformation\u{202f}: calculée par ArgyllCMS avec ce profil, donc approchée.",
+    ),
+    (
+        "verif.raison.mesure",
+        "Importez dans cette résolution la mesure d’une seconde mire, imprimée à travers ce profil.",
+    ),
+    ("verif.filtre.html", "Page HTML"),
+    ("verif.filtre.xml", "Charte FD-S2w (XML)"),
+    (
+        "verif.mire_fd9",
+        "Mire de vérification FD-9\u{202f}: enregistrer pour FD-S2w",
+    ),
+    ("verif.mire_fd9.faite", "Mire de vérification enregistrée\u{202f}:"),
+    (
+        "verif.mire_fd9.aide",
+        "Ouvrez ce fichier dans FD-S2w (Fichier, Ouvrir le fichier de la charte), imprimez la mire à travers le profil, mesurez-la, puis importez l’export ici. Ses 210 couleurs sont différentes de celles de la mire RGB-2520.",
+    ),
+    ("verif.demande", "Couleur demandée"),
+    ("verif.appareil", "Valeur après transformation"),
+    ("verif.predite", "Prédiction du profil"),
+    ("verif.mesuree", "Mesure"),
+    (
+        "verif.memes_couleurs",
+        "Mêmes couleurs que la mire du profil\u{202f}: contrôle moins exigeant qu’une mire différente.",
+    ),
+    (
+        "verif.regle",
+        "Un seuil dépassé donne «\u{202f}hors tolérance\u{202f}». Sinon, un critère qui ne peut pas être calculé donne «\u{202f}vérification incomplète\u{202f}». Sinon, le profil est accepté.",
+    ),
+    ("verif.recalculer", "Recalculer avec d’autres tolérances"),
+    ("verif.exporter_rapport", "Exporter le rapport"),
+    (
+        "verif.exporter_profil",
+        "Exporter le profil avec son rapport",
+    ),
+    ("verif.historique", "Vérifications de ce profil"),
+    ("verif.derniere", "Dernière vérification"),
+    (
+        "verif.indisponible.sans_profil",
+        "Aucun profil RVB actif à vérifier dans cette résolution.",
+    ),
+    (
+        "verif.refus.fiche",
+        "La fiche d’impression n’est pas confirmée. Vérifiez les réglages, puis cochez la case de confirmation.",
+    ),
+    (
+        "verif.refus.mesure_du_profil",
+        "Cette mesure a servi à calculer le profil\u{202f}: elle ne peut pas le vérifier. Choisissez la mesure d’une seconde mire.",
+    ),
+    (
+        "verif.refus.cmjn",
+        "La vérification d’un profil CMJN n’est pas encore prévue. Choisissez un profil RVB.",
+    ),
+    (
+        "verif.refus.vide",
+        "Cette mesure ne contient aucune plage. Importez un autre fichier.",
+    ),
+    (
+        "verif.refus.tailles",
+        "ArgyllCMS n’a pas rendu une valeur pour chaque plage. Rien n’a été rangé. Relancez la vérification.",
+    ),
+    (
+        "verif.refus.valeur",
+        "Une plage de cette mesure ou une valeur du profil est inutilisable. Rien n’a été rangé. Vérifiez la mesure, puis importez-la à nouveau.",
+    ),
+    (
+        "verif.erreur.calcul",
+        "ArgyllCMS n’a pas pu interroger le profil. Rien n’a été rangé. Vérifiez le profil, puis relancez la vérification.",
+    ),
+    ("verif.tolerances.nom", "Nom du jeu"),
+    ("verif.tolerances.seuil_gamut", "Seuil hors gamut (ΔE00)"),
+    ("verif.tolerances.enregistrer", "Enregistrer"),
+    (
+        "verif.tolerances.proposition",
+        "Proposition, à confirmer\u{202f}: aucune valeur n’est imposée.",
+    ),
+    (
+        "verif.tolerances.enregistre",
+        "{jeu} enregistré\u{202f}; les vérifications déjà faites ne changent pas.",
+    ),
+    (
+        "verif.tolerances.aucun_seuil",
+        "Ce jeu n’a aucun seuil. Renseignez au moins un seuil, puis enregistrez.",
+    ),
+    (
+        "verif.tolerances.seuil_invalide",
+        "Un seuil n’est pas un nombre plus grand que zéro. Corrigez-le, puis enregistrez.",
+    ),
+    (
+        "verif.tolerances.aucun",
+        "Aucun jeu de tolérances enregistré. Enregistrez-en un avant de vérifier.",
+    ),
+    // Rapport de vérification (HTML)
+    ("rapport.titre", "Rapport de vérification du profil"),
+    ("rapport.sans_seuil", "aucun seuil"),
+    ("rapport.resultats", "Résultats"),
+    ("rapport.controles", "Contrôles un par un"),
+    ("rapport.famille", "Famille"),
+    ("rapport.critere", "Critère"),
+    ("rapport.limite", "Seuil"),
+    ("rapport.valeur", "Valeur trouvée"),
+    ("rapport.resultat", "Résultat"),
+    ("rapport.toutes_plages", "Toutes les plages"),
+    ("rapport.plage", "Plage"),
+    ("rapport.rvb", "RVB de la mire (0 à 255)"),
+    ("rapport.ecart_fidelite", "ΔE00 fidélité"),
+    ("rapport.ecart_prediction", "ΔE00 prédiction"),
+    ("rapport.ecart_gamut", "ΔE00 au gamut"),
+    ("rapport.recalcul", "Recalcul sans nouvelle mesure de la vérification du"),
+    ("rapport.date", "Date"),
+    ("rapport.profil", "Profil vérifié"),
+    ("rapport.nom", "Nom"),
+    ("rapport.empreinte", "Empreinte SHA-256"),
+    ("rapport.recette", "Recette du calcul"),
+    ("rapport.argyll", "Version d’ArgyllCMS"),
+    ("rapport.source", "Source de la mesure"),
+    ("rapport.fichier", "Fichier importé"),
+    ("rapport.instrument", "Instrument déclaré par le fichier"),
+    ("rapport.supposee", "supposée d’après la convention du fabricant"),
+    ("rapport.commandes", "Commandes ArgyllCMS"),
+    ("rapport.utc", "UTC"),
+    ("rapport.mire", "Mire mesurée"),
+    ("rapport.mire_du_profil", "la mire qui a servi à calculer le profil"),
+    ("rapport.rvb_echelle", "0 à 255"),
+    ("verif.condition.m0", "M0"),
+    ("verif.condition.m1", "M1"),
+    ("verif.condition.m2", "M2"),
+    ("verif.tolerances.nom_version", "{nom} v{version}"),
+    ("verif.tolerances.nom_propose", "Atelier"),
+    (
+        "verif.rvb_supposes",
+        "L’échelle des RVB du fichier (0 à 255) est supposée d’après la convention du logiciel qui l’a écrit.",
+    ),
+    (
+        "verif.refus.mire_desaccord",
+        "Les valeurs RVB de cette mesure ne sont pas celles de la mire pour ces plages. Vérifiez que l’export est celui de la bonne mire, puis importez-le à nouveau.",
+    ),
+    (
+        "verif.refus.mire_inconnue",
+        "Cette mesure ne correspond à aucune mire connue (mire de vérification ou mire du profil). Imprimez et mesurez la mire de vérification, puis importez son export.",
+    ),
+    (
+        "verif.erreur.mire_changee",
+        "La mire de vérification rangée ne correspond plus à celle que l’application produit pour la même version. Rien n’a été remplacé. Signalez-le aux développeurs.",
+    ),
     // Préparer une mire (ticket #33)
     (
         "mire.erreur.cote",
@@ -2327,6 +2525,8 @@ const FRANCAIS: Catalogue = &[
 ];
 
 const ANGLAIS: Catalogue = &[
+    // Window title, with `--bibliotheque <folder>`
+    ("fenetre.titre.essai", "myiro-libre — trial library"),
     // Top bar
     ("nav.libelle", "Tasks"),
     ("tache.mesurer", "Measure"),
@@ -4109,7 +4309,6 @@ const ANGLAIS: Catalogue = &[
     ("details.condition", "Printing condition"),
     ("details.lecture", "Reading"),
     ("details.instruments", "Instruments"),
-    ("details.numero", "No."),
     ("details.a_confirmer", "to be confirmed"),
     ("details.valeurs", "Lab values"),
     (
@@ -4495,6 +4694,203 @@ const ANGLAIS: Catalogue = &[
         "probleme.repos_incertain.action",
         "To measure again, click “Try again”: the instrument will be reconnected, then needs calibrating.",
     ),
+    // Profile verification (ticket #41)
+    ("verif.titre", "Verify the profile"),
+    ("verif.profil", "Profile to verify"),
+    ("verif.mesure", "Measurement of the second chart"),
+    ("verif.condition", "Measurement condition"),
+    ("verif.tolerances", "Tolerances"),
+    ("verif.fiche", "Print sheet"),
+    ("verif.fiche.impression", "How the second chart was printed"),
+    (
+        "verif.fiche.impression.a_travers_le_profil",
+        "Through this profile, from sRGB colours, relative colorimetric",
+    ),
+    (
+        "verif.fiche.impression.sans_gestion",
+        "Without colour management",
+    ),
+    ("verif.fiche.logiciel", "Printing software"),
+    ("verif.fiche.support_pilote", "Media chosen in the driver"),
+    ("verif.fiche.qualite", "Quality and resolution"),
+    ("verif.fiche.encres", "Inks"),
+    ("verif.fiche.remarques", "Notes"),
+    ("verif.fiche.confirmer", "I confirm these settings"),
+    ("verif.lancer", "Verify"),
+    ("verif.en_cours", "Verifying…"),
+    ("verif.avance", "Advanced"),
+    ("verif.fidelite", "Fidelity to the requested colours"),
+    ("verif.prediction", "Agreement with the profile’s prediction"),
+    ("verif.hors_gamut", "Out-of-gamut colours"),
+    (
+        "verif.inconnu.sans_demande",
+        "unknown: the chart was printed without colour management, no colour was requested",
+    ),
+    (
+        "verif.inconnu.aucune_plage_dans_le_gamut",
+        "unknown: no requested colour is inside the profile’s gamut",
+    ),
+    ("verif.inconnu.aucune_plage", "no patch"),
+    ("verif.inconnu", "unknown"),
+    ("verif.etat.non_verifie", "To be verified"),
+    ("verif.etat.accepte", "Accepted under {tolerances}"),
+    ("verif.etat.hors_tolerance", "Out of tolerance"),
+    ("verif.etat.incomplet", "Incomplete verification"),
+    ("verif.critere.moyenne", "Mean ΔE00"),
+    ("verif.critere.p95", "95% of patches"),
+    ("verif.critere.max", "Maximum ΔE00"),
+    ("verif.plages", "Patches"),
+    ("verif.pires", "Furthest patches"),
+    ("verif.respecte", "met"),
+    ("verif.depasse", "exceeded"),
+    ("verif.calculee", "computed by ArgyllCMS"),
+    (
+        "verif.appareil.calculee",
+        "Value after transform: computed by ArgyllCMS with this profile, hence approximate.",
+    ),
+    (
+        "verif.raison.mesure",
+        "Import into this resolution the measurement of a second chart, printed through this profile.",
+    ),
+    ("verif.filtre.html", "HTML page"),
+    ("verif.filtre.xml", "FD-S2w chart (XML)"),
+    (
+        "verif.mire_fd9",
+        "FD-9 verification chart: save for FD-S2w",
+    ),
+    ("verif.mire_fd9.faite", "Verification chart saved:"),
+    (
+        "verif.mire_fd9.aide",
+        "Open this file in FD-S2w (File, Open chart file), print the chart through the profile, measure it, then import the export here. Its 210 colours differ from those of the RGB-2520 chart.",
+    ),
+    ("verif.demande", "Requested colour"),
+    ("verif.appareil", "Value after transform"),
+    ("verif.predite", "Profile prediction"),
+    ("verif.mesuree", "Measurement"),
+    (
+        "verif.memes_couleurs",
+        "Same colours as the profile’s chart: a less demanding check than a different chart.",
+    ),
+    (
+        "verif.regle",
+        "An exceeded threshold gives “out of tolerance”. Otherwise, a criterion that cannot be computed gives “incomplete verification”. Otherwise, the profile is accepted.",
+    ),
+    ("verif.recalculer", "Recompute with other tolerances"),
+    ("verif.exporter_rapport", "Export the report"),
+    (
+        "verif.exporter_profil",
+        "Export the profile with its report",
+    ),
+    ("verif.historique", "Verifications of this profile"),
+    ("verif.derniere", "Latest verification"),
+    (
+        "verif.indisponible.sans_profil",
+        "No active RGB profile to verify in this resolution.",
+    ),
+    (
+        "verif.refus.fiche",
+        "The print sheet is not confirmed. Check the settings, then tick the confirmation box.",
+    ),
+    (
+        "verif.refus.mesure_du_profil",
+        "This measurement was used to compute the profile: it cannot verify it. Choose the measurement of a second chart.",
+    ),
+    (
+        "verif.refus.cmjn",
+        "Verifying a CMYK profile is not available yet. Choose an RGB profile.",
+    ),
+    (
+        "verif.refus.vide",
+        "This measurement contains no patch. Import another file.",
+    ),
+    (
+        "verif.refus.tailles",
+        "ArgyllCMS did not return a value for every patch. Nothing was saved. Run the verification again.",
+    ),
+    (
+        "verif.refus.valeur",
+        "A patch of this measurement or a profile value is unusable. Nothing was saved. Check the measurement, then import it again.",
+    ),
+    (
+        "verif.erreur.calcul",
+        "ArgyllCMS could not query the profile. Nothing was saved. Check the profile, then run the verification again.",
+    ),
+    ("verif.tolerances.nom", "Set name"),
+    ("verif.tolerances.seuil_gamut", "Out-of-gamut threshold (ΔE00)"),
+    ("verif.tolerances.enregistrer", "Save"),
+    (
+        "verif.tolerances.proposition",
+        "Suggestion, to be confirmed: no value is imposed.",
+    ),
+    (
+        "verif.tolerances.enregistre",
+        "{jeu} saved; verifications already made do not change.",
+    ),
+    (
+        "verif.tolerances.aucun_seuil",
+        "This set has no threshold. Fill in at least one threshold, then save.",
+    ),
+    (
+        "verif.tolerances.seuil_invalide",
+        "A threshold is not a number greater than zero. Correct it, then save.",
+    ),
+    (
+        "verif.tolerances.aucun",
+        "No tolerance set saved. Save one before verifying.",
+    ),
+    // Verification report (HTML)
+    ("rapport.titre", "Profile verification report"),
+    ("rapport.sans_seuil", "no threshold"),
+    ("rapport.resultats", "Results"),
+    ("rapport.controles", "Checks one by one"),
+    ("rapport.famille", "Family"),
+    ("rapport.critere", "Criterion"),
+    ("rapport.limite", "Threshold"),
+    ("rapport.valeur", "Value found"),
+    ("rapport.resultat", "Result"),
+    ("rapport.toutes_plages", "All patches"),
+    ("rapport.plage", "Patch"),
+    ("rapport.rvb", "Chart RGB (0 to 255)"),
+    ("rapport.ecart_fidelite", "Fidelity ΔE00"),
+    ("rapport.ecart_prediction", "Prediction ΔE00"),
+    ("rapport.ecart_gamut", "ΔE00 to gamut"),
+    ("rapport.recalcul", "Recomputed without a new measurement from the verification of"),
+    ("rapport.date", "Date"),
+    ("rapport.profil", "Verified profile"),
+    ("rapport.nom", "Name"),
+    ("rapport.empreinte", "SHA-256 fingerprint"),
+    ("rapport.recette", "Calculation recipe"),
+    ("rapport.argyll", "ArgyllCMS version"),
+    ("rapport.source", "Measurement source"),
+    ("rapport.fichier", "Imported file"),
+    ("rapport.instrument", "Instrument declared by the file"),
+    ("rapport.supposee", "assumed from the manufacturer’s convention"),
+    ("rapport.commandes", "ArgyllCMS commands"),
+    ("rapport.utc", "UTC"),
+    ("rapport.mire", "Measured chart"),
+    ("rapport.mire_du_profil", "the chart used to compute the profile"),
+    ("rapport.rvb_echelle", "0 to 255"),
+    ("verif.condition.m0", "M0"),
+    ("verif.condition.m1", "M1"),
+    ("verif.condition.m2", "M2"),
+    ("verif.tolerances.nom_version", "{nom} v{version}"),
+    ("verif.tolerances.nom_propose", "Workshop"),
+    (
+        "verif.rvb_supposes",
+        "The RGB scale of the file (0 to 255) is assumed from the convention of the software that wrote it.",
+    ),
+    (
+        "verif.refus.mire_desaccord",
+        "The RGB values of this measurement are not those of the chart for these patches. Check that the export is from the right chart, then import it again.",
+    ),
+    (
+        "verif.refus.mire_inconnue",
+        "This measurement matches no known chart (verification chart or the profile’s chart). Print and measure the verification chart, then import its export.",
+    ),
+    (
+        "verif.erreur.mire_changee",
+        "The saved verification chart no longer matches the one the application produces for the same version. Nothing was replaced. Report it to the developers.",
+    ),
     // Prepare a chart (ticket #33)
     (
         "mire.erreur.cote",
@@ -4782,6 +5178,18 @@ mod tests {
             for langue in [Langue::Francais, Langue::Anglais] {
                 assert_ne!(texte(langue, cle), cle, "{cle} manque");
             }
+        }
+    }
+
+    /// Avec `--bibliotheque <dossier>`, le titre de la fenêtre dit que la
+    /// bibliothèque ouverte est celle d'essai (#86).
+    #[test]
+    fn le_titre_de_la_fenetre_dit_la_bibliotheque_d_essai() {
+        // « test library » est à éviter (GLOSSARY.md) : on dit « trial ».
+        for (langue, mot) in [(Langue::Francais, "essai"), (Langue::Anglais, "trial")] {
+            let titre = texte(langue, "fenetre.titre.essai");
+            assert!(titre.starts_with("myiro-libre"), "{titre}");
+            assert!(titre.contains(mot), "{titre}");
         }
     }
 
