@@ -4,9 +4,9 @@
 
 **Goal:** Depuis la vue « Comparer » où une photo est ouverte (#80), l'imprimeur exporte en un clic un **rapport PDF** à remettre à son client. Le rapport est sobre, en A4 portrait, avec un **cartouche d'architecte** aux coordonnées de l'atelier. Il contient la phrase « x % de l'image est imprimable… », la photo et sa surimpression, les pastilles Image / Imprimé, les points relevés à la pipette et les parties cochées de l'accordéon. Le même moteur servira ensuite à la vérification (#41), au contrôle et aux mesures.
 
-**Architecture:** Une nouvelle crate `rapport`, indépendante de Tauri, de Windows et des ponts, décrit un document : cartouche, sections et blocs. Elle l'écrit en **HTML autonome** : un seul fichier, styles intégrés, images en `data:`, aucun script. L'application garde le réglage « Atelier » dans un fichier JSON à côté de ses données. Elle transforme ce HTML en **PDF** par un trait `ImprimantePdf` : `ImprimantePdfWebView2` charge le fichier dans une fenêtre cachée et appelle `PrintToPdf` de WebView2 ; `ImprimantePdfSimulee` sert aux tests (ADR 0005). Le rapport d'une image est construit côté Rust depuis l'image et les analyses déjà en mémoire (#80) ; la page n'envoie que les choix et les graphiques des parties cochées.
+**Architecture:** Une nouvelle crate `rapport`, indépendante de Tauri, de Windows et des ponts, décrit un document : cartouche, sections et blocs. Elle l'écrit en **source Typst** (un gabarit fixe, puis des appels dont chaque texte est un littéral de chaîne, jamais du balisage ; images en fichiers virtuels) et la **compile en PDF en mémoire**, avec **Typst employé comme bibliothèque** (décision du mainteneur du 30 octobre 2026, voir plus bas). L'application garde le réglage « Atelier » dans un fichier JSON à côté de ses données, et écrit le PDF à sa place par un temporaire renommé. Le rapport d'une image est construit côté Rust depuis l'image et les analyses déjà en mémoire (#80) ; la page n'envoie que les choix et les graphiques des parties cochées.
 
-**Tech Stack:** Rust 2021 ; Tauri 2.12 (`WebviewWindowBuilder`, `with_webview`) ; `webview2-com` 0.39 et `windows` 0.62, déjà tirées par `wry` (licences MIT / Apache-2.0) ; `image` 0.25, déjà dans `photo` ; HTML, CSS et JavaScript simples.
+**Tech Stack:** Rust 2021 ; `typst`, `typst-layout` et `typst-pdf` 0.15.1 (Apache-2.0 ; dépendances MIT, Apache-2.0, BSD, Zlib, Unicode-3.0, toutes compatibles GPL-3.0) ; police Inter en deux instances statiques (SIL OFL 1.1) ; `image` 0.25, déjà dans `photo` ; HTML, CSS et JavaScript simples pour la page.
 
 **Spec :** ticket #89 et son commentaire de décisions du 30 octobre 2026 (`gh issue view 89 --comments`). Ce plan en tient lieu : il n'y a pas de document de spécification séparé.
 
@@ -22,24 +22,26 @@ Ces questions sont posées avant la tâche 1. La recommandation est appliquée s
 4. **Ce qu'on demande au moment d'exporter.** *Recommandé* : **Client** et **Objet / référence** (facultatifs), puis la langue du rapport (celle de l'app par défaut). Rien d'autre.
 5. **Parties cochées par défaut.** *Recommandé* : la phrase de verdict, l'image (photo, surimpression, pastilles, points relevés) et les chiffres par profil sont toujours dans le rapport. Les autres parties de l'accordéon (gamut en volume, chroma par teinte, coupe, chemins, couleurs de base, écarts) sont **décochées par défaut**, et l'app retient les coches.
 
-## Choix du moteur PDF (décision du général, à relire)
+## Choix du moteur PDF (décision du mainteneur, 30 octobre 2026)
+
+Le premier choix du général (HTML imprimé par WebView2 `PrintToPdf`) est **abandonné** sur décision du mainteneur : « il faut un moteur de PDF indépendant de Windows, open source ». Rien n'en avait été livré.
 
 | Moteur | Pour | Contre |
 |---|---|---|
-| **HTML imprimé par WebView2 `PrintToPdf`** (retenu) | Même moteur que l'écran : le système graphique, les graphiques SVG et la vue 3D se reprennent tels quels. Aucune nouvelle crate : `webview2-com` et `windows` sont déjà dans `Cargo.lock` par `wry` (MIT / Apache-2.0). Aucun réseau. Le HTML autonome reste exportable seul (décision de #41). | Windows seulement, comme l'app. Il faut une fenêtre cachée et une attente asynchrone. La pagination suit les règles d'impression de Chromium (`@page`, `break-inside`). |
-| `typst` (crate, Apache-2.0) | Mise en page fine, sans navigateur. | Très grosse dépendance, polices à embarquer, deuxième langage de mise en page à maintenir, graphiques à redessiner. |
+| **Typst en bibliothèque** (`typst` + `typst-pdf`, retenu) | Libre (Apache-2.0), pur Rust, compile et se teste sous Linux comme sous Windows, 32 et 64 bits. Mise en page fine (pied de page répété, `counter(page)`, blocs insécables), PDF en mémoire en quelques dizaines de millisecondes. Graphiques SVG et images PNG repris tels quels. Aucun réseau : ni paquet Typst, ni police du système. | Grosse dépendance : environ 300 crates, construction propre d'environ 2 minutes, et l'exécutable grossit d'environ 40 Mo (données de césure, Unicode, syntaxes). Un deuxième langage de mise en page (le gabarit Typst) à maintenir. |
+| HTML imprimé par WebView2 `PrintToPdf` (écarté) | Même moteur que l'écran. | **Lié à Windows et au runtime de Microsoft** ; fenêtre cachée et attente asynchrone ; non testable sous Linux. |
 | `printpdf` (MIT) | Petit, pur Rust. | Tout se place à la main (texte, coupures de ligne, tableaux) : beaucoup de code, rendu pauvre. |
 | Impression manuelle « Microsoft Print to PDF » (choix d'origine de #41) | Rien à coder. | Trois gestes de plus pour l'imprimeur, marges et en-têtes du navigateur à régler à chaque fois. |
 
-**Confirmé :** `webview2-com` 0.39.1, `windows` 0.62.2 et `wry` 0.57 sont dans `Cargo.lock`. **Supposé, vérifié par la pointe de la tâche 3 :** une fenêtre Tauri invisible peut charger un fichier `file:///` local et le passer à `ICoreWebView2_7::PrintToPdf`, sans en-tête ni pied du navigateur, et les éléments en `position: fixed` se répètent sur chaque page imprimée. Si la pointe échoue, on s'arrête et on revient au général avant toute autre tâche.
+**Confirmé par une pointe (30 octobre 2026) :** `typst` 0.15.1 compile en bibliothèque avec un « monde » fermé (source, images et polices fournies en mémoire), en 64 et en 32 bits ; le pied de page se répète sur chaque page avec `counter(page)` et le total des pages ; un PDF A4 de deux pages sort en 20 ms (version optimisée).
 
 ## Global Constraints
 
 - Français dans le code, les commentaires et la documentation ; textes de l'interface et du rapport dans `app/src/textes.rs`, en français et en anglais. Un rapport est dans **une seule langue** (règle de #41).
 - **Aucun identifiant d'instrument** dans un rapport (ni numéro de série, ni adresse réseau, ni MAC), ni dans un fichier versionné (#84, mémoire du projet).
 - Rapport sobre, en noir et gris, sans ombre ni arrondi. Le vert fluo `#39ff14` (jeton `--couleur-hors-gamut-calque`) ne sert qu'à la surimpression. Un verdict n'est jamais dit par la couleur seule.
-- HTML du rapport : un seul fichier, styles intégrés, images en `data:`, **aucun script**, aucun lien externe, et un `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">`. Tout texte variable est échappé, et tout SVG venu de la page passe par une liste blanche.
-- A4 portrait (`@page { size: A4; margin: 15mm 15mm 32mm }` : le bas garde la place du cartouche).
+- Source Typst du rapport : chaque texte variable est un **littéral de chaîne** (jamais du balisage), aucune lecture de fichier hors des images fournies, aucun `#import` ni paquet. Tout SVG venu de la page passe par une liste blanche. Le monde Typst refuse tout autre fichier.
+- A4 portrait, marges 15 mm, marge basse de 56 mm qui porte le cartouche (hauteur fixe de 36 mm, contenu rogné) : il ne recouvre jamais le contenu.
 - Règles d'interface du mainteneur : **ne jamais faire bouger l'UI** (mises à jour sur place, emplacements réservés), toujours du padding, ascenseurs larges (`--ascenseur`), ascenseur à gauche des zones imbriquées (`.defile-gauche`). Un seul bouton principal par écran, et toute action inactive dit sa raison.
 - Fichiers de moins de 400 lignes. `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test` en 64 et 32 bits. La crate `rapport` entre dans la liste `CRATES` du job `linux` de la CI.
 - Aucun test n'ouvre de vraie fenêtre ni n'écrit hors d'un dossier temporaire. Le test qui produit un vrai PDF est `#[ignore]`.
@@ -47,8 +49,9 @@ Ces questions sont posées avant la tâche 1. La recommandation est appliquée s
 ## Review Focus
 
 1. **Logo trop grand ou piégé** (photo de 40 Mo, SVG avec script) : seuls PNG et JPEG sont acceptés, réduits à 600 px au plus et réencodés en PNG. Le SVG est refusé avec sa raison. → test `un_logo_svg_est_refuse_et_un_grand_logo_reduit` (tâche 2).
-2. **Texte saisi qui casse le HTML** (`<script>`, `&`, guillemets dans le nom du client ou de l'atelier) : il ressort échappé, et le PDF ne contient aucun script. → test `les_textes_saisis_sont_echappes` (tâche 1).
-3. **PDF de destination ouvert dans un lecteur ou dossier protégé** : refus nommé « le fichier est ouvert ou protégé », aucun fichier à moitié écrit, fichier temporaire effacé. → test `un_pdf_non_ecrit_laisse_rien_derriere` (tâche 3).
+2. **Texte saisi qui casse la source** (`<script>`, `&`, guillemets dans le nom du client ou de l'atelier) : il ressort en littéral de chaîne, jamais lu comme du balisage. → test `les_textes_saisis_sont_echappes` (tâche 1).
+3. **PDF de destination ouvert dans un lecteur ou dossier protégé** : refus nommé « le fichier est ouvert ou protégé », aucun fichier à moitié écrit, fichier temporaire effacé. → test `un_pdf_non_ecrit_laisse_rien_derriere` (tâche 3, `app/tests/pdf.rs`).
+6. **Texte saisi qui casse la source Typst** (`") #panic(`, `[`, `$`, `\`) : il reste du texte dans le PDF. → tests `les_textes_saisis_sont_echappes` (tâche 1) et `un_texte_piege_reste_du_texte` (tâche 3).
 4. **Partie cochée mais repliée** (graphique jamais dessiné) : la page la dessine hors écran le temps de l'export, sans rien déplacer dans la vue. → test `exporter_dessine_hors_ecran_les_parties_cochees_repliees` (tâche 5).
 5. **Rapport long** (4 profils, 8 points, toutes les parties cochées) : aucune coupure au milieu d'un tableau de pastilles ou d'une image (`break-inside: avoid`), et le cartouche ne recouvre jamais le contenu. → test `les_blocs_ne_se_coupent_pas_et_le_pied_garde_sa_place` (tâche 1), vérifié à l'essai d'écran (tâche 7).
 
@@ -56,9 +59,9 @@ Ces questions sont posées avant la tâche 1. La recommandation est appliquée s
 
 ## Fichiers
 
-- Create `crates/rapport/` : `Cargo.toml` (dépend de `serde` seulement), `src/lib.rs` (types publics), `src/html.rs` (écriture), `src/style.rs` (CSS d'impression), `src/svg.rs` (liste blanche), `tests/html.rs`, `tests/svg.rs`.
+- Create `crates/rapport/` : `Cargo.toml` (dépend de `typst`, `typst-layout`, `typst-pdf`), `src/lib.rs` (types publics), `src/source.rs` (écriture de la source Typst), `src/gabarit.typ` (gabarit sobre et cartouche), `src/pdf.rs` (compilation en mémoire), `src/svg.rs` (liste blanche), `fontes/` (Inter Regular et SemiBold, licence OFL), `tests/source.rs`, `tests/or/document.typ` (test d'or), `tests/pdf.rs`, `tests/svg.rs` ; `outils/instances_inter.py` (instances statiques d'Inter).
 - Create `app/src/atelier.rs` (réglage Atelier, logo, numéro de rapport), `app/tests/atelier.rs`.
-- Create `app/src/pdf.rs` (trait `ImprimantePdf`, adapters WebView2 et simulé), `app/tests/pdf.rs`.
+- Create `app/src/pdf.rs` (fabrication et écriture du PDF à sa place), `app/src/ecriture.rs` (écriture par temporaire renommé), `app/tests/pdf.rs`.
 - Create `app/src/comparer/image/rapport.rs` (document d'une image), `app/src/comparer/image/vignette.rs` (vignettes), `app/tests/rapport_image.rs`.
 - Create `app/interface/rapport-image.js` (fenêtre d'export, captures des graphiques) et `app/interface/atelier.js` (formulaire Atelier).
 - Modify `app/interface/accordeon.js` (coche « Inclure dans le rapport »), `app/interface/pastilles-image.js` (points relevés), `app/interface/comparer.js` (bouton « Rapport PDF… »), `app/interface/index.html`, `app/src/textes.rs`, `app/src/lib.rs`, `app/Cargo.toml`, `Cargo.toml`, `.github/workflows/ci.yml`, `design-system/components.css`, `design-system/ui-kit.html`, `design-system/README.md`.
@@ -66,7 +69,9 @@ Ces questions sont posées avant la tâche 1. La recommandation est appliquée s
 
 ---
 
-### Tâche 1 : Crate `rapport` — document, HTML autonome, cartouche
+### Tâche 1 : Crate `rapport` — document, source Typst, cartouche
+
+> **Révisée le 30 octobre 2026 (Typst) :** `ecrire_html` et `echapper` deviennent `source_typst` (source et fichiers d'images) et `chaine_typst` ; les tests HTML deviennent `tests/source.rs`, avec un test d'or sur la source ; `PaireCouleurs.alt` devient `titre`, visible. Le reste de la tâche est inchangé.
 
 **Files:**
 - Create: `crates/rapport/Cargo.toml`, `crates/rapport/src/{lib.rs,html.rs,style.rs,svg.rs}`
@@ -164,34 +169,33 @@ Ces questions sont posées avant la tâche 1. La recommandation est appliquée s
 - [ ] **Step 4 : Tests verts.**
 - [ ] **Step 5 : Commit** — `Atelier : coordonnées, logo et numéro de rapport, gardés à côté des données de l'application`.
 
-### Tâche 3 : Imprimer un HTML en PDF (pointe d'abord)
+### Tâche 3 : PDF par Typst en bibliothèque
+
+> **Réécrite le 30 octobre 2026** sur décision du mainteneur (moteur libre, indépendant de Windows). La pointe WebView2 n'a pas été faite ; la pointe Typst l'a remplacée.
 
 **Files:**
-- Create: `app/src/pdf.rs`
-- Modify: `app/Cargo.toml` (`[target.'cfg(windows)'.dependencies] webview2-com = "0.39"`, `windows = { version = "0.62", features = [...] }`, mêmes versions que `Cargo.lock`)
-- Test: `app/tests/pdf.rs`
+- Create: `crates/rapport/src/pdf.rs`, `crates/rapport/fontes/`, `outils/instances_inter.py`, `app/src/pdf.rs`, `app/src/ecriture.rs`
+- Modify: `crates/rapport/Cargo.toml` (`typst`, `typst-layout`, `typst-pdf` 0.15.1)
+- Test: `crates/rapport/tests/pdf.rs`, `app/tests/pdf.rs`
 
 **Interfaces:**
 - Produces :
   ```rust
-  pub trait ImprimantePdf: Send + Sync {
-      fn imprimer(&self, html: &str, sortie: &Path) -> Result<(), ErreurPdf>;
-  }
-  pub struct ImprimantePdfSimulee { pub recus: Mutex<Vec<String>>, pub echec: Option<ErreurPdf> } // écrit "%PDF-1.7 simulé\n" + garde le HTML
-  pub struct ImprimantePdfWebView2 { app: tauri::AppHandle }                                      // Windows
-  pub enum ErreurPdf { Destination(String), Moteur(String), Delai } // + fn cle()
-  pub const DELAI_PDF: Duration = Duration::from_secs(30);
+  // crate rapport
+  pub fn pdf(d: &Document) -> Result<Pdf, ErreurRapport>;
+  pub struct Pdf { pub octets: Vec<u8>, pub pages: Vec<PagePdf> }
+  pub struct PagePdf { pub largeur_mm: f64, pub hauteur_mm: f64, pub texte: String }
+  pub enum ErreurRapport { Compilation(String), Export(String) }
+  // app
+  pub fn fabriquer_pdf(d: &rapport::Document) -> Result<Vec<u8>, ErreurPdf>;
+  pub fn enregistrer_pdf(octets: &[u8], sortie: &Path) -> Result<(), ErreurPdf>; // <sortie>.tmp puis renommage
+  pub enum ErreurPdf { Destination(String), Moteur(String) } // + fn cle()
   ```
-- [ ] **Step 1 : Pointe, sans commit** (dans un test `#[ignore]` `un_vrai_pdf_sort_de_webview2`). Fenêtre `WebviewWindowBuilder` invisible, URL `WebviewUrl::External(file:///…/rapport.html)`, attente de `PageLoadEvent::Finished`. Ensuite `with_webview(|w| w.controller())` → `CoreWebView2` → `cast::<ICoreWebView2_7>()`, réglages par `ICoreWebView2Environment6::CreatePrintSettings` (portrait, 8,27 × 11,69 pouces, marges 0, `ShouldPrintBackgrounds` vrai, `ShouldPrintHeaderAndFooter` faux), puis `PrintToPdf` avec un `PrintToPdfCompletedHandler`. Noter dans le compte rendu ce qui est **confirmé** : la fenêtre cachée, `file:///`, le pied répété, `counter(page)`. **Si un point bloque, s'arrêter et le dire au général.**
-- [ ] **Step 2 : Tests qui échouent** (sans vraie fenêtre) :
-  ```rust
-  #[test] fn le_simule_ecrit_un_pdf_et_garde_le_html() {}
-  #[test] fn un_pdf_non_ecrit_laisse_rien_derriere() {}        // destination dans un dossier inexistant → Destination ; aucun .tmp restant
-  #[test] fn le_pdf_est_ecrit_a_cote_puis_renomme() {}         // écrit dans <sortie>.tmp puis renommé ; un PDF existant n'est remplacé qu'après succès
-  ```
-- [ ] **Step 3 : Implémenter** `ImprimantePdfWebView2` : HTML dans un dossier temporaire propre à l'export, effacé à la fin même en cas d'échec ; fenêtre fermée dans tous les cas ; délai de 30 s → `Delai`. Le travail se fait hors du fil de l'interface. La fenêtre est créée depuis le fil principal par `run_on_main_thread`, et le résultat revient par un canal.
-- [ ] **Step 4 : Tests verts** (64 et 32 bits), et `cargo test -p app --test pdf -- --ignored` lancé une fois à la main sur le poste. Le PDF est ouvert et regardé.
-- [ ] **Step 5 : Commit** — `PDF : un rapport HTML imprimé en PDF par WebView2, dans une fenêtre cachée`.
+- [x] **Step 1 : Pointe** (hors dépôt) : monde Typst fermé, PDF A4, pied répété avec `counter(page)`, 64 et 32 bits, licences des dépendances relevées par `cargo tree`.
+- [x] **Step 2 : Tests qui échouent** : `un_document_devient_un_pdf_a4_portrait`, `les_textes_attendus_sont_dans_le_pdf`, `un_texte_piege_reste_du_texte`, `le_cartouche_est_sur_chaque_page`, `les_blocs_ne_se_coupent_pas`, `un_rapport_court_tient_sur_une_page`, `une_image_illisible_est_refusee_sans_arret`, `un_rapport_anglais_garde_ses_libelles` ; côté app `un_pdf_non_ecrit_laisse_rien_derriere`, `le_pdf_est_ecrit_a_cote_puis_renomme`, `un_document_devient_un_pdf_ou_une_erreur_du_moteur`.
+- [x] **Step 3 : Implémenter.** Le monde Typst ne sert que la source, ses images et deux instances statiques d'Inter tirées de la police de l'application (`outils/instances_inter.py`, licence OFL copiée à côté). Une compilation à la fois, cache de Typst vidé après chacune. Le texte de chaque page est rendu avec le PDF pour les tests. `ecrire_apercu` (`#[ignore]`, variable `APERCU_RAPPORT`) écrit des PDF d'essai à regarder.
+- [x] **Step 4 : Tests verts** (64 et 32 bits), PDF d'essai regardés.
+- [x] **Step 5 : Commit** — `Rapport : PDF compilé en mémoire par Typst en bibliothèque, polices Inter embarquées`.
 
 ### Tâche 4 : Le rapport d'une image, côté Rust
 
@@ -201,7 +205,7 @@ Ces questions sont posées avant la tâche 1. La recommandation est appliquée s
 - Test: `app/tests/rapport_image.rs`
 
 **Interfaces:**
-- Consumes : `ImageOuverte` (#80 : image d'analyse, analyses par profil, `Rendu`), `gamut::{Pastille, paire_couleur}`, `ReglageAtelier`, `ImprimantePdf`, `rapport::*`.
+- Consumes : `ImageOuverte` (#80 : image d'analyse, analyses par profil, `Rendu`), `gamut::{Pastille, paire_couleur}`, `ReglageAtelier`, `pdf::{fabriquer_pdf, enregistrer_pdf}`, `rapport::*`.
 - Produces :
   ```rust
   #[derive(Deserialize)] pub struct DemandeRapportImage {
@@ -219,10 +223,10 @@ Ces questions sont posées avant la tâche 1. La recommandation est appliquée s
   pub fn vignette_surimpression(pixels: &[[u8; 4]], ecarts: &[u8], largeur: u32, seuil: f64, cote_max: u32) -> Vec<u8>; // vert #39ff14 si code ≥ round(10 × seuil) et ≠ 255
   // Commande : image_rapport_exporter(demande, filtre) → sélecteur « Enregistrer » (Documents\myiro-libre\Rapports, nom « Rapport <image> <numéro>.pdf ») → PDF → Some(nom) | None si annulé
   ```
-- [ ] **Step 1 : Tests qui échouent** (avec `ImprimantePdfSimulee` et le profil d'essai de `gamut`) :
+- [ ] **Step 1 : Tests qui échouent** (document construit sans PDF, puis PDF réel en mémoire pour le texte des pages, et le profil d'essai de `gamut`) :
   ```rust
   #[test] fn la_part_imprimable_suit_la_regle_de_la_page() {}  // 972/28 → 97,2 % ; 10 000/1 → « plus de 99,9 % » ; 1/10 000 → « moins de 0,1 % » ; inconnus cités
-  #[test] fn le_rapport_porte_verdict_vignettes_et_pastilles() {}// HTML simulé : phrase, deux <img data:>, 12 paires au plus, au-delà du seuil
+  #[test] fn le_rapport_porte_verdict_vignettes_et_pastilles() {}// phrase, deux images, 12 paires au plus, au-delà du seuil
   #[test] fn la_surimpression_suit_le_seuil_choisi() {}         // seuil 2,0 vs 5,0 : nombre de pixels verts différent, égal au compte de l'analyse
   #[test] fn les_points_releves_partent_avec_leur_paire() {}    // 2 points → 2 paires avec Lab, écart, « au-delà/en deçà »
   #[test] fn une_partie_decochee_n_apparait_pas() {}            // parties sans "comparer.coupe" → aucun titre de coupe
@@ -290,8 +294,9 @@ Ces questions sont posées avant la tâche 1. La recommandation est appliquée s
 
 - [ ] **Step 1 : ADR 0008.** Il contient :
   - le moteur choisi et les options écartées (le tableau ci-dessus) ;
-  - le HTML autonome comme source unique ;
-  - le PDF par WebView2, avec ce que la pointe a confirmé ou laissé supposé ;
+  - la source Typst comme forme unique du document (textes en littéraux de chaîne, test d'or) ;
+  - le PDF par Typst en bibliothèque, ce que la pointe a confirmé, les licences et le poids ajouté ;
+  - l'abandon de WebView2 (décision du mainteneur) ;
   - où vit l'atelier ;
   - la règle « aucun identifiant d'instrument » ;
   - le **branchement de #41** (section suivante).
@@ -318,8 +323,8 @@ Ces questions sont posées avant la tâche 1. La recommandation est appliquée s
 
 1. **Renommer** son module `app/src/rapport.rs` en `app/src/rapport_verification.rs` (avec `donnees.rs`), pour ne pas cacher la crate `rapport`.
 2. **Construire un `rapport::Document`** depuis `DonneesRapport`. Chaque titre de #41 devient une `Section`, ses couples des `Bloc::Couples`, ses tableaux de plages des `Bloc::Tableau`, et son verdict un `Bloc::Verdict` (mot et symbole ✓ ✗ ?).
-3. **Supprimer** son `STYLE` et son `echapper` au profit de ceux de la crate. Le cartouche reçoit l'atelier, le profil, les tolérances (`v N`) et la date de la vérification.
+3. **Garder** son `STYLE` et son `echapper` pour son export HTML ; le PDF prend le gabarit de la crate. Le cartouche reçoit l'atelier, le profil, les tolérances (`v N`) et la date de la vérification.
 4. **Garder ses tests** de contenu (deux familles, version des tolérances, une seule langue, aucun script, profil et rapport côte à côte, rapport d'une ancienne vérification identique à l'octet). Le dernier impose que le numéro de rapport d'une vérification soit **gardé avec elle**, et non repris à chaque export. Ce point est à trancher dans #41.
-5. **Ajouter** l'export PDF par `ImprimantePdf` à côté de l'export HTML.
+5. **Ajouter** l'export PDF par `pdf::fabriquer_pdf` et `pdf::enregistrer_pdf` à côté de son export HTML (qui reste le sien : la crate `rapport` n'écrit plus de HTML).
 
 Le contrôle d'impression et les mesures d'un profil suivront le même chemin : une fonction `document_…` qui remplit un `rapport::Document`, puis le même export.

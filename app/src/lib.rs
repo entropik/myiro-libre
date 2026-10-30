@@ -15,6 +15,7 @@ pub mod instrument;
 pub mod mesurer;
 pub mod mires;
 pub mod parc;
+pub mod pdf;
 pub mod pont;
 pub mod profiler;
 pub mod textes;
