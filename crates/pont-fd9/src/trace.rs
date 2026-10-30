@@ -10,8 +10,8 @@
 
 use crate::{plantage, Evenement, SdkFd9};
 use fd9_sys::{
-    Appareil, CleOption, CoordonneesMire, DonneesQr, ModeReconnaissance, NomApplication,
-    PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES,
+    Appareil, CleOption, CoordonneesMire, CouleursMire, DonneesQr, ModeReconnaissance,
+    NomApplication, PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES,
 };
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -177,9 +177,17 @@ impl<S: SdkFd9> SdkFd9 for SdkTrace<S> {
         c
     }
 
-    fn reconnaitre(&mut self, mode: ModeReconnaissance, coordonnees: &CoordonneesMire) -> i32 {
+    fn reconnaitre(
+        &mut self,
+        mode: ModeReconnaissance,
+        coordonnees: &CoordonneesMire,
+        couleurs: Option<&CouleursMire>,
+    ) -> i32 {
+        let teinte = couleurs.map_or("nulles".to_string(), |c| {
+            format!("RVB × {}", c.entrees().len())
+        });
         let arguments = format!(
-            "mode {}, feuille {} × {}, zones {}, plages {}, modèle {}, couleurs nulles, rangées 0, colonnes 0",
+            "mode {}, feuille {} × {}, zones {}, plages {}, modèle {}, couleurs {teinte}, rangées 0, colonnes 0",
             mode as u32,
             coordonnees.largeur,
             coordonnees.hauteur,
@@ -190,7 +198,7 @@ impl<S: SdkFd9> SdkFd9 for SdkTrace<S> {
         self.appel(
             "FD9_StartPatchRecognition",
             &arguments,
-            |s| s.reconnaitre(mode, coordonnees),
+            |s| s.reconnaitre(mode, coordonnees, couleurs),
             code,
         )
     }

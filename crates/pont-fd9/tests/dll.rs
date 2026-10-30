@@ -152,7 +152,7 @@ fn palier_connexion() {
 fn palier_prenumerisation() {
     let attente = std::env::var("FD9_ATTENTE").unwrap_or_else(|_| "120".into());
     let connecter = format!(r#"{{"cmd":"connecter_adresse","adresse":"{}"}}"#, adresse());
-    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{RGB2520}}}"#);
+    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{}}}"#, rgb2520());
     let lignes = dialoguer_avec(
         "prenumerisation",
         &["--attente-feuille", &attente],
@@ -170,8 +170,9 @@ fn palier_prenumerisation() {
     assert!(lignes[3].contains(r#""rep":"ferme""#), "{}", lignes[3]);
 }
 
-/// Palier Feuille (essai E4) : la RGB-2520 déjà mesurée le 26 octobre est
-/// glissée, mesurée, ses 2 520 plages lues. La mesure (JSON) va dans le
+/// Palier Feuille (essai E4) : la RGB-2520 est glissée, recalée sur l'image
+/// prise (COMBINE avec ses couleurs, `FD9_MIRE_RVB`), mesurée, ses 2 520
+/// plages lues. La mesure (JSON) va dans le
 /// dossier `FD9_SORTIE` (sous `Archivage/donnees/`, local, jamais versionné) ;
 /// le Lab M1 des plages 1, 42, 2479 et 2520 s'affiche pour la comparaison.
 #[test]
@@ -181,7 +182,7 @@ fn palier_feuille() {
         std::env::var("FD9_SORTIE").expect("FD9_SORTIE : dossier local de la mesure"),
     );
     let connecter = format!(r#"{{"cmd":"connecter_adresse","adresse":"{}"}}"#, adresse());
-    let mesurer = format!(r#"{{"cmd":"mesurer_feuille","mire":{RGB2520}}}"#);
+    let mesurer = format!(r#"{{"cmd":"mesurer_feuille","mire":{}}}"#, rgb2520());
     let lignes = dialoguer(
         "feuille",
         &[
@@ -212,5 +213,46 @@ fn palier_feuille() {
     assert!(lignes[3].contains(r#""rep":"ferme""#), "{}", lignes[3]);
 }
 
-/// Définition de la RGB-2520 envoyée au pont (nombres de l'étude statique).
-const RGB2520: &str = r#"{"nom":"RGB-2520 - 1P MY9","largeur":27940,"hauteur":41660,"zones":[{"gauche":1349,"haut":2300,"largeur_plage":601,"hauteur_plage":601,"pas_x":601,"pas_y":601,"rangees":60,"colonnes":42}]}"#;
+/// Définition de la RGB-2520 envoyée au pont (nombres de l'étude statique),
+/// avec la couleur RVB imprimée sur chaque plage. Les couleurs sont lues
+/// dans un CGATS local (`FD9_MIRE_RVB`, colonnes `RGB_R`, `RGB_G`, `RGB_B`
+/// en consignes de 0 à 255, par exemple l'export de MYIROtools), dans
+/// l'ordre des SAMPLE_ID : jamais versionnées ici.
+fn rgb2520() -> String {
+    let chemin = std::env::var("FD9_MIRE_RVB")
+        .expect("FD9_MIRE_RVB : CGATS local des couleurs RVB de la RGB-2520");
+    let octets = std::fs::read(&chemin).unwrap();
+    // CGATS en Latin-1 : chaque octet est un caractère.
+    let texte: String = octets.iter().map(|&o| char::from(o)).collect();
+    let lignes: Vec<&str> = texte.lines().map(str::trim).collect();
+    let format = lignes
+        .iter()
+        .position(|l| *l == "BEGIN_DATA_FORMAT")
+        .unwrap();
+    let colonnes: Vec<&str> = lignes[format + 1].split_whitespace().collect();
+    let place = |nom: &str| colonnes.iter().position(|c| *c == nom).unwrap();
+    let rvb = [place("RGB_R"), place("RGB_G"), place("RGB_B")];
+    let debut = lignes.iter().position(|l| *l == "BEGIN_DATA").unwrap() + 1;
+    let fin = lignes.iter().position(|l| *l == "END_DATA").unwrap();
+    let couleurs: Vec<String> = lignes[debut..fin]
+        .iter()
+        .filter(|l| !l.is_empty())
+        .map(|l| {
+            let champs: Vec<&str> = l.split_whitespace().collect();
+            let v = rvb.map(|i| {
+                let valeur: f64 = champs[i].parse().unwrap();
+                assert!(
+                    (0.0..=255.0).contains(&valeur) && valeur.fract() == 0.0,
+                    "{valeur}"
+                );
+                valeur as u8
+            });
+            format!("[{},{},{}]", v[0], v[1], v[2])
+        })
+        .collect();
+    assert_eq!(couleurs.len(), 2_520, "{chemin}");
+    format!(
+        r#"{{"nom":"RGB-2520 - 1P MY9","largeur":27940,"hauteur":41660,"zones":[{{"gauche":1349,"haut":2300,"largeur_plage":601,"hauteur_plage":601,"pas_x":601,"pas_y":601,"rangees":60,"colonnes":42}}],"couleurs":[{}]}}"#,
+        couleurs.join(",")
+    )
+}

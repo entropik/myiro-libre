@@ -1262,6 +1262,7 @@ fn le_pont_simule_refuse_la_mesure_d_une_feuille_comme_pont_myiro1() {
             rangees: 60,
             colonnes: 42,
         }],
+        couleurs: None,
     };
     let mut simule = PontSimule::avec_instruments(&[12345678]);
     for requete in [

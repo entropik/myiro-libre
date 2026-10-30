@@ -2,7 +2,7 @@
 //! l'entrée et la sortie standard (ADR 0005), comme `pont-myiro1`.
 //!
 //! Usage : `pont-fd9 --dll <chemin de FD9SDK.dll> [--plafond <palier>]
-//! [--attente-feuille <secondes>] [--reconnaissance coordinate] [--trace]
+//! [--attente-feuille <secondes>] [--trace]
 //! [--vidage <fichier.dmp>]`
 //! Paliers déclarés par ce pont : version (par défaut), detection, connexion,
 //! prenumerisation, feuille. Tout autre palier est refusé au lancement.
@@ -20,7 +20,6 @@
 //! main dans `DELAI_FERMETURE` (`CODE_FERMETURE_BLOQUEE` ; la réponse à
 //! `fermer` est donnée avant).
 
-use fd9_sys::ModeReconnaissance;
 use pont_fd9::dll::Fd9Dll;
 use pont_fd9::serveur::{servir, Garde, DELAI_FERMETURE};
 use pont_fd9::trace::{self, SdkTrace};
@@ -46,7 +45,6 @@ struct Arguments {
     dll: String,
     plafond: Palier,
     delais: Delais,
-    reconnaissance: ModeReconnaissance,
     trace: bool,
     vidage: Option<PathBuf>,
 }
@@ -55,7 +53,6 @@ fn arguments() -> Result<Arguments, String> {
     let mut dll = None;
     let mut plafond = Palier::Version;
     let mut delais = Delais::default();
-    let mut reconnaissance = ModeReconnaissance::Coordonnees;
     let mut trace = false;
     let mut vidage = None;
     let mut args = std::env::args().skip(1);
@@ -76,20 +73,10 @@ fn arguments() -> Result<Arguments, String> {
                 delais.feuille = Duration::from_secs(secondes);
             }
             "--reconnaissance" => {
-                reconnaissance = match args.next().unwrap_or_default().as_str() {
-                    "coordinate" => ModeReconnaissance::Coordonnees,
-                    "combine" => {
-                        return Err(
-                            "--reconnaissance : « combine » exige les couleurs des plages, que le pont ne passe pas (la DLL lirait un pointeur nul, essai E3) ; seul « coordinate » est admis"
-                                .into(),
-                        )
-                    }
-                    autre => {
-                        return Err(format!(
-                            "--reconnaissance : « {autre} » (seul « coordinate » est admis)"
-                        ))
-                    }
-                };
+                return Err(
+                    "--reconnaissance : retiré ; la reconnaissance est toujours COMBINE, avec les couleurs des plages données par la mire (essai E4 bis)"
+                        .into(),
+                )
             }
             "--trace" => trace = true,
             "--vidage" => {
@@ -106,7 +93,6 @@ fn arguments() -> Result<Arguments, String> {
         dll: dll.ok_or("--dll <chemin de FD9SDK.dll> manquant")?,
         plafond,
         delais,
-        reconnaissance,
         trace,
         vidage,
     })
@@ -149,7 +135,6 @@ fn servir_avec<S: SdkFd9>(sdk: S, arguments: &Arguments) -> ExitCode {
     let trace = arguments.trace;
     let mut session = Session::new(sdk, arguments.plafond)
         .avec_delais(arguments.delais)
-        .avec_reconnaissance(arguments.reconnaissance)
         // Au fil de l'eau : un pont arrêté de force a déjà tout écrit.
         .avec_echo_journal(move |ligne| {
             if trace {

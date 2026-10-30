@@ -27,6 +27,7 @@ fn rgb2520() -> DefinitionFeuille {
             rangees: 60,
             colonnes: 42,
         }],
+        couleurs: Some(commun::couleurs_fictives(2_520)),
     }
 }
 
@@ -59,7 +60,7 @@ fn chaque_appel_est_trace_a_l_entree_puis_au_retour() {
     let lignes = lignes.lock().unwrap();
     let entree = lignes
         .iter()
-        .position(|l| l.contains("→ FD9_StartPatchRecognition(mode 2"))
+        .position(|l| l.contains("→ FD9_StartPatchRecognition(mode 4"))
         .unwrap_or_else(|| panic!("{lignes:#?}"));
     assert!(
         lignes[entree].contains("zones 1, plages 2520"),
@@ -79,7 +80,7 @@ fn chaque_appel_est_trace_a_l_entree_puis_au_retour() {
         .interieur()
         .appels
         .iter()
-        .any(|a| a.starts_with("FD9_StartPatchRecognition mode 2")));
+        .any(|a| a.starts_with("FD9_StartPatchRecognition mode 4")));
 }
 
 #[test]
@@ -91,7 +92,7 @@ fn un_plantage_dans_la_dll_laisse_l_entree_sans_retour() {
     let coordonnees = CoordonneesMire::depuis_definition(&rgb2520()).unwrap();
 
     let plantage = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        sdk.reconnaitre(ModeReconnaissance::Combine, &coordonnees)
+        sdk.reconnaitre(ModeReconnaissance::Combine, &coordonnees, None)
     }));
 
     assert!(plantage.is_err());

@@ -8,9 +8,9 @@
 
 use crate::{evenements, Evenement, SdkFd9};
 use fd9_sys::{
-    Appareil, CleOption, CoordonneesMire, DonneesQr, GestionnaireEvenements, ImageFd9,
-    ModeReconnaissance, NomApplication, PointMesure, PositionPlage, TamponInfosSysteme,
-    DONNEES_BRUTES, EXPORTS_AUTORISES,
+    Appareil, CleOption, CoordonneesMire, CouleursMire, DonneesQr, EnTeteCouleurs,
+    GestionnaireEvenements, ImageFd9, ModeReconnaissance, NomApplication, PointMesure,
+    PositionPlage, TamponInfosSysteme, DONNEES_BRUTES, EXPORTS_AUTORISES,
 };
 use libloading::Library;
 use std::ffi::{c_char, c_void};
@@ -56,7 +56,7 @@ type FnResultatCapture =
 type FnReconnaitre = unsafe extern "system" fn(
     *const u32,
     *const CoordonneesMire,
-    *const c_void,
+    *const EnTeteCouleurs,
     *const u32,
     *const u32,
 ) -> i32;
@@ -322,20 +322,33 @@ impl SdkFd9 for Fd9Dll {
         unsafe { (self.resultat_capture)(qr_resultat, qr, taille, &mut image) }
     }
 
-    fn reconnaitre(&mut self, mode: ModeReconnaissance, coordonnees: &CoordonneesMire) -> i32 {
-        // Sans image modèle, COMBINE fait lire à la DLL les couleurs nulles
-        // dans son fil de reconnaissance (`fd9-x86` 0x100a14f1, essai E3) :
-        // l'appel n'est pas fait, quel que soit l'appelant.
-        if mode.lit_les_couleurs_sans_modele() && coordonnees.modele_present == 0 {
+    fn reconnaitre(
+        &mut self,
+        mode: ModeReconnaissance,
+        coordonnees: &CoordonneesMire,
+        couleurs: Option<&CouleursMire>,
+    ) -> i32 {
+        // Sans image modèle, COMBINE fait lire à la DLL les couleurs dans son
+        // fil de reconnaissance sans tester le pointeur (`fd9-x86`
+        // 0x100a14f1, essai E3) : sans couleurs, l'appel n'est pas fait.
+        if mode.lit_les_couleurs_sans_modele()
+            && coordonnees.modele_present == 0
+            && couleurs.is_none()
+        {
             return fd9_sys::CODE_PARAMETRE_INVALIDE;
         }
+        let tete = couleurs.map(CouleursMire::en_tete);
+        let tete_ptr = tete
+            .as_ref()
+            .map_or(std::ptr::null(), |t| t as *const EnTeteCouleurs);
         let mode = mode as u32;
         let (rangees, colonnes) = (0u32, 0u32);
         // SAFETY : mode, rangées et colonnes jamais nuls (lus sans test par
-        // la DLL), coordonnées de 0xd70 octets (0xd78 en 64 bits) recopiées
-        // avant le retour ; couleurs nulles en COORDINATE, dont le fil ne lit
-        // que les coordonnées (fiche FD9_StartPatchRecognition).
-        unsafe { (self.reconnaitre)(&mode, coordonnees, std::ptr::null(), &rangees, &colonnes) }
+        // la DLL), coordonnées de 0xd70 octets (0xd78 en 64 bits) ; en-tête
+        // des couleurs et ses entrées vivants pendant l'appel (`couleurs`
+        // emprunté) : tout est recopié avant le retour (fiche
+        // FD9_StartPatchRecognition, 0x100ad370).
+        unsafe { (self.reconnaitre)(&mode, coordonnees, tete_ptr, &rangees, &colonnes) }
     }
 
     fn resultat_reconnaissance(

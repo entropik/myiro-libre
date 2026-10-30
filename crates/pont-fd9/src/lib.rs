@@ -11,6 +11,7 @@
 
 mod arret;
 mod attente;
+pub mod calage;
 mod connexion;
 pub mod dll;
 pub mod evenements;
@@ -28,8 +29,8 @@ pub use feuille::{ECART_ADMIS, TAILLE_IMAGE_MAX};
 pub use plages::{CONDITIONS, LONGUEUR_SPECTRE};
 
 use fd9_sys::{
-    Appareil, CleOption, CoordonneesMire, DonneesQr, EtatSdk, ModeReconnaissance, NomApplication,
-    PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES,
+    Appareil, CleOption, CoordonneesMire, CouleursMire, DonneesQr, EtatSdk, ModeReconnaissance,
+    NomApplication, PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES,
 };
 use pont_protocole::{ErreurPont, Identite, Palier, RemiseAuRepos};
 use std::collections::VecDeque;
@@ -87,9 +88,15 @@ pub trait SdkFd9 {
         taille: &mut u32,
         image: Option<&mut [u8]>,
     ) -> i32;
-    /// `FD9_StartPatchRecognition`, sans couleurs, rangées et colonnes à 0 :
-    /// le type n'admet ni couleurs ni mode matrice.
-    fn reconnaitre(&mut self, mode: ModeReconnaissance, coordonnees: &CoordonneesMire) -> i32;
+    /// `FD9_StartPatchRecognition`, rangées et colonnes à 0 (le type
+    /// n'admet pas le mode matrice), avec les couleurs des plages s'il y en
+    /// a (pointeur nul sinon).
+    fn reconnaitre(
+        &mut self,
+        mode: ModeReconnaissance,
+        coordonnees: &CoordonneesMire,
+        couleurs: Option<&CouleursMire>,
+    ) -> i32;
     /// `FD9_GetPatchRecognitionResult2`, sans disposition.
     fn resultat_reconnaissance(
         &mut self,
@@ -195,7 +202,6 @@ pub struct Session<S: SdkFd9> {
     perdu: bool,
     delais: Delais,
     annulation: Annulation,
-    reconnaissance: ModeReconnaissance,
     /// Événements reçus et pas encore traités par la requête en cours.
     recus: VecDeque<Evenement>,
     /// Dernier état connu du SDK : dernier événement traité (hors avis de
@@ -227,7 +233,6 @@ impl<S: SdkFd9> Session<S> {
             perdu: false,
             delais: Delais::default(),
             annulation: Annulation::default(),
-            reconnaissance: ModeReconnaissance::Coordonnees,
             recus: VecDeque::new(),
             dernier_etat: None,
         }
@@ -236,14 +241,6 @@ impl<S: SdkFd9> Session<S> {
     /// Délais d'attente de la feuille et de chaque étape.
     pub fn avec_delais(mut self, delais: Delais) -> Self {
         self.delais = delais;
-        self
-    }
-
-    /// Mode de reconnaissance des plages : COORDINATE par défaut. COMBINE
-    /// sans couleurs ni image modèle est refusé au début de chaque feuille,
-    /// sans appel à la DLL (plantage de l'essai E3).
-    pub fn avec_reconnaissance(mut self, mode: ModeReconnaissance) -> Self {
-        self.reconnaissance = mode;
         self
     }
 

@@ -4,9 +4,10 @@
 //! (`cargo test --target i686-pc-windows-msvc`).
 
 use fd9_sys::{
-    CleOption, CompteZone, CoordonneesMire, DonneesQr, ErreurParametre, EtatSdk, GeometrieZone,
-    ImageFd9, ModeReconnaissance, PointMesure, PositionPlage, ResultatQr, CODE_RECERTIFICATION_DUE,
-    DONNEES_BRUTES, DONNEES_BRUTES_TYPE, LAB_TYPE, PLAGES_MAX, SPECTRE_TYPE, ZONES_MAX,
+    CleOption, CompteZone, CoordonneesMire, CouleurPlage, CouleursMire, DonneesQr, EnTeteCouleurs,
+    ErreurParametre, EtatSdk, GeometrieZone, ImageFd9, ModeReconnaissance, PointMesure,
+    PositionPlage, ResultatQr, CODE_RECERTIFICATION_DUE, COULEURS_RVB, DONNEES_BRUTES,
+    DONNEES_BRUTES_TYPE, LAB_TYPE, PLAGES_MAX, SPECTRE_TYPE, ZONES_MAX,
 };
 use pont_protocole::{DefinitionFeuille, ZoneFeuille};
 use std::mem::{offset_of, size_of};
@@ -77,6 +78,13 @@ fn position_plage_fait_12_octets_et_point_mesure_20() {
     assert_eq!(offset_of!(PositionPlage, rangee), 4);
     assert_eq!(offset_of!(PositionPlage, colonne), 8);
     assert_eq!(size_of::<PointMesure>(), 20);
+    // {x, y} au 1/100 mm sur le papier, puis {zone, rangée, colonne}
+    // (fd9-x86 0x1009fd20).
+    assert_eq!(offset_of!(PointMesure, x), 0);
+    assert_eq!(offset_of!(PointMesure, y), 4);
+    assert_eq!(offset_of!(PointMesure, zone), 8);
+    assert_eq!(offset_of!(PointMesure, rangee), 12);
+    assert_eq!(offset_of!(PointMesure, colonne), 16);
     // (index, -1, -1) désigne la plage n° index (fiche FD9_GetData).
     assert_eq!(
         PositionPlage::numero(41),
@@ -124,6 +132,7 @@ fn rgb2520() -> DefinitionFeuille {
             rangees: 60,
             colonnes: 42,
         }],
+        couleurs: None,
     }
 }
 
@@ -291,4 +300,67 @@ fn des_coordonnees_vides_sont_toutes_a_zero() {
     assert!(c.geometries.iter().all(|g| *g == GeometrieZone::default()));
     assert!(c.reserve.iter().all(|&o| o == 0));
     assert!(c.modele.donnees.is_null());
+}
+
+#[test]
+fn les_couleurs_ont_la_disposition_du_sdk() {
+    // Entrée de 28 octets : {zone, rangée, colonne, 4 flottants}
+    // (fd9-x86 0x100ad370, 0x100a0ec0).
+    assert_eq!(size_of::<CouleurPlage>(), 28);
+    assert_eq!(offset_of!(CouleurPlage, valeurs), 12);
+    // En-tête {type, nombre, entrées*} : 12 octets en x86, 16 en x64.
+    if cfg!(target_pointer_width = "32") {
+        assert_eq!(size_of::<EnTeteCouleurs>(), 12);
+    } else {
+        assert_eq!(size_of::<EnTeteCouleurs>(), 16);
+    }
+    assert_eq!(offset_of!(EnTeteCouleurs, nombre), 4);
+    assert_eq!(offset_of!(EnTeteCouleurs, entrees), 8);
+    assert_eq!(COULEURS_RVB, 1);
+}
+
+#[test]
+fn les_couleurs_de_la_mire_suivent_la_definition_zone_par_zone() {
+    let mut mire = rgb2520();
+    mire.zones[0].rangees = 2;
+    mire.zones[0].colonnes = 3;
+    let mut seconde = mire.zones[0].clone();
+    seconde.haut = 20_000;
+    seconde.rangees = 1;
+    seconde.colonnes = 2;
+    mire.zones.push(seconde);
+    mire.couleurs = Some((0..8).map(|n| [n as u8, 128, 255]).collect());
+
+    let couleurs = CouleursMire::depuis_definition(&mire).unwrap();
+
+    let entrees = couleurs.entrees();
+    assert_eq!(entrees.len(), 8);
+    // Zone, rangée, colonne comptées depuis 0, de gauche à droite.
+    let places: Vec<(u32, u32, u32)> = entrees
+        .iter()
+        .map(|e| (e.zone, e.rangee, e.colonne))
+        .collect();
+    assert_eq!(
+        places,
+        [
+            (0, 0, 0),
+            (0, 0, 1),
+            (0, 0, 2),
+            (0, 1, 0),
+            (0, 1, 1),
+            (0, 1, 2),
+            (1, 0, 0),
+            (1, 0, 1)
+        ]
+    );
+    // RVB de 0 à 255 en flottants, 4ᵉ valeur à zéro (fd9-x86 0x100af2b0).
+    assert_eq!(entrees[7].valeurs, [7.0, 128.0, 255.0, 0.0]);
+    let tete = couleurs.en_tete();
+    assert_eq!((tete.sorte, tete.nombre), (COULEURS_RVB, 8));
+    assert_eq!(tete.entrees, entrees.as_ptr());
+}
+
+#[test]
+fn une_mire_sans_couleurs_n_en_donne_pas() {
+    assert!(CouleursMire::depuis_definition(&rgb2520()).is_none());
 }

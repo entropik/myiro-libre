@@ -87,18 +87,21 @@ fn la_trace_et_le_vidage_sont_acceptes_au_lancement() {
 }
 
 #[test]
-fn combine_est_refuse_au_lancement() {
-    // Essai E3 : sans couleurs ni image modèle, COMBINE fait planter la DLL.
-    let sortie = pont()
-        .args(["--dll", "x.dll", "--reconnaissance", "combine"])
-        .output()
-        .unwrap();
-    assert_eq!(sortie.status.code(), Some(2));
-    let erreur = String::from_utf8_lossy(&sortie.stderr);
-    assert!(
-        erreur.contains("combine") && erreur.contains("couleurs"),
-        "{erreur}"
-    );
+fn l_option_de_reconnaissance_est_retiree() {
+    // Essai E4 bis : la reconnaissance est toujours COMBINE avec les
+    // couleurs de la mire ; aucun autre mode ne se choisit au lancement.
+    for mode in ["combine", "coordinate"] {
+        let sortie = pont()
+            .args(["--dll", "x.dll", "--reconnaissance", mode])
+            .output()
+            .unwrap();
+        assert_eq!(sortie.status.code(), Some(2), "{mode}");
+        let erreur = String::from_utf8_lossy(&sortie.stderr);
+        assert!(
+            erreur.contains("--reconnaissance") && erreur.contains("COMBINE"),
+            "{erreur}"
+        );
+    }
 }
 
 /// L'exemple est compilé par `cargo test -p pont-fd9` (toutes cibles) ou par

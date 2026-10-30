@@ -12,14 +12,31 @@
 
 use crate::arret::EchecArret;
 use crate::attente::{Attente, Fin};
+use crate::calage::{caler, DECALAGE_ADMIS};
 use crate::connexion::inattendue;
 use crate::{SdkFd9, Session};
-use fd9_sys::{CoordonneesMire, DonneesQr, EtatSdk, ResultatQr, ZONES_MAX};
+use fd9_sys::{
+    CoordonneesMire, CouleursMire, DonneesQr, EtatSdk, ModeReconnaissance, PointMesure, ResultatQr,
+    ZONES_MAX,
+};
 use pont_protocole::{DefinitionFeuille, ErreurPont, Info, LectureFeuille, Palier, RemiseAuRepos};
 
-/// Écart d'origine ou de pas admis entre la reconnaissance et la
-/// définition : 3 mm, en 1/100 mm.
+/// Écart de pas admis entre la reconnaissance et la définition, et écart
+/// d'un point de mesure à la grille une fois le décalage retiré : 3 mm, en
+/// 1/100 mm (la moitié d'une plage de la RGB-2520).
 pub const ECART_ADMIS: u32 = 300;
+
+/// Mode de reconnaissance du pont : COMBINE, avec les couleurs des plages,
+/// comme MYIROtools et FD-S2w. La DLL trouve les plages sur l'image prise et
+/// la mesure vise les points trouvés, jamais les seules coordonnées
+/// théoriques (essai E4 bis : COORDINATE a mesuré à côté des plages).
+pub const MODE_RECONNAISSANCE: ModeReconnaissance = ModeReconnaissance::Combine;
+
+/// Définition convertie pour la DLL : coordonnées et couleurs.
+pub(crate) struct MireConvertie {
+    pub coordonnees: Box<CoordonneesMire>,
+    pub couleurs: CouleursMire,
+}
 
 /// Plus grande image acceptée de `FD9_GetCaptureResult`, en octets : une
 /// taille au-delà est une réponse inattendue, pas une allocation.
@@ -48,21 +65,21 @@ impl<S: SdkFd9> Session<S> {
         &mut self,
         mire: &DefinitionFeuille,
     ) -> Result<LectureFeuille, ErreurPont> {
-        let coordonnees = self.commencer_feuille(Palier::Prenumerisation, mire)?;
-        let lecture = self.lire_feuille(mire, &coordonnees)?;
+        let convertie = self.commencer_feuille(Palier::Prenumerisation, mire)?;
+        let lecture = self.lire_feuille(mire, &convertie)?;
         self.arreter_feuille().map_err(EchecArret::erreur)?;
         self.franchir(Palier::Prenumerisation);
         Ok(lecture)
     }
 
     /// Début commun des paliers Prénumérisation et Feuille, sans appel à la
-    /// DLL : palier, connexion, définition convertie, événements anciens
-    /// écartés.
+    /// DLL : palier, connexion, définition convertie (une mire sans couleurs
+    /// est refusée : COMBINE en a besoin), événements anciens écartés.
     pub(crate) fn commencer_feuille(
         &mut self,
         palier: Palier,
         mire: &DefinitionFeuille,
-    ) -> Result<Box<CoordonneesMire>, ErreurPont> {
+    ) -> Result<MireConvertie, ErreurPont> {
         self.autoriser(palier, Some(Palier::Connexion))?;
         self.exiger_connexion()?;
         let coordonnees = CoordonneesMire::depuis_definition(mire).map_err(|e| {
@@ -70,18 +87,21 @@ impl<S: SdkFd9> Session<S> {
                 .push(format!("définition de feuille refusée : {e:?}"));
             ErreurPont::ParametreRefuse {}
         })?;
-        if self.reconnaissance.lit_les_couleurs_sans_modele() && coordonnees.modele_present == 0 {
-            // Essai E3 : la DLL lit alors un pointeur nul dans son fil de
-            // reconnaissance (fiche FD9_StartPatchRecognition).
+        let Some(couleurs) = CouleursMire::depuis_definition(mire) else {
+            // Essai E3 : sans couleurs ni image modèle, COMBINE fait lire un
+            // pointeur nul à la DLL (fiche FD9_StartPatchRecognition).
             self.journal.push(
-                "reconnaissance COMBINE refusée : ni couleurs des plages ni image modèle, la DLL lirait un pointeur nul"
+                "mire refusée : sans les couleurs de ses plages (COMBINE), la feuille ne peut pas être recalée"
                     .into(),
             );
             return Err(ErreurPont::ParametreRefuse {});
-        }
+        };
         self.vider_hors_requete();
         self.recus.clear();
-        Ok(coordonnees)
+        Ok(MireConvertie {
+            coordonnees,
+            couleurs,
+        })
     }
 
     pub(crate) fn exiger_connexion(&self) -> Result<(), ErreurPont> {
@@ -97,13 +117,14 @@ impl<S: SdkFd9> Session<S> {
     }
 
     /// Étapes communes aux paliers Prénumérisation et Feuille, jusqu'à la
-    /// reconnaissance contrôlée. Toute sortie en erreur a déjà arrêté ou
-    /// clos la feuille.
+    /// reconnaissance contrôlée et aux points de mesure calés. Toute sortie
+    /// en erreur a déjà arrêté ou clos la feuille.
     pub(crate) fn lire_feuille(
         &mut self,
         mire: &DefinitionFeuille,
-        coordonnees: &CoordonneesMire,
+        convertie: &MireConvertie,
     ) -> Result<LectureFeuille, ErreurPont> {
+        let coordonnees = &*convertie.coordonnees;
         self.attendre_feuille()?;
         let code = self.sdk.capturer();
         self.verifier("FD9_StartCapture", code)?;
@@ -117,32 +138,62 @@ impl<S: SdkFd9> Session<S> {
                 return Err(self.abandonner(raison));
             }
         }
-        let code = self.sdk.reconnaitre(self.reconnaissance, coordonnees);
+        let code =
+            self.sdk
+                .reconnaitre(MODE_RECONNAISSANCE, coordonnees, Some(&convertie.couleurs));
         self.verifier("FD9_StartPatchRecognition", code)?;
         self.attendre_ou_conclure(EtatSdk::ReconnaissanceFinie, Attente::Etape)?;
         let mut lue = CoordonneesMire::vide();
         let mut fiabilite = 0u32;
         let code = self.sdk.resultat_reconnaissance(&mut fiabilite, &mut lue);
         self.verifier("FD9_GetPatchRecognitionResult2", code)?;
-        let (conforme, ecart_max) = comparer(coordonnees, &lue);
+        let (conforme, ecart_pas) = comparer(coordonnees, &lue);
         self.journal.push(format!(
-            "reconnaissance : {} zone(s), {} plage(s), fiabilité {fiabilite}, écart {ecart_max}",
+            "reconnaissance : {} zone(s), {} plage(s), fiabilité {fiabilite:#x}, écart de pas {ecart_pas}",
             lue.zones, lue.plages
         ));
-        if !conforme || ecart_max > ECART_ADMIS {
-            let raison = ErreurPont::MireNonReconnue {
-                zones: lue.zones,
-                plages: lue.plages,
-                ecart_max,
-            };
-            return Err(self.abandonner(raison));
+        if fiabilite != 0 {
+            // Comme FD-S2w (0x41f750) : des drapeaux d'alerte, pas de mesure.
+            return Err(self.abandonner(ErreurPont::ReconnaissanceDouteuse { fiabilite }));
+        }
+        let non_reconnue = |ecart_max| ErreurPont::MireNonReconnue {
+            zones: lue.zones,
+            plages: lue.plages,
+            ecart_max,
+        };
+        if !conforme || ecart_pas > ECART_ADMIS {
+            return Err(self.abandonner(non_reconnue(ecart_pas)));
+        }
+        let mut points = vec![PointMesure::default(); lue.plages as usize];
+        let code = self.sdk.points_mesure(&mut points);
+        self.verifier("FD9_GetMeasurePoint", code)?;
+        let calage = match caler(mire, &points) {
+            Ok(calage) => calage,
+            Err(defaut) => {
+                self.journal
+                    .push(format!("points de mesure refusés : {defaut:?}"));
+                return Err(self.abandonner(ErreurPont::PositionsPlages { defaut }));
+            }
+        };
+        let (dx, dy) = calage.decalage;
+        self.journal.push(format!(
+            "points de mesure : {} point(s), décalage de la feuille ({dx} ; {dy}), écart restant {}",
+            points.len(),
+            calage.ecart_max
+        ));
+        let decalage = dx.unsigned_abs().max(dy.unsigned_abs());
+        if decalage > DECALAGE_ADMIS {
+            return Err(self.abandonner(non_reconnue(decalage)));
+        }
+        if calage.ecart_max > ECART_ADMIS {
+            return Err(self.abandonner(non_reconnue(calage.ecart_max)));
         }
         Ok(LectureFeuille {
             qr,
             zones: lue.zones,
             plages: lue.plages,
             fiabilite,
-            ecart_max,
+            ecart_max: ecart_pas.max(calage.ecart_max),
         })
     }
 
@@ -277,8 +328,10 @@ impl<S: SdkFd9> Session<S> {
     }
 }
 
-/// Zones et plages égales à la définition (comme MYIROtools), et plus grand
-/// écart d'origine ou de pas sur les zones communes.
+/// Zones et plages égales à la définition (comme MYIROtools et FD-S2w), et
+/// plus grand écart de pas sur les zones communes. L'origine n'est pas
+/// comparée : COMBINE recale la feuille, et son décalage se lit sur les
+/// points de mesure.
 fn comparer(definition: &CoordonneesMire, lue: &CoordonneesMire) -> (bool, u32) {
     let communes = (definition.zones.min(lue.zones) as usize).min(ZONES_MAX);
     let conforme = lue.zones == definition.zones
@@ -287,14 +340,7 @@ fn comparer(definition: &CoordonneesMire, lue: &CoordonneesMire) -> (bool, u32) 
     let ecart_max = definition.geometries[..communes]
         .iter()
         .zip(&lue.geometries[..communes])
-        .flat_map(|(d, l)| {
-            [
-                d.gauche.abs_diff(l.gauche),
-                d.haut.abs_diff(l.haut),
-                d.pas_x.abs_diff(l.pas_x),
-                d.pas_y.abs_diff(l.pas_y),
-            ]
-        })
+        .flat_map(|(d, l)| [d.pas_x.abs_diff(l.pas_x), d.pas_y.abs_diff(l.pas_y)])
         .max()
         .unwrap_or(0);
     (conforme, ecart_max)

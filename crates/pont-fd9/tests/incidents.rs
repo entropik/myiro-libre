@@ -25,6 +25,7 @@ fn six_plages() -> DefinitionFeuille {
             rangees: 2,
             colonnes: 3,
         }],
+        couleurs: Some(commun::couleurs_fictives(2_520)),
     }
 }
 

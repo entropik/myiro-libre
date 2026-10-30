@@ -13,8 +13,7 @@ use crate::connexion::inattendue;
 use crate::feuille::erreur_sdk;
 use crate::{SdkFd9, Session};
 use fd9_sys::{
-    CleOption, EtatSdk, PointMesure, PositionPlage, DONNEES_BRUTES, DONNEES_BRUTES_TYPE, LAB_TYPE,
-    SPECTRE_TYPE,
+    CleOption, EtatSdk, PositionPlage, DONNEES_BRUTES, DONNEES_BRUTES_TYPE, LAB_TYPE, SPECTRE_TYPE,
 };
 use pont_protocole::{
     Calcul, ConditionMesure, ConditionsCalcul, DefautPositions, DefinitionFeuille, DonneesBrutes,
@@ -65,11 +64,8 @@ impl<S: SdkFd9> Session<S> {
     }
 
     fn mesurer_toute_la_feuille(&mut self, mire: &DefinitionFeuille) -> Result<Mesure, ErreurPont> {
-        let coordonnees = self.commencer_feuille(Palier::Feuille, mire)?;
-        let lecture = self.lire_feuille(mire, &coordonnees)?;
-        let mut points = vec![PointMesure([0; 20]); lecture.plages as usize];
-        let code = self.sdk.points_mesure(&mut points);
-        self.verifier("FD9_GetMeasurePoint", code)?;
+        let convertie = self.commencer_feuille(Palier::Feuille, mire)?;
+        let lecture = self.lire_feuille(mire, &convertie)?;
         let code = self.sdk.mesurer();
         self.verifier("FD9_StartMeasurement2", code)?;
         self.attendre_ou_conclure(EtatSdk::MesureFinie, Attente::Mesure)?;
@@ -80,6 +76,7 @@ impl<S: SdkFd9> Session<S> {
         let brutes = lues?;
         sortie?;
         let plages = self.calculer_plages(&brutes)?;
+        self.controler_vraisemblance(mire, &plages)?;
         let provenance = self.provenance(lecture)?;
         let mesure = Mesure::new(plages, provenance).map_err(|e| inattendue(e.to_string()))?;
         self.franchir(Palier::Feuille);
@@ -173,6 +170,37 @@ impl<S: SdkFd9> Session<S> {
             plages.push(Plage::new(spectres, brutes, labs).map_err(invalide)?);
         }
         Ok(plages)
+    }
+
+    /// Les L* M1 mesurés doivent suivre la clarté des couleurs imprimées
+    /// (`calage::CORRELATION_MIN`) : une mesure à côté des plages ne les
+    /// suit pas (essai E4 bis). Rien n'est rendu sinon.
+    fn controler_vraisemblance(
+        &mut self,
+        mire: &DefinitionFeuille,
+        plages: &[Plage],
+    ) -> Result<(), ErreurPont> {
+        let Some(couleurs) = &mire.couleurs else {
+            return Ok(());
+        };
+        let l_m1: Vec<f32> = plages.iter().map(|p| p.lab()[1].valeurs()[0]).collect();
+        let Some(r) = crate::calage::correlation(&l_m1, couleurs) else {
+            self.journal.push(
+                "vraisemblance non contrôlée : clartés imprimées ou mesurées toutes égales".into(),
+            );
+            return Ok(());
+        };
+        let correlation_milliemes = (r * 1000.0).round() as i32;
+        self.journal.push(format!(
+            "vraisemblance : corrélation des L* M1 à la clarté imprimée {correlation_milliemes} pour mille (minimum {})",
+            (crate::calage::CORRELATION_MIN * 1000.0) as i32
+        ));
+        if r < crate::calage::CORRELATION_MIN {
+            return Err(ErreurPont::MesureInvraisemblable {
+                correlation_milliemes,
+            });
+        }
+        Ok(())
     }
 
     fn regler(&mut self, cle: CleOption, valeur: u32) -> Result<(), ErreurPont> {

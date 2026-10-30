@@ -276,7 +276,18 @@ fn annuler_est_sans_effet_et_sans_appel_a_la_dll() {
 }
 
 /// Définition de la RGB-2520, telle que l'application l'enverra.
-const MIRE: &str = r#"{"nom":"RGB-2520 - 1P MY9","largeur":27940,"hauteur":41660,"zones":[{"gauche":1349,"haut":2300,"largeur_plage":601,"hauteur_plage":601,"pas_x":601,"pas_y":601,"rangees":60,"colonnes":42}]}"#;
+/// Définition JSON d'une RGB-2520 de `rangees` × `colonnes` plages, avec
+/// ses couleurs fictives.
+fn mire(rangees: u32, colonnes: u32) -> String {
+    let couleurs: Vec<String> = commun::couleurs_fictives((rangees * colonnes) as usize)
+        .iter()
+        .map(|[r, v, b]| format!("[{r},{v},{b}]"))
+        .collect();
+    format!(
+        r#"{{"nom":"RGB-2520 - 1P MY9","largeur":27940,"hauteur":41660,"zones":[{{"gauche":1349,"haut":2300,"largeur_plage":601,"hauteur_plage":601,"pas_x":601,"pas_y":601,"rangees":{rangees},"colonnes":{colonnes}}}],"couleurs":[{}]}}"#,
+        couleurs.join(",")
+    )
+}
 
 #[test]
 fn la_feuille_est_refusee_au_plafond_connexion_sans_appel_a_la_dll() {
@@ -286,8 +297,8 @@ fn la_feuille_est_refusee_au_plafond_connexion_sans_appel_a_la_dll() {
         &[
             r#"{"cmd":"version"}"#,
             r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#,
-            &format!(r#"{{"cmd":"prenumeriser","mire":{MIRE}}}"#),
-            &format!(r#"{{"cmd":"mesurer_feuille","mire":{MIRE}}}"#),
+            &format!(r#"{{"cmd":"prenumeriser","mire":{}}}"#, mire(60, 42)),
+            &format!(r#"{{"cmd":"mesurer_feuille","mire":{}}}"#, mire(60, 42)),
         ],
     );
     let refus = |demande| Reponse::Erreur {
@@ -324,10 +335,7 @@ fn la_feuille_est_refusee_au_plafond_connexion_sans_appel_a_la_dll() {
 #[test]
 fn mesurer_feuille_rend_la_mesure_de_toutes_les_plages() {
     // 2 rangées × 3 colonnes : six plages.
-    let mire = MIRE.replace(
-        r#""rangees":60,"colonnes":42"#,
-        r#""rangees":2,"colonnes":3"#,
-    );
+    let mire = mire(2, 3);
     let (lignes, _) = dialoguer(
         Fd9Simule::avec_une_rgb2520(),
         Palier::Feuille,
@@ -355,7 +363,7 @@ fn mesurer_feuille_rend_la_mesure_de_toutes_les_plages() {
 
 #[test]
 fn prenumeriser_rend_la_lecture_de_la_feuille() {
-    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{MIRE}}}"#);
+    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{}}}"#, mire(60, 42));
     let (lignes, session) = dialoguer(
         Fd9Simule::avec_une_rgb2520(),
         Palier::Prenumerisation,
@@ -373,7 +381,7 @@ fn prenumeriser_rend_la_lecture_de_la_feuille() {
                 qr: Info::Confirmee("RGB-2520 - 1P MY9*1+".into()),
                 zones: 1,
                 plages: 2_520,
-                fiabilite: 97,
+                fiabilite: 0,
                 ecart_max: 0,
             }
         }
@@ -390,7 +398,7 @@ fn prenumeriser_rend_la_lecture_de_la_feuille() {
 fn annuler_interrompt_l_attente_de_la_feuille() {
     let mut sdk = Fd9Simule::avec_une_rgb2520();
     sdk.a_venir.clear();
-    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{MIRE}}}"#);
+    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{}}}"#, mire(60, 42));
     let (lignes, session) = dialoguer(
         sdk,
         Palier::Prenumerisation,
@@ -430,7 +438,7 @@ fn annuler_interrompt_l_attente_de_la_feuille() {
 fn la_fin_de_l_entree_abandonne_une_feuille_pas_encore_glissee() {
     let mut sdk = Fd9Simule::avec_une_rgb2520();
     sdk.a_venir.clear();
-    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{MIRE}}}"#);
+    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{}}}"#, mire(60, 42));
     let (lignes, session) = dialoguer(
         sdk,
         Palier::Prenumerisation,

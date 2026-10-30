@@ -4,9 +4,9 @@
 #![allow(dead_code)]
 
 use fd9_sys::{
-    Appareil, CleOption, CoordonneesMire, DonneesQr, EtatSdk, ModeReconnaissance, NomApplication,
-    PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES, DONNEES_BRUTES_TYPE, LAB_TYPE,
-    SPECTRE_TYPE,
+    Appareil, CleOption, CoordonneesMire, CouleursMire, DonneesQr, EtatSdk, ModeReconnaissance,
+    NomApplication, PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES,
+    DONNEES_BRUTES_TYPE, LAB_TYPE, SPECTRE_TYPE,
 };
 use pont_fd9::{Annulation, Evenement, SdkFd9};
 use std::collections::{HashMap, VecDeque};
@@ -66,6 +66,17 @@ pub struct Fd9Simule {
     pub annuler_pendant_l_attente: Option<Annulation>,
     /// Points demandés par `FD9_GetMeasurePoint` : les plages à mesurer.
     pub points: u32,
+    /// Couleurs reçues par `FD9_StartPatchRecognition` (RVB de 0 à 255),
+    /// dans l'ordre de la définition.
+    pub couleurs_recues: Option<Vec<[f32; 4]>>,
+    /// Décalage de la feuille vu sur l'image (x, y), en 1/100 mm : les
+    /// points de mesure sont au centre théorique des plages, décalés d'autant.
+    pub decalage_points: (i32, i32),
+    /// Point rendu à la place du vrai, par rang de point.
+    pub points_forces: HashMap<usize, PointMesure>,
+    /// Les L* calculés sont ceux de la plage voisine de gauche : une mesure
+    /// faite à côté des plages (essai E4 bis).
+    pub lab_decale: bool,
     /// Réglages de `FD9_SetOption`, par clé (rangés dans la DLL).
     pub options: [u32; 4],
     /// Ordre de lecture : n° de la plage de la mire (ordre de la définition,
@@ -162,7 +173,7 @@ impl Fd9Simule {
             qr_appareil: *b"FD-9",
             qr_texte: "RGB-2520 - 1P MY9*1+".into(),
             taille_image: 1_000,
-            fiabilite: 97,
+            fiabilite: 0,
             spectre_longueur: 36,
             reactions: [
                 // Essai E3 : 0 (main pas encore obtenue), puis 1.
@@ -456,22 +467,34 @@ impl SdkFd9 for Fd9Simule {
         code
     }
 
-    fn reconnaitre(&mut self, mode: ModeReconnaissance, coordonnees: &CoordonneesMire) -> i32 {
+    fn reconnaitre(
+        &mut self,
+        mode: ModeReconnaissance,
+        coordonnees: &CoordonneesMire,
+        couleurs: Option<&CouleursMire>,
+    ) -> i32 {
         // Essai E3 : en COMBINE, sans image modèle, le fil de reconnaissance
         // de la DLL lit les couleurs sans tester le pointeur nul
         // (`fd9-x86` 0x100a14f1) et le pont s'arrête net. Le simulé fait de
         // même, en plus bruyant.
         assert!(
-            mode != ModeReconnaissance::Combine || coordonnees.modele_present != 0,
+            mode != ModeReconnaissance::Combine
+                || coordonnees.modele_present != 0
+                || couleurs.is_some(),
             "FD9SDK lirait le pointeur nul des couleurs (COMBINE sans modèle ni couleurs)"
         );
+        let teinte = couleurs.map_or("nulles".to_string(), |c| {
+            format!("RVB {}", c.entrees().len())
+        });
         let detail = format!(
-            "mode {}, couleurs nulles, rangées 0, colonnes 0",
+            "mode {}, couleurs {teinte}, rangées 0, colonnes 0",
             mode as u32
         );
         let code = self.appel_admis("FD9_StartPatchRecognition", detail, |e| e == 5 || e == 7);
         if code == 0 {
             self.coordonnees_recues = Some(Box::new(coordonnees.clone()));
+            self.couleurs_recues =
+                couleurs.map(|c| c.entrees().iter().map(|e| e.valeurs).collect());
         }
         code
     }
@@ -528,10 +551,40 @@ impl SdkFd9 for Fd9Simule {
 
     fn points_mesure(&mut self, points: &mut [PointMesure]) -> i32 {
         let code = self.appel_admis("FD9_GetMeasurePoint", points.len().to_string(), |e| e == 7);
-        if code == 0 {
-            self.points = points.len() as u32;
+        if code != 0 {
+            return code;
         }
-        code
+        self.points = points.len() as u32;
+        // Centre théorique de chaque plage, dans l'ordre de la définition,
+        // décalé comme la feuille vue sur l'image.
+        if let Some(c) = &self.coordonnees_recues {
+            let mut centres = Vec::new();
+            for zone in 0..c.zones as usize {
+                let (n, g) = (c.compte_zones[zone], c.geometries[zone]);
+                for rangee in 0..n.rangees {
+                    for colonne in 0..n.colonnes {
+                        centres.push(PointMesure {
+                            x: (g.gauche + g.pas_x * colonne + g.largeur / 2) as i32
+                                + self.decalage_points.0,
+                            y: (g.haut + g.pas_y * rangee + g.hauteur / 2) as i32
+                                + self.decalage_points.1,
+                            zone: zone as u32,
+                            rangee,
+                            colonne,
+                        });
+                    }
+                }
+            }
+            for (i, point) in points.iter_mut().enumerate() {
+                if let Some(centre) = centres.get(i) {
+                    *point = *centre;
+                }
+                if let Some(force) = self.points_forces.get(&i) {
+                    *point = *force;
+                }
+            }
+        }
+        0
     }
 
     fn mesurer(&mut self) -> i32 {
@@ -608,14 +661,43 @@ impl SdkFd9 for Fd9Simule {
                 0
             }
             LAB_TYPE if sortie.len() >= 3 => {
+                // L* : clarté de la couleur imprimée sur la plage (celle de la
+                // voisine si la mesure est décalée), 50 sans couleurs ;
+                // a* : la condition posée ; b* : illuminant × 10 + observateur.
+                let numero = (brutes[0] - 1_000.0) as usize;
+                let lue = if self.lab_decale {
+                    numero.saturating_sub(1)
+                } else {
+                    numero
+                };
+                let clarte = self
+                    .couleurs_recues
+                    .as_ref()
+                    .and_then(|c| c.get(lue))
+                    .map_or(50.0, |v| {
+                        pont_fd9::calage::clarte_attendue([v[0] as u8, v[1] as u8, v[2] as u8])
+                            as f32
+                    });
                 sortie[..3].copy_from_slice(&[
-                    (illuminant * 10 + observateur) as f32,
+                    clarte,
                     condition as f32,
-                    brutes[0],
+                    (illuminant * 10 + observateur) as f32,
                 ]);
                 0
             }
             _ => 1005,
         }
     }
+}
+
+/// Couleurs RVB fictives de `n` plages, sans ordre de clarté entre voisines
+/// (générateur congruentiel fixe) : une mesure décalée d'une plage ne les
+/// suit plus.
+pub fn couleurs_fictives(n: usize) -> Vec<[u8; 3]> {
+    let mut graine: u32 = 2_520;
+    let mut suivant = move || {
+        graine = graine.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+        (graine >> 16) as u8
+    };
+    (0..n).map(|_| [suivant(), suivant(), suivant()]).collect()
 }

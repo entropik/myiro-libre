@@ -25,6 +25,13 @@ pub struct DefinitionFeuille {
     pub hauteur: u32,
     /// 1 à 50 zones, dans l'ordre de lecture des plages.
     pub zones: Vec<ZoneFeuille>,
+    /// Couleur RVB (0 à 255) imprimée sur chaque plage, dans l'ordre de la
+    /// définition (zone par zone, rangée par rangée, de gauche à droite) :
+    /// une par plage. Le FD-9 en a besoin pour la reconnaissance COMBINE,
+    /// qui recale la feuille ; le pont s'en sert aussi pour contrôler la
+    /// vraisemblance de la mesure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub couleurs: Option<Vec<[u8; 3]>>,
 }
 
 /// Une grille de plages : origine de la première plage, taille d'une plage,
@@ -51,6 +58,8 @@ struct DefinitionLue {
     largeur: u32,
     hauteur: u32,
     zones: Vec<ZoneFeuille>,
+    #[serde(default)]
+    couleurs: Option<Vec<[u8; 3]>>,
 }
 
 impl TryFrom<DefinitionLue> for DefinitionFeuille {
@@ -61,6 +70,7 @@ impl TryFrom<DefinitionLue> for DefinitionFeuille {
             largeur: d.largeur,
             hauteur: d.hauteur,
             zones: d.zones,
+            couleurs: d.couleurs,
         };
         definition.verifier()?;
         Ok(definition)
@@ -109,6 +119,15 @@ impl DefinitionFeuille {
                 ));
             }
         }
+        if let Some(couleurs) = &self.couleurs {
+            if couleurs.len() != self.plages() {
+                return refus(format!(
+                    "feuille : {} couleurs pour {} plages",
+                    couleurs.len(),
+                    self.plages()
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -132,9 +151,11 @@ pub struct LectureFeuille {
     /// Zones et plages reconnues par le SDK.
     pub zones: u32,
     pub plages: u32,
-    /// Fiabilité rendue par le SDK, brute : son sens n'est pas établi.
+    /// Fiabilité rendue par le SDK, brute : des drapeaux d'alerte, 0 sans
+    /// alerte (fiche `FD9_GetPatchRecognitionResult2`).
     pub fiabilite: u32,
-    /// Plus grand écart d'origine ou de pas entre la reconnaissance et la
-    /// définition, en 1/100 mm.
+    /// Plus grand écart, en 1/100 mm, entre un point de mesure trouvé sur
+    /// l'image et la grille de la définition, une fois retiré le décalage
+    /// de la feuille ; ou entre le pas reconnu et le pas défini.
     pub ecart_max: u32,
 }

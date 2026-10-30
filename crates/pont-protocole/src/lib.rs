@@ -434,6 +434,14 @@ pub enum ErreurPont {
     /// rappel : 101–103, 201–206, 301) ; `premesure` : code de
     /// `FD9_GetPremeasurementError` quand il a été lu.
     IncidentFeuille { etat: u32, premesure: Option<i32> },
+    /// FD-9 : la reconnaissance a rendu des drapeaux d'alerte (`fiabilite`,
+    /// brute, non nulle) : comme FD-S2w, le pont ne mesure pas une feuille
+    /// dont la reconnaissance est douteuse. Rien n'a été mesuré.
+    ReconnaissanceDouteuse { fiabilite: u32 },
+    /// FD-9 : la feuille a été mesurée, mais les L* mesurés ne suivent pas
+    /// la clarté des couleurs imprimées (corrélation en millièmes, sous le
+    /// seuil du pont) : mesure à côté des plages. Rien n'est rendu.
+    MesureInvraisemblable { correlation_milliemes: i32 },
     /// FD-9 : les positions (zone, rangée, colonne) rendues par la DLL pour
     /// les plages lues ne couvrent pas la mire une fois chacune (`defaut`) :
     /// rien n'est rendu. La feuille est close.

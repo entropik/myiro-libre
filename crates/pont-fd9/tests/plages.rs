@@ -30,6 +30,7 @@ fn rgb2520() -> DefinitionFeuille {
             rangees: 60,
             colonnes: 42,
         }],
+        couleurs: Some(commun::couleurs_fictives(2_520)),
     }
 }
 
@@ -38,6 +39,7 @@ fn six_plages() -> DefinitionFeuille {
     let mut mire = rgb2520();
     mire.zones[0].rangees = 2;
     mire.zones[0].colonnes = 3;
+    mire.couleurs = Some(commun::couleurs_fictives(6));
     mire
 }
 
@@ -102,12 +104,13 @@ fn chaque_plage_a_trois_spectres_et_ses_donnees_brutes() {
     assert_eq!(plage.m0()[0], 0.0);
     assert_eq!(plage.m1()[0], 2.0);
     assert_eq!(plage.m2()[35], 15.0 + 35.0 / 4.0);
-    // Lab fictifs : [illuminant × 10 + observateur, condition, brute n° 0] :
-    // D50 (2) et 2° (0) posés pour chacun des trois.
+    // Lab fictifs : [clarté de la couleur imprimée, condition, illuminant ×
+    // 10 + observateur] : D50 (2) et 2° (0) posés pour chacun des trois.
+    let clarte = pont_fd9::calage::clarte_attendue(six_plages().couleurs.unwrap()[4]) as f32;
     let [m0, m1, m2] = plage.lab();
-    assert_eq!(m0.valeurs(), [20.0, 0.0, 1_004.0]);
-    assert_eq!(m1.valeurs(), [20.0, 2.0, 1_004.0]);
-    assert_eq!(m2.valeurs(), [20.0, 15.0, 1_004.0]);
+    assert_eq!(m0.valeurs(), [clarte, 0.0, 20.0]);
+    assert_eq!(m1.valeurs(), [clarte, 2.0, 20.0]);
+    assert_eq!(m2.valeurs(), [clarte, 15.0, 20.0]);
 }
 
 #[test]
@@ -157,7 +160,7 @@ fn la_fin_lit_les_plages_puis_sort_sans_arreter() {
             "FD9_StartCapture",
             "FD9_GetCaptureResult image nulle",
             "FD9_GetCaptureResult image 1000",
-            "FD9_StartPatchRecognition mode 2, couleurs nulles, rangées 0, colonnes 0",
+            "FD9_StartPatchRecognition mode 4, couleurs RVB 6, rangées 0, colonnes 0",
             "FD9_GetPatchRecognitionResult2",
             "FD9_GetMeasurePoint 6",
             "FD9_StartMeasurement2 1 1",
@@ -228,6 +231,7 @@ fn deux_zones_sont_rangees_zone_par_zone() {
     seconde.rangees = 1;
     seconde.colonnes = 2;
     mire.zones.push(seconde);
+    mire.couleurs = Some(commun::couleurs_fictives(8));
     let mut sdk = Fd9Simule::avec_une_rgb2520();
     sdk.ordre = Some(vec![7, 6, 0, 1, 2, 5, 4, 3]);
     let (mut session, _) = connectee(sdk, Palier::Feuille);
@@ -312,6 +316,36 @@ fn une_position_hors_de_la_mire_refuse_la_mesure() {
         );
         lue_puis_close_sans_calcul(&session);
     }
+}
+
+#[test]
+fn une_mesure_a_cote_des_plages_est_refusee() {
+    // Essai E4 bis : chaque plage mesurée sur sa voisine. Les L* ne suivent
+    // plus la clarté des couleurs imprimées : rien n'est rendu.
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.lab_decale = true;
+    let (mut session, _) = connectee(sdk, Palier::Feuille);
+
+    let Err(ErreurPont::MesureInvraisemblable {
+        correlation_milliemes,
+    }) = session.mesurer_feuille(&rgb2520())
+    else {
+        panic!("{:?}", session.journal())
+    };
+    assert!(correlation_milliemes < 500, "{correlation_milliemes}");
+    assert!(session
+        .journal()
+        .iter()
+        .any(|l| l.starts_with("vraisemblance : corrélation")));
+}
+
+#[test]
+fn une_mesure_juste_passe_le_controle_de_vraisemblance() {
+    let (_, session, _) = mesuree(&rgb2520());
+    assert!(session
+        .journal()
+        .iter()
+        .any(|l| l.contains("vraisemblance : corrélation des L* M1 à la clarté imprimée 1000")));
 }
 
 #[test]
@@ -452,6 +486,7 @@ fn une_position_non_ecrite_refuse_la_mesure() {
     let mut mire = six_plages();
     mire.zones[0].rangees = 1;
     mire.zones[0].colonnes = 1;
+    mire.couleurs = Some(commun::couleurs_fictives(1));
     let mut sdk = Fd9Simule::avec_une_rgb2520();
     sdk.position_non_ecrite = true;
     let (mut session, _) = connectee(sdk, Palier::Feuille);

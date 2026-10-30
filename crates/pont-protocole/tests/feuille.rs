@@ -22,6 +22,7 @@ fn rgb2520() -> DefinitionFeuille {
             rangees: 60,
             colonnes: 42,
         }],
+        couleurs: None,
     }
 }
 
@@ -53,6 +54,43 @@ fn une_requete_mesurer_feuille_se_relit() {
         texte.starts_with(r#"{"cmd":"mesurer_feuille","mire":{"nom":"RGB-2520 - 1P MY9","#),
         "{texte}"
     );
+}
+
+/// Couleurs fictives de chaque plage, dans l'ordre de la définition.
+fn couleurs(n: usize) -> Vec<[u8; 3]> {
+    (0..n)
+        .map(|i| [(i % 256) as u8, 128, 255 - (i % 256) as u8])
+        .collect()
+}
+
+#[test]
+fn les_couleurs_des_plages_traversent_le_protocole() {
+    let mut mire = rgb2520();
+    mire.couleurs = Some(couleurs(2_520));
+    let requete = Requete::MesurerFeuille { mire };
+    let texte = serde_json::to_string(&requete).unwrap();
+    assert!(
+        texte.contains(r#""couleurs":[[0,128,255],[1,128,254],"#),
+        "{}",
+        &texte[..300]
+    );
+    assert_eq!(lire_requete(&texte), Ok(requete));
+    // Sans couleurs, le champ n'est pas écrit, et une ancienne définition
+    // se relit.
+    let texte = serde_json::to_string(&Requete::MesurerFeuille { mire: rgb2520() }).unwrap();
+    assert!(!texte.contains("couleurs"), "{texte}");
+}
+
+#[test]
+fn des_couleurs_en_nombre_faux_sont_refusees() {
+    for n in [0, 2_519, 2_521] {
+        let mut mire = rgb2520();
+        mire.couleurs = Some(couleurs(n));
+        let erreur = mire.verifier().unwrap_err();
+        assert!(erreur.to_string().contains("couleurs"), "{n} : {erreur}");
+        let texte = serde_json::to_string(&Requete::MesurerFeuille { mire }).unwrap();
+        assert!(lire_requete(&texte).is_err(), "{n}");
+    }
 }
 
 #[test]
@@ -320,6 +358,14 @@ fn la_prenumerisation_et_les_erreurs_de_feuille_traversent_le_protocole() {
                     rangee: 60,
                     colonne: 0,
                 },
+            },
+        },
+        Reponse::Erreur {
+            erreur: ErreurPont::ReconnaissanceDouteuse { fiabilite: 0x4000 },
+        },
+        Reponse::Erreur {
+            erreur: ErreurPont::MesureInvraisemblable {
+                correlation_milliemes: -186,
             },
         },
         Reponse::Erreur {

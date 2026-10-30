@@ -5,11 +5,11 @@
 mod commun;
 
 use commun::Fd9Simule;
-use fd9_sys::ModeReconnaissance;
+use fd9_sys::PointMesure;
 use pont_fd9::{Delais, Fermeture, Session};
 use pont_protocole::{
-    AdresseReseau, DefinitionFeuille, ErreurPont, Info, LectureFeuille, Palier, RemiseAuRepos,
-    ZoneFeuille,
+    AdresseReseau, DefautPositions, DefinitionFeuille, ErreurPont, Info, LectureFeuille, Palier,
+    RemiseAuRepos, ZoneFeuille,
 };
 use std::time::Duration;
 
@@ -29,6 +29,7 @@ fn rgb2520() -> DefinitionFeuille {
             rangees: 60,
             colonnes: 42,
         }],
+        couleurs: Some(commun::couleurs_fictives(2_520)),
     }
 }
 
@@ -73,7 +74,7 @@ fn une_rgb2520_est_reconnue_sans_mesurer() {
             qr: Info::Confirmee("RGB-2520 - 1P MY9*1+".into()),
             zones: 1,
             plages: 2_520,
-            fiabilite: 97,
+            fiabilite: 0,
             ecart_max: 0,
         }
     );
@@ -83,8 +84,9 @@ fn une_rgb2520_est_reconnue_sans_mesurer() {
             "FD9_StartCapture",
             "FD9_GetCaptureResult image nulle",
             "FD9_GetCaptureResult image 1000",
-            "FD9_StartPatchRecognition mode 2, couleurs nulles, rangées 0, colonnes 0",
+            "FD9_StartPatchRecognition mode 4, couleurs RVB 2520, rangées 0, colonnes 0",
             "FD9_GetPatchRecognitionResult2",
+            "FD9_GetMeasurePoint 2520",
             ARRET[0],
             ARRET[1],
         ]
@@ -97,27 +99,32 @@ fn une_rgb2520_est_reconnue_sans_mesurer() {
 }
 
 #[test]
-fn la_reconnaissance_part_en_coordinate_par_defaut() {
-    // Essai E3 : COMBINE sans couleurs ni image modèle a planté le pont dans
-    // le fil de reconnaissance de la DLL. COORDINATE ne lit que les
-    // coordonnées (fiche FD9_StartPatchRecognition).
+fn la_reconnaissance_part_en_combine_avec_les_couleurs_de_la_mire() {
+    // Essai E4 bis : COORDINATE a mesuré à côté des plages. COMBINE, avec
+    // les couleurs, recale la feuille sur l'image prise (comme MYIROtools et
+    // FD-S2w).
     let (mut session, depuis) = connectee(Fd9Simule::avec_une_rgb2520(), Palier::Prenumerisation);
 
     session.prenumeriser(&rgb2520()).unwrap();
 
     assert!(appels_de_la_feuille(&session, depuis)
-        .contains(&"FD9_StartPatchRecognition mode 2, couleurs nulles, rangées 0, colonnes 0"));
+        .contains(&"FD9_StartPatchRecognition mode 4, couleurs RVB 2520, rangées 0, colonnes 0"));
+    // Les couleurs reçues sont celles de la mire, de 0 à 255.
+    let recues = session.sdk().couleurs_recues.as_ref().unwrap();
+    let mire = rgb2520().couleurs.unwrap();
+    assert_eq!(recues[41][..3], mire[41].map(f32::from));
 }
 
 #[test]
-fn combine_sans_couleurs_est_refuse_avant_la_feuille() {
-    // Le pont ne passe ni couleurs ni image modèle : COMBINE ferait lire à la
-    // DLL un pointeur nul. Refusé avant tout appel, rien n'est engagé.
-    let (session, depuis) = connectee(Fd9Simule::avec_une_rgb2520(), Palier::Prenumerisation);
-    let mut session = session.avec_reconnaissance(ModeReconnaissance::Combine);
+fn une_mire_sans_couleurs_est_refusee_avant_la_feuille() {
+    // Sans couleurs ni image modèle, COMBINE ferait lire à la DLL un
+    // pointeur nul (essai E3). Refusé avant tout appel, rien n'est engagé.
+    let (mut session, depuis) = connectee(Fd9Simule::avec_une_rgb2520(), Palier::Prenumerisation);
+    let mut mire = rgb2520();
+    mire.couleurs = None;
 
     assert_eq!(
-        session.prenumeriser(&rgb2520()),
+        session.prenumeriser(&mire),
         Err(ErreurPont::ParametreRefuse {})
     );
     assert_eq!(session.sdk().appels.len(), depuis);
@@ -313,10 +320,58 @@ fn un_qr_absent_n_empeche_pas_la_reconnaissance() {
 }
 
 #[test]
-fn une_geometrie_decalee_refuse_la_feuille() {
+fn une_feuille_decalee_est_recalee_sur_les_points_trouves() {
+    // Essai E4 bis : la RGB-2520 imprimée sur A3 est décalée d'environ
+    // 8,8 mm sur la définition. COMBINE la retrouve : les points de mesure
+    // sont décalés d'autant, et la feuille est admise.
     let mut sdk = Fd9Simule::avec_une_rgb2520();
-    sdk.decalage = 400;
+    sdk.decalage_points = (880, -110);
+    let (mut session, _) = connectee(sdk, Palier::Prenumerisation);
+
+    assert_eq!(session.prenumeriser(&rgb2520()).unwrap().ecart_max, 0);
+    assert!(session
+        .journal()
+        .iter()
+        .any(|l| l.contains("points de mesure")
+            && l.contains("2520 point(s)")
+            && l.contains("décalage de la feuille (880 ; -110)")));
+}
+
+#[test]
+fn un_decalage_au_dela_de_21_mm_refuse_la_feuille() {
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.decalage_points = (0, 2_200);
     let (mut session, depuis) = connectee(sdk, Palier::Prenumerisation);
+
+    assert_eq!(
+        session.prenumeriser(&rgb2520()),
+        Err(ErreurPont::MireNonReconnue {
+            zones: 1,
+            plages: 2_520,
+            ecart_max: 2_200,
+        })
+    );
+    let appels = appels_de_la_feuille(&session, depuis);
+    assert_eq!(appels[appels.len() - 2..], ARRET);
+}
+
+#[test]
+fn un_point_hors_de_la_grille_refuse_la_feuille() {
+    // Un point à 4 mm de sa place, le reste en place : la grille trouvée
+    // n'est pas celle de la mire.
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    let centre = |colonne: i32| 1_349 + 601 * colonne + 300;
+    sdk.points_forces.insert(
+        5,
+        PointMesure {
+            x: centre(5) + 400,
+            y: 2_300 + 300,
+            zone: 0,
+            rangee: 0,
+            colonne: 5,
+        },
+    );
+    let (mut session, _) = connectee(sdk, Palier::Prenumerisation);
 
     assert_eq!(
         session.prenumeriser(&rgb2520()),
@@ -326,17 +381,53 @@ fn une_geometrie_decalee_refuse_la_feuille() {
             ecart_max: 400,
         })
     );
+}
+
+#[test]
+fn un_point_de_mesure_en_double_refuse_la_feuille() {
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.points_forces.insert(
+        1,
+        PointMesure {
+            x: 1_649,
+            y: 2_600,
+            zone: 0,
+            rangee: 0,
+            colonne: 0,
+        },
+    );
+    let (mut session, depuis) = connectee(sdk, Palier::Prenumerisation);
+
+    assert_eq!(
+        session.prenumeriser(&rgb2520()),
+        Err(ErreurPont::PositionsPlages {
+            defaut: DefautPositions::Doublon {
+                lue: 2,
+                zone: 0,
+                rangee: 0,
+                colonne: 0
+            }
+        })
+    );
     let appels = appels_de_la_feuille(&session, depuis);
     assert_eq!(appels[appels.len() - 2..], ARRET);
 }
 
 #[test]
-fn un_ecart_de_3_mm_est_admis_et_rendu() {
+fn une_fiabilite_non_nulle_refuse_la_feuille_sans_mesure() {
+    // Comme FD-S2w : des drapeaux d'alerte de la reconnaissance, pas de
+    // mesure (fiche FD9_GetPatchRecognitionResult2).
     let mut sdk = Fd9Simule::avec_une_rgb2520();
-    sdk.decalage = 300;
-    let (mut session, _) = connectee(sdk, Palier::Prenumerisation);
+    sdk.fiabilite = 0x4000;
+    let (mut session, depuis) = connectee(sdk, Palier::Feuille);
 
-    assert_eq!(session.prenumeriser(&rgb2520()).unwrap().ecart_max, 300);
+    assert_eq!(
+        session.mesurer_feuille(&rgb2520()),
+        Err(ErreurPont::ReconnaissanceDouteuse { fiabilite: 0x4000 })
+    );
+    let appels = appels_de_la_feuille(&session, depuis);
+    assert!(!appels.contains(&"FD9_StartMeasurement2 1 1"), "{appels:?}");
+    assert_eq!(appels[appels.len() - 2..], ARRET);
 }
 
 #[test]

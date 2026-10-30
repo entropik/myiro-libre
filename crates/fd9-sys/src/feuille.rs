@@ -238,10 +238,92 @@ impl PositionPlage {
     }
 }
 
-/// `tFD9_PatchMeasurePoint` : 20 octets par plage, contenu non décodé.
+/// `tFD9_PatchMeasurePoint` : 20 octets par plage reconnue, rendus par
+/// `FD9_GetMeasurePoint` (fd9-x86 `0x1009fd20`) : le point que l'instrument
+/// visera, au centre de la plage trouvée sur l'image prise (300 ppp converti
+/// au 1/100 mm sur le papier), et sa place dans la mire (comptée depuis 0).
+/// Ce sont les points rouges de l'onglet « Measured Point » de FD-S2w.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PointMesure(pub [u8; 20]);
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PointMesure {
+    pub x: i32,
+    pub y: i32,
+    pub zone: u32,
+    pub rangee: u32,
+    pub colonne: u32,
+}
+
+/// Valeurs de `type` de `tFD9_PatchColors` (fd9-x86 `0x100afa00` :
+/// « RGB » pour 1, « CMYK » pour 0).
+pub const COULEURS_RVB: u32 = 1;
+pub const COULEURS_CMJN: u32 = 0;
+
+/// Une entrée de `tFD9_PatchColors` : 28 octets. En RVB, trois valeurs de
+/// 0 à 255 et la quatrième à zéro.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CouleurPlage {
+    pub zone: u32,
+    pub rangee: u32,
+    pub colonne: u32,
+    pub valeurs: [f32; 4],
+}
+
+/// `tFD9_PatchColors` : `{type, nombre, entrées*}`, 12 octets en x86, 16 en
+/// x64. Recopié par la DLL avant le retour de `FD9_StartPatchRecognition`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct EnTeteCouleurs {
+    pub sorte: u32,
+    pub nombre: u32,
+    pub entrees: *const CouleurPlage,
+}
+
+/// Couleurs des plages d'une mire, dans l'ordre de la définition (zone par
+/// zone, rangée par rangée, de gauche à droite) : l'ordre dans lequel la DLL
+/// les peint sur l'image modèle de COMBINE (fd9-x86 `0x100af2b0`), et celui
+/// de MYIROtools (mit-x64 `0x1402642e0`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct CouleursMire {
+    entrees: Vec<CouleurPlage>,
+}
+
+impl CouleursMire {
+    /// `None` si la définition ne porte pas de couleurs. Le nombre de
+    /// couleurs est celui des plages (contrôlé par le protocole).
+    pub fn depuis_definition(d: &DefinitionFeuille) -> Option<Self> {
+        let couleurs = d.couleurs.as_ref()?;
+        let places = d.zones.iter().enumerate().flat_map(|(zone, z)| {
+            (0..z.rangees).flat_map(move |rangee| {
+                (0..z.colonnes).map(move |colonne| (zone as u32, rangee, colonne))
+            })
+        });
+        let entrees = places
+            .zip(couleurs)
+            .map(|((zone, rangee, colonne), rvb)| CouleurPlage {
+                zone,
+                rangee,
+                colonne,
+                valeurs: [rvb[0].into(), rvb[1].into(), rvb[2].into(), 0.0],
+            })
+            .collect();
+        Some(CouleursMire { entrees })
+    }
+
+    pub fn entrees(&self) -> &[CouleurPlage] {
+        &self.entrees
+    }
+
+    /// En-tête à passer à la DLL : valable tant que `self` vit.
+    pub fn en_tete(&self) -> EnTeteCouleurs {
+        EnTeteCouleurs {
+            sorte: COULEURS_RVB,
+            // Borné par PLAGES_MAX : tient dans un u32.
+            nombre: self.entrees.len() as u32,
+            entrees: self.entrees.as_ptr(),
+        }
+    }
+}
 
 /// Modes de `FD9_StartPatchRecognition` connus du pont. Les autres
 /// (automatique, définition, matrice) exigent une image modèle ou des
