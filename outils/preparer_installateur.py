@@ -16,11 +16,18 @@ Usage (à la racine du dépôt) :
    `sdk/x64/` ou `sdk/x86/` selon l'architecture de la DLL.
 3. Si le dossier `argyll/` du dépôt existe (ignoré par git), vérifie qu'il
    contient ArgyllCMS 3.5.0 (ADR 0002 : version figée) et embarque `colprof`,
-   `profcheck`, `iccgamut` (limite du gamut, comparaison des profils),
+   `profcheck`, `iccgamut` (limite du gamut, comparaison des profils), `targen`,
    `ref/sRGB.icm` et tous les textes de licence présents sous
    `argyll/`.
    Sans `argyll/`, l'installateur se construit sans ArgyllCMS : l'application
-   dira qu'il est introuvable au moment de calculer un profil.
+   dira qu'il est introuvable au moment de calculer un profil ou de préparer
+   une mire MYIRO-1.
+4. Si le dossier `mire-fd9/` du dépôt existe (ignoré par git), vérifie
+   l'empreinte de la mire RGB-2520 et l'embarque telle quelle sous
+   `mire-fd9/`. Une autre empreinte arrête tout. Sans `mire-fd9/`,
+   l'application dira la mire FD-9 introuvable ; le MYIRO-1 reste utilisable.
+   Embarquée, la mire suit la même règle que `SDK/` : installateur local,
+   jamais publié tel quel.
 
 ArgyllCMS est sous AGPL-3.0 : chaque publication d'un installateur qui
 l'embarque fournit les sources de la version incluse, ou leur lien précis.
@@ -29,6 +36,7 @@ Un installateur qui embarque `SDK/` est STRICTEMENT LOCAL : les DLL du fabricant
 n'ont aucun droit de redistribution. Ne jamais le publier (Releases GitHub
 comprises). Sans `SDK/`, l'installateur est publiable.
 """
+import hashlib
 import json
 import os
 import pathlib
@@ -41,11 +49,20 @@ APP = RACINE / "app"
 CIBLE_32 = "i686-pc-windows-msvc"
 PONTS = ("pont-myiro1", "pont-fd9")
 VERSION_ARGYLL = "3.5.0"
-ARGYLL_FICHIERS = ("bin/colprof.exe", "bin/profcheck.exe", "bin/iccgamut.exe", "ref/sRGB.icm")
+ARGYLL_FICHIERS = (
+    "bin/colprof.exe",
+    "bin/profcheck.exe",
+    "bin/targen.exe",
+    "bin/iccgamut.exe",
+    "ref/sRGB.icm",
+)
 # Noms possibles des textes de licence à la racine de la distribution (non
 # confirmés pour la 3.5.0) : tous ceux qui sont présents sont embarqués, sous
 # leur nom réel, sans tenir compte de la casse.
 ARGYLL_LICENCES = ("License.txt", "AGPLv3.txt", "License3.txt", "LICENSE.txt", "COPYING.txt", "COPYING")
+# Mire FD-9 RGB-2520, reprise telle quelle (crate `mires`, `rgb2520.rs`).
+MIRE_FD9_FICHIER = "RGB-2520 A3 - 1p.tif"
+MIRE_FD9_EMPREINTE = "7550f4a38725ad9260982152bb6bcbe077922289adb48dd954f0bd7d2c7fc713"
 
 
 def architecture(fichier):
@@ -146,12 +163,38 @@ def argyll_embarque(racine=RACINE, aide=aide_colprof):
     return {f"../argyll/{f}": f"argyll/{f}" for f in (*ARGYLL_FICHIERS, *licences)}
 
 
+def mire_fd9_embarquee(racine=RACINE, empreinte=MIRE_FD9_EMPREINTE):
+    """Ressource Tauri de la mire RGB-2520 sous `mire-fd9/`, ou {} sans dossier
+    `mire-fd9/`. Une mire absente du dossier ou d'une autre empreinte arrête tout."""
+    dossier = racine / "mire-fd9"
+    if not dossier.is_dir():
+        return {}
+    mire = dossier / MIRE_FD9_FICHIER
+    if not mire.is_file():
+        sys.exit(f"Mire FD-9 introuvable : {mire} (dossier mire-fd9/ présent, fichier {MIRE_FD9_FICHIER} absent).")
+    trouvee = hashlib.sha256(mire.read_bytes()).hexdigest()
+    if trouvee != empreinte:
+        sys.exit(f"{mire} n'est pas la mire RGB-2520 retenue : empreinte {trouvee}, attendue {empreinte}. "
+                 "Reprenez le fichier d'origine, sans l'ouvrir ni l'enregistrer dans un autre logiciel.")
+    return {f"../mire-fd9/{MIRE_FD9_FICHIER}": f"mire-fd9/{MIRE_FD9_FICHIER}"}
+
+
+def annonce_mire_fd9(embarquee):
+    """Une ligne sur la mire FD-9. Embarquée, elle suit la même règle que SDK/."""
+    if embarquee:
+        return ("ATTENTION : cet installateur embarque aussi la mire RGB-2520 (empreinte vérifiée) : même règle "
+                "que SDK/, installateur local, jamais publié tel quel.")
+    return "Dossier mire-fd9/ absent : mire FD-9 non embarquée, seule la mire MYIRO-1 pourra être préparée."
+
+
 def main():
-    # ArgyllCMS est contrôlé avant la compilation des ponts, qui est longue.
+    # ArgyllCMS et la mire FD-9 sont contrôlés avant la compilation des ponts, qui est longue.
     argyll = argyll_embarque()
+    mire_fd9 = mire_fd9_embarquee()
     compiler_ponts(hote())
     ressources = dll_embarquees()
     ressources.update(argyll)
+    ressources.update(mire_fd9)
     bundle = {
         "active": True,
         "targets": ["nsis"],
@@ -173,6 +216,7 @@ def main():
               f"les sources d'ArgyllCMS {VERSION_ARGYLL} ou leur lien précis.")
     else:
         print("Dossier argyll/ absent : ArgyllCMS non embarqué, l'application ne pourra pas calculer de profil.")
+    print(annonce_mire_fd9(bool(mire_fd9)))
     print("Suite : cargo tauri build --config app/tauri.installateur.json")
 
 

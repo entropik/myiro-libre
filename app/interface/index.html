@@ -12,6 +12,7 @@
 <script src="bibliotheque.js" defer></script>
 <script src="arbre.js" defer></script>
 <script src="calcul-profil.js" defer></script>
+<script src="mire.js" defer></script>
 <script src="vue3d.js" defer></script>
 <script src="graphiques.js" defer></script>
 <script src="comparer-ecarts.js" defer></script>
@@ -234,11 +235,14 @@
         <button class="btn" data-exporter-profil data-t="parc.exporter"></button>
         <button class="btn" data-ranger-profil data-t="parc.ranger"></button>
         <button class="btn" data-calcul-ouvrir data-t="profil.titre" aria-expanded="false" aria-controls="calcul-profil"></button>
+        <button class="btn" data-mire-ouvrir data-t="mire.ouvrir" aria-expanded="false" aria-controls="preparer-mire"></button>
         <button class="btn" data-comparer-ouvrir data-t="comparer.ouvrir"></button>
       </div>
       <p class="why" role="status" data-reglage-occupe data-t="parc.en_cours" hidden></p>
       <!-- Calcul d’un profil : section construite par calcul-profil.js (mesure, condition, recette, commande équivalente). -->
       <div id="calcul-profil" data-calcul-profil hidden></div>
+      <!-- Préparer une mire : section construite par mire.js (instrument, taille, format, avancé, fichiers, mires préparées). -->
+      <div id="preparer-mire" data-mire hidden></div>
       <div class="section">
         <div class="section__head"><span class="label label--ink" data-t="parc.historique"></span></div>
         <div data-historique></div>

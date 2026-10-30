@@ -39,6 +39,8 @@ window.Reglage = (() => {
   // Calcul d'un profil : section, calcul et provenance (calcul-profil.js).
   const calcul = window.CalculProfil;
   const { texteErreur } = calcul;
+  // Préparer une mire : section et préparation (mire.js).
+  const mire = window.PreparerMire;
 
   // Comparaison de profils (comparer.js) : elle prend la place de cette vue.
   const comparer = window.Comparer;
@@ -50,11 +52,12 @@ window.Reglage = (() => {
   // marqué data-inactif l'est aussi hors de toute action. « Comparer » et « Comparer à
   // l'actuel » en font partie.
   const BOUTONS = "[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-comparer-ouvrir], [data-comparer-actuel], [data-calcul-profil] button, [data-calcul-profil] input";
+  const BOUTONS_MIRE = "[data-mire-ouvrir], [data-mire] button, [data-mire] input";
   const occupe = vue.querySelector("[data-reglage-occupe]");
   let enCours = false;
 
   function dessinerOccupation(sansProfil) {
-    for (const b of vue.querySelectorAll(BOUTONS)) {
+    for (const b of vue.querySelectorAll(`${BOUTONS}, ${BOUTONS_MIRE}`)) {
       b.disabled = enCours || b.hasAttribute("data-inactif") || (sansProfil && b.hasAttribute("data-installer"));
     }
     occupe.hidden = !enCours || calcul.raisonVisible();
@@ -83,6 +86,7 @@ window.Reglage = (() => {
     vue.querySelector("[data-exporter-profil]").hidden = !actif;
     vue.querySelector("[data-comparer-ouvrir]").hidden = !actif;
     calcul.dessiner(d);
+    mire.dessiner(d);
     dessinerOccupation(!actif);
 
     const historique = vue.querySelector("[data-historique]");
@@ -204,6 +208,16 @@ window.Reglage = (() => {
     recharger: () => parc.recharger(),
     annoncer,
     agir,
+    occupation: () => dessinerOccupation(!(parc.reglage() || {}).actif),
+  });
+
+  // La préparation d'une mire agit sur la résolution affichée, avec le même mécanisme.
+  mire.brancher({
+    reglage: () => parc.reglage(),
+    recharger: () => parc.recharger(),
+    annoncer,
+    agir,
+    texteErreur,
     occupation: () => dessinerOccupation(!(parc.reglage() || {}).actif),
   });
 
