@@ -323,12 +323,18 @@ impl SdkFd9 for Fd9Dll {
     }
 
     fn reconnaitre(&mut self, mode: ModeReconnaissance, coordonnees: &CoordonneesMire) -> i32 {
+        // Sans image modèle, COMBINE fait lire à la DLL les couleurs nulles
+        // dans son fil de reconnaissance (`fd9-x86` 0x100a14f1, essai E3) :
+        // l'appel n'est pas fait, quel que soit l'appelant.
+        if mode.lit_les_couleurs_sans_modele() && coordonnees.modele_present == 0 {
+            return fd9_sys::CODE_PARAMETRE_INVALIDE;
+        }
         let mode = mode as u32;
         let (rangees, colonnes) = (0u32, 0u32);
         // SAFETY : mode, rangées et colonnes jamais nuls (lus sans test par
         // la DLL), coordonnées de 0xd70 octets (0xd78 en 64 bits) recopiées
-        // avant le retour, couleurs nulles admises en COMBINE et COORDINATE
-        // (fiche FD9_StartPatchRecognition).
+        // avant le retour ; couleurs nulles en COORDINATE, dont le fil ne lit
+        // que les coordonnées (fiche FD9_StartPatchRecognition).
         unsafe { (self.reconnaitre)(&mode, coordonnees, std::ptr::null(), &rangees, &colonnes) }
     }
 

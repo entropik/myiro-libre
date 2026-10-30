@@ -151,7 +151,7 @@ fn la_fin_lit_les_plages_puis_sort_sans_arreter() {
             "FD9_StartCapture",
             "FD9_GetCaptureResult image nulle",
             "FD9_GetCaptureResult image 1000",
-            "FD9_StartPatchRecognition mode 4, couleurs nulles, rangées 0, colonnes 0",
+            "FD9_StartPatchRecognition mode 2, couleurs nulles, rangées 0, colonnes 0",
             "FD9_GetPatchRecognitionResult2",
             "FD9_GetMeasurePoint 6",
             "FD9_StartMeasurement2 1 1",

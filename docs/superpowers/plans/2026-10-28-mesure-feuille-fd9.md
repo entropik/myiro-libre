@@ -540,7 +540,7 @@ Après chaque essai, les fiches `docs/abi/` concernées passent les points véri
 ## Questions ouvertes (tranchées par les essais)
 
 1. La feuille part-elle seule sans `FD9_RegisterJob` (E3) ? Sinon : `RegisterJob` / `DeleteJob` au plan 7, avec leurs fiches.
-2. COMBINE sans `tFD9_PatchColors` reconnaît-il la RGB-2520 (E3) ? Sinon : COORDINATE ; et si COORDINATE échoue aussi, étude de l'échelle des couleurs de FD-S2w (`0x4da710`, notes locales § 5).
+2. COMBINE sans `tFD9_PatchColors` reconnaît-il la RGB-2520 (E3) ? Sinon : COORDINATE ; et si COORDINATE échoue aussi, étude de l'échelle des couleurs de FD-S2w (`0x4da710`, notes locales § 5). **Réponse de l'essai E3 (30 octobre)** : non, le pont s'arrête net juste après l'événement 6 ; la DLL lit les couleurs nulles dans son fil de reconnaissance (fiche `FD9_StartPatchRecognition`). Le pont passe en COORDINATE par défaut et refuse COMBINE.
 3. Texte exact du QR et sens de `011M` et `*1+` (E3).
 4. Unités et écart de la géométrie rendue par `GetPatchRecognitionResult2` (E3).
 5. Longueur d'un spectre et valeurs M0 / M1 / M2 de la clé 0 (E4).

@@ -242,16 +242,28 @@ impl PositionPlage {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PointMesure(pub [u8; 20]);
 
-/// Modes de `FD9_StartPatchRecognition` admis par le pont. Les autres
+/// Modes de `FD9_StartPatchRecognition` connus du pont. Les autres
 /// (automatique, définition, matrice) exigent une image modèle ou des
 /// couleurs que le pont ne passe pas.
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ModeReconnaissance {
-    /// Coordonnées seules.
+    /// Coordonnées seules : le mode du pont.
     Coordonnees = 2,
-    /// Reconnaissance automatique comparée aux coordonnées (MYIROtools).
+    /// Reconnaissance automatique comparée aux coordonnées (MYIROtools, qui
+    /// passe toujours les couleurs des plages). Sans image modèle, le fil de
+    /// reconnaissance de la DLL lit les couleurs sans tester le pointeur nul
+    /// (`fd9-x86` 0x100a14f1, plantage de l'essai E3) : jamais appelé tant
+    /// que le pont ne les passe pas.
     Combine = 4,
+}
+
+impl ModeReconnaissance {
+    /// Vrai si la DLL lit les couleurs des plages quand aucune image modèle
+    /// n'est donnée (fiche `FD9_StartPatchRecognition`).
+    pub fn lit_les_couleurs_sans_modele(self) -> bool {
+        self == ModeReconnaissance::Combine
+    }
 }
 
 /// Clés de `FD9_SetOption` : réglages de calcul rangés dans la DLL, sans

@@ -2,7 +2,7 @@
 //! l'entrée et la sortie standard (ADR 0005), comme `pont-myiro1`.
 //!
 //! Usage : `pont-fd9 --dll <chemin de FD9SDK.dll> [--plafond <palier>]
-//! [--attente-feuille <secondes>] [--reconnaissance combine|coordinate]`
+//! [--attente-feuille <secondes>] [--reconnaissance coordinate]`
 //! Paliers déclarés par ce pont : version (par défaut), detection, connexion,
 //! prenumerisation, feuille. Tout autre palier est refusé au lancement.
 //!
@@ -41,7 +41,7 @@ fn arguments() -> Result<Arguments, String> {
     let mut dll = None;
     let mut plafond = Palier::Version;
     let mut delais = Delais::default();
-    let mut reconnaissance = ModeReconnaissance::Combine;
+    let mut reconnaissance = ModeReconnaissance::Coordonnees;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -61,11 +61,16 @@ fn arguments() -> Result<Arguments, String> {
             }
             "--reconnaissance" => {
                 reconnaissance = match args.next().unwrap_or_default().as_str() {
-                    "combine" => ModeReconnaissance::Combine,
                     "coordinate" => ModeReconnaissance::Coordonnees,
+                    "combine" => {
+                        return Err(
+                            "--reconnaissance : « combine » exige les couleurs des plages, que le pont ne passe pas (la DLL lirait un pointeur nul, essai E3) ; seul « coordinate » est admis"
+                                .into(),
+                        )
+                    }
                     autre => {
                         return Err(format!(
-                            "--reconnaissance : « {autre} » (combine ou coordinate)"
+                            "--reconnaissance : « {autre} » (seul « coordinate » est admis)"
                         ))
                     }
                 };

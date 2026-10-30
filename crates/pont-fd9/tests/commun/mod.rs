@@ -390,6 +390,14 @@ impl SdkFd9 for Fd9Simule {
     }
 
     fn reconnaitre(&mut self, mode: ModeReconnaissance, coordonnees: &CoordonneesMire) -> i32 {
+        // Essai E3 : en COMBINE, sans image modèle, le fil de reconnaissance
+        // de la DLL lit les couleurs sans tester le pointeur nul
+        // (`fd9-x86` 0x100a14f1) et le pont s'arrête net. Le simulé fait de
+        // même, en plus bruyant.
+        assert!(
+            mode != ModeReconnaissance::Combine || coordonnees.modele_present != 0,
+            "FD9SDK lirait le pointeur nul des couleurs (COMBINE sans modèle ni couleurs)"
+        );
         let detail = format!(
             "mode {}, couleurs nulles, rangées 0, colonnes 0",
             mode as u32

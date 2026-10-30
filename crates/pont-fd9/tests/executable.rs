@@ -68,6 +68,21 @@ fn une_attente_ou_une_reconnaissance_illisible_est_refusee_au_lancement() {
     }
 }
 
+#[test]
+fn combine_est_refuse_au_lancement() {
+    // Essai E3 : sans couleurs ni image modèle, COMBINE fait planter la DLL.
+    let sortie = pont()
+        .args(["--dll", "x.dll", "--reconnaissance", "combine"])
+        .output()
+        .unwrap();
+    assert_eq!(sortie.status.code(), Some(2));
+    let erreur = String::from_utf8_lossy(&sortie.stderr);
+    assert!(
+        erreur.contains("combine") && erreur.contains("couleurs"),
+        "{erreur}"
+    );
+}
+
 /// L'exemple est compilé par `cargo test -p pont-fd9` (toutes cibles) ou par
 /// `cargo build -p pont-fd9 --example pont_fd9_simule`.
 fn pont_simule() -> std::path::PathBuf {

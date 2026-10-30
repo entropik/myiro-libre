@@ -5,6 +5,7 @@
 mod commun;
 
 use commun::Fd9Simule;
+use fd9_sys::ModeReconnaissance;
 use pont_fd9::{Delais, Fermeture, Session};
 use pont_protocole::{
     AdresseReseau, DefinitionFeuille, ErreurPont, Info, LectureFeuille, Palier, RemiseAuRepos,
@@ -82,7 +83,7 @@ fn une_rgb2520_est_reconnue_sans_mesurer() {
             "FD9_StartCapture",
             "FD9_GetCaptureResult image nulle",
             "FD9_GetCaptureResult image 1000",
-            "FD9_StartPatchRecognition mode 4, couleurs nulles, rangées 0, colonnes 0",
+            "FD9_StartPatchRecognition mode 2, couleurs nulles, rangées 0, colonnes 0",
             "FD9_GetPatchRecognitionResult2",
             ARRET[0],
             ARRET[1],
@@ -93,6 +94,37 @@ fn une_rgb2520_est_reconnue_sans_mesurer() {
     assert_eq!((recue.zones, recue.plages), (1, 2_520));
     assert_eq!(recue.geometries[0].gauche, 1_349);
     assert_eq!(session.palier_atteint(), Some(Palier::Prenumerisation));
+}
+
+#[test]
+fn la_reconnaissance_part_en_coordinate_par_defaut() {
+    // Essai E3 : COMBINE sans couleurs ni image modèle a planté le pont dans
+    // le fil de reconnaissance de la DLL. COORDINATE ne lit que les
+    // coordonnées (fiche FD9_StartPatchRecognition).
+    let (mut session, depuis) = connectee(Fd9Simule::avec_une_rgb2520(), Palier::Prenumerisation);
+
+    session.prenumeriser(&rgb2520()).unwrap();
+
+    assert!(appels_de_la_feuille(&session, depuis)
+        .contains(&"FD9_StartPatchRecognition mode 2, couleurs nulles, rangées 0, colonnes 0"));
+}
+
+#[test]
+fn combine_sans_couleurs_est_refuse_avant_la_feuille() {
+    // Le pont ne passe ni couleurs ni image modèle : COMBINE ferait lire à la
+    // DLL un pointeur nul. Refusé avant tout appel, rien n'est engagé.
+    let (session, depuis) = connectee(Fd9Simule::avec_une_rgb2520(), Palier::Prenumerisation);
+    let mut session = session.avec_reconnaissance(ModeReconnaissance::Combine);
+
+    assert_eq!(
+        session.prenumeriser(&rgb2520()),
+        Err(ErreurPont::ParametreRefuse {})
+    );
+    assert_eq!(session.sdk().appels.len(), depuis);
+    assert!(session
+        .journal()
+        .iter()
+        .any(|l| l.contains("COMBINE") && l.contains("couleurs")));
 }
 
 #[test]

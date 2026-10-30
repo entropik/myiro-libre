@@ -7,7 +7,7 @@
 ```c
 int32_t __stdcall FD9_StartPatchRecognition(const uint32_t *mode,                   /* FD9_eRecogMode */
                                             const tFD9_ChartCoordinate *coordonnees, /* 0xd70 octets en x86 */
-                                            const tFD9_PatchColors *couleurs,        /* NULL admis en COMBINE */
+                                            const tFD9_PatchColors *couleurs,        /* NULL : jamais en COMBINE sans modèle */
                                             const uint32_t *rangees,                 /* mode MATRIX */
                                             const uint32_t *colonnes);               /* x86 : ret 0x14 */
 ```
@@ -29,7 +29,7 @@ int32_t __stdcall FD9_StartPatchRecognition(const uint32_t *mode,               
 | 1 | DEFINITION | coordonnées obligatoires, avec un modèle ou des couleurs |
 | 2 | COORDINATE | coordonnées obligatoires |
 | 3 | MATRIX | rangées de 1 à 250, colonnes de 1 à 60 ; sinon cause 5 |
-| 4 | **COMBINE** | **aucune exigence propre** : seuls les contrôles des coordonnées ; **`couleurs` nul admis** |
+| 4 | COMBINE | aucune exigence propre : seuls les contrôles des coordonnées ; `couleurs` nul **accepté par l'export, mais fatal plus loin** (voir « Fil de reconnaissance ») |
 
 - Un **modèle** (image de référence, `modele_present ≠ 0`) doit avoir des données, une largeur de 1 à 3 638, une hauteur de 1 à 19 000 et 8, 16 ou 24 bits par pixel (`0x100b2555..0x100b2586`).
 - Tout refus de l'export : public **1001**.
@@ -39,6 +39,15 @@ int32_t __stdcall FD9_StartPatchRecognition(const uint32_t *mode,               
 - Hors connexion : code interne 8023, public **1102**.
 - **État 5 ou 7 seulement** (`WAIT_CAPTURE_COMPLETION`, ou une reconnaissance déjà finie), sinon code interne 8024, public **1104** (`0x1008a8d7..0x1008a8e7`).
 - Les paramètres sont recopiés dans un objet de la DLL (`0x100ad370`), puis un fil de reconnaissance est lancé ; retour 0 : la reconnaissance est **lancée**.
+
+### Fil de reconnaissance (essai E3 du 30 octobre 2026)
+
+- Objet `CPatchRecognitionThread` (0xda4 octets, créé une fois à `0x1008a8f8`, table de méthodes `0x1011c470`) : copie des coordonnées à +0x18, mode à +0xd88, en-tête des couleurs `{type, nombre}` à +0xd8c et leur liste à +0xd94, « coordonnées données » à +0xd98, « couleurs données » à +0xd99 (`0x100ad370`). Sans couleurs, +0xd99 vaut 0.
+- Lancement (`0x100ad2b0`) : un `std::thread` de la bibliothèque C++ (pile par défaut de l'exécutable : 1 Mo pour le pont comme pour FD-S2w, lu dans leurs en-têtes PE), corps `0x100ad620`. Le fil annonce d'abord son état (`0x100ad560`), ce qui donne l'événement 6, et attend que l'événement soit parti avant de continuer (supposé : drapeau +0x578 de l'objet principal), puis appelle `CJungfrauCore::PatchRecognition` (`0x100a0ec0`) avec le **pointeur des couleurs nul** si +0xd99 vaut 0.
+- Dans `PatchRecognition`, pour les modes 0, 1 et 4 avec des coordonnées, et sans résultat précédent réutilisable : **si « modèle présent » (+0x718) vaut 0, la DLL fabrique une image modèle à partir des couleurs** (« CreateChartImage »), et lit leur type **sans tester le pointeur** : `mov edi, [esp+0x38]` (`0x100a14e0`, 4ᵉ argument), puis `cmp dword ptr [edi], 1` (`0x100a14f1`). Couleurs nulles : **lecture à l'adresse 0, le processus s'arrête net**, sans message (confirmé par lecture ; c'est l'arrêt de l'essai E3, juste après l'événement 6).
+- Type des couleurs lu à cet endroit : 0 = quatre valeurs par plage, converties par `(1 − v/100) × 255` (supposé : CMJN en %) ; 1 = trois valeurs moyennées telles quelles (supposé : RVB de 0 à 255) ; autre : refus interne 0x856.
+- **COORDINATE (2)** ne passe pas par là : `CoordinateMatching` (`0x10097260`) ne reçoit que la copie des coordonnées et l'image prise ; aucune lecture des couleurs (confirmé).
+- MYIROtools ne tombe jamais dans ce cas : sa fonction qui retient la mire (`mit-x64` `0x1403ec2a0`) n'accepte une définition **qu'avec ses couleurs** (les deux pointeurs non nuls), et passe toujours l'adresse de ses couleurs à `FD9_StartPatchRecognition` (confirmé).
 
 ## Contenu de `tFD9_ChartCoordinate`
 
@@ -71,24 +80,27 @@ Nombres relevés dans la définition de mire de MYIROtools (unité : 1/100 mm) :
 
 ## Ce qui est supposé
 
+- COORDINATE place les plages d'après la définition seule : un décalage de la feuille doit rester dans l'écart admis par le pont (3 mm), sinon la feuille est refusée (`MireNonReconnue`). À vérifier à l'essai E3 suivant.
 - L'unité des coordonnées est le 1/100 mm : FD-S2w recopie les définitions de mire champ par champ, sans conversion (`fd9-feuille.md` § 5), et ses fichiers donnent des plages de 600 pour 6 mm.
-- COMBINE = reconnaissance automatique des plages, puis comparaison aux coordonnées données ; il corrige un décalage de la feuille (tolérance de 21 mm d'après le manuel de FD-S2w).
-- COMBINE sans couleurs reconnaît la RGB-2520.
+- COMBINE = reconnaissance automatique des plages, puis comparaison aux coordonnées données ; il corrige un décalage de la feuille (tolérance de 21 mm d'après le manuel de FD-S2w). Il exige les couleurs des plages (ou une image modèle) : le pont pourra y venir en passant les couleurs RVB de la mire, type et échelle à établir sur MYIROtools.
 
 ## Pour le pont
 
 - Construire la structure à zéro, puis y écrire la définition ; refuser avant l'appel une définition hors bornes (mêmes règles que la DLL).
-- Mode **COMBINE (4)**, `couleurs` nul, `rangees` et `colonnes` vers des zéros. Repli prévu : COORDINATE (2), sur réglage explicite.
+- Mode **COORDINATE (2)**, `couleurs` nul, `rangees` et `colonnes` vers des zéros.
+- **COMBINE (4) refusé** tant que le pont ne passe ni couleurs ni image modèle : la session le refuse avant la feuille (`parametre_refuse`), l'adapter de la DLL ne fait pas l'appel, l'exécutable refuse `--reconnaissance combine` au lancement.
 - L'appeler dans le fil de la session, après l'événement 5 et la lecture du QR ; attendre ensuite l'événement 7.
 
 ## À vérifier sur l'instrument
 
-- COMBINE sans couleurs reconnaît-il la RGB-2520 ? Sinon, COORDINATE (essai E3).
+- ~~COMBINE sans couleurs reconnaît-il la RGB-2520 ?~~ Non : il plante (essai E3, cause établie par lecture). COORDINATE reconnaît-il la RGB-2520, et avec quel écart (essai E3 suivant) ?
 - L'unité et l'écart de la géométrie rendue par [FD9_GetPatchRecognitionResult2](FD9_GetPatchRecognitionResult2.md).
 
 ## Preuves (locales)
 
 - `fd9-x86/exports/FD9_StartPatchRecognition.asm.txt` (contrôles, `ret 0x14`) ; `fd9-x64/exports/FD9_StartPatchRecognition.asm.txt`.
 - Fonction de travail : `desassemble.py fd9-x86 --address 0x1008a890` ; recopie : `--address 0x100ad370`.
+- Fil de reconnaissance : `--address 0x100ad2b0` (lancement), `--address 0x100ad620` (corps) ; lecture des couleurs nulles : `desassemble.py fd9-x86 --address 0x100a0ec0 --limit 6000`, lignes `0x100a14a2..0x100a14f4` ; COORDINATE : `--address 0x10097260`.
+- Pile des fils : `SizeOfStackReserve` 0x100000 dans `pont-fd9.exe` (i686) et `FD-S2w.exe`.
 - Taille x64 : `retroanalyse/logiciels/fd-s2w.md` § 4.3 (effacement de 0xd78 octets) ; noms des champs : journal du SDK, même section.
 - Définition de la RGB-2520 et séquence de MYIROtools : `retroanalyse/logiciels/fd9-feuille.md` § 2 et 3 ; conversion de FD-S2w : § 5.

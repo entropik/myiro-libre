@@ -70,6 +70,15 @@ impl<S: SdkFd9> Session<S> {
                 .push(format!("définition de feuille refusée : {e:?}"));
             ErreurPont::ParametreRefuse {}
         })?;
+        if self.reconnaissance.lit_les_couleurs_sans_modele() && coordonnees.modele_present == 0 {
+            // Essai E3 : la DLL lit alors un pointeur nul dans son fil de
+            // reconnaissance (fiche FD9_StartPatchRecognition).
+            self.journal.push(
+                "reconnaissance COMBINE refusée : ni couleurs des plages ni image modèle, la DLL lirait un pointeur nul"
+                    .into(),
+            );
+            return Err(ErreurPont::ParametreRefuse {});
+        }
         self.vider_hors_requete();
         self.recus.clear();
         Ok(coordonnees)

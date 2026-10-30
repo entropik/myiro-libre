@@ -92,6 +92,9 @@ fn position_plage_fait_12_octets_et_point_mesure_20() {
 fn les_options_et_les_modes_ont_les_valeurs_du_sdk() {
     assert_eq!(ModeReconnaissance::Combine as u32, 4);
     assert_eq!(ModeReconnaissance::Coordonnees as u32, 2);
+    // Sans image modèle, COMBINE lit les couleurs des plages (essai E3).
+    assert!(ModeReconnaissance::Combine.lit_les_couleurs_sans_modele());
+    assert!(!ModeReconnaissance::Coordonnees.lit_les_couleurs_sans_modele());
     assert_eq!(CleOption::Condition as u32, 0);
     assert_eq!(CleOption::Illuminant as u32, 1);
     assert_eq!(CleOption::Observateur as u32, 2);

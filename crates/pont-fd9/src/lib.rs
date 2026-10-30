@@ -225,7 +225,7 @@ impl<S: SdkFd9> Session<S> {
             perdu: false,
             delais: Delais::default(),
             annulation: Annulation::default(),
-            reconnaissance: ModeReconnaissance::Combine,
+            reconnaissance: ModeReconnaissance::Coordonnees,
             recus: VecDeque::new(),
             dernier_etat: None,
         }
@@ -237,8 +237,9 @@ impl<S: SdkFd9> Session<S> {
         self
     }
 
-    /// Mode de reconnaissance des plages : COMBINE par défaut, COORDINATE en
-    /// repli, sur réglage explicite.
+    /// Mode de reconnaissance des plages : COORDINATE par défaut. COMBINE
+    /// sans couleurs ni image modèle est refusé au début de chaque feuille,
+    /// sans appel à la DLL (plantage de l'essai E3).
     pub fn avec_reconnaissance(mut self, mode: ModeReconnaissance) -> Self {
         self.reconnaissance = mode;
         self

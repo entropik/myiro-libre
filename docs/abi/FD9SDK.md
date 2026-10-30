@@ -68,7 +68,7 @@ Référence : **MYIROtools**, le logiciel du fabricant qui imprime la mire RGB-2
 1. [FD9_RegisterDeviceEventHandler](FD9_RegisterDeviceEventHandler.md), puis [FD9_Connect](FD9_Connect.md) : succès si 0 ou 1901 ; puis [FD9_GetSystemInfo](FD9_GetSystemInfo.md) et [FD9_GetStatus](FD9_GetStatus.md).
 2. L'opérateur glisse la feuille. Événement 3 : [FD9_StartCapture](FD9_StartCapture.md).
 3. Événement 5 : [FD9_GetCaptureResult](FD9_GetCaptureResult.md) deux fois (taille, puis image et QR) ; contrôle du QR.
-4. [FD9_StartPatchRecognition](FD9_StartPatchRecognition.md) en mode **COMBINE** (4), avec la définition de la mire, sans couleurs.
+4. [FD9_StartPatchRecognition](FD9_StartPatchRecognition.md) en mode **COORDINATE** (2), avec la définition de la mire, sans couleurs. MYIROtools passe en COMBINE (4) **avec** les couleurs des plages ; COMBINE sans couleurs ni image modèle fait lire un pointeur nul à la DLL (plantage de l'essai E3) : le pont le refuse.
 5. Événement 7 : [FD9_GetPatchRecognitionResult2](FD9_GetPatchRecognitionResult2.md), puis **comparaison à la définition** (zones et plages, comme MYIROtools ; origine et pas, en plus pour le pont). Au palier Prénumérisation, la feuille s'arrête là : [FD9_StopMeasurement](FD9_StopMeasurement.md)`(faux)`, puis attente de l'événement 10.
 6. Palier Feuille : [FD9_GetMeasurePoint](FD9_GetMeasurePoint.md), puis [FD9_StartMeasurement2](FD9_StartMeasurement2.md)`(1, 1)`.
 7. Événements 11 : nombre de plages mesurées. Événement 9 : mesure finie.
@@ -102,7 +102,7 @@ Noms confirmés dans la DLL x86 (table `0x101086d0`, 22 entrées) et dans la bib
 | 2 | `RUN_FEED` | feuille en cours d'engagement | rien | attendre |
 | 3 | `WAIT_FEED_COMPLETION` | feuille engagée | `FD9_StartCapture` (depuis un autre fil) | `FD9_StartCapture` |
 | 4 | `RUN_CAPTURE` | image en cours | — | attendre |
-| 5 | `WAIT_CAPTURE_COMPLETION` | image prise | `FD9_GetCaptureResult` ×2, puis reconnaissance | `FD9_GetCaptureResult` ×2, contrôle du QR, `FD9_StartPatchRecognition` (COMBINE) ; autre QR : arrêt (`AutreMire`) |
+| 5 | `WAIT_CAPTURE_COMPLETION` | image prise | `FD9_GetCaptureResult` ×2, puis reconnaissance | `FD9_GetCaptureResult` ×2, contrôle du QR, `FD9_StartPatchRecognition` (COORDINATE) ; autre QR : arrêt (`AutreMire`) |
 | 6 | `RUN_PATCHRECOG` | reconnaissance en cours | — | attendre |
 | 7 | `WAIT_PATCHRECOG_COMPLETION` | plages reconnues | résultat, comparaison, `FD9_GetMeasurePoint`, `FD9_StartMeasurement2(1, 1)` | résultat et comparaison (sinon arrêt, `MireNonReconnue`) ; Prénumérisation : `FD9_StopMeasurement(faux)` ; Feuille : `FD9_GetMeasurePoint`, `FD9_StartMeasurement2(1, 1)` |
 | 8 | `RUN_MEASURE` | mesure en cours | — | attendre |
