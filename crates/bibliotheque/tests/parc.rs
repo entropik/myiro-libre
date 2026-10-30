@@ -66,14 +66,14 @@ fn produire_fixture_organisation_4() {
 }
 
 #[test]
-fn une_base_neuve_est_en_organisation_6() {
+fn une_base_neuve_est_en_organisation_7() {
     let (dossier, biblio) = bibliotheque_temporaire();
     drop(biblio);
     let base = rusqlite::Connection::open(dossier.path().join(bibliotheque::FICHIER_BASE)).unwrap();
     let version: i32 = base
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 6);
+    assert_eq!(version, 7);
     base.prepare("SELECT papier, resolution FROM conditions")
         .unwrap();
     base.prepare("SELECT id, nom FROM imprimantes").unwrap();

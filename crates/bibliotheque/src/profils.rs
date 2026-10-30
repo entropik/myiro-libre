@@ -6,13 +6,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use pont_protocole::Horodatage;
 use rusqlite::{params, OptionalExtension};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::{instant, Bibliotheque, ErreurBibliotheque, IdCondition, IdMesure, Resultat};
 
 /// Numéro d'un profil dans la bibliothèque.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct IdProfil(pub i64);
 
 /// Espace de données d'un profil ICC accepté par la bibliothèque.
@@ -24,14 +24,14 @@ pub enum EspaceProfil {
 }
 
 impl EspaceProfil {
-    fn en_base(self) -> &'static str {
+    pub(crate) fn en_base(self) -> &'static str {
         match self {
             Self::Rvb => "rvb",
             Self::Cmjn => "cmjn",
         }
     }
 
-    fn depuis_base(texte: &str) -> Option<Self> {
+    pub(crate) fn depuis_base(texte: &str) -> Option<Self> {
         match texte {
             "rvb" => Some(Self::Rvb),
             "cmjn" => Some(Self::Cmjn),
@@ -51,7 +51,7 @@ pub enum EtatVerification {
 }
 
 impl EtatVerification {
-    fn en_base(self) -> &'static str {
+    pub(crate) fn en_base(self) -> &'static str {
         match self {
             Self::NonVerifie => "non_verifie",
             Self::Accepte => "accepte",
@@ -60,7 +60,7 @@ impl EtatVerification {
         }
     }
 
-    fn depuis_base(texte: &str) -> Option<Self> {
+    pub(crate) fn depuis_base(texte: &str) -> Option<Self> {
         match texte {
             "non_verifie" => Some(Self::NonVerifie),
             "accepte" => Some(Self::Accepte),
@@ -171,7 +171,7 @@ pub fn profil_ancien(horodatage: &str, maintenant: SystemTime) -> bool {
 }
 
 /// Empreinte SHA-256 en hexadécimal minuscule.
-fn empreinte(octets: &[u8]) -> String {
+pub(crate) fn empreinte(octets: &[u8]) -> String {
     let mut hex = String::with_capacity(64);
     for o in Sha256::digest(octets) {
         let _ = write!(hex, "{o:02x}");

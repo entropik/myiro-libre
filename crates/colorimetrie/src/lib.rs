@@ -323,6 +323,36 @@ pub fn xyz_vers_lab(xyz: Xyz, blanc: Xyz) -> Result<Lab, Inconnu> {
     })
 }
 
+/// Lab vers XYZ, rapporté au blanc donné : l'inverse exact de
+/// [`xyz_vers_lab`] (mêmes constantes CIE, même partie linéaire pour les
+/// couleurs très sombres).
+pub fn lab_vers_xyz(lab: Lab, blanc: Xyz) -> Result<Xyz, Inconnu> {
+    verifier_lab(&lab)?;
+    if [blanc.x, blanc.y, blanc.z].iter().any(|v| !v.is_finite()) {
+        return Err(Inconnu::ValeurNonFinie);
+    }
+    if [blanc.x, blanc.y, blanc.z].iter().any(|&v| v <= 0.0) {
+        return Err(Inconnu::BlancInvalide);
+    }
+    const EPSILON: f64 = 216.0 / 24389.0;
+    const KAPPA: f64 = 24389.0 / 27.0;
+    let fy = (lab.l + 16.0) / 116.0;
+    let (fx, fz) = (fy + lab.a / 500.0, fy - lab.b / 200.0);
+    let inverse = |f: f64| {
+        let cube = f * f * f;
+        if cube > EPSILON {
+            cube
+        } else {
+            (116.0 * f - 16.0) / KAPPA
+        }
+    };
+    Ok(Xyz {
+        x: fini(blanc.x * inverse(fx))?,
+        y: fini(blanc.y * inverse(fy))?,
+        z: fini(blanc.z * inverse(fz))?,
+    })
+}
+
 /// Spectre de réflexion vers Lab, D50 et 2°.
 pub fn spectre_vers_lab(spectre: &[f64]) -> Result<Lab, Inconnu> {
     xyz_vers_lab(spectre_vers_xyz(spectre)?, blanc_d50())

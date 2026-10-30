@@ -43,3 +43,8 @@ Première partie du ticket : un profil RVB calculé à partir d'une mesure impor
 - **`iccgamut` rejoint les outils lancés** pour la comparaison des profils : `iccgamut -v -ia -pl profil.icc` calcule la limite du gamut d'un profil et son volume (commande confirmée le 26 octobre 2026 avec ArgyllCMS 3.5.0, voir la [référence des options](../references/icc-argyll-options.md)). Il passe par un second trait, `MoteurGamut`, séparé de `MoteurProfil`, avec le même contrôle de version, le même dossier de travail effacé à la fin et sa commande montrée telle quelle.
 - **Installateur** : `bin/iccgamut.exe` est embarqué avec `colprof`, `profcheck` et `sRGB.icm` ; un dossier `argyll/` sans lui arrête `outils/preparer_installateur.py`, comme pour les autres fichiers.
 - **Sur le poste, un ArgyllCMS sans `iccgamut`** calcule toujours les profils : seul cet outil est dit manquant. La comparaison montre alors la surface brute à la place de la limite du gamut, avec la raison, et calcule tout le reste.
+
+## Complété (28 octobre 2026, ticket #41)
+
+- **`xicclu` embarqué** : la vérification d'un profil l'interroge (couleur demandée en sRVB, valeur envoyée à l'imprimante, prédictions relative et absolue), derrière le trait `MoteurVerification` de `profilage`. L'installateur embarque `bin/xicclu.exe` et s'arrête s'il manque. Dans l'application, un dossier `argyll/` sans `xicclu` dit « outil manquant » (`ErreurMoteur::OutilManquant`) : rien n'est rangé, le calcul de profil reste possible.
+- **Confirmé avec ArgyllCMS 3.5.0** : `xicclu -v0` lit une couleur par ligne sur l'entrée standard et écrit trois nombres par ligne ; une couleur hors gamut demandée vers l'appareil est ramenée en silence (voir la [référence des options](../references/icc-argyll-options.md)).
