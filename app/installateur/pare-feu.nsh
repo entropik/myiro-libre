@@ -15,9 +15,10 @@
 !define MYIRO_REGLE_FD9 "myiro-libre - FD-9 - detection (UDP 49152)"
 
 ; A l'installation et a chaque mise a jour : lecture de la regle, sans droits
-; (netsh ecrit son detail dans un fichier temporaire, lu ligne a ligne). Les
-; libelles LocalPort, RemoteIP et Program restent en anglais dans le Windows
-; francais ; Protocol y devient Protocole. Chaque regle de ce nom doit avoir
+; (netsh ecrit son detail dans un fichier temporaire, lu ligne a ligne).
+; Suppose, a confirmer a l'essai sur le poste : les libelles LocalPort,
+; RemoteIP et Program restent en anglais dans le Windows francais ; Protocol
+; y devient Protocole. Chaque regle de ce nom doit avoir
 ; le port 49152, UDP, l'etendue LocalSubnet et aucun programme (Any, Tout).
 ; Sinon : une seule demande de droits, retrait de toute regle de ce nom, puis
 ; ajout d'une seule. Un refus ne bloque pas l'installation : l'application

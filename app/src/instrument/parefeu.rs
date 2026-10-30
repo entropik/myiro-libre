@@ -98,8 +98,10 @@ pub enum EtatRegle {
 /// de ce nom doit être conforme : port local 49152, UDP, étendue
 /// `LocalSubnet`, sans programme (pas de ligne `Program`, ou `Any`/`Tout`).
 ///
-/// Les libellés `LocalPort`, `RemoteIP` et `Program` restent en anglais dans
-/// le Windows français ; `Protocol` y devient `Protocole`. L'espace
+/// Supposé, à confirmer à l'essai sur le poste (relevé dans les ressources de
+/// langue de `netsh`, sans le lancer) : les libellés `LocalPort`, `RemoteIP`
+/// et `Program` restent en anglais dans le Windows français ; `Protocol` y
+/// devient `Protocole`. L'espace
 /// insécable avant « : » du français arrive parfois illisible (`\u{fffd}`).
 pub fn etat_selon_netsh(sortie: &str) -> EtatRegle {
     // Chaque règle commence par son nom, souligné d'une ligne de tirets :
@@ -535,12 +537,14 @@ Ok.\r\n\r\n";
 
     #[test]
     fn une_regle_d_un_autre_port_protocole_ou_etendue_est_a_refaire() {
-        for sortie in [SORTIE_ANGLAISE, SORTIE_FRANCAISE] {
+        for (sortie, tout) in [(SORTIE_ANGLAISE, "Any"), (SORTIE_FRANCAISE, "Tout")] {
             let autre_port = sortie.replace("49152\r\n", "5000\r\n");
             let plage = sortie.replace("49152\r\n", "49152-49153\r\n");
             let adresse = sortie.replace("LocalSubnet", "192.0.2.40/255.255.255.255");
+            // Ouverte à toutes les adresses, au-delà du réseau local.
+            let partout = sortie.replace("LocalSubnet", tout);
             let tcp = sortie.replace("UDP\r\n", "TCP\r\n");
-            for mauvaise in [autre_port, plage, adresse, tcp] {
+            for mauvaise in [autre_port, plage, adresse, partout, tcp] {
                 assert_eq!(
                     etat_selon_netsh(&mauvaise),
                     EtatRegle::ARefaire,
