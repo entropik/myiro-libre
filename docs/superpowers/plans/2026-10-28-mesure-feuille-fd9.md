@@ -59,6 +59,8 @@ Niveaux : **confirmé** (lu dans le code), **supposé**, **à vérifier sur l'in
 
 **Révision du 28 octobre 2026 (essai E2)** : un `StopMeasurement(faux)` admis à l'état 1 (attente de la feuille, rien glissé) n'a jamais été suivi de l'événement 10, puis `FD9_Disconnect` est resté bloqué environ 5 min. Nouvelle règle, celle de MYIROtools : une attente de la feuille finie sans feuille (délai ou annulation) relit l'état ; aux états 0 et 1, ni arrêt ni sortie, et le pont rend `FeuilleAbsente` ou `MesureAnnulee { au_repos }`. Aux états 2 à 8, l'arrêt reste celui de la tâche 5. La fermeture fait `ExitMeasurement(0, NULL)` (retour ignoré), `Disconnect`, puis relit l'état toutes les 100 ms jusqu'à l'état 1 ou au code 1102 (10 s au plus), puis désinscrit le rappel ; un chien de garde de 20 s la borne entière. Les lignes ci-dessous qui disent « on arrête » au délai de la feuille décrivent l'ancienne règle.
 
+**Révision du 30 octobre 2026 (essais E3 à E4 ter, tâches 0 à 9 faites)** : quatre écarts au plan, tous dans la branche. (1) **COMBINE avec couleurs** : à l'essai E3, COMBINE sans couleurs a arrêté net le pont (la DLL lit les couleurs absentes, confirmé par lecture de la DLL) ; COORDINATE a ensuite mesuré à côté des plages, la mire imprimée sur A3 étant décalée d'environ 9 mm (E4 bis). Le pont reconnaît donc toujours en COMBINE, avec les couleurs RVB (0 à 255) de chaque plage envoyées dans la définition ; une définition sans couleurs est refusée. Le « repli COORDINATE » et le « pointeur de couleurs nul » des Choix de l'assistant sont abandonnés, et les plages sont rangées par la position que rend `GetData` (le FD-9 lit en serpentin, essai E4), pas par l'ordre de lecture. (2) **Calage** : points de mesure contrôlés (chaque plage une fois, décalage de 21 mm au plus, grille à 3 mm près), doute de la DLL (fiabilité non nulle) et mesure invraisemblable refusés ; l'image de la feuille est lue par `FD9_GetChartImage` (ajouté à la liste blanche avec sa fiche, lecture seule) et rendue en `calage` avec `prenumerisee` et `mesure`, gardée par l'application à côté de la mesure. (3) **Avancement** : le pont annonce l'avancement de la feuille avant sa réponse (feuille engagée, lecture, calage, mesure n / 2 520 ; que n compte les plages mesurées reste supposé), relayé à l'écran. (4) **zxing.dll** (ticket #87) : la DLL charge ce composant de lecture du QR depuis le dossier du pont ; le pont l'exige avant chaque feuille (`composant_qr_introuvable`, sans appel à la DLL) et l'installateur l'embarque après contrôle de son empreinte. Résultat de l'essai E4 ter : RGB-2520 mesurée de bout en bout, ΔE00 moyen 0,03 (maximum 0,26) face à FD-S2w sur la même feuille. Restent supposées les conditions M0, M1, M2, les longueurs d'onde, D50 et 2° ; l'essai E5 (application de bout en bout) reste à faire.
+
 ## Global Constraints
 
 - Travail dans le worktree `.claude/worktrees/ticket-34`, branche `ticket/34-feuille-fd9` issue de `dev`. PR vers `dev` (`AGENTS.md`). Avant d'écrire : `python outils/verifier_contexte.py --worktree <worktree> --branch ticket/34-feuille-fd9 --reference dev`. **Rebaser sur `dev` une fois le plan 4 fusionné**, avant la tâche 8.
@@ -113,9 +115,9 @@ Niveaux : **confirmé** (lu dans le code), **supposé**, **à vérifier sur l'in
 
 **Files:** aucun.
 
-- [ ] **Step 1 : Contexte** — Run: `python outils/verifier_contexte.py --worktree C:/Code/MYIRO-fork/.claude/worktrees/ticket-34 --branch ticket/34-feuille-fd9 --reference dev` puis `git status --short`. Expected: contexte conforme, rien d'autre que ce plan.
-- [ ] **Step 2 : Plan 4** — Run: `git log --oneline dev -- crates/mires/src/rgb2520.rs`. Si rien : les tâches 1 à 7 peuvent avancer (elles ne touchent pas `mires`) ; la tâche 8 attend la fusion du plan 4 et un `git rebase dev`.
-- [ ] **Step 3 : Ponts compilés** — Run: `cargo build -p pont-fd9 --target i686-pc-windows-msvc` puis `cargo test -p pont-fd9 --target i686-pc-windows-msvc`. Expected: vert (état de départ).
+- [x] **Step 1 : Contexte** — Run: `python outils/verifier_contexte.py --worktree C:/Code/MYIRO-fork/.claude/worktrees/ticket-34 --branch ticket/34-feuille-fd9 --reference dev` puis `git status --short`. Expected: contexte conforme, rien d'autre que ce plan.
+- [x] **Step 2 : Plan 4** — Run: `git log --oneline dev -- crates/mires/src/rgb2520.rs`. Si rien : les tâches 1 à 7 peuvent avancer (elles ne touchent pas `mires`) ; la tâche 8 attend la fusion du plan 4 et un `git rebase dev`.
+- [x] **Step 3 : Ponts compilés** — Run: `cargo build -p pont-fd9 --target i686-pc-windows-msvc` puis `cargo test -p pont-fd9 --target i686-pc-windows-msvc`. Expected: vert (état de départ).
 
 ### Tâche 1 : Fiches d'ABI de la mesure d'une feuille
 
@@ -125,16 +127,16 @@ Niveaux : **confirmé** (lu dans le code), **supposé**, **à vérifier sur l'in
 
 Chaque fiche suit le modèle de `FD9_GetSystemInfo.md` : En clair, Signature, Ce qui est confirmé (adresses VA `fd9-x86`), Contenu des structures, Propriété de la mémoire, Ce qui est supposé, Pour le pont, À vérifier sur l'instrument, Preuves (locales). Elles reprennent les faits de `Audit-MYIRO/retroanalyse/logiciels/fd9-feuille.md` et de `fd-s2w.md` § 4, **sans recopier de code du fabricant**, sans adresse IP, MAC ni n° de série. La définition de mire de MYIROtools y est citée par ses nombres, jamais par son contenu brut ni sa clé.
 
-- [ ] **Step 1 : Écrire les 13 fiches.** Points obligatoires :
+- [x] **Step 1 : Écrire les 13 fiches.** Points obligatoires :
   - `FD9_GetCaptureResult` : 1er appel avec image nulle, qui rend la taille ; 2e avec l'image. Résultats 0, 1 et 2 du QR. Disposition de `tFD9_BarcodeData` (1 172 octets), format `011` et ancien format. `bpp` forcé à 8.
   - `FD9_StartPatchRecognition` : disposition x86 et x64 de `tFD9_ChartCoordinate`, contrôles des zones, exigences de chaque mode, pointeur de couleurs nul admis en COMBINE.
   - `FD9_GetData` : `{index, −1, −1}`, bornes, données brutes en 4 × 38, position rendue.
   - `FD9_SetOption` : **aucun échange avec l'instrument**, les quatre clés et leurs bornes.
   - `FD9_StartMeasurement2` : exige l'état 7, `mode & 7`, sens supposé.
   - `FD9_StopMeasurement` et `FD9_ExitMeasurement` : quand MYIROtools appelle l'un ou l'autre.
-- [ ] **Step 2 : `FD9SDK.md`** : section « Mesurer une feuille », avec la séquence, la table des états du rappel (0–11, 101–103, 201–206, 301) et l'action du pont pour chacun. Rendre à 1901 son sens : « recertification due ».
-- [ ] **Step 3 : Vérifier** — Run: `python outils/verifier_docs.py`. Expected: OK (liens, mots interdits).
-- [ ] **Step 4 : Commit** — `git commit -m "Fiches d'ABI FD-9 : mesure d'une feuille, établies par lecture statique"`
+- [x] **Step 2 : `FD9SDK.md`** : section « Mesurer une feuille », avec la séquence, la table des états du rappel (0–11, 101–103, 201–206, 301) et l'action du pont pour chacun. Rendre à 1901 son sens : « recertification due ».
+- [x] **Step 3 : Vérifier** — Run: `python outils/verifier_docs.py`. Expected: OK (liens, mots interdits).
+- [x] **Step 4 : Commit** — `git commit -m "Fiches d'ABI FD-9 : mesure d'une feuille, établies par lecture statique"`
 
 ### Tâche 2 : `fd9-sys` — structures de la feuille et liste blanche
 
@@ -198,7 +200,7 @@ impl DonneesQr { pub fn vide() -> Box<Self>; pub fn appareil(&self) -> String; p
 
 `fd9-sys` dépend de `pont-protocole` pour `DefinitionFeuille` (tâche 3) ; si la dépendance gêne, la conversion va dans `pont-fd9`.
 
-- [ ] **Step 1 : Tests d'abord** (`tests/dispositions.rs`), en 32 et 64 bits avec `cfg(target_pointer_width)` :
+- [x] **Step 1 : Tests d'abord** (`tests/dispositions.rs`), en 32 et 64 bits avec `cfg(target_pointer_width)` :
 
 ```rust
 #[test] fn coordonnees_mire_fait_0xd70_en_32_bits_et_0xd78_en_64() {}
@@ -213,10 +215,10 @@ impl DonneesQr { pub fn vide() -> Box<Self>; pub fn appareil(&self) -> String; p
 #[test] fn set_option_est_la_seule_fonction_set_admise() {}
 ```
 
-- [ ] **Step 2 : Lancer** — `cargo test -p fd9-sys` puis `cargo test -p fd9-sys --target i686-pc-windows-msvc`. Expected: échec (types absents).
-- [ ] **Step 3 : Implémenter** `feuille.rs` et la liste blanche (dans l'ordre des Global Constraints, un commentaire par export qui renvoie à sa fiche).
-- [ ] **Step 4 : Vert en 32 et 64 bits**, clippy, fmt.
-- [ ] **Step 5 : Commit** — `git commit -m "fd9-sys : structures de la feuille FD-9 et liste blanche de la mesure"`
+- [x] **Step 2 : Lancer** — `cargo test -p fd9-sys` puis `cargo test -p fd9-sys --target i686-pc-windows-msvc`. Expected: échec (types absents).
+- [x] **Step 3 : Implémenter** `feuille.rs` et la liste blanche (dans l'ordre des Global Constraints, un commentaire par export qui renvoie à sa fiche).
+- [x] **Step 4 : Vert en 32 et 64 bits**, clippy, fmt.
+- [x] **Step 5 : Commit** — `git commit -m "fd9-sys : structures de la feuille FD-9 et liste blanche de la mesure"`
 
 ### Tâche 3 : `pont-protocole` — définition d'une feuille, deux paliers, deux requêtes
 
@@ -266,7 +268,7 @@ IncidentFeuille { etat: u32, premesure: Option<i32> },   // 101–103, 201–206
 
 `Provenance` reçoit `feuille: Option<LectureFeuille>` (`#[serde(default, skip_serializing_if = "Option::is_none")]`), présent pour une mesure en feuille. Le format reste `myiro-libre/mesure/1` : le champ est facultatif et les anciennes lignes se relisent. **Vérifier à l'implémentation** que `Mesure::new` refuse une feuille sans `feuille`, et une `feuille` sur une autre géométrie. `MODELE_FD9: &str = "FD-9"`.
 
-- [ ] **Step 1 : Tests d'abord**
+- [x] **Step 1 : Tests d'abord**
 
 ```rust
 #[test] fn prenumerisation_et_feuille_viennent_apres_bande() {}           // Palier::Feuille > Palier::Bande
@@ -279,8 +281,8 @@ IncidentFeuille { etat: u32, premesure: Option<i32> },   // 101–103, 201–206
 #[test] fn un_champ_inconnu_dans_la_definition_est_refuse() {}            // deny_unknown_fields
 ```
 
-- [ ] **Step 2 : Rouge, puis implémenter, puis vert** (`cargo test -p pont-protocole`), et les crates qui font un `match` sur `Palier` ou `Requete` (`pont-myiro1`, `pont-fd9`, `app`) compilent : les nouvelles requêtes y sont refusées (`requete_invalide` ou `palier_non_autorise`), sans effet.
-- [ ] **Step 3 : Commit** — `git commit -m "Protocole : définition d'une feuille, paliers Prénumérisation et Feuille"`
+- [x] **Step 2 : Rouge, puis implémenter, puis vert** (`cargo test -p pont-protocole`), et les crates qui font un `match` sur `Palier` ou `Requete` (`pont-myiro1`, `pont-fd9`, `app`) compilent : les nouvelles requêtes y sont refusées (`requete_invalide` ou `palier_non_autorise`), sans effet.
+- [x] **Step 3 : Commit** — `git commit -m "Protocole : définition d'une feuille, paliers Prénumérisation et Feuille"`
 
 ### Tâche 4 : `pont-fd9` — palier Connexion et rappel d'événements
 
@@ -317,7 +319,7 @@ Ordre de la connexion :
 
 En cas d'échec : `inscrire_rappel(faux)`. Fermeture : `deconnecter`, puis `inscrire_rappel(faux)`. Un échec de `deconnecter` donne `FermetureIncertaine`, sans nouvel appel.
 
-- [ ] **Step 1 : Tests d'abord** (instrument simulé)
+- [x] **Step 1 : Tests d'abord** (instrument simulé)
 
 ```rust
 #[test] fn la_connexion_inscrit_le_rappel_avant_connect() {}            // journal : RegisterDeviceEventHandler, Connect, GetSystemInfo, GetStatus
@@ -332,9 +334,9 @@ En cas d'échec : `inscrire_rappel(faux)`. Fermeture : `deconnecter`, puis `insc
 #[test] fn le_plafond_detection_refuse_la_connexion_sans_appel() {}
 ```
 
-- [ ] **Step 2 : Rouge, implémenter, vert** (64 et 32 bits).
-- [ ] **Step 3 : Test réel préparé, pas lancé** — `tests/dll.rs` : `palier_connexion` (`#[ignore]`). Il prend l'adresse dans `FD9_ADRESSE` (jamais en dur), affiche l'identité à l'écran et se déconnecte. Il n'est lancé qu'à l'essai E1, avec l'opérateur.
-- [ ] **Step 4 : Commit** — `git commit -m "Pont FD-9 : palier Connexion et rappel d'événements sans appel à la DLL"`
+- [x] **Step 2 : Rouge, implémenter, vert** (64 et 32 bits).
+- [x] **Step 3 : Test réel préparé, pas lancé** — `tests/dll.rs` : `palier_connexion` (`#[ignore]`). Il prend l'adresse dans `FD9_ADRESSE` (jamais en dur), affiche l'identité à l'écran et se déconnecte. Il n'est lancé qu'à l'essai E1, avec l'opérateur.
+- [x] **Step 4 : Commit** — `git commit -m "Pont FD-9 : palier Connexion et rappel d'événements sans appel à la DLL"`
 
 ### Tâche 5 : `pont-fd9` — palier Prénumérisation
 
@@ -361,7 +363,7 @@ Pendant toute attente :
 - une requête `annuler` lue par le serveur donne **arrêt**, puis `MesureAnnulee`, comme le pont MYIRO-1 (#26) ;
 - l'image capturée n'est gardée que le temps de la requête : elle n'est ni écrite ni renvoyée (plus tard, #35).
 
-- [ ] **Step 1 : Tests d'abord** (scénarios simulés)
+- [x] **Step 1 : Tests d'abord** (scénarios simulés)
 
 ```rust
 #[test] fn une_rgb2520_est_reconnue_sans_mesurer() {}           // StartMeasurement2 absent du journal
@@ -377,9 +379,9 @@ Pendant toute attente :
 #[test] fn la_capture_est_lue_en_deux_appels() {}               // image nulle, puis tampon de la taille rendue
 ```
 
-- [ ] **Step 2 : Rouge, implémenter, vert** (64 et 32 bits).
-- [ ] **Step 3 : Test réel préparé** — `palier_prenumerisation` (`#[ignore]`, `FD9_ADRESSE`, délai `FD9_ATTENTE` en secondes, 120 par défaut) : affiche le texte du QR, les zones, les plages, la fiabilité et l'écart. Lancé à l'essai E3.
-- [ ] **Step 4 : Commit** — `git commit -m "Pont FD-9 : prénumérisation d'une feuille, QR et reconnaissance contrôlés"`
+- [x] **Step 2 : Rouge, implémenter, vert** (64 et 32 bits).
+- [x] **Step 3 : Test réel préparé** — `palier_prenumerisation` (`#[ignore]`, `FD9_ADRESSE`, délai `FD9_ATTENTE` en secondes, 120 par défaut) : affiche le texte du QR, les zones, les plages, la fiabilité et l'écart. Lancé à l'essai E3.
+- [x] **Step 4 : Commit** — `git commit -m "Pont FD-9 : prénumérisation d'une feuille, QR et reconnaissance contrôlés"`
 
 ### Tâche 6 : `pont-fd9` — palier Feuille
 
@@ -409,7 +411,7 @@ Pendant toute attente :
 
 Variante prévue (Choix de l'assistant) : si l'essai E4 montre que les données ne sont plus lisibles à l'événement 9, l'étape 5 se fait au fil des événements 11, plage par plage.
 
-- [ ] **Step 1 : Tests d'abord**
+- [x] **Step 1 : Tests d'abord**
 
 ```rust
 #[test] fn une_feuille_rgb2520_rend_2520_plages_dans_l_ordre() {}
@@ -422,9 +424,9 @@ Variante prévue (Choix de l'assistant) : si l'essai E4 montre que les données 
 #[test] fn mesurer_sans_prenumerisation_prealable_est_permis() {}     // Feuille exige Connexion, pas Prénumérisation
 ```
 
-- [ ] **Step 2 : Rouge, implémenter, vert** (64 et 32 bits).
-- [ ] **Step 3 : Test réel préparé** — `palier_feuille` (`#[ignore]`, `FD9_ADRESSE`, `FD9_SORTIE`). Il écrit la mesure (JSON) dans `FD9_SORTIE` (sous `Archivage/donnees/`, local) et affiche le Lab M1 des plages 1, 42, 2479 et 2520. Lancé à l'essai E4.
-- [ ] **Step 4 : Commit** — `git commit -m "Pont FD-9 : mesure d'une feuille, 2 520 plages lues et associées à la mire"`
+- [x] **Step 2 : Rouge, implémenter, vert** (64 et 32 bits).
+- [x] **Step 3 : Test réel préparé** — `palier_feuille` (`#[ignore]`, `FD9_ADRESSE`, `FD9_SORTIE`). Il écrit la mesure (JSON) dans `FD9_SORTIE` (sous `Archivage/donnees/`, local) et affiche le Lab M1 des plages 1, 42, 2479 et 2520. Lancé à l'essai E4.
+- [x] **Step 4 : Commit** — `git commit -m "Pont FD-9 : mesure d'une feuille, 2 520 plages lues et associées à la mire"`
 
 ### Tâche 7 : Incidents et simulation complète
 
@@ -434,7 +436,7 @@ Variante prévue (Choix de l'assistant) : si l'essai E4 montre que les données 
 
 Scénarios du ticket #34 : feuille valide, plage non reconnue, bourrage, perte de liaison, fermeture incertaine ; et en plus, couvercle ouvert, erreur de prémesure, feuille trop longue, état inconnu.
 
-- [ ] **Step 1 : Tests**
+- [x] **Step 1 : Tests**
 
 ```rust
 #[test] fn un_bourrage_rend_une_erreur_et_aucune_plage() {}           // état 102 → IncidentFeuille { etat: 102 }
@@ -446,8 +448,8 @@ Scénarios du ticket #34 : feuille valide, plage non reconnue, bourrage, perte d
 #[test] fn l_executable_refuse_feuille_au_plafond_connexion() {}      // pont lancé en vrai processus, instrument simulé
 ```
 
-- [ ] **Step 2 : Vert** en 64 et 32 bits ; `cargo clippy --all-targets -- -D warnings`.
-- [ ] **Step 3 : Commit** — `git commit -m "Pont FD-9 : incidents d'une feuille traduits en erreurs explicites"`
+- [x] **Step 2 : Vert** en 64 et 32 bits ; `cargo clippy --all-targets -- -D warnings`.
+- [x] **Step 3 : Commit** — `git commit -m "Pont FD-9 : incidents d'une feuille traduits en erreurs explicites"`
 
 ### Tâche 8 : Application — mesurer la RGB-2520 et la ranger
 
@@ -472,7 +474,7 @@ Déroulé de `mesurer_feuille_fd9(condition)` :
 
 **CGATS** : `ecrire_avec_rvb` ajoute `RGB_R RGB_G RGB_B` à chaque tableau. Le nombre de valeurs RVB doit être égal au nombre de plages, sinon refus. `lire` donne une échelle RVB `Confirmee` (0 à 100) pour un fichier écrit par myiro-libre. Les autres règles d'échelle ne changent pas.
 
-- [ ] **Step 1 : Tests d'abord**
+- [x] **Step 1 : Tests d'abord**
 
 ```rust
 // crates/cgats/tests/rvb.rs
@@ -488,8 +490,8 @@ Déroulé de `mesurer_feuille_fd9(condition)` :
 #[test] fn apres_la_mesure_le_pont_revient_au_plafond_connexion() {}
 ```
 
-- [ ] **Step 2 : Rouge, implémenter, vert** ; `cargo test -p app -p cgats` en 64 et 32 bits.
-- [ ] **Step 3 : Commit** — `git commit -m "Application : mesurer la RGB-2520 au FD-9 et la ranger dans la résolution"`
+- [x] **Step 2 : Rouge, implémenter, vert** ; `cargo test -p app -p cgats` en 64 et 32 bits.
+- [x] **Step 3 : Commit** — `git commit -m "Application : mesurer la RGB-2520 au FD-9 et la ranger dans la résolution"`
 
 ### Tâche 9 : Écran « Mesurer une feuille au FD-9 »
 
@@ -505,10 +507,10 @@ La vue d'une résolution reçoit un bouton **« Mesurer une feuille au FD-9 »**
 
 Un bouton **« Annuler »** reste présent pendant l'attente et la lecture. Thèmes clair et sombre, jetons de `design-system/tokens.css`, aucun texte en dur, utilisable au clavier.
 
-- [ ] **Step 1 : Clés de texte** `feuille_fd9.*` (français et anglais) : libellés, états, et chaque `ErreurPont` de la feuille (`feuille_absente`, `autre_mire`, `mire_non_reconnue`, `incident_feuille.101|102|103|201|…|301`, `delai`, `instrument_perdu`).
-- [ ] **Step 2 : Page**, puis `cargo test -p app` (catalogue complet).
-- [ ] **Step 3 : Vérification visuelle** avec `cargo run -p app` et un pont simulé (`--demonstration` si présent) : capture d'écran des quatre états, dans les deux thèmes.
-- [ ] **Step 4 : Commit** — `git commit -m "Écran : mesurer une feuille au FD-9, état en clair et annulation"`
+- [x] **Step 1 : Clés de texte** `feuille_fd9.*` (français et anglais) : libellés, états, et chaque `ErreurPont` de la feuille (`feuille_absente`, `autre_mire`, `mire_non_reconnue`, `incident_feuille.101|102|103|201|…|301`, `delai`, `instrument_perdu`).
+- [x] **Step 2 : Page**, puis `cargo test -p app` (catalogue complet).
+- [x] **Step 3 : Vérification visuelle** avec `cargo run -p app` et un pont simulé (`--demonstration` si présent) : capture d'écran des quatre états, dans les deux thèmes.
+- [x] **Step 4 : Commit** — `git commit -m "Écran : mesurer une feuille au FD-9, état en clair et annulation"`
 
 ### Tâche 10 : Documentation et fin
 
@@ -540,7 +542,7 @@ Après chaque essai, les fiches `docs/abi/` concernées passent les points véri
 ## Questions ouvertes (tranchées par les essais)
 
 1. La feuille part-elle seule sans `FD9_RegisterJob` (E3) ? Sinon : `RegisterJob` / `DeleteJob` au plan 7, avec leurs fiches.
-2. COMBINE sans `tFD9_PatchColors` reconnaît-il la RGB-2520 (E3) ? Sinon : COORDINATE ; et si COORDINATE échoue aussi, étude de l'échelle des couleurs de FD-S2w (`0x4da710`, notes locales § 5). **Réponse de l'essai E3 (30 octobre)** : non, le pont s'arrête net juste après l'événement 6 ; la DLL lit les couleurs nulles dans son fil de reconnaissance (fiche `FD9_StartPatchRecognition`). Le pont passe en COORDINATE par défaut et refuse COMBINE.
+2. COMBINE sans `tFD9_PatchColors` reconnaît-il la RGB-2520 (E3) ? Sinon : COORDINATE ; et si COORDINATE échoue aussi, étude de l'échelle des couleurs de FD-S2w (`0x4da710`, notes locales § 5). **Réponse de l'essai E3 (30 octobre)** : non, le pont s'arrête net juste après l'événement 6 ; la DLL lit les couleurs nulles dans son fil de reconnaissance (fiche `FD9_StartPatchRecognition`). Le pont passe en COORDINATE par défaut et refuse COMBINE. **Révisé après l'essai E4 bis (30 octobre)** : COORDINATE mesure à côté d'une feuille décalée ; le pont reconnaît en COMBINE avec les couleurs de la mire (voir la révision du 30 octobre, en tête du plan).
 3. Texte exact du QR et sens de `011M` et `*1+` (E3).
 4. Unités et écart de la géométrie rendue par `GetPatchRecognitionResult2` (E3).
 5. Longueur d'un spectre et valeurs M0 / M1 / M2 de la clé 0 (E4).

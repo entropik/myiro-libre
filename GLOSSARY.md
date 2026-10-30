@@ -47,7 +47,15 @@ Couleur nommée, saisie ou mesurée par l'utilisateur, à laquelle on compare un
 _Éviter_ : ton direct, spot color, nuancier
 
 **Feuille** :
-Géométrie de lecture du FD-9 : le tirage entier est lu en une passe.
+Géométrie de lecture du FD-9 : le tirage entier est lu en une passe. C'est aussi le dernier palier du pont FD-9 : la feuille est engagée, lue, calée, puis toutes ses plages sont mesurées (spectres M0, M1, M2). Le pont n'y va que lancé avec ce plafond, pour une mesure demandée par l'opérateur.
+
+**Prénumérisation** :
+Palier du pont FD-9, avant la feuille : la feuille est engagée, photographiée, son QR code lu et ses plages reconnues, puis elle est rendue **sans être mesurée**. Il sert à vérifier qu'il s'agit bien de la bonne mire et que l'instrument la trouve, avant de mesurer.
+_Éviter_ : prémesure (nom d'un état d'erreur du SDK), scan
+
+**Reconnaissance COMBINE** :
+Façon dont la DLL du FD-9 retrouve les plages sur la photo de la feuille : elle part de la description de la mire (taille de la feuille, origine, pas) **et** des couleurs imprimées sur chaque plage (RVB de 0 à 255), puis recale la grille sur ce qu'elle voit. C'est le mode de FD-S2w et de MYIROtools, et le seul admis par le pont. Sans couleurs, la DLL s'arrête net (confirmé par l'essai E3 et la lecture de la DLL) ; avec la description seule (mode COORDINATE), elle mesure à côté d'une feuille décalée (essai E4 bis).
+_Éviter_ : reconnaissance automatique, matching
 
 **Calage de la feuille** :
 Ce que le FD-9 a trouvé de la feuille avant de la mesurer : le point qu'il va viser sur chaque plage, le décalage de la feuille sur la mire et l'écart restant, avec une image réduite de la feuille prise. L'application peut ainsi montrer où l'instrument va mesurer. Ce n'est pas une donnée de la mesure. Il est gardé à côté de la mesure, dans la bibliothèque du poste, et montré dans l'onglet « Points mesurés ».
@@ -68,6 +76,10 @@ _Éviter_ : appareil, device, spectro
 Mise à zéro de l'instrument sur son blanc de référence avant mesure.
 _Éviter_ : calibration (ambigu avec la linéarisation)
 
+**Recertification** :
+Contrôle périodique de l'instrument par le fabricant (supposé). Le FD-9 signale qu'elle est due par le code 1901 à la connexion : la connexion est faite et la mesure reste possible (confirmé : FD-S2w et MYIROtools le traitent comme un succès, MYIROtools écrit « Instrument should be recertified »). Ce n'est pas un étalonnage à faire par l'opérateur.
+_Éviter_ : étalonnage périodique, calibration due
+
 **Capuchon** :
 Pièce qui se fixe sous le MYIRO-1 et contient son blanc de référence, une tuile appairée à l'instrument par son n° de série. Pour l'étalonnage, l'instrument est posé à plat dessus.
 _Éviter_ : socle, support, tuile (la tuile n'en est qu'une partie)
@@ -87,7 +99,7 @@ Exécutable séparé qui charge la DLL du fabricant pour un instrument donné et
 _Éviter_ : bridge, wrapper, driver, pilote (réservé au pilote Windows)
 
 **Palier** :
-Étape de la progression imposée sur instrument réel (version du SDK, détection, connexion, étalonnage, mesure ponctuelle, puis bande ou feuille). Le pont refuse tout palier au-delà du plafond autorisé au lancement ; chaque pont déclare les paliers qui existent pour son instrument.
+Étape de la progression imposée sur instrument réel (version du SDK, détection, connexion, étalonnage, mesure ponctuelle, puis bande ou feuille). Le pont refuse tout palier au-delà du plafond autorisé au lancement ; chaque pont déclare les paliers qui existent pour son instrument. Le FD-9 a les siens : version, détection, connexion, prénumérisation, feuille (ni étalonnage par l'opérateur ni mesure ponctuelle).
 _Éviter_ : phase (réservé au plan d'action), niveau, étape
 
 **Logiciel du fabricant** :
@@ -107,7 +119,7 @@ L'instrument du poste dont le pont est ouvert, montré dans la barre ; un seul �
 _Éviter_ : instrument sélectionné, instrument par défaut, appareil courant
 
 **Mesure automatique** :
-Mesure ponctuelle du MYIRO-1 que l'application fait partir elle-même : l'opérateur pose l'instrument sur la couleur puis clique sur « Mesurer », sans appuyer sur son bouton. Le pont arme l'instrument puis le déclenche par `FDX_StartMeasurement`. Que le MYIRO-1 accepte ce déclenchement est supposé jusqu'à l'essai réel. Son contraire est la **mesure manuelle**, qui part à l'appui sur le bouton. Choix « Mesure : automatique / manuelle » de la feuille Mesurer, automatique par défaut. Le FD-9 ne mesure pas encore.
+Mesure ponctuelle du MYIRO-1 que l'application fait partir elle-même : l'opérateur pose l'instrument sur la couleur puis clique sur « Mesurer », sans appuyer sur son bouton. Le pont arme l'instrument puis le déclenche par `FDX_StartMeasurement`. Que le MYIRO-1 accepte ce déclenchement est supposé jusqu'à l'essai réel. Son contraire est la **mesure manuelle**, qui part à l'appui sur le bouton. Choix « Mesure : automatique / manuelle » de la feuille Mesurer, automatique par défaut. Le FD-9 n'a pas de mesure ponctuelle : il mesure une feuille entière.
 _Éviter_ : mode déclenché, trigger, mesure logicielle (à l'écran)
 
 **Plafond** :
