@@ -249,7 +249,7 @@ fn une_feuille_en_cours_d_engagement_est_attendue() {
 
 #[test]
 fn un_instrument_qui_n_attend_pas_de_feuille_est_refuse_sans_appel_de_mesure() {
-    // 0 : un autre logiciel a la main ; 7 : une reconnaissance déjà finie.
+    // 0 : main pas encore obtenue ; 7 : une reconnaissance déjà finie.
     for etat in [0, 7, 77] {
         let mut sdk = Fd9Simule::avec_une_rgb2520();
         sdk.reactions.insert("FD9_Connect", vec![etat]);
@@ -509,7 +509,7 @@ fn deux_feuilles_se_suivent_dans_la_meme_connexion() {
 
 #[test]
 fn sans_la_main_une_annulation_n_arrete_rien() {
-    // Un autre logiciel prend la main (état 0) pendant l'attente : rien à
+    // La main est perdue (état 0) pendant l'attente : rien à
     // arrêter, rien à clore.
     let mut sdk = Fd9Simule::avec_une_rgb2520();
     sdk.a_venir = [0].into();
@@ -538,7 +538,25 @@ fn sans_la_main_une_annulation_n_arrete_rien() {
     assert!(session
         .journal()
         .iter()
-        .any(|l| l.contains("un autre logiciel a la main")));
+        .any(|l| l.contains("état 0") && l.contains("main pas encore obtenue")));
+}
+
+#[test]
+fn l_etat_0_juste_apres_la_connexion_est_dit_passager() {
+    // Essai E3 : 0 puis 1 juste après FD9_Connect, sans autre logiciel.
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.reactions.insert("FD9_Connect", vec![0, 1]);
+    let (mut session, _) = connectee(sdk, Palier::Prenumerisation);
+
+    session.prenumeriser(&rgb2520()).unwrap();
+
+    let ligne = session
+        .journal()
+        .iter()
+        .find(|l| l.contains("hors requête") && l.contains("état 0"))
+        .unwrap();
+    assert!(!ligne.contains("un autre logiciel a la main"), "{ligne}");
+    assert!(ligne.contains("passage normal"), "{ligne}");
 }
 
 #[test]

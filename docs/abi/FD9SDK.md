@@ -97,7 +97,7 @@ Noms confirmés dans la DLL x86 (table `0x101086d0`, 22 entrées) et dans la bib
 
 | État | Nom | En clair | MYIROtools | Pont |
 |---|---|---|---|---|
-| 0 | `WAIT_NO_AUTHORITY` | un autre logiciel a la main sur l'instrument | rien | journaliser ; continuer d'attendre jusqu'au délai de la feuille |
+| 0 | `WAIT_NO_AUTHORITY` | main pas encore obtenue : passage normal juste après la connexion (essai E3 : 0 puis 1) ; s'il dure, un autre logiciel tient peut-être l'instrument | rien | journaliser ; continuer d'attendre jusqu'au délai de la feuille |
 | 1 | `WAIT_AUTHORITY` | main obtenue, attente d'une feuille | remise à zéro de ses drapeaux | attendre la feuille |
 | 2 | `RUN_FEED` | feuille en cours d'engagement | rien | attendre |
 | 3 | `WAIT_FEED_COMPLETION` | feuille engagée | `FD9_StartCapture` (depuis un autre fil) | `FD9_StartCapture` |

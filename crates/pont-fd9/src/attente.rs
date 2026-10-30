@@ -159,7 +159,11 @@ impl<S: SdkFd9> Session<S> {
             self.dernier_etat = Some(e.etat);
         }
         let precision = match e.etat {
-            EtatSdk::AttenteSansMain => " : un autre logiciel a la main sur l'instrument",
+            // Essai E3 : 0 puis 1 juste après la connexion, sans autre
+            // logiciel ouvert.
+            EtatSdk::AttenteSansMain => {
+                " : main pas encore obtenue (passage normal juste après la connexion ; s'il dure, un autre logiciel tient peut-être l'instrument)"
+            }
             _ => "",
         };
         self.journal.push(format!(

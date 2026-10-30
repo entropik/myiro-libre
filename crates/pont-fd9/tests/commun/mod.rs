@@ -160,8 +160,8 @@ impl Fd9Simule {
             fiabilite: 97,
             spectre_longueur: 36,
             reactions: [
-                // Supposé : la main est obtenue dès la connexion (état 1).
-                ("FD9_Connect", vec![1]),
+                // Essai E3 : 0 (main pas encore obtenue), puis 1.
+                ("FD9_Connect", vec![0, 1]),
                 ("FD9_StartCapture", vec![4, 5]),
                 ("FD9_StartPatchRecognition", vec![6, 7]),
                 ("FD9_StopMeasurement", vec![10]),

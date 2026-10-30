@@ -286,7 +286,9 @@ pub enum CleOption {
 /// fiche `docs/abi/FD9_RegisterDeviceEventHandler.md`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EtatSdk {
-    /// 0 (`WAIT_NO_AUTHORITY`) : un autre logiciel a la main sur l'instrument.
+    /// 0 (`WAIT_NO_AUTHORITY`) : main pas encore obtenue. Passage normal
+    /// juste après la connexion (essai E3) ; s'il dure, un autre logiciel
+    /// tient peut-être l'instrument (supposé).
     AttenteSansMain,
     /// 1 (`WAIT_AUTHORITY`) : main obtenue, attente d'une feuille.
     Attente,

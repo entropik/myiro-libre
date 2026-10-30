@@ -26,7 +26,7 @@ Le détail des appels, et ce que fait MYIROtools à chaque état, est dans [FD9S
 
 | État | Nom | En clair | Action du pont (dans le fil de la session, jamais dans le rappel) |
 |---|---|---|---|
-| 0 | `WAIT_NO_AUTHORITY` | un autre logiciel a la main | journaliser ; attendre jusqu'au délai |
+| 0 | `WAIT_NO_AUTHORITY` | main pas encore obtenue (passage normal après la connexion ; s'il dure, un autre logiciel tient peut-être l'instrument) | journaliser ; attendre jusqu'au délai |
 | 1 | `WAIT_AUTHORITY` | main obtenue, attente d'une feuille | attendre la feuille |
 | 2 | `RUN_FEED` | feuille en cours d'engagement | attendre |
 | 3 | `WAIT_FEED_COMPLETION` | feuille engagée | prise d'image ([FD9_StartCapture](FD9_StartCapture.md)) |
@@ -59,7 +59,7 @@ Le détail des appels, et ce que fait MYIROtools à chaque état, est dans [FD9S
 ## Ce qui est supposé
 
 - Le rappel est appelé depuis un fil d'exécution de la DLL, pas celui du pont : la connexion crée un objet qui reçoit l'adresse du rappel, et la DLL importe `CreateThread`. Le rappel doit donc être court, ne jamais rappeler la DLL, et transmettre l'événement au fil principal.
-- Les états 0 (`WAIT_NO_AUTHORITY`) et 1 (`WAIT_AUTHORITY`) décrivent la **prise de main** : un seul logiciel à la fois pilote l'instrument réseau.
+- Les états 0 (`WAIT_NO_AUTHORITY`) et 1 (`WAIT_AUTHORITY`) décrivent la **prise de main** : un seul logiciel à la fois pilote l'instrument réseau. **Constaté à l'essai E3** (30 octobre 2026) : juste après `FD9_Connect`, l'événement 0 puis l'événement 1, sans autre logiciel ouvert. L'état 0 est donc d'abord un passage ; seul un état 0 qui dure peut signaler un autre logiciel.
 
 ## Pour le pont
 
@@ -69,7 +69,7 @@ Le détail des appels, et ce que fait MYIROtools à chaque état, est dans [FD9S
 
 ## À vérifier sur l'instrument
 
-- Les événements reçus pendant une connexion seule, sans travail ni mesure.
+- Les événements reçus pendant une connexion seule, sans travail ni mesure (essai E3 : 0 puis 1 à la connexion).
 - La suite des événements pour une feuille glissée sans travail (`FD9_RegisterJob` non appelé) : 1, puis 2 et 3 (essai E3).
 - Les valeurs de `travail` et `page` sans travail.
 

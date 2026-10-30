@@ -426,8 +426,9 @@ pub enum ErreurPont {
     /// Aucune feuille glissée dans le délai d'attente.
     FeuilleAbsente {},
     /// FD-9 : l'instrument n'attend pas de feuille au début de la requête
-    /// (état brut du SDK lu par `FD9_GetStatus` ; 0 : un autre logiciel a la
-    /// main). Rien n'a été lancé.
+    /// (état brut du SDK lu par `FD9_GetStatus` ; 0 : main pas encore
+    /// obtenue, un autre logiciel tient peut-être l'instrument). Rien n'a été
+    /// lancé.
     InstrumentIndisponible { etat: u32 },
     /// L'instrument a signalé un incident pendant la feuille (état brut du
     /// rappel : 101–103, 201–206, 301) ; `premesure` : code de
