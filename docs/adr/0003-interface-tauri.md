@@ -80,3 +80,10 @@ Après le refus de l'écran (« illisible », fenêtre d'environ 1900 × 1080) :
 - Les pixels de l'image d'analyse (RVBA, 4 octets par pixel) et ses codes d'écart (1 octet par pixel) passent de l'application à la page en **réponse binaire** (`tauri::ipc::Response`), reçue en `ArrayBuffer` : jamais en JSON. Une image d'analyse de 2 048 × 1 536 pixels fait ainsi 12 Mio, au lieu de plusieurs fois plus en texte. Les autres réponses (résumé de l'image, chiffres, histogramme, nuage) restent en JSON.
 - La page dessine l'image et la surimpression dans un `canvas` (`ImageData`) : la politique de sécurité de la page **ne change pas** (aucune image chargée par adresse, aucun `blob:` ni `data:` ajouté à `img-src`).
 - La photo ne vit qu'en mémoire, le temps de la séance : elle n'est jamais rangée, copiée ni écrite sur le disque.
+
+## Texte imprimé des mires dans la langue de l'application (30 octobre 2026, ticket #79)
+
+- Le texte imprimé sur les pages d'une mire MYIRO-1 vient lui aussi du catalogue (clés `mire.etiquette.*`), dans la langue de la page au moment de la préparation : la commande `mire_preparer` reçoit `langue`, comme les autres commandes qui écrivent un texte. La date suit la forme des dates de la page (« 23 oct. 2026 », « Oct 23, 2026 »).
+- Ces clés sont dessinées par la police bitmap des pages (`font8x8`, table latine), pas par la fenêtre : elles n'emploient que des caractères de cette police. En français, l'espace insécable U+00A0 y remplace l'espace fine U+202F, absente de la police. Un test passe sur chaque caractère de ces clés, dans les deux langues (`mires::dessinable`).
+- La langue est rangée dans le JSON `generation` du tirage (`"langue": "fr"` ou `"en"`), sans changer l'organisation de la bibliothèque ; sans elle (mire rangée avant), c'est le français. Une page redessinée (reprise sans doublon, ticket #33) reprend la langue rangée. La langue ne fait pas partie de l'identité d'une mire : préparer la même mire dans l'autre langue reprend celle déjà préparée, sans doublon.
+- La mire FD-9 RGB-2520 est copiée telle quelle, quelle que soit la langue. Les noms de fichiers restent en français.
