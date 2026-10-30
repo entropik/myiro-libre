@@ -117,8 +117,8 @@ pub struct Fd9Simule {
     /// écrire d'autre : une DLL qui dirait plus que le tampon.
     pub dimensions_forcees: Option<(u32, u32)>,
     /// Comptes des événements 11 envoyés pendant la mesure, dans l'ordre ;
-    /// vide : un seul, toutes les plages.
-    pub comptes_mesure: Vec<u32>,
+    /// `None` : un seul, toutes les plages ; vide : aucun.
+    pub comptes_mesure: Option<Vec<u32>>,
 }
 
 /// Motif répété 32 fois : empreinte SHA-256 fictive de la DLL simulée.
@@ -635,11 +635,10 @@ impl SdkFd9 for Fd9Simule {
         // Sans réaction imposée : mesure, nombre de plages mesurées, fin.
         if code == 0 && !self.reactions.contains_key("FD9_StartMeasurement2") {
             self.rappeler(8);
-            let comptes = if self.comptes_mesure.is_empty() {
-                vec![self.points]
-            } else {
-                self.comptes_mesure.clone()
-            };
+            let comptes = self
+                .comptes_mesure
+                .clone()
+                .unwrap_or_else(|| vec![self.points]);
             if self.inscrit {
                 for compte in comptes {
                     self.recus.push_back(Evenement {

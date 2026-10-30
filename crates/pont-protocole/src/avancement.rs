@@ -14,15 +14,22 @@ use crate::CalageFeuille;
 #[serde(tag = "etape", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AvancementFeuille {
     // Accolades vides : sans elles, serde accepterait des champs en trop.
-    /// L'instrument a pris la feuille (états 2 ou 3 du SDK).
+    /// L'instrument a pris la feuille : premier état 2 ou 3 du SDK (que ces
+    /// états suivent l'entrée de la feuille est supposé, d'après leur nom).
     FeuilleEngagee {},
     /// Prise d'image acceptée : image, QR et reconnaissance des plages.
     Lecture {},
     /// Plages trouvées sur l'image et contrôlées : points visés et image
     /// réduite, avant la mesure (palier Feuille) ou l'arrêt
-    /// (Prénumérisation).
+    /// (Prénumérisation). Le calage ainsi annoncé est rendu : la réponse
+    /// finale ne le renvoie pas.
     CalagePret { calage: CalageFeuille },
-    /// Mesure en cours : `mesurees` plages déjà mesurées sur `plages`, tel
-    /// que le rappel de la DLL le compte (état 11, 4ᵉ nombre) ; 0 au départ.
+    /// `FD9_StartMeasurement2` accepté : mesure en cours, sans compte tant
+    /// que le FD-9 n'en a pas donné.
+    MesureLancee {},
+    /// Mesure en cours : `mesurees` sur `plages`, le 4ᵉ nombre d'un
+    /// événement 11 du rappel. Qu'il compte les plages déjà mesurées est
+    /// supposé (nom tiré du symbole de la bibliothèque Mac, table des
+    /// états) ; aucun compte n'est annoncé sans événement 11.
     Mesure { mesurees: u32, plages: u32 },
 }

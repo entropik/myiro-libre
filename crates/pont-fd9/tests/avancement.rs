@@ -64,26 +64,64 @@ fn mesure(mesurees: u32) -> AvancementFeuille {
 #[test]
 fn une_feuille_mesuree_annonce_chaque_etape_avant_sa_reponse() {
     let mut sdk = Fd9Simule::avec_une_rgb2520();
-    sdk.comptes_mesure = vec![0, 2, 2, 5, 6];
+    sdk.comptes_mesure = Some(vec![0, 2, 2, 5, 6]);
     let (mut session, recus) = suivie(sdk, Palier::Feuille);
 
     session.mesurer_feuille(&six_plages()).unwrap();
-    let calage = session.prendre_calage().unwrap();
 
-    // Le calage est annoncé avant la mesure ; un compte répété ne l'est
-    // qu'une fois.
+    // Le calage est annoncé avant la mesure ; la mesure lancée l'est sans
+    // compte ; chaque compte vient d'un événement 11, un compte répété
+    // n'est annoncé qu'une fois.
+    let etapes = etapes(&recus);
+    assert!(matches!(etapes[2], AvancementFeuille::CalagePret { .. }));
     assert_eq!(
-        etapes(&recus),
+        etapes,
         vec![
             AvancementFeuille::FeuilleEngagee {},
             AvancementFeuille::Lecture {},
-            AvancementFeuille::CalagePret { calage },
+            etapes[2].clone(),
+            AvancementFeuille::MesureLancee {},
             mesure(0),
             mesure(2),
             mesure(5),
             mesure(6),
         ]
     );
+}
+
+/// Sans événement 11, aucun compte n'est inventé : « mesure lancée »
+/// seulement.
+#[test]
+fn sans_compte_du_fd9_aucun_compte_n_est_annonce() {
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.comptes_mesure = Some(vec![]);
+    let (mut session, recus) = suivie(sdk, Palier::Feuille);
+
+    session.mesurer_feuille(&six_plages()).unwrap();
+
+    let etapes = etapes(&recus);
+    assert_eq!(etapes.last(), Some(&AvancementFeuille::MesureLancee {}));
+    assert!(!etapes
+        .iter()
+        .any(|e| matches!(e, AvancementFeuille::Mesure { .. })));
+}
+
+/// Le calage annoncé est rendu : la réponse finale ne le renvoie pas. Sans
+/// suivi, la réponse le porte comme avant.
+#[test]
+fn le_calage_n_est_rendu_qu_une_fois() {
+    let (mut session, recus) = suivie(Fd9Simule::avec_une_rgb2520(), Palier::Feuille);
+    session.mesurer_feuille(&six_plages()).unwrap();
+    assert!(etapes(&recus)
+        .iter()
+        .any(|e| matches!(e, AvancementFeuille::CalagePret { .. })));
+    assert_eq!(session.prendre_calage(), None);
+
+    session.ne_plus_suivre();
+    // Une deuxième feuille glissée.
+    session.sdk_mut().a_venir = [2, 3].into();
+    session.mesurer_feuille(&six_plages()).unwrap();
+    assert!(session.prendre_calage().is_some());
 }
 
 #[test]

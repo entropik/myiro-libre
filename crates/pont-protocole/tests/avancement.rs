@@ -35,6 +35,10 @@ fn chaque_etape_s_ecrit_sur_une_ligne_et_se_relit() {
             r#"{"rep":"avancement","avancement":{"etape":"lecture"}}"#,
         ),
         (
+            AvancementFeuille::MesureLancee {},
+            r#"{"rep":"avancement","avancement":{"etape":"mesure_lancee"}}"#,
+        ),
+        (
             AvancementFeuille::Mesure {
                 mesurees: 12,
                 plages: 2_520,

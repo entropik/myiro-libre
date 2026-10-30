@@ -224,8 +224,12 @@ impl<S: SdkFd9> Session<S> {
         // État 7, avant l'arrêt ou la mesure : l'image de la feuille pour
         // l'application, avec les points visés.
         self.retenir_calage(&calage, &points, taille_capture);
-        if let Some(calage) = self.calage.clone() {
-            self.avancer(AvancementFeuille::CalagePret { calage });
+        // Suivie, la feuille annonce son calage : il est alors rendu, et la
+        // réponse finale ne le renvoie pas (image envoyée une seule fois).
+        if self.avancement.is_some() {
+            if let Some(calage) = self.calage.take() {
+                self.avancer(AvancementFeuille::CalagePret { calage });
+            }
         }
         Ok(LectureFeuille {
             qr,

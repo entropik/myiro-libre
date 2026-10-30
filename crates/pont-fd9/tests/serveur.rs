@@ -48,6 +48,19 @@ fn reponses(lignes: &[String]) -> Vec<Reponse> {
         .collect()
 }
 
+/// Calage annoncé par l'avancement (`calage_pret`).
+fn calage_annonce(lignes: &[String]) -> pont_protocole::CalageFeuille {
+    lignes
+        .iter()
+        .find_map(|l| match lire_reponse(l).unwrap() {
+            Reponse::Avancement {
+                avancement: AvancementFeuille::CalagePret { calage },
+            } => Some(calage),
+            _ => None,
+        })
+        .expect("calage annoncé")
+}
+
 /// Lignes des réponses finales, sans celles de l'avancement.
 fn finales(lignes: &[String]) -> Vec<&String> {
     lignes
@@ -370,8 +383,10 @@ fn mesurer_feuille_rend_la_mesure_de_toutes_les_plages() {
         panic!("{}", finales(&lignes)[2])
     };
     assert_eq!(mesure.plages().len(), 6);
-    // Points visés et image de la feuille, à côté de la mesure.
-    let calage = calage.as_ref().unwrap();
+    // Points visés et image de la feuille, annoncés avant la mesure, une
+    // seule fois.
+    assert_eq!(*calage, None);
+    let calage = calage_annonce(&lignes);
     assert_eq!(calage.points.len(), 6);
     assert!(calage.image.is_some());
     assert!(mesure.provenance().feuille.is_some());
@@ -404,18 +419,21 @@ fn mesurer_feuille_ecrit_son_avancement_avant_la_mesure() {
                 AvancementFeuille::FeuilleEngagee {} => "engagee",
                 AvancementFeuille::Lecture {} => "lecture",
                 AvancementFeuille::CalagePret { .. } => "calage",
+                AvancementFeuille::MesureLancee {} => "lancee",
                 AvancementFeuille::Mesure { .. } => "mesure",
             },
-            Reponse::Mesure { .. } => "MESURE",
+            // Le calage est déjà parti dans l'avancement : la réponse ne le
+            // renvoie pas.
+            Reponse::Mesure { calage: None, .. } => "MESURE",
             Reponse::Ferme {} => "FERME",
             autre => panic!("{autre:?}"),
         })
         .collect();
     assert_eq!(
         etapes,
-        ["engagee", "lecture", "calage", "mesure", "mesure", "MESURE", "FERME"]
+        ["engagee", "lecture", "calage", "lancee", "mesure", "MESURE", "FERME"]
     );
-    // Le compte de plages est celui du rappel : 0 au départ, puis 6 sur 6.
+    // Le compte de plages est celui du rappel : 6 sur 6, jamais inventé.
     assert_eq!(
         toutes[6],
         Reponse::Avancement {
@@ -453,11 +471,14 @@ fn prenumeriser_rend_la_lecture_de_la_feuille() {
             ecart_max: 0,
         }
     );
-    let calage = calage.as_ref().unwrap();
+    // Le calage part une fois, dans l'avancement.
+    assert_eq!(*calage, None);
+    let calage = calage_annonce(&lignes);
     assert_eq!(calage.points.len(), 2_520);
     assert_eq!(calage.image.as_ref().unwrap().largeur(), 40);
-    assert!(finales(&lignes)[2]
-        .contains(r#""calage":{"decalage":[0,0],"ecart_max":0,"points":[{"zone":0"#));
+    assert!(lignes.iter().any(|l| l.contains(
+        r#""etape":"calage_pret","calage":{"decalage":[0,0],"ecart_max":0,"points":[{"zone":0"#
+    )));
     assert_eq!(reponses(&lignes)[3], Reponse::Ferme {});
     assert!(!session
         .sdk()

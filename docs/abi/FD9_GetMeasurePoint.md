@@ -43,7 +43,7 @@ int32_t __stdcall FD9_GetMeasurePoint(tFD9_PatchMeasurePoint *points,
 
 ### Pour l'application : le calage (fait le 30 octobre 2026, ticket #34)
 
-Pour montrer, comme FD-S2w, l'image de la feuille et les points visés, le pont rend un champ `calage` dans ses réponses `prenumerisee` et `mesure` (feuille) :
+Pour montrer, comme FD-S2w, l'image de la feuille et les points visés, le pont rend un champ `calage` dans ses réponses `prenumerisee` et `mesure` (feuille), ou, quand l'avancement est suivi, une seule fois dans l'étape `calage_pret` (section suivante) :
 
 ```json
 {"rep":"prenumerisee","lecture":{...},
@@ -65,14 +65,16 @@ Pendant `prenumeriser` et `mesurer_feuille`, le pont écrit, avant sa réponse f
 {"rep":"avancement","avancement":{"etape":"feuille_engagee"}}
 {"rep":"avancement","avancement":{"etape":"lecture"}}
 {"rep":"avancement","avancement":{"etape":"calage_pret","calage":{...}}}
-{"rep":"avancement","avancement":{"etape":"mesure","mesurees":0,"plages":2520}}
+{"rep":"avancement","avancement":{"etape":"mesure_lancee"}}
+{"rep":"avancement","avancement":{"etape":"mesure","mesurees":42,"plages":2520}}
 ```
 
-- `feuille_engagee` : premier état 2 ou 3 de la feuille (lu par `FD9_GetStatus` ou reçu du rappel), une fois.
+- `feuille_engagee` : premier état 2 ou 3 de la feuille (lu par `FD9_GetStatus` ou reçu du rappel), une fois. Les noms de ces états (`RUN_FEED`, `WAIT_FEED_COMPLETION`) sont **confirmés** (table de la DLL) ; qu'ils suivent l'entrée de la feuille dans l'instrument est **supposé**, d'après ces noms : le journal des essais E3 et E4 ne l'a pas encore établi.
 - `lecture` : `FD9_StartCapture` accepté (image, QR, reconnaissance).
-- `calage_pret` : le calage ci-dessus, dès les contrôles passés, **avant** `FD9_StartMeasurement2` : l'application montre les points pendant la mesure.
-- `mesure` : 0 dès `FD9_StartMeasurement2` accepté, puis le 4ᵉ nombre de chaque événement 11 du rappel (`mesurees`, nom tiré du symbole de la bibliothèque Mac), un compte répété n'étant pas réécrit. Qu'il compte les plages déjà mesurées est **supposé** (table des états) ; à l'essai E4, seul le journal l'a vu.
-- Une feuille refusée s'arrête à la dernière étape atteinte, puis sa réponse d'erreur. Un pont d'avant ce contrat n'écrit que sa réponse finale : l'application la lit comme avant.
+- `calage_pret` : le calage ci-dessus, dès les contrôles passés, **avant** `FD9_StartMeasurement2` : l'application montre les points pendant la mesure. Annoncé, il est rendu : la réponse finale (`prenumerisee`, `mesure`) porte alors `calage` absent, et l'image ne part qu'une fois. Sans suivi de l'avancement (session appelée directement), la réponse le porte comme avant.
+- `mesure_lancee` : `FD9_StartMeasurement2` accepté, sans compte.
+- `mesure` : seulement à un événement 11 du rappel, avec son 4ᵉ nombre (`mesurees`, nom tiré du symbole de la bibliothèque Mac) ; un compte répété n'est pas réécrit, et aucun compte n'est écrit sans événement 11. Qu'il compte les plages déjà mesurées est **supposé** (table des états) ; à l'essai E4, seul le journal l'a vu.
+- Une feuille refusée s'arrête à la dernière étape atteinte, puis sa réponse d'erreur. Un pont d'avant ce contrat n'écrit que sa réponse finale : l'application la lit comme avant. Une ligne d'avancement que l'application ne sait pas lire (étape ou champ d'un pont plus récent) est notée et écartée : la feuille continue.
 
 ## À vérifier sur l'instrument
 

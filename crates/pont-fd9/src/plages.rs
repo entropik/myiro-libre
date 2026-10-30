@@ -16,10 +16,10 @@ use fd9_sys::{
     CleOption, EtatSdk, PositionPlage, DONNEES_BRUTES, DONNEES_BRUTES_TYPE, LAB_TYPE, SPECTRE_TYPE,
 };
 use pont_protocole::{
-    Calcul, ConditionMesure, ConditionsCalcul, DefautPositions, DefinitionFeuille, DonneesBrutes,
-    Echantillonnage, Empreinte, ErreurPont, Geometrie, Horodatage, Illuminant, Info,
-    InstrumentMesurant, Lab, LectureFeuille, Mesure, Observateur, Palier, Plage, Provenance,
-    Spectre, MODELE_FD9,
+    AvancementFeuille, Calcul, ConditionMesure, ConditionsCalcul, DefautPositions,
+    DefinitionFeuille, DonneesBrutes, Echantillonnage, Empreinte, ErreurPont, Geometrie,
+    Horodatage, Illuminant, Info, InstrumentMesurant, Lab, LectureFeuille, Mesure, Observateur,
+    Palier, Plage, Provenance, Spectre, MODELE_FD9,
 };
 use std::collections::HashMap;
 
@@ -68,9 +68,10 @@ impl<S: SdkFd9> Session<S> {
         let lecture = self.lire_feuille(mire, &convertie)?;
         let code = self.sdk.mesurer();
         self.verifier("FD9_StartMeasurement2", code)?;
-        // Bornée par PLAGES_MAX : le nombre tient dans un u32.
+        // Bornée par PLAGES_MAX : le nombre tient dans un u32. Pas de compte
+        // avant le premier événement 11 : rien n'est inventé.
         self.plages_feuille = mire.plages() as u32;
-        self.annoncer_compte(0);
+        self.avancer(AvancementFeuille::MesureLancee {});
         self.attendre_ou_conclure(EtatSdk::MesureFinie, Attente::Mesure)?;
         let lues = self.lire_plages(mire);
         // Toutes les plages lues, ou la lecture refusée : la feuille est
