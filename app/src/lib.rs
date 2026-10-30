@@ -15,7 +15,7 @@ pub mod mires;
 pub mod parc;
 pub mod pont;
 pub mod profiler;
-pub mod rapport;
+pub mod rapport_verification;
 pub mod textes;
 pub mod verifier;
 

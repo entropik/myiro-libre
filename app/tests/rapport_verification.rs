@@ -4,7 +4,7 @@
 
 mod banc_verification;
 
-use app::rapport::rapport_html;
+use app::rapport_verification::rapport_html;
 use app::textes::{cles, texte, Langue};
 use banc_verification::*;
 use bibliotheque::IdVerification;

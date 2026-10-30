@@ -1,4 +1,4 @@
-//! Banc commun aux essais de la vérification (`verifier.rs`, `rapport.rs`) :
+//! Banc commun aux essais de la vérification (`verifier.rs`, `rapport_verification.rs`) :
 //! une résolution, un profil calculé par le moteur simulé, le jeu
 //! « Atelier », la mire de vérification FD-9 rangée et des exports FD-S2w
 //! fictifs (numéros de série fictifs).
