@@ -26,6 +26,8 @@
 <script src="pastilles-image.js" defer></script>
 <script src="verdict-image.js" defer></script>
 <script src="comparer-image.js" defer></script>
+<script src="rapport-image.js" defer></script>
+<script src="atelier.js" defer></script>
 <script src="comparer.js" defer></script>
 <script src="reglage.js" defer></script>
 <script src="parc.js" defer></script>
@@ -274,7 +276,9 @@
         <p class="why" data-comparer-ajouter-raison data-t="comparer.ajouter.chargement"></p>
         <!-- Liste des profils de la bibliothèque et ouverture d'un fichier, construite par comparer.js. -->
         <div id="comparer-choix" data-comparer-choix hidden></div>
-        <div class="actions"><button class="btn" data-comparer-fermer data-t="comparer.fermer"></button></div>
+        <div class="actions"><button class="btn" data-comparer-fermer data-t="comparer.fermer"></button><button class="btn" data-comparer-rapport data-t="rapport.bouton" aria-haspopup="dialog" disabled></button></div>
+        <!-- Raison du bouton « Rapport PDF… » inactif, ou à quoi il sert : toujours à sa place (rapport-image.js). -->
+        <p class="why" data-comparer-rapport-raison data-t="rapport.bouton.raison"></p>
         <p class="why" role="status" data-comparer-message hidden></p>
         <p class="why" role="status" data-comparer-en-cours data-t="comparer.en_cours" hidden></p>
       </div>

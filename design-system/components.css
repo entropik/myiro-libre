@@ -330,13 +330,14 @@ select.input option { background: var(--panneau); color: var(--encre); }
    bouton (Entrée, Espace), chevron à droite ; le contenu s'ouvre juste dessous, les autres en-têtes
    ne bougent que de sa place. Serré quand c'est replié ; ni ombre ni arrondi. ---- */
 .section.accordeon { margin-top: 0; }
-.accordeon__titre { margin: 0; padding-top: 0; font-size: inherit; font-weight: inherit; }
+.accordeon__titre { display: flex; align-items: center; gap: var(--space-3); margin: 0; padding-top: 0; font-size: inherit; font-weight: inherit; }
 .accordeon__bouton { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .accordeon__bouton:hover .label { color: var(--accent); }
 .accordeon__bouton:focus-visible { outline: var(--rule-strong) solid var(--accent); outline-offset: calc(var(--rule-strong) * -1); }
 .accordeon__chevron { flex: none; width: var(--space-2); height: var(--space-2); margin-right: var(--space-1); border-right: var(--rule-strong) solid currentColor; border-bottom: var(--rule-strong) solid currentColor; transform: rotate(-45deg); }
 .accordeon__bouton[aria-expanded="true"] .accordeon__chevron { transform: rotate(45deg); }
 .accordeon__corps { padding-bottom: var(--space-6); }
+.accordeon__rapport { display: inline-flex; flex: none; align-items: center; gap: var(--space-2); padding: var(--space-2) 0 var(--space-2) var(--space-3); font-size: var(--text-xs); color: var(--attenue); white-space: nowrap; cursor: pointer; }
 .section__title { font-size: var(--text-xl); font-weight: 500; line-height: var(--leading-snug); }
 .section--serree { margin-top: var(--space-4); }
 .section--defile { margin-top: var(--space-4); }
@@ -498,3 +499,33 @@ select.input option { background: var(--panneau); color: var(--encre); }
 .agrandie__lecture { flex: none; }
 /* Curseur d'une valeur dans un intervalle (clarté d'une coupe). */
 .curseur { width: 100%; max-width: var(--measure); accent-color: var(--accent); }
+
+/* ---- Rapport PDF (ticket #89) : points relevés (huit emplacements toujours là), fenêtre d'export
+   (statut à une place gardée, « Ouvrir le dossier » caché sans perdre sa place), zone de dessin
+   hors écran des parties cochées. Ni ombre ni arrondi. ---- */
+.points-releves { display: flex; flex-direction: column; gap: var(--space-2); }
+.points-releves__liste { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(4, auto); gap: var(--space-2) var(--space-3); margin: 0; padding: 0; list-style: none; }
+.points-releves__point { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); height: var(--space-12); min-width: 0; padding: 0 var(--space-2); font-size: var(--text-sm); }
+.points-releves__point > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.points-releves__point--vide { border: var(--rule) dashed var(--filet); }
+.points-releves__point .pastille-couleur { width: var(--space-6); height: var(--space-6); }
+.fenetre-rapport { width: min(40rem, 100vw); max-height: 100vh; margin: auto; padding: var(--space-6); border: var(--rule) solid var(--filet); background: var(--fond); color: var(--encre); overflow: auto; scrollbar-gutter: stable; }
+.fenetre-rapport[open] { display: flex; flex-direction: column; gap: var(--space-3); }
+.fenetre-rapport::backdrop { background: var(--fond); }
+.fenetre-rapport__atelier { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: var(--space-16); }
+.fenetre-rapport__resume { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.fenetre-rapport__logo { max-width: var(--space-24); max-height: var(--space-12); object-fit: contain; }
+.fenetre-rapport__parties { margin: 0; padding-left: var(--space-5); font-size: var(--text-sm); }
+.fenetre-rapport__ligne { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.fenetre-rapport__statut { min-height: calc(2em * var(--leading-normal)); margin: 0; }
+.fenetre-rapport__dossier--cache { visibility: hidden; }
+.hors-ecran { position: fixed; left: -10000px; top: 0; width: 45rem; }
+/* Formulaire « Atelier » : erreurs sous leur champ à une place gardée, aperçu du cartouche (mêmes
+   cases que celui du rapport PDF, crate `rapport` : logo, atelier, client et objet, numéro). */
+.fenetre-atelier__erreur { min-height: calc(1em * var(--leading-normal)); margin: 0; }
+.fenetre-atelier__apercu { padding: var(--space-3); background: var(--carte); }
+.cartouche-rapport { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border: var(--rule) solid var(--encre); font-size: var(--text-xs); }
+.cartouche-rapport__cellule { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; height: var(--space-24); padding: var(--space-2); overflow: hidden; border-left: var(--rule) solid var(--encre); }
+.cartouche-rapport__cellule:first-child { border-left: 0; }
+.cartouche-rapport__etiquette { color: var(--attenue); font-weight: 600; letter-spacing: var(--tracking-widest); text-transform: uppercase; }
+.cartouche-rapport__logo { max-width: 100%; max-height: 100%; object-fit: contain; }

@@ -9,7 +9,8 @@
 // agrandie) et suit le profil et le seuil sans nouveau clic. Avec la compensation du point noir, la
 // pastille « Image » reste la couleur de l'image, « Imprimé » la couleur reproduite de la couleur
 // visée, et la paire du point cliqué dit la couleur visée. Les couleurs à l'écran sont approchées :
-// la page le dit.
+// la page le dit. Rapport PDF (ticket #89) : « Garder ce point » ajoute le point cliqué à la liste des
+// points relevés (8 au plus, chacun avec « Retirer ») ; ses huit emplacements sont toujours là.
 "use strict";
 
 window.PastillesImage = (() => {
@@ -20,6 +21,7 @@ window.PastillesImage = (() => {
   const { texteRefus } = window.ComparerDetails;
 
   const AFFICHEES = 12;
+  const POINTS_MAX = 8;
   const code = (s) => Math.round(s * 10);
   const hexa = (c) => /^#[0-9a-fA-F]{6}$/.test(String(c));
 
@@ -35,6 +37,7 @@ window.PastillesImage = (() => {
   let racine = null; // section affichée
   let zoneAgrandie = null; // le point cliqué, sous l'image agrandie
   let repere = null; // repère du point cliqué sur l'image affichée
+  let gardes = []; // points relevés : { x, y, image, imprime } (pixels de l'image d'analyse)
 
   // L'analyse, le seuil ou le profil de la surimpression a changé (comparer-image.js).
   function changer(nouvelle, nouveauSeuil, nouveauRang, nouveauNom, nouvelAvis = "") {
@@ -46,6 +49,7 @@ window.PastillesImage = (() => {
   function oublier() {
     demande++;
     [pixel, dernier] = [null, null];
+    gardes = [];
     placer();
     ecrire();
   }
@@ -215,6 +219,54 @@ window.PastillesImage = (() => {
     return ligne;
   }
 
+  // ---- Points relevés pour le rapport : huit emplacements, toujours là ----
+  function releves() {
+    const bloc = el("div", "points-releves");
+    const etat = pixel ? pixel.profils[rang] : null;
+    const deja = pixel && gardes.some((g) => g.x === pixel.x && g.y === pixel.y);
+    const garder = el("button", "btn", t("rapport.points.garder"));
+    garder.dataset.garder = "";
+    garder.disabled = !pixel || gardes.length >= POINTS_MAX || deja;
+    // Un bouton inactif dit pourquoi, juste à côté ; actif, la ligne dit à quoi il sert.
+    const raison = !pixel ? t("rapport.points.raison.aucun") : gardes.length >= POINTS_MAX ? t("rapport.points.raison.plein")
+      : deja ? t("rapport.points.raison.deja") : t("rapport.points.aide");
+    garder.addEventListener("click", () => {
+      const p = etat && etat.etat === "calcule" ? etat.paire : {};
+      gardes.push({ x: pixel.x, y: pixel.y, image: p.couleur_demandee, imprime: p.couleur_reproduite });
+      ecrire();
+      racine?.querySelector("[data-garder]")?.focus();
+    });
+    const tete = el("div", "actions");
+    tete.append(garder, el("p", "why", raison));
+    const liste = el("ol", "points-releves__liste");
+    for (let i = 0; i < POINTS_MAX; i++) {
+      const g = gardes[i];
+      const ligne = el("li", g ? "points-releves__point" : "points-releves__point points-releves__point--vide");
+      if (g) {
+        const couleurs = el("span", "paire__couleurs");
+        for (const c of [g.image, g.imprime]) {
+          const s = el("span", "pastille-couleur");
+          if (hexa(c)) s.style.setProperty("--c", c);
+          couleurs.append(s);
+        }
+        const retirer = el("button", "btn", t("rapport.points.retirer"));
+        retirer.addEventListener("click", () => {
+          gardes.splice(i, 1);
+          ecrire();
+          racine?.querySelector("[data-garder]")?.focus();
+        });
+        ligne.append(couleurs, el("span", "", t("rapport.point").replace("{n}", () => i + 1)
+          .replace("{x}", () => g.x).replace("{y}", () => g.y)), retirer);
+      }
+      liste.append(ligne);
+    }
+    bloc.append(el("span", "label", t("rapport.points")), tete, liste);
+    return bloc;
+  }
+
+  // Les points relevés, en pixels de l'image d'analyse, pour le rapport (rapport-image.js).
+  const pointsReleves = () => gardes.map((g) => [g.x, g.y]);
+
   // ---- La section, sous l'image ----
   function section() {
     racine = el("div", "pastilles-section");
@@ -225,10 +277,10 @@ window.PastillesImage = (() => {
   function ecrire() {
     if (zoneAgrandie) zoneAgrandie.replaceChildren(pipette());
     if (!racine) return;
-    const contenu = [el("span", "label", t("pastilles.titre")), pipette(),
+    const contenu = [el("span", "label", t("pastilles.titre")), pipette(), releves(),
       el("p", "pastilles-lecture", t("pastilles.lecture")), grille(), el("p", "why", t("pastilles.precaution"))];
     racine.replaceChildren(...contenu);
   }
 
-  return { changer, oublier, reprendre, cadre, lecture, section };
+  return { changer, oublier, reprendre, cadre, lecture, section, pointsReleves };
 })();

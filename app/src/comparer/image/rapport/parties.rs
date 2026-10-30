@@ -112,10 +112,16 @@ pub(super) fn sections(d: &DemandeRapportImage, langue: Langue) -> Vec<Section> 
         .enumerate()
         .filter(|(i, cle)| *i == 0 || d.parties.iter().any(|p| p == *cle))
         .filter_map(|(_, cle)| {
-            let g = d.graphiques.iter().find(|g| g.partie == *cle)?;
-            Some(Section {
+            // Une partie peut avoir plusieurs graphiques ou tableaux (chemin, écarts).
+            let blocs: Vec<Bloc> = d
+                .graphiques
+                .iter()
+                .filter(|g| g.partie == *cle)
+                .flat_map(|g| blocs(g, langue))
+                .collect();
+            (!blocs.is_empty()).then(|| Section {
                 titre: t(langue, cle),
-                blocs: blocs(g, langue),
+                blocs,
             })
         })
         .collect()

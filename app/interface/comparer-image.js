@@ -124,7 +124,7 @@ window.ComparerImage = (() => {
       if (n !== demande) return; // périmée : la demande plus récente tient « en cours »
       const octets = await lireEcarts(reponse);
       if (n !== demande) return;
-      [analyses, ecarts, compense] = [reponse.profils, octets, pointNoir];
+      [analyses, ecarts, compense] = [Object.assign(reponse.profils, { numero: reponse.numero }), octets, pointNoir];
     } catch (cle) {
       if (n === demande) message = t(String(cle));
     }
@@ -150,7 +150,7 @@ window.ComparerImage = (() => {
       const reponse = await invoke("image_analyser", { sources, compensation: pointNoir });
       const octets = n === demande ? await lireEcarts(reponse) : null;
       if (n !== demande) return;
-      [analyses, ecarts, compense] = [reponse.profils, octets, pointNoir];
+      [analyses, ecarts, compense] = [Object.assign(reponse.profils, { numero: reponse.numero }), octets, pointNoir];
     } catch (cle) {
       if (n !== demande) return;
       // Annulée ou en erreur : les valeurs s'effacent sur place, la raison et « Relancer » s'affichent.
@@ -321,7 +321,11 @@ window.ComparerImage = (() => {
     choisi = rang;
     calque();
     nuage();
+    document.dispatchEvent(new CustomEvent("image-dessinee")); // le bouton « Rapport PDF… » suit (rapport-image.js)
   }
+
+  // Ce que le rapport PDF reprend de l'analyse affichée ; null sans image analysée.
+  const pourRapport = () => (resume && analyses ? { analyse: analyses.numero, profil_surimpression: choisi, seuil } : null);
 
   // ---- Dessin de la section ----
   // Deux colonnes : à gauche l'image (légende, « Agrandir », surimpression) ; à droite, collé en haut
@@ -391,5 +395,5 @@ window.ComparerImage = (() => {
   // Le thème change les jetons : le calque est refait dans les nouvelles couleurs.
   new MutationObserver(calque).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
-  return { section: section_, profilsChanges, fermer };
+  return { section: section_, profilsChanges, fermer, pourRapport };
 })();

@@ -370,6 +370,13 @@ window.Vue3d = (() => {
         reglages = { ...reglages, ...nouveaux };
         redessiner();
       },
+      // Dessine tout de suite, à la taille du canvas dans la page, et rend l'image en PNG (rapport, #89).
+      capturer() {
+        ajusterTaille();
+        if (image) cancelAnimationFrame(image);
+        dessiner();
+        return canvas.toDataURL("image/png");
+      },
       detruire() {
         if (image) cancelAnimationFrame(image);
         image = 0;

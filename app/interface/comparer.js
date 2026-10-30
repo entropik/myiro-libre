@@ -367,6 +367,10 @@ window.Comparer = (() => {
     dessinerAjout();
   });
   vue.querySelector("[data-comparer-fermer]").addEventListener("click", fermer);
+  // « Rapport PDF… » (ticket #89) : la fenêtre d'export redessine les parties cochées hors écran.
+  window.RapportImage.brancher(vue.querySelector("[data-comparer-rapport]"), vue.querySelector("[data-comparer-rapport-raison]"));
+  const donneesRapport = () => ({ liste: analyses(), comparaison, profils: comparaison ? comparaison.profils.map(profilVu) : [],
+    formes: formes(analyses()), reglages: { ...reglages }, chemins });
   document.addEventListener("langue-appliquee", () => {
     if (!ouverte) return;
     dessinerPuces();
@@ -374,5 +378,5 @@ window.Comparer = (() => {
     dessiner();
   });
 
-  return { ouvrir, fermer, ouverte: () => ouverte };
+  return { ouvrir, fermer, ouverte: () => ouverte, donneesRapport };
 })();

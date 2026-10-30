@@ -481,3 +481,21 @@ fn ecrire_apercu_image() {
             .unwrap();
     }
 }
+
+#[test]
+fn une_partie_a_deux_graphiques_les_garde_tous() {
+    let (b, _, numero) = prepare();
+    let mut d = demande(numero);
+    d.parties = vec!["comparer.chemin".into()];
+    d.graphiques = vec![
+        graphique("comparer.chemin", SVG),
+        graphique("comparer.chemin", SVG),
+    ];
+    let doc = document(&b, &d);
+    let chemin = doc
+        .sections
+        .iter()
+        .find(|s| s.titre == "Courbes le long d’un chemin du cube RVB")
+        .unwrap();
+    assert_eq!(chemin.blocs.len(), 2);
+}
