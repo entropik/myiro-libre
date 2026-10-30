@@ -5,8 +5,21 @@
 /* ---- Base ---- */
 html { font-optical-sizing: auto; -webkit-text-size-adjust: 100%; }
 *, *::before, *::after { box-sizing: border-box; }
-/* Barres de défilement fines partout, jamais l'ascenseur épais du système. */
-* { scrollbar-width: thin; scrollbar-color: var(--filet) transparent; }
+/* Ascenseurs larges partout (--ascenseur), piste visible, poignée contrastée d'au moins
+   --ascenseur-longueur-min, angles droits, sans ombre. Moteur de la fenêtre (Chromium) : pseudo-
+   éléments ::-webkit-scrollbar, qu'il ignore si scrollbar-width ou scrollbar-color est posé ; les
+   autres moteurs reçoivent scrollbar-width et scrollbar-color. Les zones qui défilent gardent la
+   place de l'ascenseur (scrollbar-gutter: stable) : son apparition ne fait rien bouger ; elles ont
+   aussi un retrait intérieur côté ascenseur d'au moins --gouttiere-ascenseur : jamais de texte collé
+   à l'ascenseur ni au bord. */
+::-webkit-scrollbar { width: var(--ascenseur); height: var(--ascenseur); background: var(--ascenseur-piste); }
+::-webkit-scrollbar-track { background: var(--ascenseur-piste); }
+::-webkit-scrollbar-thumb { background: var(--ascenseur-poignee); border: 3px solid var(--ascenseur-piste); min-height: var(--ascenseur-longueur-min); min-width: var(--ascenseur-longueur-min); }
+::-webkit-scrollbar-thumb:hover { background: var(--ascenseur-poignee-survol); }
+::-webkit-scrollbar-corner { background: var(--ascenseur-piste); }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: auto; scrollbar-color: var(--ascenseur-poignee) var(--ascenseur-piste); }
+}
 body {
   margin: 0; background: var(--fond); color: var(--encre);
   font-family: var(--font-body); font-size: var(--text-base); line-height: var(--leading-normal);
@@ -68,10 +81,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .pastille--en-mesure { background: transparent; border-color: var(--accent); }
 
 .zones { display: grid; grid-template-columns: 270px minmax(0, 1fr) 300px; min-height: 0; }
-.zone-gauche, .zone-centre, .zone-droite { min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; }
-.zone-gauche { background: var(--panneau); border-right: var(--rule) solid var(--filet); padding-bottom: var(--space-6); }
+.zone-gauche, .zone-centre, .zone-droite { min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
+.zone-gauche { background: var(--panneau); border-right: var(--rule) solid var(--filet); padding-bottom: var(--space-6); padding-right: var(--gouttiere-ascenseur); }
 .zone-centre { padding: var(--space-6) var(--space-8); }
-.zone-droite { background: var(--panneau); border-left: var(--rule) solid var(--filet); padding-bottom: var(--space-6); }
+.zone-droite { background: var(--panneau); border-left: var(--rule) solid var(--filet); padding-bottom: var(--space-6); padding-right: var(--gouttiere-ascenseur); }
 .zone__titre { display: block; padding: var(--space-2) var(--space-4); }
 .zone-droite__titre {
   padding: var(--space-4); font-size: var(--text-lg); border-bottom: var(--rule) solid var(--filet);
@@ -272,7 +285,10 @@ tr.hl td { background: var(--carte); }
 /* ---- Détail replié : le détail technique sous une explication ---- */
 .replie { border-top: var(--rule) solid var(--filet); padding-top: var(--space-3); margin-top: var(--space-6); max-width: var(--measure); }
 .replie summary { cursor: pointer; font-size: var(--text-sm); color: var(--attenue); }
-.replie pre { margin: var(--space-2) 0 0; font: inherit; font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: pre-wrap; overflow-wrap: anywhere; }
+.replie pre { margin: var(--space-2) 0 0; padding: var(--space-2) var(--space-3); background: var(--carte); border: var(--rule) solid var(--filet); font: inherit; font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: pre-wrap; overflow-wrap: anywhere; }
+.replie > .label { display: block; margin-top: var(--space-3); }
+/* « Avancé » posé seul dans un panneau de détails : même retrait que les autres blocs du panneau. */
+.details-avance { padding: 0 var(--space-4) var(--space-4); }
 
 /* ---- Schéma d'un geste : dessin au trait, repères numérotés, légende à côté ---- */
 .schema { display: grid; grid-template-columns: minmax(0, calc(var(--space-24) * 2.5)) 1fr; column-gap: var(--space-6); align-items: center; margin: var(--space-6) 0; max-width: var(--measure); }
@@ -310,6 +326,17 @@ select.input option { background: var(--panneau); color: var(--encre); }
 /* ---- Section ---- */
 .section { margin-top: var(--space-8); }
 .section__head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); border-top: var(--rule) solid var(--filet); padding-top: var(--space-2); margin-bottom: var(--space-3); }
+/* ---- Accordéon : grandes parties d'une vue, repliables (accordeon.js). Tout l'en-tête est un
+   bouton (Entrée, Espace), chevron à droite ; le contenu s'ouvre juste dessous, les autres en-têtes
+   ne bougent que de sa place. Serré quand c'est replié ; ni ombre ni arrondi. ---- */
+.section.accordeon { margin-top: 0; }
+.accordeon__titre { margin: 0; padding-top: 0; font-size: inherit; font-weight: inherit; }
+.accordeon__bouton { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.accordeon__bouton:hover .label { color: var(--accent); }
+.accordeon__bouton:focus-visible { outline: var(--rule-strong) solid var(--accent); outline-offset: calc(var(--rule-strong) * -1); }
+.accordeon__chevron { flex: none; width: var(--space-2); height: var(--space-2); margin-right: var(--space-1); border-right: var(--rule-strong) solid currentColor; border-bottom: var(--rule-strong) solid currentColor; transform: rotate(-45deg); }
+.accordeon__bouton[aria-expanded="true"] .accordeon__chevron { transform: rotate(45deg); }
+.accordeon__corps { padding-bottom: var(--space-6); }
 .section__title { font-size: var(--text-xl); font-weight: 500; line-height: var(--leading-snug); }
 .section--serree { margin-top: var(--space-4); }
 .section--defile { margin-top: var(--space-4); }
@@ -327,7 +354,7 @@ select.input option { background: var(--panneau); color: var(--encre); }
 .feuille__actions > .notice { margin: var(--space-3) 0 0; }
 .feuille__actions > .replie { margin-top: var(--space-3); }
 .feuille__actions > .replie p + p { margin-top: var(--space-2); }
-.defile { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--filet) transparent; }
+.defile { overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--gouttiere-ascenseur); }
 .defile thead th { position: sticky; top: 0; background: var(--fond); }
 .table--compact td { padding-top: var(--space-1); padding-bottom: var(--space-1); font-size: var(--text-base); line-height: var(--leading-snug); }
 /* La feuille remplit le centre : la barre reste en haut, le tableau prend le reste. */
@@ -338,7 +365,7 @@ select.input option { background: var(--panneau); color: var(--encre); }
 .ariane button:hover { color: var(--encre); }
 .feuille:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .feuille > .feuille__actions { flex: none; }
-.feuille__corps:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+.feuille__corps:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--gouttiere-ascenseur); }
 .feuille__corps > * { flex: none; }
 .feuille__corps > .section--defile { flex: 1 1 auto; min-height: calc(var(--space-16) * 2); display: flex; flex-direction: column; }
 .feuille__corps > .section--defile > .defile { flex: 1; min-height: 0; }
@@ -350,3 +377,124 @@ select.input option { background: var(--panneau); color: var(--encre); }
 /* ---- État vide : une phrase en grand corps, une action ---- */
 .empty__text { font-size: var(--text-3xl); font-weight: 500; line-height: var(--leading-snug); max-width: var(--measure); }
 .empty__text + p { margin-top: var(--space-3); }
+
+/* ---- Comparer des profils : graphiques SVG et vue 3D (ticket #71) ----
+   Chaque profil prend sa couleur de série par data-serie, et un trait propre (plein, tirets,
+   points, mixte) : la couleur ne parle jamais seule, la légende donne le nom. */
+.graphique { width: 100%; height: auto; font-family: var(--font-body); }
+.graphique [data-serie="1"] { --serie: var(--serie-1); }
+.graphique [data-serie="2"] { --serie: var(--serie-2); }
+.graphique [data-serie="3"] { --serie: var(--serie-3); }
+.graphique [data-serie="4"] { --serie: var(--serie-4); }
+.graphique__trace { fill: none; stroke: var(--serie); stroke-width: 2; stroke-linejoin: round; }
+.graphique__trace[data-serie="2"] { stroke-dasharray: 8 4; }
+.graphique__trace[data-serie="3"] { stroke-dasharray: 2 3; }
+.graphique__trace[data-serie="4"] { stroke-dasharray: 8 3 2 3; }
+.graphique__point { fill: var(--serie, var(--attenue)); stroke: var(--carte); stroke-width: 1; }
+/* Couleurs d'une image dans la coupe (ticket #80) : la couleur du point, posée par la page, et un contour à l'encre lisible dans les deux thèmes ; en alerte, le vert fluo. */
+.graphique__nuage { fill: var(--attenue); stroke: var(--encre); stroke-width: 0.5; }
+.graphique__nuage--alerte { fill: var(--couleur-hors-gamut); }
+.graphique__axe { stroke: var(--attenue); stroke-width: 1; }
+.graphique__grille { stroke: var(--filet); stroke-width: 1; }
+.graphique__texte { fill: var(--attenue); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.graphique__titre { fill: var(--attenue); font-size: var(--text-sm); }
+.graphique__legende { fill: var(--encre); font-size: var(--text-sm); }
+.vue3d { width: 100%; aspect-ratio: 4 / 3; background: var(--carte); border: var(--rule) solid var(--filet); cursor: grab; touch-action: none; }
+.vue3d:active { cursor: grabbing; }
+.vue3d:focus-visible { outline: var(--rule-strong) solid var(--accent); outline-offset: var(--rule-strong); }
+/* Profils d'une comparaison : carré de la couleur de série, nom, « Retirer », raison d'un refus. */
+.profils-compares { list-style: none; margin: 0; padding: 0; }
+.profils-compares li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-2) 0; border-top: var(--rule) solid var(--filet); }
+.profils-compares li > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.profils-compares li > .why { flex-basis: 100%; margin-top: 0; }
+/* Image comparée à un profil : pixels posés par putImageData, à la largeur de la colonne. */
+.surimpression { display: block; width: 100%; height: auto; object-fit: contain; background: var(--carte); border: var(--rule) solid var(--filet); cursor: crosshair; }
+.surimpression:focus-visible { outline: var(--rule-strong) solid var(--accent); outline-offset: var(--rule-strong); }
+.legende-alerte { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+/* Section Image : deux colonnes sur toute la largeur de la section. L'image à gauche, à la largeur
+   de la photo (jamais plus haute que --hauteur-image) ; le panneau à droite prend toute la largeur
+   restante, 320 px au moins (réglages, point cliqué, pastilles, chiffres), collé en haut au
+   défilement et qui défile seul s'il est long.
+   L'image entière ne dépasse pas 70 % de la hauteur de la fenêtre (--hauteur-image). Quand la
+   section a moins de 760 px de large, les deux colonnes s'empilent et l'image passe à 50 %. */
+.image-comparee { container-type: inline-size; }
+.image-comparee__colonnes { display: grid; grid-template-columns: minmax(0, calc(var(--hauteur-image) * var(--ratio, 1.5))) minmax(320px, 1fr); gap: var(--space-6); align-items: start; --hauteur-image: 70vh; }
+.image-comparee__image { min-width: 0; }
+.image-comparee__barre { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: var(--space-3); height: calc(var(--space-16) + var(--space-6)); margin-bottom: var(--space-2); }
+/* Verdict au-dessus de la photo, à place gardée : la part imprimable en grand (deux lignes au plus),
+   puis, en petit, le carré vert, le seuil, le profil et le rendu (deux lignes au plus). Atténué
+   pendant une analyse relancée sur place. */
+.verdict { flex: 1; min-width: 0; }
+.verdict__part { margin: 0; font-size: var(--text-lg); font-weight: 600; line-height: var(--leading-snug); color: var(--encre); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.verdict__detail { margin: var(--space-1) 0 0; }
+.verdict--perime { opacity: .45; }
+.image-comparee__barre > .btn { flex: none; }
+/* Deux lignes au plus, coupées : la légende ne change jamais la hauteur de la barre. */
+.legende-alerte > span:last-child { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.image-comparee__panneau { position: sticky; top: 0; min-width: 0; max-height: calc(100vh - var(--space-16) - var(--space-12)); overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; padding-right: var(--gouttiere-ascenseur); }
+/* Emplacements réservés du panneau : aucun changement de valeur ne change une taille. « Analyse en
+   cours… », « Annuler » ou « Relancer » à une place gardée, visible seulement quand il le faut ;
+   pendant une analyse relancée, les anciens résultats restent, atténués. */
+.recalcul { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); height: calc(1em * var(--leading-normal) + var(--space-1) * 2); margin-top: var(--space-2); font-size: var(--text-sm); visibility: hidden; }
+.recalcul--actif { visibility: visible; }
+.recalcul > p { margin: 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recalcul > .btn { flex: none; padding: var(--space-1) var(--space-3); font-size: inherit; line-height: var(--leading-normal); }
+.image-comparee__panneau--recalcul .image-comparee__resultats { opacity: .45; }
+.image-comparee__rendu { height: calc(2em * var(--leading-normal)); overflow: hidden; }
+.chiffres-image table { table-layout: fixed; width: 100%; }
+.chiffres-image__cellule { height: calc(var(--lignes, 1) * 1em * var(--leading-normal)); overflow: hidden; }
+@container (max-width: 760px) {
+  .image-comparee__colonnes { grid-template-columns: minmax(0, 1fr); --hauteur-image: 50vh; }
+  .image-comparee__panneau { position: static; max-height: none; overflow: visible; }
+}
+/* Zone qui défile dans une zone qui défile déjà : son ascenseur passe à gauche (direction rtl sur la
+   zone, ltr sur son contenu), pour ne jamais avoir deux ascenseurs côte à côte. Place gardée et
+   retrait côté gauche alors. */
+.defile-gauche { direction: rtl; padding-right: 0; padding-left: var(--gouttiere-ascenseur); }
+.defile-gauche > * { direction: ltr; }
+/* Pipette : le cadre garde les proportions de l'image (--ratio, posé par la page) et sa hauteur reste
+   sous --hauteur-image. Le point cliqué est un carré à l'encre bordé du fond, lisible sur une photo
+   claire comme sombre ; placé par la page en fraction de l'image (--x, --y), le filet compris. */
+.pipette { position: relative; width: min(100%, calc(var(--hauteur-image, 70vh) * var(--ratio, 1.5))); }
+.pipette > .surimpression { aspect-ratio: var(--ratio, 1.5); }
+.pipette__repere { position: absolute; left: calc(var(--rule) + (100% - 2 * var(--rule)) * var(--x, 0)); top: calc(var(--rule) + (100% - 2 * var(--rule)) * var(--y, 0)); width: var(--space-4); height: var(--space-4); transform: translate(-50%, -50%); border: var(--rule-strong) solid var(--encre); outline: var(--rule-strong) solid var(--fond); pointer-events: none; }
+/* Pastilles des couleurs hors gamut, sous l'image : couleur de l'image à gauche, couleur imprimée à
+   droite, à bords francs dans un seul filet. La couleur (--c) vient de la page, contrôlée ; sans elle,
+   la carte. */
+.pastilles-section { margin-top: var(--space-4); }
+.pastilles-section > * + * { margin-top: var(--space-2); }
+/* Le point cliqué a un bloc de hauteur fixe, présent même vide ; les pastilles ont toujours leurs
+   12 emplacements, autant par rangée que la largeur du panneau en loge (rangées de hauteur fixe) :
+   la grille ne change qu'avec la taille de la fenêtre, jamais avec une valeur. Ils restent vides
+   s'il y a moins de couleurs, et la phrase « aucune » ou la raison d'un profil inconnu se pose
+   par-dessus. */
+.pastilles-pipette { display: grid; grid-template-rows: calc(1em * var(--leading-normal)) calc(5em * var(--leading-normal)); row-gap: var(--space-2); font-size: var(--text-sm); overflow: hidden; }
+.pastilles-pipette > .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.paire.paire--pipette { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-3); align-items: start; }
+.paire__lignes { display: grid; grid-template-rows: repeat(5, calc(1em * var(--leading-normal))); min-width: 0; }
+.paire__lignes > * { margin: 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.paire__lignes > p { grid-row: 1 / -1; white-space: normal; }
+.pastilles-lecture { height: calc(3em * var(--leading-normal)); overflow: hidden; }
+.pastilles { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--space-16) + var(--space-4)), 1fr)); grid-auto-rows: calc(var(--space-12) * 2); gap: var(--space-3); }
+.pastilles .paire__couleurs { width: 100%; }
+.pastilles .pastille-couleur { flex: 1; width: auto; }
+.paire--vide .pastille-couleur { background: var(--carte); }
+.pastilles__message { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-4); text-align: center; background: var(--fond); }
+.pastilles__message:empty { display: none; }
+.paire { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.paire__couleurs { display: flex; width: fit-content; border: var(--rule) solid var(--filet); }
+.pastille-couleur { display: block; width: var(--space-12); height: var(--space-12); background: var(--c, var(--carte)); }
+.paire--pipette .pastille-couleur { width: var(--space-16); height: var(--space-16); }
+.paire__texte { color: var(--attenue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.paire__visee { display: flex; align-items: center; gap: var(--space-2); }
+.paire__visee .pastille-couleur { flex: none; width: 1em; height: 1em; border: var(--rule) solid var(--filet); }
+/* Image agrandie : fenêtre modale sur toute la fenêtre, fond plein du thème, sans ombre ; l'image
+   entière y tient sous la barre « Fermer » et la paire du point cliqué. */
+.agrandie { width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: var(--space-6); border: 0; background: var(--fond); color: var(--encre); overflow: auto; scrollbar-gutter: stable; }
+.agrandie[open] { display: flex; flex-direction: column; gap: var(--space-3); }
+.agrandie::backdrop { background: var(--fond); }
+.agrandie__barre { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.agrandie .pipette { --hauteur-image: calc(100vh - var(--space-24) - var(--space-24)); margin: 0 auto; flex: none; }
+.agrandie__lecture { flex: none; }
+/* Curseur d'une valeur dans un intervalle (clarté d'une coupe). */
+.curseur { width: 100%; max-width: var(--measure); accent-color: var(--accent); }

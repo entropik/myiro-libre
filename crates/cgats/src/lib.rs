@@ -10,6 +10,8 @@
 //!   remplacée par une valeur par défaut.
 //! - [`lire`] relit un fichier CGATS.17, de myiro-libre ou d'un autre logiciel,
 //!   en [`MesureImportee`] : ce que le fichier ne donne pas reste inconnu.
+//! - [`modele_instrument`] ne garde d'une ligne `INSTRUMENTATION` que le
+//!   modèle connu, jamais le numéro de série.
 
 mod ecriture;
 mod lecture;
@@ -20,7 +22,7 @@ use std::fmt;
 use pont_protocole::{ConditionMesure, Echantillonnage, Info, Lab, Provenance, Spectre};
 
 pub use ecriture::ecrire;
-pub use lecture::lire;
+pub use lecture::{lire, lire_sans_condition};
 
 /// Version du CGATS écrit par myiro-libre (mot-clé `MYIRO_LIBRE_FORMAT`).
 pub const FORMAT_CGATS: &str = "myiro-libre/cgats/1";
@@ -36,6 +38,14 @@ impl fmt::Display for ErreurCgats {
 }
 
 impl std::error::Error for ErreurCgats {}
+
+impl ErreurCgats {
+    /// Le fichier est refusé parce que l'échelle de ses colonnes
+    /// `SPECTRAL_NM_` ne se décide pas (maximum entre 1,5 et 2).
+    pub fn echelle_spectre_indecidable(&self) -> bool {
+        self.0.starts_with(lecture::ECHELLE_INDECIDABLE)
+    }
+}
 
 pub(crate) fn erreur<T>(detail: impl Into<String>) -> Result<T, ErreurCgats> {
     Err(ErreurCgats(detail.into()))
@@ -107,6 +117,23 @@ pub fn decoder(octets: &[u8]) -> String {
             _ => char::from(o),
         })
         .collect()
+}
+
+/// Modèle d'instrument nommé par une ligne `INSTRUMENTATION` : seul un
+/// modèle connu est gardé, jamais le reste de la ligne (numéro de série,
+/// adresse). « KONICA MINOLTA, INC. MYIRO-9 (FD-9), Serial No. … » → « FD-9 ».
+pub fn modele_instrument(declare: &str) -> Option<String> {
+    let haut = declare.to_uppercase();
+    [
+        ("FD-9", "FD-9"),
+        ("MYIRO-9", "FD-9"),
+        ("MYIRO-1", "MYIRO-1"),
+        ("FD-7", "FD-7"),
+        ("FD-5", "FD-5"),
+    ]
+    .into_iter()
+    .find(|(motif, _)| haut.contains(motif))
+    .map(|(_, modele)| modele.to_string())
 }
 
 /// Noms des trois emplacements de spectre d'une plage.

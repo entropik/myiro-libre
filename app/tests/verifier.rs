@@ -483,13 +483,15 @@ fn une_mire_regeneree_autrement_pour_la_meme_version_est_refusee() {
     let dossier = tempfile::tempdir().unwrap();
     let chemin = app::colonne::emplacement(dossier.path());
     let b = bibliotheque::Bibliotheque::ouvrir(&chemin).unwrap();
-    b.ranger_mire_verification(
-        "myiro-libre verification FD-9 v1",
-        "fd9",
-        verification::MIRE_FD9_VERSION,
-        "<Data/>",
-        "2026-10-27T09:00:00Z",
-    )
+    b.ranger_mire_verification(&bibliotheque::NouvelleMireVerification {
+        nom: "myiro-libre verification FD-9 v1",
+        instrument: "fd9",
+        version: verification::MIRE_FD9_VERSION,
+        plages: 1,
+        valeurs: "[[0.0,0.0,0.0]]",
+        contenu: "<Data/>",
+        horodatage: "2026-10-27T09:00:00Z",
+    })
     .unwrap();
     drop(b);
     let ouverte = app::colonne::BibliothequeOuverte::ouvrir(&chemin);

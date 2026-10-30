@@ -13,9 +13,11 @@ use pont_protocole::{ecrire_mesure, lire_mesure, Geometrie, Info, Mesure};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, TransactionBehavior, MAIN_DB};
 use serde::{Deserialize, Serialize};
 
+mod mires;
 mod parc;
 mod profils;
 mod verifications;
+pub use mires::*;
 pub use parc::*;
 pub use profils::*;
 pub use verifications::*;
@@ -111,6 +113,10 @@ pub enum ErreurBibliotheque {
     /// « Non vérifié » n'est pas le résultat d'une vérification ; rien
     /// n'est rangé.
     EtatVerificationInvalide,
+    /// Une mire à ranger est incomplète ou d'un instrument inconnu ; rien
+    /// n'est enregistré.
+    MireInvalide(String),
+    TirageInconnu(IdTirage),
     /// Erreur du fichier ou de la base elle-même.
     Base(String),
 }
@@ -154,6 +160,10 @@ impl fmt::Display for ErreurBibliotheque {
             Self::EtatVerificationInvalide => {
                 f.write_str("« non vérifié » n'est pas le résultat d'une vérification")
             }
+            Self::MireInvalide(detail) => {
+                write!(f, "mire refusée, rien n'a été enregistré : {detail}")
+            }
+            Self::TirageInconnu(id) => write!(f, "tirage n° {} inconnu", id.0),
             Self::Base(detail) => write!(f, "bibliothèque : {detail}"),
         }
     }
@@ -190,6 +200,9 @@ pub struct ConditionImpression {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct Instrument {
     pub modele: String,
+    /// Jamais envoyé à la page (ticket #84) : une capture d'écran partagée
+    /// le publierait. Il reste dans la base et sert à la recherche.
+    #[serde(skip_serializing)]
     pub numero_serie: u32,
 }
 
@@ -1085,11 +1098,32 @@ CREATE INDEX profils_par_condition ON profils (condition);
 CREATE UNIQUE INDEX un_profil_actif_par_condition ON profils (condition) WHERE actif = 1;
 ";
 
-/// Organisation 6 : réservée aux mires et tirages du ticket #33, développés
-/// en parallèle (plan 4). Vide ici ; la fusion de #33 la remplace par la
-/// sienne. Une base passée par cette organisation vide n'aurait pas les
-/// tables des mires : fusionner #33 avant le ticket #41.
-const ORGANISATION_6: &str = "";
+/// Organisation 6 (ticket #33), par-dessus l'organisation 5 : les mires de
+/// profilage et leurs tirages. Une mire est rangée une fois par empreinte ;
+/// chaque préparation ajoute un tirage dans sa condition. L'état `prepare`
+/// est le seul pour l'instant. Rien n'est réécrit ni effacé.
+const ORGANISATION_6: &str = "
+CREATE TABLE mires (
+    id INTEGER PRIMARY KEY,
+    nom TEXT NOT NULL,
+    instrument TEXT NOT NULL CHECK (instrument IN ('fd9', 'myiro1')),
+    plages INTEGER NOT NULL CHECK (plages > 0),
+    generation TEXT NOT NULL,
+    valeurs TEXT NOT NULL,
+    mise_en_page TEXT NOT NULL,
+    empreinte TEXT NOT NULL UNIQUE,
+    horodatage TEXT NOT NULL
+);
+CREATE TABLE tirages (
+    id INTEGER PRIMARY KEY,
+    condition INTEGER NOT NULL REFERENCES conditions (id),
+    mire INTEGER NOT NULL REFERENCES mires (id),
+    pages INTEGER NOT NULL CHECK (pages > 0),
+    horodatage TEXT NOT NULL,
+    etat TEXT NOT NULL DEFAULT 'prepare' CHECK (etat IN ('prepare'))
+);
+CREATE INDEX tirages_par_condition ON tirages (condition);
+";
 
 #[cfg(test)]
 mod tests {

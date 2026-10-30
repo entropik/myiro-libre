@@ -8,8 +8,8 @@ use rusqlite::{params, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    instant, Bibliotheque, ErreurBibliotheque, EtatVerification, IdCondition, IdMesure, IdProfil,
-    Resultat,
+    instant, Bibliotheque, ErreurBibliotheque, EtatVerification, IdCondition, IdMesure, IdMire,
+    IdProfil, Resultat,
 };
 
 /// Numéro d'un jeu de tolérances (une version) dans la bibliothèque.
@@ -263,19 +263,36 @@ impl Bibliotheque {
     }
 }
 
-/// Numéro d'une mire de vérification dans la bibliothèque.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct IdMireVerification(pub i64);
+/// Une mire de vérification à ranger. Elle rejoint la table `mires` des
+/// mires de profilage (#33), marquée `usage = 'verification'`, sans tirage.
+#[derive(Clone, Copy, Debug)]
+pub struct NouvelleMireVerification<'a> {
+    pub nom: &'a str,
+    /// `"fd9"` ou `"myiro1"`.
+    pub instrument: &'a str,
+    /// Version du générateur de la mire, à partir de 1.
+    pub version: u32,
+    pub plages: usize,
+    /// JSON des valeurs RVB, de 0 à 100, dans l'ordre des plages (comme les
+    /// mires de profilage).
+    pub valeurs: &'a str,
+    /// Le fichier de la mire tel qu'écrit pour l'instrument (XML de FD-S2w
+    /// pour le FD-9). Son SHA-256 est l'empreinte de la mire.
+    pub contenu: &'a str,
+    /// Première fois qu'elle est rangée, en RFC 3339.
+    pub horodatage: &'a str,
+}
 
-/// Une mire de vérification rangée : son contenu (XML de FD-S2w pour le
-/// FD-9), tel qu'écrit la première fois.
+/// Une mire de vérification rangée, telle qu'écrite la première fois.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct MireVerificationRangee {
-    pub id: IdMireVerification,
+    /// Numéro dans la table `mires`, partagée avec les mires de profilage.
+    pub id: IdMire,
     pub nom: String,
     /// `fd9` ou `myiro1`.
     pub instrument: String,
     pub version: u32,
+    pub plages: usize,
     /// SHA-256 du contenu, en hexadécimal minuscule.
     pub empreinte: String,
     pub contenu: String,
@@ -283,25 +300,84 @@ pub struct MireVerificationRangee {
     pub horodatage: String,
 }
 
+/// Ce que la colonne `generation` garde d'une mire de vérification.
+#[derive(Serialize, Deserialize)]
+struct GenerationVerification {
+    origine: String,
+    version: u32,
+}
+
+/// Ce que la colonne `mise_en_page` garde d'une mire de vérification : le
+/// fichier lui-même, qui porte la place de chaque plage.
+#[derive(Serialize, Deserialize)]
+struct FichierVerification {
+    contenu: String,
+}
+
+const ORIGINE_VERIFICATION: &str = "verification";
+
 impl Bibliotheque {
     /// Range une mire de vérification une seule fois : un contenu déjà rangé
     /// est rendu tel qu'il a été rangé la première fois, sans rien changer.
+    /// Un contenu déjà rangé comme mire de profilage est refusé.
     pub fn ranger_mire_verification(
         &self,
-        nom: &str,
-        instrument: &str,
-        version: u32,
-        contenu: &str,
-        horodatage: &str,
+        mire: &NouvelleMireVerification,
     ) -> Resultat<MireVerificationRangee> {
-        horodatage_valide(horodatage)?;
-        let empreinte = crate::profils::empreinte(contenu.as_bytes());
-        self.base.execute(
-            "INSERT OR IGNORE INTO mires_verification
-                 (nom, instrument, version, empreinte, contenu, horodatage)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![nom, instrument, version, empreinte, contenu, horodatage],
-        )?;
+        let invalide = |cause: &str| Err(ErreurBibliotheque::MireInvalide(cause.to_string()));
+        if mire.nom.trim().is_empty() {
+            return Err(ErreurBibliotheque::NomVide);
+        }
+        if !crate::mires::INSTRUMENTS_MIRE.contains(&mire.instrument) {
+            return invalide(&format!("instrument « {} » inconnu", mire.instrument));
+        }
+        if mire.version == 0 || mire.plages == 0 {
+            return invalide("une mire de vérification a une version et au moins une plage");
+        }
+        horodatage_valide(mire.horodatage)?;
+        let empreinte = crate::profils::empreinte(mire.contenu.as_bytes());
+        let json = |e: serde_json::Error| ErreurBibliotheque::Base(e.to_string());
+        let generation = serde_json::to_string(&GenerationVerification {
+            origine: ORIGINE_VERIFICATION.to_string(),
+            version: mire.version,
+        })
+        .map_err(json)?;
+        let fichier = serde_json::to_string(&FichierVerification {
+            contenu: mire.contenu.to_string(),
+        })
+        .map_err(json)?;
+        let plages =
+            i64::try_from(mire.plages).map_err(|e| ErreurBibliotheque::Base(e.to_string()))?;
+        let transaction = self.base.unchecked_transaction()?;
+        let existante: Option<String> = transaction
+            .query_row(
+                "SELECT usage FROM mires WHERE empreinte = ?1",
+                params![empreinte],
+                |l| l.get(0),
+            )
+            .optional()?;
+        match existante.as_deref() {
+            Some(ORIGINE_VERIFICATION) => {}
+            Some(_) => return invalide("ce contenu est déjà rangé comme mire de profilage"),
+            None => {
+                transaction.execute(
+                    "INSERT INTO mires (nom, instrument, plages, generation, valeurs,
+                                        mise_en_page, empreinte, horodatage, usage)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'verification')",
+                    params![
+                        mire.nom.trim(),
+                        mire.instrument,
+                        plages,
+                        generation,
+                        mire.valeurs,
+                        fichier,
+                        empreinte,
+                        mire.horodatage
+                    ],
+                )?;
+            }
+        }
+        transaction.commit()?;
         self.mires_verification()?
             .into_iter()
             .find(|m| m.empreinte == empreinte)
@@ -323,42 +399,57 @@ impl Bibliotheque {
             .find(|m| m.instrument == instrument && m.version == version))
     }
 
-    /// Les mires de vérification, dans l'ordre où elles ont été rangées.
+    /// Les mires de vérification, dans l'ordre où elles ont été rangées ; les
+    /// mires de profilage n'en font pas partie.
     pub fn mires_verification(&self) -> Resultat<Vec<MireVerificationRangee>> {
         let mut requete = self.base.prepare(
-            "SELECT id, nom, instrument, version, empreinte, contenu, horodatage
-             FROM mires_verification ORDER BY id",
+            "SELECT id, nom, instrument, plages, generation, mise_en_page, empreinte, horodatage
+             FROM mires WHERE usage = 'verification' ORDER BY id",
         )?;
-        let mires = requete.query_map([], |l| {
-            Ok(MireVerificationRangee {
-                id: IdMireVerification(l.get(0)?),
-                nom: l.get(1)?,
-                instrument: l.get(2)?,
-                version: l.get(3)?,
-                empreinte: l.get(4)?,
-                contenu: l.get(5)?,
-                horodatage: l.get(6)?,
-            })
+        let lignes = requete.query_map([], |l| {
+            Ok((
+                l.get::<_, i64>(0)?,
+                l.get::<_, String>(1)?,
+                l.get::<_, String>(2)?,
+                l.get::<_, i64>(3)?,
+                l.get::<_, String>(4)?,
+                l.get::<_, String>(5)?,
+                l.get::<_, String>(6)?,
+                l.get::<_, String>(7)?,
+            ))
         })?;
-        Ok(mires.collect::<Result<_, _>>()?)
+        let mut mires = Vec::new();
+        for ligne in lignes {
+            let (id, nom, instrument, plages, generation, fichier, empreinte, horodatage) = ligne?;
+            let illisible =
+                |e: serde_json::Error| ErreurBibliotheque::Base(format!("mire n° {id} : {e}"));
+            let generation: GenerationVerification =
+                serde_json::from_str(&generation).map_err(illisible)?;
+            let fichier: FichierVerification = serde_json::from_str(&fichier).map_err(illisible)?;
+            mires.push(MireVerificationRangee {
+                id: IdMire(id),
+                nom,
+                instrument,
+                version: generation.version,
+                plages: plages.try_into().unwrap_or(0),
+                empreinte,
+                contenu: fichier.contenu,
+                horodatage,
+            });
+        }
+        Ok(mires)
     }
 }
 
 /// Organisation 7 (ticket #41), par-dessus l'organisation 6 (mires, #33) :
-/// les jeux de tolérances versionnés, les vérifications de profils et les
-/// mires de vérification (rangées une fois par contenu ; elles rejoindront
-/// les mires de #33 à sa fusion). La base elle-même refuse de modifier ou
-/// d'effacer un jeu ou une vérification. Rien n'est réécrit ni effacé.
+/// les jeux de tolérances versionnés et les vérifications de profils. Les
+/// mires de vérification rejoignent la table `mires` de #33 (colonne
+/// `usage`, `profilage` pour toutes les mires déjà rangées). La base elle-même
+/// refuse de modifier ou d'effacer une mire, un jeu ou une vérification.
+/// Rien n'est réécrit ni effacé.
 pub(crate) const ORGANISATION_7: &str = "
-CREATE TABLE mires_verification (
-    id INTEGER PRIMARY KEY,
-    nom TEXT NOT NULL,
-    instrument TEXT NOT NULL CHECK (instrument IN ('fd9', 'myiro1')),
-    version INTEGER NOT NULL CHECK (version > 0),
-    empreinte TEXT NOT NULL UNIQUE,
-    contenu TEXT NOT NULL,
-    horodatage TEXT NOT NULL
-);
+ALTER TABLE mires ADD COLUMN usage TEXT NOT NULL DEFAULT 'profilage'
+    CHECK (usage IN ('profilage', 'verification'));
 CREATE TABLE tolerances (
     id INTEGER PRIMARY KEY,
     nom TEXT NOT NULL,
@@ -379,6 +470,10 @@ CREATE TABLE verifications (
     recalcul_de INTEGER REFERENCES verifications (id)
 );
 CREATE INDEX verifications_par_profil ON verifications (profil);
+CREATE TRIGGER mires_immuables BEFORE UPDATE ON mires
+    BEGIN SELECT RAISE(ABORT, 'mire immuable'); END;
+CREATE TRIGGER mires_gardees BEFORE DELETE ON mires
+    BEGIN SELECT RAISE(ABORT, 'mire immuable'); END;
 CREATE TRIGGER tolerances_immuables BEFORE UPDATE ON tolerances
     BEGIN SELECT RAISE(ABORT, 'jeu de tolérances immuable'); END;
 CREATE TRIGGER tolerances_gardees BEFORE DELETE ON tolerances

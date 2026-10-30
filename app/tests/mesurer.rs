@@ -404,6 +404,18 @@ fn fiche_de(nom: &str, mesure: Mesure, langue: Langue) -> FicheMesure {
     seance.fiches(langue).remove(0)
 }
 
+/// La fiche envoyée à la page montre le modèle, jamais le numéro de série
+/// (ticket #84) : une capture d'écran partagée ne le publie pas. La mesure,
+/// elle, le garde dans sa provenance.
+#[test]
+fn la_fiche_de_mesurer_n_envoie_pas_le_numero_de_serie() {
+    let fiche = fiche_du_gris("sans-numero", demande_myiro1(), Langue::Francais);
+    let page = serde_json::to_string(&fiche).unwrap();
+    assert!(!page.contains(&SERIE.to_string()), "{page}");
+    assert!(!page.contains("numero_serie"), "{page}");
+    assert_eq!(fiche.modele.as_deref(), Some("MYIRO-1"));
+}
+
 /// Lab, LCH et XYZ sont calculés par notre colorimétrie à partir du
 /// spectre (pas repris des Lab de la DLL, nuls ici), à deux décimales, avec la
 /// virgule en français. Un gris n'a pas de teinte : elle est inconnue.

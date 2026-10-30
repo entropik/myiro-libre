@@ -70,6 +70,8 @@ Un tableau qui porte `MEASUREMENT_CONDITION` et une `MEASUREMENT_SOURCE` `M0`, `
 
 Sans aucun de ces mots-clés, le fichier est **refusé** avec une phrase claire : on ne range pas des valeurs sous une condition devinée.
 
+Une seule exception, hors de l'import : les mesures qu'un profil embarque (balise `targ`), relues pour comparer des profils. ArgyllCMS y réécrit le `.ti3` reçu, sans condition de mesure (constaté le 28 octobre 2026 avec ArgyllCMS 3.5.0 : fins de ligne LF, `KEYWORD` retirés, cinq décimales, mêmes valeurs). `lire_sans_condition` les lit quand même, sous une condition **inconnue** : la fidélité d'un profil et la reconnaissance de mêmes mesures n'ont besoin que des RVB et des Lab. Rien n'est rangé de cette façon.
+
 Dans les colonnes : `SAMPLE_ID` donne l'identifiant de la plage (sinon son rang), `LAB_L`, `LAB_A`, `LAB_B` le Lab, et le spectre vient de l'une de ces familles de colonnes, chacune avec son échelle, jamais devinée :
 
 | Colonnes | Écrites par | Échelle |
@@ -77,8 +79,19 @@ Dans les colonnes : `SAMPLE_ID` donne l'identifiant de la plage (sinon son rang)
 | `SPEC_380`… | ArgyllCMS, myiro-libre | pourcentage (0 à 100) |
 | `nm380`… | logiciels du fabricant | réflectance (0 à 1) |
 | `MYIRO_LIBRE_SPECTRE_1`… | myiro-libre, longueurs d'onde inconnues | pourcentage |
+| `SPECTRAL_NM_380`… | nom CGATS.17 ; exports MYIROtools | **décidée** sur le fichier (ci-dessous) |
 
-Deux familles dans un même tableau : refusé. Les longueurs d'onde doivent être régulières (calcul en 64 bits : des valeurs démesurées sont refusées, sans planter). Une autre famille de colonnes (par exemple `SPECTRAL_NM380` ou `SPECTRAL_380`, dont l'échelle n'est pas établie) est ignorée : le spectre reste inconnu. Les autres colonnes (densités, emplacement sur la feuille…) sont ignorées. **Un fichier sans spectre donne des spectres inconnus** : tout ce qui exige un spectre (autre condition de mesure, densité calculée, nouvel illuminant) reste inconnu pour cette mesure. Un emplacement absent du fichier (par exemple M0 et M2 d'un export qui ne contient que M1) reste inconnu lui aussi.
+**Échelle des colonnes `SPECTRAL_NM_`.** Le fichier ne la dit pas. C'est une règle **décidée** par myiro-libre (28 octobre 2026), et non lue dans le fichier. On prend la plus forte valeur de toutes ces colonnes, dans tout le fichier, quel que soit le logiciel qui l'a écrit :
+
+| Plus forte valeur | Échelle retenue |
+|---|---|
+| 1,5 au plus | réflectance de 0 à 1 |
+| 2 au moins | pourcentage (0 à 100) |
+| plus de 1,5 et moins de 2 | **refusé** : on ne peut pas trancher, rien n'est deviné |
+
+Pourquoi ces seuils : un papier très blanc, avec azurants, dépasse 1 dans le bleu, mais pas 1,5. Un pourcentage ne reste sous 2 que pour un fichier presque noir partout. Observé sur l'export que MYIROtools embarque dans ses profils (essai du 26 octobre 2026, papier mat, 2 520 plages) : spectres seuls, sans Lab, de 0 à 1, blanc vers 0,94. Le Lab y est alors calculé par myiro-libre (D50, 2°), et il retrouve celui du `.ti3` de la même mesure. Le refus se reconnaît par `ErreurCgats::echelle_spectre_indecidable`. L'application le dit avec son propre texte (`comparer.fidelite.echelle_spectre`).
+
+Deux familles dans un même tableau : refusé. Les longueurs d'onde doivent être régulières (calcul en 64 bits : des valeurs démesurées sont refusées, sans planter). Une autre famille de colonnes (par exemple `SPECTRAL_NM380`, sans tiret bas, ou `SPECTRAL_380`, jamais rencontrées) est ignorée : le spectre reste inconnu. Les autres colonnes (densités, emplacement sur la feuille…) sont ignorées. **Un fichier sans spectre donne des spectres inconnus** : tout ce qui exige un spectre (autre condition de mesure, densité calculée, nouvel illuminant) reste inconnu pour cette mesure. Un emplacement absent du fichier (par exemple M0 et M2 d'un export qui ne contient que M1) reste inconnu lui aussi.
 
 Les **valeurs RVB** envoyées à l'imprimante (colonnes `RGB_R`, `RGB_G`, `RGB_B`, toutes trois ou aucune : une ou deux seulement, le fichier est refusé) sont lues et ramenées de 0 à 1 (1 = 100 % de la composante). Elles servent au calcul d'un profil RVB. Leur échelle dépend du logiciel qui a écrit le fichier, et n'est jamais devinée :
 
@@ -98,6 +111,8 @@ Plusieurs tableaux doivent porter les mêmes plages, dans le même ordre, avec l
 Écrire une mesure puis la relire rend exactement ses spectres, ses Lab et sa provenance (test de la crate).
 
 À l'écran, « Importer un fichier… » lit le fichier et montre la mesure en aperçu, sans rien ranger ; elle n'entre dans la bibliothèque qu'avec « Ranger dans « … » », dans la condition d'impression choisie. La bibliothèque conserve le texte du fichier tel quel, avec le seul nom du fichier (pas son dossier), et le relit à chaque affichage : la colonne de gauche et le cartouche disent « Importée » et le fichier d'origine, et une valeur absente du fichier s'affiche « inconnue ».
+
+**L'instrument à l'écran : le modèle seul** (30 octobre 2026, ticket #84). Les exports de FD-S2w mettent le numéro de série de l'instrument dans `INSTRUMENTATION` (« KONICA MINOLTA, INC. MYIRO-9 (FD-9), Serial No. … ») et dans `SERIAL`. Une capture d'écran partagée le publierait. La fonction `modele_instrument` ne garde de la ligne qu'un modèle connu : FD-9 (MYIRO-9 compris), MYIRO-1, FD-7, FD-5 ; le reste de la ligne n'est jamais gardé. Sans modèle reconnu, l'instrument s'affiche « inconnu ». C'est tout ce que la page reçoit, dans la feuille des mesures comme dans la vue d'une résolution. Pour une mesure d'un pont aussi, dans la feuille des mesures comme dans Mesurer, seul le modèle part vers la page : aucun écran ne montre le numéro de série. Le fichier rangé dans la bibliothèque, lui, reste tel quel, numéro compris : la recherche le retrouve encore par son numéro. La provenance des mesures d'un pont et l'export CGATS (`SERIAL`) le gardent aussi.
 
 ## Comparaison avec l'export CGATS de référence du fabricant
 

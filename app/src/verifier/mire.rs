@@ -5,7 +5,7 @@
 use std::path::Path;
 use std::time::SystemTime;
 
-use bibliotheque::MireVerificationRangee;
+use bibliotheque::{MireVerificationRangee, NouvelleMireVerification};
 use verification::{ecrire_xml_fds2w, mire_verification_fd9, MIRE_FD9_VERSION};
 
 use crate::colonne::BibliothequeOuverte;
@@ -23,9 +23,27 @@ impl BibliothequeOuverte {
         let mire = mire_verification_fd9();
         let xml = ecrire_xml_fds2w(&mire);
         let horodatage = instant_utc(maintenant);
+        // Valeurs RVB de 0 à 100, comme celles des mires de profilage (#33).
+        let valeurs: Vec<[f64; 3]> = mire
+            .plages
+            .iter()
+            .map(|p| p.rvb.map(|v| f64::from(v) * 100.0 / 255.0))
+            .collect();
+        let valeurs = serde_json::to_string(&valeurs).map_err(|e| {
+            eprintln!("{e}");
+            "bibliotheque.erreur.autre".to_string()
+        })?;
         let rangee = self.avec(|b| match b.mire_verification("fd9", MIRE_FD9_VERSION)? {
             Some(m) => Ok(m),
-            None => b.ranger_mire_verification(&mire.nom, "fd9", mire.version, &xml, &horodatage),
+            None => b.ranger_mire_verification(&NouvelleMireVerification {
+                nom: &mire.nom,
+                instrument: "fd9",
+                version: mire.version,
+                plages: mire.plages.len(),
+                valeurs: &valeurs,
+                contenu: &xml,
+                horodatage: &horodatage,
+            }),
         })?;
         if rangee.contenu != xml {
             eprintln!(

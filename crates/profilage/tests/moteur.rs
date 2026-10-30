@@ -5,6 +5,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use profilage::arguments_targen;
 use profilage::{
     arguments_colprof, chercher_argyll, controler_version, description_argyll, etape_colprof,
     lignes_commandes, lire_avancement, lire_precision, lire_version, ArgyllCms, Avancement,
@@ -561,4 +562,59 @@ fn les_parties_de_colprof_se_reperent_dans_ses_lignes() {
 fn une_ligne_d_asterisques_n_annonce_rien() {
     assert_eq!(lire_avancement("*********"), None);
     assert_eq!(lire_avancement(" * "), None);
+}
+
+// Plages d'une mire MYIRO-1, choisies par `targen`.
+
+#[test]
+fn targen_recoit_le_nombre_et_le_rvb() {
+    let a: Vec<_> = arguments_targen(232, Path::new("mire"))
+        .iter()
+        .map(|s| s.to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(a, ["-v", "-d2", "-G", "-f232", "mire"]);
+}
+
+#[test]
+fn la_commande_des_plages_se_montre_sans_rien_lancer() {
+    let moteur = MoteurSimule::reussit(Vec::new()).avec_plages("CTI1\n".into());
+    assert_eq!(moteur.commande_plages(464), "targen -v -d2 -G -f464 mire");
+    assert!(moteur.plages_demandees().is_empty());
+}
+
+#[test]
+fn le_moteur_simule_rend_son_ti1() {
+    let moteur = MoteurSimule::reussit(Vec::new()).avec_plages("CTI1\nfictif\n".into());
+    let plages = moteur.generer_plages(232).unwrap();
+    assert_eq!(plages.ti1, "CTI1\nfictif\n");
+    assert_eq!(plages.version, VERSION_ARGYLL);
+    assert_eq!(plages.commande, "targen -v -d2 -G -f232 mire");
+    assert_eq!(moteur.plages_demandees(), [232]);
+}
+
+#[test]
+fn sans_ti1_le_moteur_simule_echoue_a_l_etape_des_plages() {
+    let moteur = MoteurSimule::reussit(Vec::new());
+    let erreur = moteur.generer_plages(232).unwrap_err();
+    assert!(matches!(
+        erreur,
+        ErreurMoteur::Echec {
+            etape: Etape::Plages,
+            ..
+        }
+    ));
+    assert_eq!(erreur.cle(), "mire.erreur.generation");
+}
+
+#[test]
+fn un_moteur_simule_en_echec_echoue_aussi_pour_les_plages() {
+    let moteur = MoteurSimule::echoue(ErreurMoteur::Introuvable).avec_plages("CTI1\n".into());
+    assert_eq!(moteur.generer_plages(232), Err(ErreurMoteur::Introuvable));
+}
+
+#[test]
+fn un_argyll_absent_ne_genere_pas_de_plages() {
+    let vide = tempfile::tempdir().unwrap();
+    let moteur = ArgyllCms::new(vide.path().join("argyll"));
+    assert_eq!(moteur.generer_plages(232), Err(ErreurMoteur::Introuvable));
 }

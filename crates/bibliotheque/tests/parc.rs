@@ -84,6 +84,13 @@ fn une_base_neuve_est_en_organisation_7() {
                 mesures, icc FROM profils",
     )
     .unwrap();
+    base.prepare(
+        "SELECT id, nom, instrument, plages, generation, valeurs, mise_en_page, empreinte,
+                horodatage FROM mires",
+    )
+    .unwrap();
+    base.prepare("SELECT id, condition, mire, pages, horodatage, etat FROM tirages")
+        .unwrap();
 }
 
 #[test]

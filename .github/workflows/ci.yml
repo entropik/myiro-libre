@@ -53,14 +53,16 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Crates qui doivent rester indépendantes de Windows (ADR 0004).
-      # Y ajouter `mires` à sa création.
       CRATES: >-
         -p pont-protocole
         -p jeu-validation
         -p colorimetrie
         -p bibliotheque
         -p cgats
+        -p gamut
+        -p photo
         -p profilage
+        -p mires
         -p verification
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -39,19 +39,27 @@ window.Reglage = (() => {
   // Calcul d'un profil : section, calcul et provenance (calcul-profil.js).
   const calcul = window.CalculProfil;
   const { texteErreur } = calcul;
+  // Préparer une mire : section et préparation (mire.js).
+  const mire = window.PreparerMire;
+
+  // Comparaison de profils (comparer.js) : elle prend la place de cette vue.
+  const comparer = window.Comparer;
+  const source = (profil) => ({ type: "bibliotheque", profil });
 
   // Pendant une action (fenêtre de Windows ouverte, installation, calcul), tous les boutons de
   // la vue sont inactifs et la raison « en cours » est dite juste à côté : un double clic ne
   // fait rien. Pendant un calcul, seule sa raison à lui est dite, sous son bouton. Un bouton
-  // marqué data-inactif l'est aussi hors de toute action.
-  const BOUTONS = "[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-calcul-profil] button, [data-calcul-profil] input, [data-verif-ouvrir], [data-verification] button, [data-verification] input";
+  // marqué data-inactif l'est aussi hors de toute action. « Comparer » et « Comparer à
+  // l'actuel » en font partie, comme la vérification.
+  const BOUTONS = "[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-comparer-ouvrir], [data-comparer-actuel], [data-calcul-profil] button, [data-calcul-profil] input, [data-verif-ouvrir], [data-verification] button, [data-verification] input";
+  const BOUTONS_MIRE = "[data-mire-ouvrir], [data-mire] button, [data-mire] input";
   // Vérification d'un profil : section, résultat et provenance (verification.js).
   const verification = window.Verification;
   const occupe = vue.querySelector("[data-reglage-occupe]");
   let enCours = false;
 
   function dessinerOccupation(sansProfil) {
-    for (const b of vue.querySelectorAll(BOUTONS)) {
+    for (const b of vue.querySelectorAll(`${BOUTONS}, ${BOUTONS_MIRE}`)) {
       b.disabled = enCours || b.hasAttribute("data-inactif") || (sansProfil && b.hasAttribute("data-installer"));
     }
     occupe.hidden = !enCours || calcul.raisonVisible();
@@ -78,8 +86,10 @@ window.Reglage = (() => {
     // Un seul bouton principal ; sans profil, il est inactif et dit pourquoi, juste à côté.
     vue.querySelector("[data-installer-raison]").hidden = Boolean(actif) || enCours;
     vue.querySelector("[data-exporter-profil]").hidden = !actif;
+    vue.querySelector("[data-comparer-ouvrir]").hidden = !actif;
     calcul.dessiner(d);
     verification.dessiner(d);
+    mire.dessiner(d);
     dessinerOccupation(!actif);
 
     const historique = vue.querySelector("[data-historique]");
@@ -88,7 +98,18 @@ window.Reglage = (() => {
       const quand = el("span", "", `${date(p.horodatage)} · ${t(p.actif ? "parc.historique.actuel" : "parc.historique.remplace")}`);
       quand.title = p.nom;
       const etat = textes[p.libelle] ? p.libelle : "parc.etat.non_verifie";
-      ligne.append(quand, el("span", "", t(etat)));
+      const droite = el("span", "", t(etat));
+      // Un profil remplacé se compare à l'actuel : avant / après, l'actuel en référence.
+      if (!p.actif && actif) {
+        const b = el("button", "btn", t("comparer.ouvrir.actuel"));
+        b.dataset.comparerActuel = "";
+        b.disabled = enCours;
+        b.addEventListener("click", () => {
+          comparer.ouvrir([source(d.actif.id), source(p.id)]);
+        });
+        droite.append(" ", b);
+      }
+      ligne.append(quand, droite);
       return ligne;
     }));
     if (!d.historique.length) historique.append(el("p", "why", t("parc.historique.vide")));
@@ -118,7 +139,8 @@ window.Reglage = (() => {
     return l;
   }
 
-  // Instrument d'un profil calculé : celui que déclare le fichier de la mesure source.
+  // Instrument d'un profil calculé : le modèle que déclare le fichier de la mesure source,
+  // déjà réduit par Rust (« FD-9 »), jamais son numéro de série (ticket #84).
   function instrumentDeclare(d) {
     const source = d.provenance && d.importees.find((m) => m.id === d.provenance.mesure);
     const info = source ? source.instrument : null;
@@ -180,6 +202,11 @@ window.Reglage = (() => {
     annoncer(t(etat === "deja_installe" ? "parc.deja_installe" : "installation.installe"));
   }));
 
+  vue.querySelector("[data-comparer-ouvrir]").addEventListener("click", () => {
+    const d = parc.reglage();
+    if (d && d.actif) comparer.ouvrir([source(d.actif.id)]);
+  });
+
   // Le calcul agit sur la résolution affichée, avec le même mécanisme que les autres actions.
   calcul.brancher({
     reglage: () => parc.reglage(),
@@ -195,6 +222,16 @@ window.Reglage = (() => {
     agir,
     occupation: () => dessinerOccupation(!(parc.reglage() || {}).actif),
     texteErreur,
+  });
+
+  // La préparation d'une mire agit sur la résolution affichée, avec le même mécanisme.
+  mire.brancher({
+    reglage: () => parc.reglage(),
+    recharger: () => parc.recharger(),
+    annoncer,
+    agir,
+    texteErreur,
+    occupation: () => dessinerOccupation(!(parc.reglage() || {}).actif),
   });
 
   return {

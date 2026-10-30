@@ -14,6 +14,8 @@ serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 bibliotheque = { path = "../bibliotheque" }
+mires = { path = "../mires" }
+gamut = { path = "../gamut" }
 serde_json = "1"
 verification = { path = "../verification" }
 tempfile = "3"
