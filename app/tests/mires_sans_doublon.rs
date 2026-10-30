@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use app::colonne::emplacement;
 use app::mires::DemandeMire;
+use app::textes::Langue;
 use bibliotheque::{Bibliotheque, NouvelleMire};
 use commun_mires::*;
 use mires::TailleMire;
@@ -34,6 +35,7 @@ fn deux_preparations_myiro1_aux_memes_reglages_donnent_un_seul_tirage() {
             None,
             &b.mires(),
             plus_tard(),
+            Langue::Francais,
         )
         .unwrap();
     assert_eq!(seconde.tirage, premiere.tirage);
@@ -100,6 +102,7 @@ fn une_page_myiro1_effacee_est_redessinee_sous_le_meme_tirage() {
             None,
             &b.mires(),
             plus_tard(),
+            Langue::Francais,
         )
         .unwrap();
     assert_eq!(seconde.tirage, premiere.tirage);
@@ -130,6 +133,7 @@ fn deux_resolutions_donnent_deux_tirages_myiro1() {
             None,
             &b.mires(),
             maintenant(),
+            Langue::Francais,
         )
         .unwrap();
     assert_ne!(seconde.tirage, premiere.tirage);

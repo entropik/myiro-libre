@@ -1270,6 +1270,15 @@ fn la_vue_d_une_resolution_prepare_une_mire() {
     ] {
         assert!(script.contains(attendu), "{attendu}");
     }
+    // Texte imprimé dans la langue de la page (#79) : l'appel de
+    // `mire_preparer` passe `langue`, quelle que soit sa mise en forme.
+    let appel = script
+        .split("invoke(\"mire_preparer\"")
+        .nth(1)
+        .and_then(|reste| reste.split('}').next())
+        .expect("appel de mire_preparer");
+    assert!(appel.contains("langue"), "{appel}");
+    assert!(script.contains("document.documentElement.lang"));
     let vue = element(&page, "data-vue-reglage");
     let ouvrir = vue
         .split('<')

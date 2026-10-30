@@ -11,6 +11,7 @@ use profilage::ArgyllCms;
 use super::{chercher_mire_fd9, ApercuMire, DemandeMire, MirePreparee, DOSSIER_MIRE_FD9};
 use crate::colonne::BibliothequeOuverte;
 use crate::profiler::Moteur;
+use crate::textes::Langue;
 
 /// Dossier de l'exécutable ; vide s'il est introuvable.
 fn dossier_exe() -> PathBuf {
@@ -61,7 +62,8 @@ pub fn mire_apercu(
 }
 
 /// Prépare la mire et range son tirage. Hors du fil de la fenêtre : `targen`
-/// peut prendre quelques secondes.
+/// peut prendre quelques secondes. Le texte imprimé sur les pages MYIRO-1
+/// est dans la langue de la page (`fr` ou `en`, français sinon).
 #[tauri::command(async)]
 pub fn mire_preparer(
     app: tauri::AppHandle,
@@ -69,6 +71,7 @@ pub fn mire_preparer(
     moteur: tauri::State<'_, Moteur>,
     condition: i64,
     demande: DemandeMire,
+    langue: &str,
 ) -> Result<MirePreparee, String> {
     let mire_fd9 = chercher_mire_fd9(&dossier_exe());
     ouverte.preparer_mire(
@@ -78,6 +81,7 @@ pub fn mire_preparer(
         mire_fd9.as_deref(),
         &dossier_mires(&app)?,
         SystemTime::now(),
+        Langue::depuis_code(langue).unwrap_or(Langue::Francais),
     )
 }
 

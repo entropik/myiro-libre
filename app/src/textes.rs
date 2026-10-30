@@ -2510,6 +2510,31 @@ const FRANCAIS: Catalogue = &[
         "mire.preparees.vide",
         "Aucune mire préparée pour cette résolution.",
     ),
+    // Texte imprimé sur les pages MYIRO-1 (#79), dessiné par la police
+    // `font8x8` : ni espace fine insécable (U+202F), ni apostrophe courbe,
+    // qui sortiraient en « ? » ; espace insécable U+00A0 à la place.
+    // Lignes 2 et 3 : au plus 67 caractères en A4, à côté du QR code.
+    (
+        "mire.etiquette.detail",
+        "Mire {taille} · {n} plages · MYIRO-1 · page {page} sur {pages}",
+    ),
+    (
+        "mire.etiquette.detail.libre",
+        "Mire {n} plages · MYIRO-1 · page {page} sur {pages}",
+    ),
+    ("mire.etiquette.taille.rapide", "rapide"),
+    ("mire.etiquette.taille.standard", "standard"),
+    ("mire.etiquette.taille.approfondi", "approfondi"),
+    (
+        "mire.etiquette.consigne",
+        "{date} · Imprimer à 100\u{a0}%, sans gestion des couleurs",
+    ),
+    // Même forme que les dates de la page : « 23 oct. 2026 ».
+    ("mire.etiquette.date", "{jour} {mois} {annee}"),
+    (
+        "mire.etiquette.mois",
+        "janv. févr. mars avr. mai juin juil. août sept. oct. nov. déc.",
+    ),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -4971,6 +4996,26 @@ const ANGLAIS: Catalogue = &[
     (
         "mire.preparees.vide",
         "No chart prepared for this resolution.",
+    ),
+    (
+        "mire.etiquette.detail",
+        "Chart: {taille} · {n} patches · MYIRO-1 · page {page} of {pages}",
+    ),
+    (
+        "mire.etiquette.detail.libre",
+        "Chart: {n} patches · MYIRO-1 · page {page} of {pages}",
+    ),
+    ("mire.etiquette.taille.rapide", "quick"),
+    ("mire.etiquette.taille.standard", "standard"),
+    ("mire.etiquette.taille.approfondi", "thorough"),
+    (
+        "mire.etiquette.consigne",
+        "{date} · Print at 100%, no colour management",
+    ),
+    ("mire.etiquette.date", "{mois} {jour}, {annee}"),
+    (
+        "mire.etiquette.mois",
+        "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",
     ),
 ];
 

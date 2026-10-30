@@ -8,7 +8,7 @@
 use font8x8::legacy::{BASIC_LEGACY, LATIN_LEGACY};
 use qrcode::{Color, EcLevel, QrCode};
 
-use crate::{ErreurMire, MiseEnPage};
+use crate::{ErreurMire, Gabarit, MiseEnPage};
 
 /// Résolution des pages.
 pub const RESOLUTION_PPP: u32 = 300;
@@ -136,6 +136,43 @@ fn octet(v: f64) -> u8 {
     (v * 2.55).round().clamp(0.0, 255.0) as u8
 }
 
+/// Le bandeau du haut d'une page : QR code à droite, texte à gauche.
+struct Bandeau {
+    qr: QrCode,
+    /// Colonne, en pixels, du premier module du QR code.
+    x_qr: u32,
+    /// Caractères d'une ligne de texte avant la marge du QR code ; au-delà,
+    /// la ligne est coupée par « … » ([`couper_ligne`]).
+    caracteres: usize,
+}
+
+fn bandeau(g: &Gabarit, code: &str) -> Result<Bandeau, ErreurMire> {
+    let erreur = |cause: String| ErreurMire::Ecriture(cause);
+    let zone = g.zone_texte();
+    let (zx, zy) = (px(zone.x), px(zone.y));
+    let (zx1, zy1) = (px(zone.x + zone.largeur), px(zone.y + zone.hauteur));
+    let qr = QrCode::with_error_correction_level(code, EcLevel::M)
+        .map_err(|e| erreur(format!("QR code : {e}")))?;
+    let cote_qr = qr.width() as u32 * MODULE_PX;
+    if cote_qr > zy1 - zy || cote_qr + MARGE_QR_MODULES * MODULE_PX > zx1 - zx {
+        return Err(erreur("QR code trop grand pour le bandeau".to_string()));
+    }
+    let x_qr = zx1 - cote_qr;
+    let fin_texte = x_qr - MARGE_QR_MODULES * MODULE_PX;
+    Ok(Bandeau {
+        qr,
+        x_qr,
+        caracteres: ((fin_texte - zx) / (8 * ECHELLE_TEXTE)) as usize,
+    })
+}
+
+/// Nombre de caractères qu'une ligne du texte d'une page peut avoir sans
+/// être coupée, pour ce gabarit et ce contenu de QR code (plus le QR code
+/// est grand, moins il reste de place). C'est le calcul de [`rendre_page`].
+pub fn caracteres_par_ligne(gabarit: &Gabarit, code: &str) -> Result<usize, ErreurMire> {
+    bandeau(gabarit, code).map(|b| b.caracteres)
+}
+
 /// Dessine la page `page` (numérotée à partir de 1) de la mise en page.
 pub fn rendre_page(
     mise: &MiseEnPage,
@@ -164,19 +201,18 @@ pub fn rendre_page(
         );
     }
 
-    let zone = g.zone_texte();
-    let (zx, zy) = (px(zone.x), px(zone.y));
-    let (zx1, zy1) = (px(zone.x + zone.largeur), px(zone.y + zone.hauteur));
-    let qr = QrCode::with_error_correction_level(&etiquette.code, EcLevel::M)
-        .map_err(|e| erreur(format!("QR code : {e}")))?;
-    let modules = qr.width() as u32;
-    let cote_qr = modules * MODULE_PX;
-    if cote_qr > zy1 - zy || cote_qr + MARGE_QR_MODULES * MODULE_PX > zx1 - zx {
-        return Err(erreur("QR code trop grand pour le bandeau".to_string()));
-    }
+    let Bandeau {
+        qr,
+        x_qr: qx,
+        caracteres,
+    } = bandeau(g, &etiquette.code)?;
+    let (zx, zy, zy1) = {
+        let zone = g.zone_texte();
+        (px(zone.x), px(zone.y), px(zone.y + zone.hauteur))
+    };
     // Modules sombres dans le bandeau, en haut à droite ; sa marge blanche
     // tombe dans la marge de la page et l'écart aux plages.
-    let qx = zx1 - cote_qr;
+    let modules = qr.width() as u32;
     for (i, couleur) in qr.to_colors().into_iter().enumerate() {
         if couleur == Color::Dark {
             let (mx, my) = (i as u32 % modules, i as u32 / modules);
@@ -186,8 +222,6 @@ pub fn rendre_page(
     }
 
     let cellule = 8 * ECHELLE_TEXTE;
-    let fin_texte = qx - MARGE_QR_MODULES * MODULE_PX;
-    let caracteres = ((fin_texte - zx) / cellule) as usize;
     for (rang, ligne) in etiquette.lignes.iter().enumerate() {
         let y = zy + rang as u32 * INTERLIGNE_PX;
         if y + cellule > zy1 {
@@ -200,15 +234,29 @@ pub fn rendre_page(
     Ok(image)
 }
 
+/// Motif 8 × 8 d'un caractère (ligne par ligne, bit 0 à gauche), s'il est
+/// dans la police : ASCII, table latine (accents, « · », espace insécable
+/// U+00A0) et « … ».
+fn motif_police(c: char) -> Option<[u8; 8]> {
+    match c as u32 {
+        n @ 0..=0x7F => Some(BASIC_LEGACY[n as usize]),
+        n @ 0xA0..=0xFF => Some(LATIN_LEGACY[(n - 0xA0) as usize]),
+        0x2026 => Some(POINTS_DE_SUITE),
+        _ => None,
+    }
+}
+
+/// Le caractère est dessiné sur les pages tel quel ; sinon il sort en « ? ».
+/// Une espace fine insécable (U+202F) ou une apostrophe courbe, par
+/// exemple, ne le sont pas.
+pub fn dessinable(c: char) -> bool {
+    !c.is_control() && motif_police(c).is_some_and(|m| m != [0; 8] || c == ' ' || c == '\u{a0}')
+}
+
 /// Motif 8 × 8 d'un caractère (ligne par ligne, bit 0 à gauche) ; « ? » pour
 /// un caractère que la police n'a pas.
 fn motif(c: char) -> [u8; 8] {
-    match c as u32 {
-        n @ 0..=0x7F => BASIC_LEGACY[n as usize],
-        n @ 0xA0..=0xFF => LATIN_LEGACY[(n - 0xA0) as usize],
-        0x2026 => POINTS_DE_SUITE,
-        _ => BASIC_LEGACY['?' as usize],
-    }
+    motif_police(c).unwrap_or(BASIC_LEGACY['?' as usize])
 }
 
 fn dessiner_caractere(image: &mut ImageRvb, c: char, (x, y): (u32, u32)) {
