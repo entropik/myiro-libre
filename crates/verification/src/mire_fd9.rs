@@ -7,10 +7,12 @@
 //! Format relevé le 28 octobre 2026 sur les mires FD-9 RVB livrées avec
 //! FD-S2w (version `00.00`), jamais copiées : `Data` → `Chart` → `Sheet` →
 //! `Area` → `Patch`, dimensions en centièmes de millimètre, valeurs RVB de 0
-//! à 255 multipliées par 100. **Supposé** : `PatchWidthGap` et
-//! `PatchHeightGap` sont le pas d'une plage à la suivante (ils valent la
-//! largeur de plage sur les mires jointives livrées) ; à confirmer en
-//! ouvrant la mire dans FD-S2w.
+//! à 255 multipliées par 100. `PatchWidthGap` et `PatchHeightGap` sont
+//! écrits comme le pas d'une plage à la suivante (ils valent la largeur de
+//! plage sur les mires jointives livrées). **Confirmé à l'ouverture** le
+//! 30 octobre 2026 : FD-S2w ouvre la mire version 1 et montre ses 210
+//! plages en 15 × 14. La lecture de la mire imprimée par le FD-9 reste à
+//! faire.
 
 use serde::{Deserialize, Serialize};
 
