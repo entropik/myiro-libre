@@ -394,7 +394,8 @@
     const cells = el("div", "cells");
     cells.append(
       // Une donnée que le pont n'a pas rendue s'écrit « inconnu », jamais une case vide.
-      cellule(t("cartouche.instrument"), `${f.modele || t("cartouche.inconnu")} ${t("details.numero")} ${f.numero_serie}`),
+      // L'instrument : le modèle seul, jamais le numéro de série (ticket #84).
+      cellule(t("cartouche.instrument"), f.modele || t("cartouche.inconnu")),
       cellule(t("cartouche.micrologiciel"), f.micrologiciel || t("cartouche.inconnu")),
       cellule(t("cartouche.etalonnage"), etalonnage(f.etalonnage)),
       cellule(t("cartouche.condition_mesure"), conditionSpectre(f, spectreChoisi)),

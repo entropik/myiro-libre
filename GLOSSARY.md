@@ -58,7 +58,7 @@ Géométrie de lecture du MYIRO-1 : une rangée de plages lue en un balayage.
 _Éviter_ : strip, rangée
 
 **Instrument** :
-Un spectrophotomètre précis (modèle, n° de série, micrologiciel), enregistré avec chaque mesure qu'il produit.
+Un spectrophotomètre précis (modèle, n° de série, micrologiciel), enregistré avec chaque mesure qu'il produit. À l'écran, seul son modèle est montré : aucune vue de la page (vue d'une résolution, feuille des mesures, Mesurer) ne montre son n° de série, qui reste dans la provenance des mesures et dans l'export CGATS.
 _Éviter_ : appareil, device, spectro
 
 **Étalonnage** :
@@ -239,6 +239,42 @@ _Éviter_ : ink limit, saturation
 Évaluation d'un tirage d'une seconde mire imprimée à travers un profil : elle distingue la fidélité aux couleurs demandées de l'accord entre les mesures et la prédiction du profil. Les deux résultats conservent leurs références et leurs tolérances.
 _Éviter_ : validation de profil, test de profil
 
+**Fidélité aux couleurs demandées** :
+Écart ΔE00 entre la couleur demandée (les RVB de la seconde mire lus comme du sRVB, en colorimétrique relatif) et la mesure ramenée au blanc du support. Elle se calcule seulement pour une mire imprimée à travers le profil, et seulement sur les couleurs dans le gamut.
+_Éviter_ : justesse, exactitude
+
+**Accord avec la prédiction** :
+Écart ΔE00 entre ce que le profil prédit pour la valeur après transformation et la mesure telle quelle. Il dit si le profil décrit bien l'imprimante, même pour une couleur qu'elle ne peut pas atteindre.
+_Éviter_ : précision (réservé à la précision du calcul)
+
+**Valeur après transformation** :
+Les RVB envoyés à l'imprimante une fois la couleur demandée convertie par le profil. myiro-libre ne sait pas ce que le logiciel d'impression a envoyé : ArgyllCMS refait la conversion avec le même profil, la valeur est donc calculée, approchée, et dite comme telle.
+_Éviter_ : valeur imprimée, valeur réelle
+
+**Seuil de gamut** :
+Écart ΔE00 entre la couleur demandée et ce que le profil prédit pouvoir en rendre, au-delà duquel la couleur est hors gamut. Ces couleurs restent listées, avec leurs propres statistiques ; les critères de fidélité portent sur les couleurs dans le gamut. Il fait partie du jeu de tolérances.
+_Éviter_ : limite de gamut (réservé à l'enveloppe du gamut d'un profil)
+
+**Jeu de tolérances** :
+Les seuils choisis par l'imprimeur pour accepter un profil : moyenne, 95 % des plages et maximum, pour la fidélité et pour la prédiction (chacun peut rester vide), et le seuil de gamut. Aucun n'est imposé : la page propose des valeurs de départ, à confirmer.
+_Éviter_ : norme, seuils par défaut
+
+**Version de tolérances** :
+Numéro d'un jeu de tolérances, augmenté de un à chaque modification enregistrée. Une version n'est jamais modifiée ; une vérification garde la version avec laquelle elle a été faite, et son rapport se régénère à l'identique. Un profil accepté l'est « selon Atelier v2 ».
+_Éviter_ : révision, mise à jour du jeu
+
+**Vérification incomplète** :
+État d'un profil dont un critère demandé n'a pas pu être calculé (mire imprimée sans gestion des couleurs alors qu'un seuil de fidélité est demandé, ou aucune couleur dans le gamut), sans qu'aucun seuil ne soit dépassé. Elle n'accepte jamais le profil.
+_Éviter_ : acceptation partielle, vérification à zéro
+
+**Recalcul** :
+Nouvelle conclusion d'une vérification avec un autre jeu de tolérances, à partir des écarts gardés plage par plage, sans nouvelle mesure ni ArgyllCMS. Il s'ajoute à l'historique ; la vérification d'origine reste telle quelle.
+_Éviter_ : remesure, correction de la vérification
+
+**Mire de vérification FD-9** :
+Mire de 210 couleurs créée une seule fois par myiro-libre, différentes de celles de la RGB-2520, rangée dans la bibliothèque avec les mires de profilage (mais sans tirage) et écrite pour FD-S2w, qui l'ouvre et en tire le fichier à imprimer.
+_Éviter_ : seconde RGB-2520, mire de contrôle
+
 **Recette de calcul** :
 Qualité demandée au calcul d'un profil : rapide (pour un essai), standard (par défaut, en production) ou approfondie (en cours de réglage depuis le 28 octobre 2026, pas encore disponible). Elle est conservée avec le profil, avec la version d'ArgyllCMS et la commande lancée.
 _Éviter_ : preset, mode, qualité seule
@@ -394,6 +430,10 @@ _Éviter_ : déployer, enregistrer le profil
 **Sauvegarde** :
 Copie complète de la bibliothèque en un seul fichier, à garder en lieu sûr ou à restaurer sur un autre poste. La restaurer remplace toute la bibliothèque, après accord de l'opérateur.
 _Éviter_ : backup, archive (réservé à `Archivage/`), export (réservé à CGATS)
+
+**Bibliothèque d'essai** :
+Copie de la bibliothèque, ouverte au lancement par `--bibliotheque <dossier>` à la place de celle du poste, pour essayer une version de l'application sans toucher à la vraie ; le titre de la fenêtre le dit. Sans dossier, avec l'option répétée ou mal écrite, ou avec le dossier de la vraie bibliothèque, l'application ne démarre pas. `--demo` l'emporte sur elle. Les réglages du poste et le dossier des mires restent les vrais.
+_Éviter_ : bibliothèque de test, bac à sable, bibliothèque de démonstration (réservé à `--demo` et ses données fictives)
 
 **État vide** :
 Ce qu'affiche une tâche qui n'a encore rien à montrer : une phrase et une seule action (« Aucune mesure. Mesurer une couleur »).

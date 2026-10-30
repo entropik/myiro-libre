@@ -22,6 +22,7 @@ use crate::installation::{
     self, est_installe, EtatInstallation, InstallationProfils, InstallationWindows,
 };
 use crate::profiler::{provenance_profil, sources_profil, ProvenanceProfil, SourceProfil};
+use crate::verifier::{derniere_verification, ResumeVerification};
 
 /// Taille au-delà de laquelle un fichier n'est pas lu comme un profil :
 /// 64 Mio, bien plus qu'un profil d'imprimante.
@@ -73,6 +74,10 @@ pub struct ProfilHistorique {
     pub origine: &'static str,
     /// Clé du texte de son état ([`cle_etat`]).
     pub libelle: &'static str,
+    /// Recette d'un profil calculé, lue dans ses paramètres conservés ; rien
+    /// pour un profil rangé tel quel. Elle distingue, avec l'heure, des
+    /// profils calculés le même jour.
+    pub recette: Option<profilage::Recette>,
 }
 
 impl std::ops::Deref for ProfilHistorique {
@@ -113,6 +118,9 @@ pub struct DetailReglage {
     /// Le profil actif est installé dans Windows, à l'identique. Faux tant
     /// que le système n'a pas été regardé ([`BibliothequeOuverte::detail_reglage_installe`]).
     pub installe: bool,
+    /// La vérification la plus récente du profil actif ; rien sans profil
+    /// ou avant sa première vérification.
+    pub verification: Option<ResumeVerification>,
 }
 
 /// Après une fenêtre de choix de fichier : rien si l'opérateur a annulé
@@ -220,10 +228,13 @@ impl BibliothequeOuverte {
             let Some((i, p, r)) = trouve else {
                 return Ok(None);
             };
+            // Instrument des mesures importées : le modèle seul, jamais le
+            // numéro de série (ticket #84).
             let branche = b
                 .arborescence("")?
                 .into_iter()
-                .find(|br| br.condition.id == condition);
+                .find(|br| br.condition.id == condition)
+                .map(crate::colonne::modeles_seuls);
             let (mesures, importees) =
                 branche.map_or_else(Default::default, |br| (br.mesures, br.importees));
             let origine = match &r.profil {
@@ -239,8 +250,13 @@ impl BibliothequeOuverte {
                 .into_iter()
                 .map(|profil| {
                     let origine = origine_profil(b, profil.id)?;
+                    let recette = crate::profiler::provenance_depuis_parametres(
+                        &b.parametres_profil(profil.id)?,
+                    )
+                    .map(|p| p.recette);
                     Ok(ProfilHistorique {
                         libelle: cle_etat(profil.etat, origine),
+                        recette,
                         origine,
                         profil,
                     })
@@ -248,6 +264,10 @@ impl BibliothequeOuverte {
                 .collect::<Result<Vec<_>, ErreurBibliotheque>>()?;
             let sources = sources_profil(b, &importees)?;
             let provenance = provenance_profil(b, r.profil.as_ref())?;
+            let verification = match &r.profil {
+                Some(p) => derniere_verification(b, p.id)?,
+                None => None,
+            };
             Ok(Some(DetailReglage {
                 origine,
                 provenance,
@@ -264,6 +284,7 @@ impl BibliothequeOuverte {
                 sources,
                 tirages: b.tirages(condition)?,
                 installe: false,
+                verification,
             }))
         })?;
         detail.ok_or_else(|| "parc.erreur.reglage_inconnu".to_string())

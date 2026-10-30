@@ -12,13 +12,16 @@ pub mod demonstration_fd9;
 mod ecran_feuille;
 pub mod installation;
 pub mod instrument;
+pub mod lancement;
 pub mod mesurer;
 pub mod mesurer_feuille;
 pub mod mires;
 pub mod parc;
 pub mod pont;
 pub mod profiler;
+pub mod rapport_verification;
 pub mod textes;
+pub mod verifier;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -27,6 +30,7 @@ use std::sync::{mpsc, Mutex};
 use instrument::choix::{self, Modele, Occupation, Operation, Ouverture, Selection, VueSelection};
 use instrument::parefeu::{AutorisationPareFeu, PareFeuWindows};
 use instrument::{emplacements_a_essayer, fd9, Accord, Geste, Gestes};
+use lancement::BibliothequeDemandee;
 use mesurer::{
     choisir_condition, ecrire_declenchement, lire_declenchement, retenir_declenchement,
     FicheMesure, FicheReference, RefusMesure, Seance,
@@ -278,23 +282,48 @@ fn choisir_instrument(
     Ok(vue_retenue(&app, selection))
 }
 
-/// Ouvre la bibliothèque du poste, ou celle de démonstration avec `--demo`,
-/// dont la séance de Mesurer est alors garnie de mesures fictives.
-fn ouvrir_bibliotheque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let (ouverte, seance, dossier) = if std::env::args().any(|a| a == "--demo") {
-        let dossier = demonstration::dossier();
-        let ouverte = colonne::BibliothequeOuverte::demonstration(&dossier);
-        let seance = demonstration::seance(&ouverte);
-        (ouverte, seance, dossier)
-    } else {
-        let dossier = colonne::emplacement(&app.path().app_data_dir()?);
-        let ouverte = colonne::BibliothequeOuverte::ouvrir(&dossier);
-        // La couleur de référence conservée revient dans Mesurer (ticket #8).
-        let mut seance = Seance::default();
-        let langue = self::langue(langue_demandee().unwrap_or("fr"));
-        let _ = seance.reprendre_reference(&ouverte, langue);
-        (ouverte, seance, dossier)
+/// Ouvre la bibliothèque demandée au lancement : celle du poste, celle
+/// d'essai (`--bibliotheque <dossier>`, dite dans le titre de la fenêtre), ou
+/// celle de démonstration (`--demo`), dont la séance de Mesurer est alors
+/// garnie de mesures fictives.
+fn ouvrir_bibliotheque(
+    app: &mut tauri::App,
+    demandee: &BibliothequeDemandee,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let langue = self::langue(langue_demandee().unwrap_or("fr"));
+    let dossier = match demandee {
+        BibliothequeDemandee::Demonstration { essai_ecarte } => {
+            if let Some(essai) = essai_ecarte {
+                eprintln!(
+                    "--demo l'emporte : la bibliothèque d'essai {} n'est pas ouverte",
+                    essai.display()
+                );
+            }
+            let ouverte = colonne::BibliothequeOuverte::demonstration(&demonstration::dossier());
+            let seance = demonstration::seance(&ouverte);
+            app.manage(ouverte);
+            app.manage(DossierBibliotheque(demonstration::dossier()));
+            app.manage(SeanceMesures(Mutex::new(seance)));
+            return Ok(());
+        }
+        BibliothequeDemandee::Essai(dossier) => {
+            let poste = colonne::emplacement(&app.path().app_data_dir()?);
+            if let Err(refus) = lancement::refuser_bibliotheque_du_poste(dossier, &poste) {
+                eprintln!("{refus}");
+                std::process::exit(2);
+            }
+            eprintln!("bibliothèque d'essai : {}", dossier.display());
+            for fenetre in app.webview_windows().values() {
+                fenetre.set_title(textes::texte(langue, "fenetre.titre.essai"))?;
+            }
+            dossier.clone()
+        }
+        BibliothequeDemandee::Poste => colonne::emplacement(&app.path().app_data_dir()?),
     };
+    let ouverte = colonne::BibliothequeOuverte::ouvrir(&dossier);
+    // La couleur de référence conservée revient dans Mesurer (ticket #8).
+    let mut seance = Seance::default();
+    let _ = seance.reprendre_reference(&ouverte, langue);
     app.manage(ouverte);
     app.manage(DossierBibliotheque(dossier));
     app.manage(SeanceMesures(Mutex::new(seance)));
@@ -583,8 +612,17 @@ fn repondre_geste(fait: bool, attente: State<'_, GesteEnAttente>) {
     }
 }
 
-/// Ouvre la fenêtre principale.
+/// Ouvre la fenêtre principale. Une option de lancement mal écrite arrête
+/// tout avant d'ouvrir une bibliothèque.
 pub fn lancer() {
+    let args: Vec<String> = std::env::args().collect();
+    let demandee = match lancement::bibliotheque_demandee(&args) {
+        Ok(demandee) => demandee,
+        Err(refus) => {
+            eprintln!("{refus}");
+            std::process::exit(2);
+        }
+    };
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Instruments::default())
@@ -592,7 +630,7 @@ pub fn lancer() {
         .manage(profiler::Moteur::au_lancement())
         .manage(comparer::FichiersOuverts::default())
         .manage(comparer::image::ImageOuverte::default())
-        .setup(ouvrir_bibliotheque)
+        .setup(move |app| ouvrir_bibliotheque(app, &demandee))
         .manage(GesteEnAttente::default())
         .manage(ecran_feuille::AnnulationFeuille::default())
         .manage(ecran_feuille::CalageAffiche::default())
@@ -641,6 +679,17 @@ pub fn lancer() {
             parc::parc_installer_profil,
             profiler::profiler_commandes,
             profiler::profiler_calculer,
+            verifier::commandes::verifier_sources,
+            verifier::commandes::verifier_commandes,
+            verifier::commandes::verifier_fiche,
+            verifier::commandes::verifier_lancer,
+            verifier::commandes::verifier_recalculer,
+            verifier::commandes::verifier_historique,
+            verifier::commandes::tolerances_lister,
+            verifier::commandes::tolerances_enregistrer,
+            verifier::commandes::verifier_exporter_rapport,
+            verifier::commandes::verifier_exporter_profil,
+            verifier::commandes::verifier_mire_fd9,
             mires::commandes::mire_apercu,
             mires::commandes::mire_preparer,
             mires::commandes::mire_ouvrir_dossier,

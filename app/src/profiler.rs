@@ -12,7 +12,7 @@ use std::time::SystemTime;
 
 use bibliotheque::{
     nom_profil_propose, Bibliotheque, ErreurBibliotheque, IdCondition, IdMesure, IdProfil,
-    NouveauProfil, ResumeImportee, ResumeProfil,
+    MesureImporteeEnregistree, NouveauProfil, ResumeImportee, ResumeProfil,
 };
 use pont_protocole::ConditionMesure;
 use profilage::{
@@ -119,7 +119,7 @@ impl RefusCoherence {
 }
 
 impl ErreurProfil {
-    fn sans_cause(cle: &'static str) -> Self {
+    pub(crate) fn sans_cause(cle: &'static str) -> Self {
         ErreurProfil {
             cle,
             cause: None,
@@ -128,7 +128,7 @@ impl ErreurProfil {
         }
     }
 
-    fn du_moteur(erreur: &ErreurMoteur) -> Self {
+    pub(crate) fn du_moteur(erreur: &ErreurMoteur) -> Self {
         let mut e = ErreurProfil::sans_cause(erreur.cle());
         match erreur {
             ErreurMoteur::Echec { cause, .. } | ErreurMoteur::Fichier(cause) => {
@@ -385,6 +385,14 @@ impl Moteur {
             .ok_or_else(|| ErreurProfil::du_moteur(&ErreurMoteur::Introuvable))
     }
 
+    /// Le moteur de la vérification d'un profil (`xicclu`) : le même
+    /// ArgyllCMS ; rien s'il est introuvable.
+    pub fn verification(&self) -> Option<&dyn profilage::MoteurVerification> {
+        self.0
+            .as_ref()
+            .map(|a| a as &dyn profilage::MoteurVerification)
+    }
+
     /// Le moteur de la limite du gamut (comparaison des profils) : le même
     /// ArgyllCMS ; rien s'il est introuvable.
     pub fn gamut(&self) -> Option<&dyn MoteurGamut> {
@@ -429,6 +437,29 @@ pub(crate) fn sources_profil(
         .collect()
 }
 
+/// Contrôle de cohérence des mesures (ticket #1), avant tout calcul : le
+/// calcul d'un profil et sa vérification refusent de même, avec les plages
+/// en cause nommées par leur identifiant dans le fichier.
+pub(crate) fn refuser_incoherence(
+    importee: &MesureImporteeEnregistree,
+    plages: &PlagesProfil,
+) -> Result<ControleCoherence, ErreurProfil> {
+    let coherence = controler_coherence(plages);
+    if coherence.accepte() {
+        return Ok(coherence);
+    }
+    eprintln!("{} : mesures incohérentes {coherence:?}", importee.fichier);
+    let identifiants: Vec<String> = importee
+        .mesure
+        .plages
+        .iter()
+        .map(|p| p.identifiant.clone())
+        .collect();
+    let mut e = ErreurProfil::sans_cause("profil.refus.incoherent");
+    e.coherence = Some(Box::new(RefusCoherence::new(&coherence, &identifiants)));
+    Err(e)
+}
+
 /// Tout ce qu'il faut pour lancer le calcul, lu dans la bibliothèque.
 struct Preparation {
     nom: String,
@@ -462,19 +493,7 @@ impl BibliothequeOuverte {
         })?;
         // Avant ArgyllCMS : des mesures qui ne correspondent pas aux plages
         // donneraient un profil faux (ticket #1).
-        let coherence = controler_coherence(&plages);
-        if !coherence.accepte() {
-            eprintln!("{} : mesures incohérentes {coherence:?}", importee.fichier);
-            let identifiants: Vec<String> = importee
-                .mesure
-                .plages
-                .iter()
-                .map(|p| p.identifiant.clone())
-                .collect();
-            let mut e = ErreurProfil::sans_cause("profil.refus.incoherent");
-            e.coherence = Some(Box::new(RefusCoherence::new(&coherence, &identifiants)));
-            return Err(e);
-        }
+        let coherence = refuser_incoherence(&importee, &plages)?;
         let horodatage = instant_utc(maintenant);
         let date = horodatage.get(..10).unwrap_or(&horodatage);
         let nom = nom_profil_propose(&detail.imprimante, &detail.papier, &detail.resolution, date);

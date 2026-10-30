@@ -75,8 +75,11 @@ impl BibliothequeOuverte {
         f(&bibliotheque).map_err(|e| cle_erreur(&e).to_string())
     }
 
+    /// Les branches de la colonne de gauche. La recherche lit le fichier rangé
+    /// tel quel ; la page ne reçoit que le modèle de l'instrument.
     pub fn arborescence(&self, recherche: &str) -> Result<Vec<Branche>, String> {
         self.avec(|b| b.arborescence(recherche))
+            .map(|branches| branches.into_iter().map(modeles_seuls).collect())
     }
 
     pub fn detail_mesure(&self, id: IdMesure) -> Result<DetailMesure, String> {
@@ -259,6 +262,31 @@ impl BibliothequeOuverte {
     }
 }
 
+/// Instrument qu'une mesure importée déclare, tel que la page le reçoit :
+/// seulement le modèle reconnu ([`cgats::modele_instrument`]), au même
+/// statut ; inconnu sans modèle reconnu. Le reste de la ligne
+/// `INSTRUMENTATION` (numéro de série) ne sort jamais vers la page.
+pub(crate) fn modele_declare(declare: &Info<String>) -> Info<String> {
+    match declare {
+        Info::Confirmee(ligne) => {
+            cgats::modele_instrument(ligne).map_or(Info::Inconnue, Info::Confirmee)
+        }
+        Info::Supposee(ligne) => {
+            cgats::modele_instrument(ligne).map_or(Info::Inconnue, Info::Supposee)
+        }
+        Info::Inconnue => Info::Inconnue,
+    }
+}
+
+/// Une branche telle que la page la reçoit : l'instrument de chaque mesure
+/// importée réduit à son modèle ([`modele_declare`]).
+pub(crate) fn modeles_seuls(mut branche: Branche) -> Branche {
+    for importee in &mut branche.importees {
+        importee.instrument = modele_declare(&importee.instrument);
+    }
+    branche
+}
+
 /// Fichier CGATS lu et montré en aperçu, pas encore rangé.
 struct Apercu {
     numero: u64,
@@ -279,8 +307,9 @@ pub struct ContenuImport {
     pub plages: usize,
     /// Écrit par myiro-libre (provenance complète dans l'en-tête).
     pub myiro_libre: bool,
+    /// Modèle de l'instrument déclaré ([`modele_declare`]), jamais son
+    /// numéro de série.
     pub instrument: Info<String>,
-    pub numero_serie: Info<String>,
     pub date: Info<String>,
     /// Condition de mesure de chaque emplacement de spectre.
     pub conditions: [Info<ConditionMesure>; 3],
@@ -308,8 +337,7 @@ impl ContenuImport {
             fichier,
             plages: m.plages.len(),
             myiro_libre: m.provenance != Info::Inconnue,
-            instrument: m.instrument,
-            numero_serie: m.numero_serie,
+            instrument: modele_declare(&m.instrument),
             date: m.date,
             conditions: m.conditions,
             spectres,
@@ -966,16 +994,16 @@ mod tests {
         let latin = dossier.path().join("latin.txt");
         std::fs::write(
             &latin,
-            b"CGATS.17\nINSTRUMENTATION\t\"Relev\xe9 fictif\"\nMEASUREMENT_SOURCE\t\"D50\"\n\
+            b"CGATS.17\nINSTRUMENTATION\t\"Relev\xe9 fictif FD-9\"\nCREATED\t\"6 f\xe9vrier 2026\"\n\
+              MEASUREMENT_SOURCE\t\"D50\"\n\
               BEGIN_DATA_FORMAT\nSAMPLE_ID\tLAB_L\tLAB_A\tLAB_B\nEND_DATA_FORMAT\n\
               BEGIN_DATA\n1\t50.0\t1.0\t-2.0\nEND_DATA\n",
         )
         .unwrap();
         let id = importer(&ouverte, offset, &latin);
-        assert_eq!(
-            ouverte.detail_importee(id).unwrap().contenu.instrument,
-            Info::Confirmee("Relevé fictif".into())
-        );
+        let contenu = ouverte.detail_importee(id).unwrap().contenu;
+        assert_eq!(contenu.date, Info::Confirmee("6 février 2026".into()));
+        assert_eq!(contenu.instrument, Info::Confirmee("FD-9".into()));
     }
 
     #[test]

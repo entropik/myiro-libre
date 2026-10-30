@@ -34,11 +34,12 @@ class ArgyllEmbarque(unittest.TestCase):
     def test_sans_dossier_argyll_rien_n_est_embarque(self):
         self.assertEqual({}, pi.argyll_embarque(self.racine, aide=lambda colprof: self.fail("colprof lancé")))
 
-    def test_argyll_complet_donne_ses_six_fichiers(self):
+    def test_argyll_complet_donne_ses_sept_fichiers(self):
         self.poser(*pi.ARGYLL_FICHIERS, "License.txt")
         self.assertEqual({
             "../argyll/bin/colprof.exe": "argyll/bin/colprof.exe",
             "../argyll/bin/profcheck.exe": "argyll/bin/profcheck.exe",
+            "../argyll/bin/xicclu.exe": "argyll/bin/xicclu.exe",
             "../argyll/bin/targen.exe": "argyll/bin/targen.exe",
             "../argyll/bin/iccgamut.exe": "argyll/bin/iccgamut.exe",
             "../argyll/ref/sRGB.icm": "argyll/ref/sRGB.icm",
@@ -54,7 +55,7 @@ class ArgyllEmbarque(unittest.TestCase):
         ressources = self.embarquer()
         for nom in ("License.txt", "AGPLv3.txt", "COPYING"):
             self.assertEqual(f"argyll/{nom}", ressources[f"../argyll/{nom}"])
-        self.assertEqual(8, len(ressources))
+        self.assertEqual(9, len(ressources))
 
     def test_une_licence_garde_son_nom_reel(self):
         # Sous Windows, « LICENSE.TXT » répond aussi à « License.txt » : il n'est
@@ -75,9 +76,16 @@ class ArgyllEmbarque(unittest.TestCase):
             self.embarquer()
         self.assertIn("bin/profcheck.exe", str(arret.exception.code))
 
+    def test_sans_xicclu_l_installateur_s_arrete(self):
+        # Sans xicclu, la vérification d'un profil serait impossible.
+        self.poser(*(f for f in pi.ARGYLL_FICHIERS if f != "bin/xicclu.exe"), "License.txt")
+        with self.assertRaises(SystemExit) as arret:
+            self.embarquer()
+        self.assertIn("bin/xicclu.exe", str(arret.exception.code))
+
     def test_sans_iccgamut_l_installateur_s_arrete(self):
         # Sans iccgamut, la comparaison des profils perdrait la limite du gamut.
-        self.poser("bin/colprof.exe", "bin/profcheck.exe", "ref/sRGB.icm", "License.txt")
+        self.poser(*(f for f in pi.ARGYLL_FICHIERS if f != "bin/iccgamut.exe"), "License.txt")
         with self.assertRaises(SystemExit) as arret:
             self.embarquer()
         self.assertIn("bin/iccgamut.exe", str(arret.exception.code))
