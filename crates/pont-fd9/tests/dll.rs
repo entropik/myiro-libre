@@ -7,7 +7,7 @@
 //! identifiant réels) restent à l'écran : ne jamais les recopier dans un
 //! fichier versionné.
 
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
@@ -27,7 +27,11 @@ fn dialoguer(plafond: &str, requetes: &[&str]) -> Vec<String> {
     dialoguer_avec(plafond, &[], requetes)
 }
 
-/// Comme `dialoguer`, avec des arguments de plus pour le pont.
+/// Comme `dialoguer`, avec des arguments de plus pour le pont. Chaque requête
+/// attend sa réponse avant la suivante : envoyer `fermer`, ou fermer l'entrée,
+/// pendant une attente de feuille l'annulerait (essai E3). L'entrée n'est
+/// fermée qu'après la dernière réponse. Le journal du pont (sortie d'erreur)
+/// s'affiche au fil de l'eau.
 fn dialoguer_avec(plafond: &str, arguments: &[&str], requetes: &[&str]) -> Vec<String> {
     let mut enfant = Command::new(env!("CARGO_BIN_EXE_pont-fd9"))
         .arg("--dll")
@@ -36,22 +40,28 @@ fn dialoguer_avec(plafond: &str, arguments: &[&str], requetes: &[&str]) -> Vec<S
         .args(arguments)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
         .spawn()
         .unwrap();
     let mut entree = enfant.stdin.take().unwrap();
+    let mut sortie = BufReader::new(enfant.stdout.take().unwrap());
+    let mut lignes = Vec::new();
     for requete in requetes {
         writeln!(entree, "{requete}").unwrap();
+        entree.flush().unwrap();
+        let mut ligne = String::new();
+        if sortie.read_line(&mut ligne).unwrap() == 0 {
+            break;
+        }
+        let ligne = ligne.trim_end().to_string();
+        // Une mesure fait plusieurs mégaoctets : seul le début s'affiche.
+        println!("{}", ligne.chars().take(400).collect::<String>());
+        lignes.push(ligne);
     }
     drop(entree);
-    let sortie = enfant.wait_with_output().unwrap();
-    let texte = String::from_utf8(sortie.stdout).unwrap();
-    // Une mesure fait plusieurs mégaoctets : seul le début de chaque ligne
-    // s'affiche.
-    for ligne in texte.lines() {
-        println!("{}", ligne.chars().take(400).collect::<String>());
-    }
-    assert!(sortie.status.success(), "code {:?}", sortie.status.code());
-    texte.lines().map(String::from).collect()
+    let statut = enfant.wait().unwrap();
+    assert!(statut.success(), "code {:?}", statut.code());
+    lignes
 }
 
 /// Palier Version : charge la DLL, résout la liste blanche, appelle
