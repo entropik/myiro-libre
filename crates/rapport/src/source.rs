@@ -188,7 +188,10 @@ pub fn source_typst(d: &Document) -> SourceTypst {
         }
         None => "none".into(),
     };
-    let mut s = String::from(GABARIT);
+    // Le gabarit peut avoir été extrait avec des fins de ligne Windows.
+    let mut s = GABARIT.replace("
+", "
+");
     s.push('\n');
     s.push_str(SEPARATION);
     let _ = writeln!(
