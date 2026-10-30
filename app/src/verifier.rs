@@ -101,23 +101,6 @@ pub fn nom_version(jeu: &JeuTolerances, langue: Langue) -> String {
         .replace("{version}", &jeu.version.to_string())
 }
 
-/// Modèle d'instrument nommé par une ligne `INSTRUMENTATION` : seul un
-/// modèle connu est gardé, jamais le reste de la ligne (numéro de série,
-/// adresse). « KONICA MINOLTA, INC. MYIRO-9 (FD-9), Serial No. … » → « FD-9 ».
-pub fn modele_instrument(declare: &str) -> Option<String> {
-    let haut = declare.to_uppercase();
-    [
-        ("FD-9", "FD-9"),
-        ("MYIRO-9", "FD-9"),
-        ("MYIRO-1", "MYIRO-1"),
-        ("FD-7", "FD-7"),
-        ("FD-5", "FD-5"),
-    ]
-    .into_iter()
-    .find(|(motif, _)| haut.contains(motif))
-    .map(|(_, modele)| modele.to_string())
-}
-
 pub(crate) fn resume(v: &VerificationRangee) -> ResumeVerification {
     ResumeVerification {
         verification: v.id,
@@ -280,7 +263,7 @@ impl BibliothequeOuverte {
                 .mesure
                 .instrument
                 .valeur()
-                .and_then(|i| modele_instrument(i)),
+                .and_then(|i| cgats::modele_instrument(i)),
             condition: plages.condition,
             condition_supposee: plages.condition_supposee,
             rvb_supposes: plages.rvb_supposes,
