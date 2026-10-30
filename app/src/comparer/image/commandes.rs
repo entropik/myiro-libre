@@ -4,7 +4,7 @@
 use tauri::ipc::Response;
 use tauri_plugin_dialog::DialogExt;
 
-use super::{Analyses, ImageOuverte, ImageResume};
+use super::{Analyses, ImageOuverte, ImageResume, PixelImage, PointAffiche};
 use crate::colonne::BibliothequeOuverte;
 use crate::comparer::{FichiersOuverts, SourceComparaison};
 use crate::parc::si_choisi;
@@ -65,6 +65,20 @@ pub fn image_ecarts(
     index: usize,
 ) -> Result<Response, String> {
     image.ecarts(analyse, index).map(Response::new)
+}
+
+/// Pipette : couleur du pixel sous un clic sur l'image affichée, et sa
+/// couleur imprimée par chaque profil de `sources`. Hors du fil de la
+/// fenêtre.
+#[tauri::command(async)]
+pub fn image_pixel(
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+    image: tauri::State<'_, ImageOuverte>,
+    fichiers: tauri::State<'_, FichiersOuverts>,
+    sources: Vec<SourceComparaison>,
+    point: PointAffiche,
+) -> Result<PixelImage, String> {
+    ouverte.couleur_pixel(&image, &sources, &fichiers, point)
 }
 
 #[tauri::command]

@@ -637,6 +637,7 @@ pub fn lancer() {
             comparer::image::commandes::image_analyser,
             comparer::image::commandes::image_ecarts,
             comparer::image::commandes::image_annuler,
+            comparer::image::commandes::image_pixel,
             etalonner,
             repondre_geste
         ])

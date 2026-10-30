@@ -16,6 +16,9 @@ use super::{detail_refus, SourceComparaison};
 
 mod analyse;
 pub mod commandes;
+mod pipette;
+
+pub use pipette::{pixel_affiche, EtatPixel, PixelImage, PointAffiche};
 
 /// Taille d'un fichier image lu au plus : au-delà, rien n'est lu.
 pub const OCTETS_MAX_IMAGE: u64 = 1 << 30;
@@ -34,7 +37,7 @@ const CALCUL_INTERROMPU: &str = "image.erreur.calcul";
 
 /// Clés des refus de l'image propres à l'application (ceux du décodage
 /// viennent de `photo::RefusPhoto::cle`).
-pub const CLES_IMAGE: [&str; 8] = [
+pub const CLES_IMAGE: [&str; 11] = [
     AUCUNE,
     PROFIL_REFUSE,
     PROFIL_ILLISIBLE,
@@ -43,6 +46,9 @@ pub const CLES_IMAGE: [&str; 8] = [
     SANS_ECARTS,
     ANNULEE,
     CALCUL_INTERROMPU,
+    pipette::HORS_IMAGE,
+    pipette::TRANSPARENT,
+    pipette::PIXEL_INCONNU,
 ];
 
 /// L'image ouverte pour la séance (une à la fois), en mémoire seulement, et

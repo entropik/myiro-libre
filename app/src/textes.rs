@@ -617,7 +617,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "image.canvas.aria",
-        "{p}\u{202f}% de l’image au-delà de {s}\u{202f}ΔE00 avec {profil}",
+        "{p}\u{202f}% de l’image au-delà de {s}\u{202f}ΔE00 avec {profil}. Cliquez sur l’image pour voir la couleur d’un point et sa couleur imprimée.",
     ),
     (
         "image.chiffres",
@@ -702,6 +702,82 @@ const FRANCAIS: Catalogue = &[
     (
         "image.teinte.gris",
         "Gris (C* < 5)",
+    ),
+    (
+        "image.pixel.hors_image",
+        "Ce point est en dehors de l’image.",
+    ),
+    (
+        "image.pixel.transparent",
+        "Ce point de l’image est transparent\u{202f}: il n’a pas de couleur à imprimer.",
+    ),
+    (
+        "image.pixel.inconnu",
+        "L’écart de cette couleur n’a pas pu être calculé.",
+    ),
+    (
+        "pastilles.titre",
+        "Couleurs hors gamut",
+    ),
+    (
+        "pastilles.lecture",
+        "À gauche la couleur de l’image, à droite la couleur imprimée avec {profil}. Les plus présentes dans l’image d’abord.",
+    ),
+    (
+        "pastilles.aucune",
+        "Aucune des couleurs les plus présentes de l’image n’est au-delà de {s}\u{202f}ΔE00 avec {profil}.",
+    ),
+    (
+        "pastilles.precaution",
+        "Couleurs approchées à l’écran (écran non calibré).",
+    ),
+    (
+        "pastilles.ecart",
+        "{e}\u{202f}ΔE00",
+    ),
+    (
+        "pastilles.part",
+        "{p}\u{202f}% de l’image",
+    ),
+    (
+        "pastilles.aria.image",
+        "Couleur de l’image\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "pastilles.aria.imprimee",
+        "Couleur imprimée\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "pastilles.image",
+        "Image",
+    ),
+    (
+        "pastilles.imprimee",
+        "Imprimé",
+    ),
+    (
+        "pastilles.lab",
+        "L* {l}  a* {a}  b* {b}",
+    ),
+    (
+        "pastilles.pipette.titre",
+        "Couleur du point cliqué",
+    ),
+    (
+        "pastilles.pipette.aide",
+        "Cliquez sur l’image pour voir la couleur d’un point et sa couleur imprimée.",
+    ),
+    (
+        "pastilles.pipette.au_dela",
+        "Au-delà du seuil d’alerte de {s}\u{202f}ΔE00",
+    ),
+    (
+        "pastilles.pipette.en_deca",
+        "En deçà du seuil d’alerte de {s}\u{202f}ΔE00",
+    ),
+    (
+        "pastilles.pipette.inconnu",
+        "Couleur imprimée inconnue avec {profil}\u{202f}: {raison}",
     ),
     (
         "comparer.zone.gris",
@@ -2750,7 +2826,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "image.canvas.aria",
-        "{p}% of the image beyond {s} ΔE00 with {profil}",
+        "{p}% of the image beyond {s} ΔE00 with {profil}. Click the image to see the colour of a point and its printed colour.",
     ),
     (
         "image.chiffres",
@@ -2835,6 +2911,82 @@ const ANGLAIS: Catalogue = &[
     (
         "image.teinte.gris",
         "Greys (C* < 5)",
+    ),
+    (
+        "image.pixel.hors_image",
+        "This point is outside the image.",
+    ),
+    (
+        "image.pixel.transparent",
+        "This point of the image is transparent: it has no colour to print.",
+    ),
+    (
+        "image.pixel.inconnu",
+        "The difference for this colour could not be calculated.",
+    ),
+    (
+        "pastilles.titre",
+        "Out-of-gamut colours",
+    ),
+    (
+        "pastilles.lecture",
+        "Left, the image colour; right, the colour printed with {profil}. Most present in the image first.",
+    ),
+    (
+        "pastilles.aucune",
+        "None of the most present image colours is beyond {s} ΔE00 with {profil}.",
+    ),
+    (
+        "pastilles.precaution",
+        "Approximate on-screen colours (uncalibrated screen).",
+    ),
+    (
+        "pastilles.ecart",
+        "{e} ΔE00",
+    ),
+    (
+        "pastilles.part",
+        "{p}% of the image",
+    ),
+    (
+        "pastilles.aria.image",
+        "Image colour: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "pastilles.aria.imprimee",
+        "Printed colour: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "pastilles.image",
+        "Image",
+    ),
+    (
+        "pastilles.imprimee",
+        "Printed",
+    ),
+    (
+        "pastilles.lab",
+        "L* {l}  a* {a}  b* {b}",
+    ),
+    (
+        "pastilles.pipette.titre",
+        "Colour of the clicked point",
+    ),
+    (
+        "pastilles.pipette.aide",
+        "Click the image to see the colour of a point and its printed colour.",
+    ),
+    (
+        "pastilles.pipette.au_dela",
+        "Beyond the {s} ΔE00 alert threshold",
+    ),
+    (
+        "pastilles.pipette.en_deca",
+        "Within the {s} ΔE00 alert threshold",
+    ),
+    (
+        "pastilles.pipette.inconnu",
+        "Printed colour unknown with {profil}: {raison}",
     ),
     (
         "comparer.zone.gris",
