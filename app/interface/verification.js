@@ -10,7 +10,7 @@
 window.Verification = (() => {
   const { invoke } = window.__TAURI__.core;
   const t = (cle) => textes[cle] || cle;
-  const { el, date } = window.Arbre;
+  const { el, date, dateHeure } = window.Arbre;
 
   const vue = document.querySelector("[data-vue-reglage]");
   const installer = vue.querySelector("[data-installer]");
@@ -38,6 +38,16 @@ window.Verification = (() => {
   // Profils RVB de la résolution : l'actif d'abord, puis l'historique.
   const profilsRvb = (d) => d.historique.filter((p) => p.espace === "rvb")
     .sort((a, b) => Number(b.actif) - Number(a.actif));
+
+  // Un profil à vérifier : date et heure, recette s'il a été calculé, état, et « actuel » pour
+  // l'actif. Plusieurs profils calculés le même jour se distinguent ainsi.
+  function libelleProfil(p) {
+    const morceaux = [dateHeure(p.horodatage)];
+    if (p.recette) morceaux.push(t("profil.recette.nom." + p.recette));
+    morceaux.push(t(p.libelle));
+    if (p.actif) morceaux.push(t("parc.historique.actuel"));
+    return morceaux.join(" · ");
+  }
 
   function champ(cle, ...contenu) {
     const f = el("div", "field");
@@ -177,7 +187,7 @@ window.Verification = (() => {
     const tete = el("div", "section__head");
     tete.append(el("span", "label label--ink", t("verif.titre")));
     corps.append(tete, champ("verif.profil", liste("verif-profil", profilsRvb(d).map((p) => ({
-      valeur: p.id, libelle: `${date(p.horodatage)} · ${t(p.libelle)}`,
+      valeur: p.id, libelle: libelleProfil(p),
     })), choix.profil, (id) => { choix.profil = id; choix.mesure = null; resultat = null; charger(parc.reglage()); })));
     // La mire de vérification FD-9, créée une fois, s'ouvre dans FD-S2w pour être imprimée.
     const mire = el("button", "btn", t("verif.mire_fd9"));

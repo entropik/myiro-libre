@@ -24,6 +24,7 @@ window.Arbre = (() => {
   const date = (h) => formater(h, { day: "numeric", month: "short", year: "numeric" });
   const moisAnnee = (h) => formater(h, { month: "short", year: "numeric" });
   const dateCourte = (h) => formater(h, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const dateHeure = (h) => formater(h, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
   function lecture(geometrie, plages) {
     const nom = t("lecture." + geometrie.lecture);
@@ -92,5 +93,5 @@ window.Arbre = (() => {
     return lignes;
   }
 
-  return { el, date, noeud, repliable, age, lignesMesures };
+  return { el, date, dateHeure, noeud, repliable, age, lignesMesures };
 })();

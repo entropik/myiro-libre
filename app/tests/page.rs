@@ -2702,3 +2702,35 @@ fn la_verification_ne_porte_aucun_texte_en_dur() {
         assert!(!script.contains(" v${"), "{fichier}");
     }
 }
+
+/// Essai d'écran du 30 octobre 2026 : cinq profils du même jour avaient le
+/// même libellé dans « Profil à vérifier ». Chacun dit maintenant sa date et
+/// son heure, sa recette s'il a été calculé, son état, et « actuel » pour
+/// l'actif. Le libellé reste dans la même pastille : rien d'autre ne bouge.
+#[test]
+fn les_profils_a_verifier_se_distinguent() {
+    use app::textes::{texte, Langue};
+    let arbre = lire("interface/arbre.js");
+    assert!(arbre.contains(
+        "const dateHeure = (h) => formater(h, { day: \"numeric\", month: \"short\", year: \"numeric\", hour: \"2-digit\", minute: \"2-digit\" });"
+    ));
+    assert!(arbre.contains("return { el, date, dateHeure,"));
+    let script = lire("interface/verification.js");
+    for attendu in [
+        "const morceaux = [dateHeure(p.horodatage)];",
+        "if (p.recette) morceaux.push(t(\"profil.recette.nom.\" + p.recette));",
+        "morceaux.push(t(p.libelle));",
+        "if (p.actif) morceaux.push(t(\"parc.historique.actuel\"));",
+        "return morceaux.join(\" · \");",
+        "valeur: p.id, libelle: libelleProfil(p),",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+    for recette in ["rapide", "standard", "approfondi"] {
+        for langue in [Langue::Francais, Langue::Anglais] {
+            let cle = format!("profil.recette.nom.{recette}");
+            assert_ne!(texte(langue, &cle), cle);
+        }
+    }
+    assert_eq!(texte(Langue::Francais, "parc.historique.actuel"), "actuel");
+}

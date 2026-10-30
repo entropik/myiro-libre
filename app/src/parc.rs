@@ -74,6 +74,10 @@ pub struct ProfilHistorique {
     pub origine: &'static str,
     /// Clé du texte de son état ([`cle_etat`]).
     pub libelle: &'static str,
+    /// Recette d'un profil calculé, lue dans ses paramètres conservés ; rien
+    /// pour un profil rangé tel quel. Elle distingue, avec l'heure, des
+    /// profils calculés le même jour.
+    pub recette: Option<profilage::Recette>,
 }
 
 impl std::ops::Deref for ProfilHistorique {
@@ -246,8 +250,13 @@ impl BibliothequeOuverte {
                 .into_iter()
                 .map(|profil| {
                     let origine = origine_profil(b, profil.id)?;
+                    let recette = crate::profiler::provenance_depuis_parametres(
+                        &b.parametres_profil(profil.id)?,
+                    )
+                    .map(|p| p.recette);
                     Ok(ProfilHistorique {
                         libelle: cle_etat(profil.etat, origine),
+                        recette,
                         origine,
                         profil,
                     })
