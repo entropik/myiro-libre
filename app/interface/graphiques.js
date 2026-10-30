@@ -14,6 +14,8 @@ window.Graphiques = (() => {
   const LIGNE_LEGENDE = 18;
   // Caractères d'un nom dans la légende, qui tient alors sur la largeur du graphique.
   const NOM_MAX = 72;
+  // L* : un point du nuage de l'image entre dans la coupe à ± une demi-tranche de sa clarté.
+  const DEMI_TRANCHE = 2.5;
 
   // Chiffre écrit dans la langue de la page (virgule décimale en français), ou « inconnu ».
   function nombre(valeur, decimales) {
@@ -177,13 +179,23 @@ window.Graphiques = (() => {
     valeurs(svg, [t("comparer.graphique.teinte"), ...series.map((s) => s.nom)], lignes);
   }
 
-  // Coupe à clarté constante, dans le plan a*b* (de −100 à +100, plus si un profil en sort).
-  function coupe(svg, series, l) {
+  // Coupe à clarté constante, dans le plan a*b* (de −100 à +100, plus si un profil en sort). Les
+  // couleurs de l'image (`points`, nuage-image.js), facultatives, sont celles dont la clarté est à
+  // ± DEMI_TRANCHE de `l` : petits cercles de leur couleur, ou de la couleur d'alerte, au-dessus des
+  // contours. Sans elles, le graphique ne change pas.
+  function coupe(svg, series, l, points = []) {
     const COTE = 420;
-    const hauteur = MARGE.haut + COTE + MARGE.bas + series.length * LIGNE_LEGENDE + 8;
-    const aria = t("comparer.graphique.coupe.aria").replace("{l}", () => nombre(l, 0)).replace("{profils}", () => noms(series));
+    const proches = points.filter((p) => Math.abs(p.lab[0] - l) <= DEMI_TRANCHE);
+    const alertes = proches.filter((p) => p.alerte).length;
+    const entrees = series.length + (points.length ? 2 : 0);
+    const hauteur = MARGE.haut + COTE + MARGE.bas + entrees * LIGNE_LEGENDE + 8;
+    let aria = t("comparer.graphique.coupe.aria").replace("{l}", () => nombre(l, 0)).replace("{profils}", () => noms(series));
+    if (points.length) {
+      aria += " " + t("nuage.aria").replace("{n}", () => nombre(proches.length, 0)).replace("{a}", () => nombre(alertes, 0));
+    }
     preparer(svg, hauteur, aria);
-    const borne = Math.max(100, hautChroma(series.flatMap((s) => s.valeurs || [])));
+    const chromas = proches.map((p) => Math.max(Math.abs(p.lab[1]), Math.abs(p.lab[2])));
+    const borne = Math.max(100, hautChroma([...series.flatMap((s) => s.valeurs || []), ...chromas]));
     const gauche = (LARGEUR - COTE) / 2;
     const z = zone(-borne, borne, -borne, borne, gauche, gauche + COTE, MARGE.haut, MARGE.haut + COTE);
     axes(svg, z, { min: -borne, max: borne, pas: 20, titre: "a*" }, { min: -borne, max: borne, pas: 20, titre: "b*" });
@@ -197,10 +209,37 @@ window.Graphiques = (() => {
       });
       trace(svg, points, s, true);
     }
-    legende(svg, series, z.bas + MARGE.bas + 12, false);
+    for (const p of proches) {
+      const rond = noeud("circle", { class: `graphique__nuage${p.alerte ? " graphique__nuage--alerte" : ""}`, cx: z.x(p.lab[1]), cy: z.y(p.lab[2]), r: 2.5 });
+      if (!p.alerte && /^#[0-9a-fA-F]{6}$/.test(String(p.couleur))) rond.style.fill = p.couleur;
+      svg.append(rond);
+    }
+    const bas = z.bas + MARGE.bas + 12 + legende(svg, series, z.bas + MARGE.bas + 12, false);
+    if (points.length) {
+      const libelles = [t("nuage.legende").replace("{l}", () => nombre(l, 0)).replace("{d}", () => nombre(DEMI_TRANCHE, 1)), t("nuage.legende.alerte")];
+      libelles.forEach((texte, i) => {
+        const y = bas + i * LIGNE_LEGENDE;
+        svg.append(noeud("circle", { class: `graphique__nuage${i ? " graphique__nuage--alerte" : ""}`, cx: MARGE.gauche + 11, cy: y - 4, r: 3.5 }));
+        svg.append(noeud("text", { class: "graphique__legende", x: MARGE.gauche + 30, y }, texte));
+      });
+    }
     const lignes = [];
     for (let h = 0; h < 360; h += 30) lignes.push([nombre(h, 0), ...series.map((s) => nombre((s.valeurs || [])[h / 2], 1))]);
     valeurs(svg, [t("comparer.graphique.teinte"), ...series.map((s) => `${s.nom} (C*)`)], lignes);
+    // Les couleurs de l'image de la coupe sont comptées dans une phrase sous « Valeurs », lue par le
+    // lecteur d'écran ; sans nuage, la phrase disparaît.
+    const details = svg.nextElementSibling;
+    let phrase = details && details.nextElementSibling;
+    if (phrase && !phrase.hasAttribute("data-nuage")) phrase = null;
+    if (!points.length || !details) { if (phrase) phrase.remove(); return; }
+    if (!phrase) {
+      phrase = document.createElement("p");
+      phrase.className = "why";
+      phrase.setAttribute("data-nuage", "");
+      details.after(phrase);
+    }
+    phrase.textContent = t("nuage.compte").replace("{l}", () => nombre(l, 0)).replace("{d}", () => nombre(DEMI_TRANCHE, 1))
+      .replace("{n}", () => nombre(proches.length, 0)).replace("{a}", () => nombre(alertes, 0));
   }
 
   // L* et C* le long d'un chemin du cube RVB : 256 points (L*, C*) par profil, de 0 à 255, et les

@@ -20,6 +20,7 @@ fn essai(blanc: [f64; 3], mesures: Option<&str>) -> ProfilEssai {
         grille: 9,
         blanc,
         cible: lineaire,
+        inverse: None,
         description: "Profil d'essai lineaire".into(),
         mesures: mesures.map(String::from),
     }

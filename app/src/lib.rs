@@ -582,6 +582,7 @@ pub fn lancer() {
         .manage(PareFeuFd9::default())
         .manage(profiler::Moteur::au_lancement())
         .manage(comparer::FichiersOuverts::default())
+        .manage(comparer::image::ImageOuverte::default())
         .setup(ouvrir_bibliotheque)
         .manage(GesteEnAttente::default())
         .invoke_handler(tauri::generate_handler![
@@ -629,6 +630,14 @@ pub fn lancer() {
             comparer::comparer_ouvrir_fichier,
             comparer::comparer_analyser,
             comparer::comparer_chemin,
+            comparer::image::commandes::image_ouvrir,
+            comparer::image::commandes::image_traiter_comme_srvb,
+            comparer::image::commandes::image_fermer,
+            comparer::image::commandes::image_apercu,
+            comparer::image::commandes::image_analyser,
+            comparer::image::commandes::image_ecarts,
+            comparer::image::commandes::image_annuler,
+            comparer::image::commandes::image_pixel,
             etalonner,
             repondre_geste
         ])

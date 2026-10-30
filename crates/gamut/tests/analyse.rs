@@ -18,6 +18,7 @@ fn profil() -> ProfilIcc {
         grille: 9,
         blanc: [100.0, 0.0, 0.0],
         cible: lineaire,
+        inverse: None,
         description: "Profil d'essai lineaire".into(),
         mesures: None,
     });

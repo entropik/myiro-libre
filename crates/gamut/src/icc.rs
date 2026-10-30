@@ -1,9 +1,10 @@
 //! Lecture d'un profil ICC RVB : en-tête, table des balises, `wtpt`, `desc`,
-//! `targ` et table A2B1 de type `mft2` (lut16).
+//! `targ`, table A2B1 de type `mft2` (lut16) et, si elle se lit, table
+//! inverse B2A1 du même type.
 
 use colorimetrie::{xyz_vers_lab, Lab, Xyz};
 
-use crate::table::{lire_mft2, Lut};
+use crate::table::{lab16_vers_lab, lab_vers_lab16, lire_mft2, Lut, XYZ16};
 
 /// Illuminant D50 du PCS, tel que l'écrivent les profils (échelle Y = 1).
 pub(crate) const ILLUMINANT_D50: [f64; 3] = [0.9642, 1.0, 0.8249];
@@ -24,6 +25,9 @@ pub enum ErreurIcc {
     /// Pas de blanc du support (`wtpt`) : la colorimétrie absolue est
     /// impossible, et aucun blanc D50 n'est supposé.
     SansBlanc,
+    /// Pas de table inverse B2A1 : la couleur que l'imprimante rendrait d'une
+    /// couleur demandée ne se calcule pas.
+    SansTableInverse,
 }
 
 impl ErreurIcc {
@@ -36,6 +40,7 @@ impl ErreurIcc {
             ErreurIcc::StructureNonPriseEnCharge { .. } => "comparer.refus.structure",
             ErreurIcc::Tronque { .. } => "comparer.refus.tronque",
             ErreurIcc::SansBlanc => "comparer.refus.sans_blanc",
+            ErreurIcc::SansTableInverse => "comparer.refus.sans_table_inverse",
         }
     }
 }
@@ -55,6 +60,9 @@ pub struct ProfilIcc {
     illuminant: [f64; 3],
     blanc: [f64; 3],
     lut: Lut,
+    /// Table B2A1, ou pourquoi elle ne se lit pas : son absence ne bloque
+    /// pas la lecture du profil.
+    inverse: Result<Lut, ErreurIcc>,
     mesures: Option<Vec<u8>>,
 }
 
@@ -94,7 +102,12 @@ impl ProfilIcc {
 
         let lut = match balises.trouver(b"A2B1")? {
             None => return Err(ErreurIcc::SansTable),
-            Some(donnees) => lire_mft2(donnees)?,
+            Some(donnees) => lire_mft2(donnees, "A2B1")?,
+        };
+        let inverse = match balises.trouver(b"B2A1") {
+            Ok(Some(donnees)) => lire_mft2(donnees, "B2A1"),
+            Ok(None) => Err(ErreurIcc::SansTableInverse),
+            Err(erreur) => Err(erreur),
         };
         let blanc = match balises.trouver(b"wtpt")? {
             Some(d) if d.len() >= 20 && &d[0..4] == b"XYZ " => [s15(d, 8), s15(d, 12), s15(d, 16)],
@@ -114,6 +127,7 @@ impl ProfilIcc {
             illuminant,
             blanc,
             lut,
+            inverse,
             mesures,
         })
     }
@@ -135,40 +149,50 @@ impl ProfilIcc {
 
     /// L\*, a\*, b\* absolus de `rvb` (de 0 à 1, borné) par la table A2B1.
     pub fn lab_absolu(&self, rvb: [f64; 3]) -> [f64; 3] {
+        self.relatif_vers_absolu(self.lab_relatif(rvb))
+    }
+
+    /// L\*, a\*, b\* relatifs (rapportés au D50 du PCS) de `rvb` par la
+    /// table A2B1, sans le blanc du support : le blanc du papier vaut
+    /// L\* = 100.
+    pub fn lab_relatif(&self, rvb: [f64; 3]) -> [f64; 3] {
         let v = self.lut.evaluer(rvb);
-        let relatif = match self.pcs {
-            Pcs::Lab => {
-                let w = v.map(|x| x * 65535.0);
-                let lab = [w[0] / 652.80, w[1] / 256.0 - 128.0, w[2] / 256.0 - 128.0];
-                lab_vers_xyz(lab, self.illuminant)
+        match self.pcs {
+            Pcs::Lab => lab16_vers_lab(v),
+            Pcs::Xyz => vers_lab_pcs(v.map(|x| x * XYZ16), self.illuminant),
+        }
+    }
+
+    /// Lab relatif vers Lab absolu : en XYZ, × blanc du support / D50.
+    pub fn relatif_vers_absolu(&self, lab: [f64; 3]) -> [f64; 3] {
+        let relatif = lab_vers_xyz(lab, self.illuminant);
+        let absolu = [0, 1, 2].map(|k| relatif[k] * self.blanc[k] / self.illuminant[k]);
+        vers_lab_pcs(absolu, self.illuminant)
+    }
+
+    /// Aller-retour colorimétrique relatif : A2B1(B2A1(`lab`)), en Lab
+    /// relatif. C'est la couleur que l'imprimante rend de la couleur demandée.
+    pub fn reproduire(&self, lab: [f64; 3]) -> Result<[f64; 3], ErreurIcc> {
+        let inverse = self.inverse.as_ref().map_err(Clone::clone)?;
+        let rvb = match self.pcs {
+            Pcs::Lab => inverse.evaluer_inverse(lab_vers_lab16(lab)),
+            Pcs::Xyz => {
+                let xyz = lab_vers_xyz(lab, self.illuminant);
+                inverse.evaluer_inverse_xyz(xyz.map(|x| x / XYZ16))
             }
-            Pcs::Xyz => v.map(|x| x * 65535.0 / 32768.0),
         };
-        let absolu = |k: usize| 100.0 * relatif[k] * self.blanc[k] / self.illuminant[k];
-        let xyz = Xyz {
-            x: absolu(0),
-            y: absolu(1),
-            z: absolu(2),
-        };
-        let blanc = Xyz {
-            x: 100.0 * self.illuminant[0],
-            y: 100.0 * self.illuminant[1],
-            z: 100.0 * self.illuminant[2],
-        };
-        // Valeurs finies et illuminant positif, contrôlés à la lecture.
-        xyz_vers_lab(xyz, blanc).map_or([f64::NAN; 3], |lab| [lab.l, lab.a, lab.b])
+        Ok(self.lab_relatif(rvb))
+    }
+
+    /// La table inverse B2A1 a-t-elle été lue ; sinon, pourquoi.
+    pub fn inverse(&self) -> Result<(), ErreurIcc> {
+        self.inverse.as_ref().map(|_| ()).map_err(Clone::clone)
     }
 
     /// Blanc du support (`wtpt`) en L\*, a\*, b\*, rapporté à l'illuminant
     /// du PCS.
     pub fn blanc_support(&self) -> [f64; 3] {
-        let blanc = |v: [f64; 3]| Xyz {
-            x: 100.0 * v[0],
-            y: 100.0 * v[1],
-            z: 100.0 * v[2],
-        };
-        xyz_vers_lab(blanc(self.blanc), blanc(self.illuminant))
-            .map_or([f64::NAN; 3], |lab| [lab.l, lab.a, lab.b])
+        vers_lab_pcs(self.blanc, self.illuminant)
     }
 
     /// Mesures embarquées (balise `targ`), octets tels quels.
@@ -178,13 +202,13 @@ impl ProfilIcc {
 }
 
 /// Table des balises : signature, position et taille.
-struct Balises<'a> {
+pub(crate) struct Balises<'a> {
     octets: &'a [u8],
     entrees: Vec<([u8; 4], usize, usize)>,
 }
 
 impl<'a> Balises<'a> {
-    fn lire(octets: &'a [u8]) -> Result<Balises<'a>, ErreurIcc> {
+    pub(crate) fn lire(octets: &'a [u8]) -> Result<Balises<'a>, ErreurIcc> {
         let nombre = u32_at(octets, 128).unwrap_or(0) as usize;
         let fin = nombre
             .checked_mul(12)
@@ -207,7 +231,7 @@ impl<'a> Balises<'a> {
     }
 
     /// Données d'une balise ; `Tronque` si elle sort du fichier.
-    fn trouver(&self, sig: &[u8; 4]) -> Result<Option<&'a [u8]>, ErreurIcc> {
+    pub(crate) fn trouver(&self, sig: &[u8; 4]) -> Result<Option<&'a [u8]>, ErreurIcc> {
         let Some(&(_, position, taille)) = self.entrees.iter().find(|e| &e.0 == sig) else {
             return Ok(None);
         };
@@ -222,7 +246,7 @@ impl<'a> Balises<'a> {
 }
 
 /// Texte d'un `desc` (ASCII) ou premier enregistrement d'un `mluc`.
-fn lire_desc(d: &[u8]) -> Option<String> {
+pub(crate) fn lire_desc(d: &[u8]) -> Option<String> {
     match d.get(0..4)? {
         b"desc" => {
             let n = u32_at(d, 8)? as usize;
@@ -276,7 +300,7 @@ pub(crate) fn u16_at(d: &[u8], position: usize) -> Option<u16> {
 }
 
 /// s15Fixed16 ; zéro si hors du fichier (la longueur est contrôlée avant).
-fn s15(d: &[u8], position: usize) -> f64 {
+pub(crate) fn s15(d: &[u8], position: usize) -> f64 {
     f64::from(u32_at(d, position).unwrap_or(0) as i32) / 65536.0
 }
 
@@ -287,6 +311,17 @@ pub(crate) fn vers_lab(lab: [f64; 3]) -> Lab {
         a: lab[1],
         b: lab[2],
     }
+}
+
+/// XYZ (échelle Y = 1) vers L\*, a\*, b\* rapportés à l'illuminant du PCS.
+pub(crate) fn vers_lab_pcs(xyz: [f64; 3], illuminant: [f64; 3]) -> [f64; 3] {
+    let cent = |v: [f64; 3]| Xyz {
+        x: 100.0 * v[0],
+        y: 100.0 * v[1],
+        z: 100.0 * v[2],
+    };
+    // Valeurs finies et illuminant positif, contrôlés à la lecture.
+    xyz_vers_lab(cent(xyz), cent(illuminant)).map_or([f64::NAN; 3], |lab| [lab.l, lab.a, lab.b])
 }
 
 /// L\*, a\*, b\* vers XYZ, rapporté au blanc donné (même échelle que lui).

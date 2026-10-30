@@ -141,6 +141,7 @@ fn limite_reelle_d_un_profil_d_essai() {
         grille: 9,
         blanc: [100.0, 0.0, 0.0],
         cible: lineaire,
+        inverse: None,
         description: "Essai lineaire".into(),
         mesures: None,
     });

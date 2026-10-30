@@ -44,6 +44,7 @@ fn essai(cible: fn([f64; 3]) -> [f64; 3], grille: u8, mesures: Option<String>) -
         grille,
         blanc: [100.0, 0.0, 0.0],
         cible,
+        inverse: None,
         description: "Essai".into(),
         mesures,
     })

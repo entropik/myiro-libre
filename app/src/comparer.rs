@@ -9,6 +9,7 @@
 //! Ce qui n'est pas connu reste « inconnu », avec la clé de sa raison.
 
 pub mod embarquees;
+pub mod image;
 mod sources;
 
 use gamut::{Analyse, Ecarts, ErreurIcc, MaillageAffiche, ProfilIcc, Repetabilite, Statistiques};
@@ -182,7 +183,7 @@ fn detail_refus(erreur: &ErreurIcc) -> Option<String> {
         ErreurIcc::PasRvb { espace } => Some(espace.clone()),
         ErreurIcc::StructureNonPriseEnCharge { structure } => Some(structure.clone()),
         ErreurIcc::Tronque { balise } => Some(balise.clone()),
-        ErreurIcc::SansTable | ErreurIcc::SansBlanc => None,
+        ErreurIcc::SansTable | ErreurIcc::SansBlanc | ErreurIcc::SansTableInverse => None,
     }
 }
 

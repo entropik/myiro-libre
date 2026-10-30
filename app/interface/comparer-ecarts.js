@@ -160,13 +160,12 @@ window.ComparerEcarts = (() => {
   // Section des écarts : à partir de deux profils ; « profils identiques » et « mêmes mesures »
   // dits en clair.
   function ecarts(comparaison, profils, texteFidelite) {
-    const section = el("div", "section");
-    const tete = el("div", "section__head");
-    tete.append(titre("comparer.ecarts"));
-    section.append(tete);
+    // Partie repliable (accordeon.js), comme les autres grandes parties de la vue.
+    const section = el("div");
+    const partie = () => window.Accordeon.partie("comparer.ecarts", [section]);
     if (profils.length < 2) {
       section.append(el("p", "why", t("comparer.ecarts.deux")));
-      return section;
+      return partie();
     }
     const reference = profils[0];
     profils.slice(1).forEach((p, k) => {
@@ -190,7 +189,7 @@ window.ComparerEcarts = (() => {
       }
       section.append(blocEcarts(e, reference));
     });
-    return section;
+    return partie();
   }
 
   return { primaires, ecarts, carreSerie, tableau, lab, cleZone };

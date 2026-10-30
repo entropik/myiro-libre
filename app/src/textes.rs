@@ -396,6 +396,10 @@ const FRANCAIS: Catalogue = &[
         "Ce profil ne dit pas quel est le blanc du support\u{202f}: ses couleurs absolues ne se calculent pas. Il n’est pas comparé.",
     ),
     (
+        "comparer.refus.sans_table_inverse",
+        "Ce profil n’a pas de table inverse lisible (B2A1)\u{202f}: on ne sait pas quelles couleurs l’imprimante rendrait de l’image. Ce point reste inconnu.",
+    ),
+    (
         "comparer.refus.trop_de_profils",
         "On compare quatre profils au plus. Retirez-en un, puis recommencez.",
     ),
@@ -418,6 +422,430 @@ const FRANCAIS: Catalogue = &[
     (
         "comparer.refus.fichier_trop_grand",
         "Ce fichier est bien trop grand pour un profil ICC\u{202f}: il n’est pas ouvert.",
+    ),
+    (
+        "comparer.image.refus.en_tete",
+        "Le profil embarqué dans cette image n’est pas un profil ICC lisible ({detail}).",
+    ),
+    (
+        "comparer.image.refus.pas_rvb",
+        "Le profil embarqué dans cette image est un profil CMJN. Les images CMJN sont prévues dans une seconde étape.",
+    ),
+    (
+        "comparer.image.refus.sans_conversion",
+        "Le profil embarqué dans cette image ne dit pas quelles couleurs ses pixels demandent\u{202f}: il n’a ni table A2B, ni matrice et courbes, ni courbe de gris.",
+    ),
+    (
+        "comparer.image.refus.structure",
+        "Le profil embarqué dans cette image est d’une structure que myiro-libre ne lit pas encore ({detail}).",
+    ),
+    (
+        "comparer.image.refus.tronque",
+        "Le profil embarqué dans cette image est incomplet\u{202f}: une partie ({detail}) sort du profil.",
+    ),
+    (
+        "comparer.image.refus.illisible",
+        "Le profil embarqué dans cette image est abîmé ou incomplet\u{202f}: il ne se lit pas ({detail}).",
+    ),
+    (
+        "image.ouvrir",
+        "Ajouter une image",
+    ),
+    (
+        "image.filtre",
+        "Images JPEG, PNG ou TIFF",
+    ),
+    (
+        "image.traiter_srvb",
+        "Traiter comme sRVB",
+    ),
+    (
+        "image.refus.cmjn",
+        "Cette image est en CMJN. La comparaison des images CMJN viendra dans une seconde étape. Ouvrez une version RVB de la photo.",
+    ),
+    (
+        "image.refus.profil",
+        "Le profil intégré à l’image ne se lit pas ({detail}). Choisissez «\u{202f}Traiter comme sRVB\u{202f}» si la photo vient d’un appareil ou d’un site en sRVB.",
+    ),
+    (
+        "image.refus.trop_grande",
+        "Cette image est trop grande pour être ouverte (plus de 120 millions de pixels, ou un fichier de plus de 1\u{202f}Go). Ouvrez une version réduite de la photo.",
+    ),
+    (
+        "image.refus.illisible",
+        "Ce fichier ne se lit pas comme une image. Vérifiez qu’il existe toujours et qu’il s’ouvre dans un autre logiciel, puis ouvrez-le de nouveau.",
+    ),
+    (
+        "image.refus.format",
+        "Ce format d’image n’est pas pris en charge. Ouvrez la photo en JPEG, PNG ou TIFF.",
+    ),
+    (
+        "image.refus.aucune",
+        "Aucune image n’est ouverte. Ajoutez-en une, puis recommencez.",
+    ),
+    (
+        "image.refus.sans_ecarts",
+        "Les écarts de ce profil ne sont pas calculés. Relancez l’analyse de l’image.",
+    ),
+    (
+        "image.annulee",
+        "Analyse de l’image annulée.",
+    ),
+    (
+        "image.erreur.calcul",
+        "Le calcul de ce profil s’est arrêté sur une erreur de myiro-libre. Ce point reste inconnu.",
+    ),
+    (
+        "image.profil.embarque",
+        "Profil de l’image\u{202f}: {nom}",
+    ),
+    (
+        "image.profil.sans_nom",
+        "profil intégré sans nom",
+    ),
+    (
+        "image.profil.ecartee",
+        "Table {table} du profil de l’image non utilisée\u{202f}: {raison}",
+    ),
+    (
+        "image.profil.srvb",
+        "Profil de l’image\u{202f}: sRVB (aucun profil intégré)",
+    ),
+    (
+        "image.profil.suppose",
+        "sRVB, supposé\u{202f}: choisi par vous",
+    ),
+    (
+        "image.approche",
+        "Calculé sur 1 pixel sur {n}",
+    ),
+    (
+        "image.seize_bits",
+        "Valeurs 16 bits ramenées à 8 bits",
+    ),
+    (
+        "image.titre",
+        "Image",
+    ),
+    (
+        "image.aide",
+        "Ouvrez une photo de client en RVB (JPEG, PNG ou TIFF)\u{202f}: pour chaque profil affiché, la page montre les pixels que l’imprimante ne pourra pas reproduire. L’image reste en mémoire le temps de la comparaison\u{202f}; elle n’est ni rangée ni copiée.",
+    ),
+    (
+        "image.remplacer",
+        "Ouvrir une autre image",
+    ),
+    (
+        "image.retirer",
+        "Retirer l’image",
+    ),
+    (
+        "image.en_cours",
+        "Analyse de l’image en cours…",
+    ),
+    (
+        "image.annuler",
+        "Annuler",
+    ),
+    (
+        "image.relancer",
+        "Relancer l’analyse",
+    ),
+    (
+        "image.taille",
+        "Image d’analyse de {l} × {h} pixels, tirée d’une photo de {lo} × {ho} pixels",
+    ),
+    (
+        "image.surimpression.profil",
+        "Profil de la surimpression",
+    ),
+    (
+        "image.surimpression.inconnue",
+        "Pas de surimpression pour ce profil\u{202f}: {raison}",
+    ),
+    (
+        "image.seuil.valeur",
+        "Seuil d’alerte {s}\u{202f}ΔE00",
+    ),
+    (
+        "image.affichage",
+        "Afficher",
+    ),
+    (
+        "image.affichage.image",
+        "Image",
+    ),
+    (
+        "image.affichage.les_deux",
+        "Image et alerte",
+    ),
+    (
+        "image.affichage.alerte",
+        "Alerte seule",
+    ),
+    (
+        "nuage.bascule",
+        "Couleurs de l’image",
+    ),
+    (
+        "nuage.aide",
+        "Chaque point est la moyenne d’un groupe de couleurs proches de l’image, placée sur le blanc du papier de {profil}. Il passe dans la couleur d’alerte dès qu’une de ses couleurs dépasse {s}\u{202f}ΔE00.",
+    ),
+    (
+        "nuage.indisponible",
+        "Les couleurs de l’image apparaissent ici quand une image est analysée face au profil choisi pour la surimpression.",
+    ),
+    (
+        "nuage.aria",
+        "Couleurs de l’image\u{202f}: {n} points, dont {a} au-delà du seuil d’alerte.",
+    ),
+    (
+        "nuage.compte",
+        "Couleurs de l’image dans la coupe (L* {l} ± {d})\u{202f}: {n} points, dont {a} au-delà du seuil d’alerte.",
+    ),
+    (
+        "nuage.legende",
+        "Couleurs de l’image, L* {l} ± {d}",
+    ),
+    (
+        "nuage.legende.alerte",
+        "Couleur de l’image au-delà du seuil d’alerte",
+    ),
+    (
+        "image.legende",
+        "Écart d’au plus {s}\u{202f}ΔE00, {profil}, sans compensation du point noir. En vert, au-delà.",
+    ),
+    (
+        "image.canvas.aria",
+        "{p}\u{202f}% de l’image au-delà de {s}\u{202f}ΔE00 avec {profil}. Cliquez sur l’image pour voir la couleur d’un point et sa couleur imprimée.",
+    ),
+    (
+        "image.chiffres",
+        "Chiffres de l’image",
+    ),
+    (
+        "image.chiffres.part",
+        "Part de l’image au-delà de {s}\u{202f}ΔE00",
+    ),
+    (
+        "image.classe.leger",
+        "Léger, de 2 à 5\u{202f}ΔE00",
+    ),
+    (
+        "image.classe.moyen",
+        "Moyen, de 5 à 10\u{202f}ΔE00",
+    ),
+    (
+        "image.classe.fort",
+        "Fort, plus de 10\u{202f}ΔE00",
+    ),
+    (
+        "image.chiffres.teintes",
+        "Teintes les plus touchées",
+    ),
+    (
+        "image.chiffres.inconnus",
+        "Pixels à l’écart inconnu",
+    ),
+    (
+        "image.chiffres.couleurs",
+        "Couleurs distinctes",
+    ),
+    (
+        "image.chiffres.raison",
+        "Raison",
+    ),
+    (
+        "image.valeur.pourcent",
+        "{p}\u{202f}%",
+    ),
+    (
+        "image.teinte.valeur",
+        "{nom} {p}\u{202f}%",
+    ),
+    (
+        "image.teintes.aucune",
+        "aucune",
+    ),
+    (
+        "image.inconnus.valeur",
+        "{n} pixels ({p}\u{202f}%), jamais comptés comme bons",
+    ),
+    (
+        "image.inconnus.aucun",
+        "aucun",
+    ),
+    (
+        "image.teinte.rouge",
+        "Rouges",
+    ),
+    (
+        "image.teinte.jaune",
+        "Jaunes",
+    ),
+    (
+        "image.teinte.vert",
+        "Verts",
+    ),
+    (
+        "image.teinte.cyan",
+        "Cyans",
+    ),
+    (
+        "image.teinte.bleu",
+        "Bleus",
+    ),
+    (
+        "image.teinte.magenta",
+        "Magentas",
+    ),
+    (
+        "image.teinte.gris",
+        "Gris (C* < 5)",
+    ),
+    (
+        "image.verdict",
+        "{p}\u{202f}% de l’image est imprimable sur ce papier avec ce profil",
+    ),
+    (
+        "image.verdict.plus_de",
+        "plus de {p}",
+    ),
+    (
+        "image.verdict.moins_de",
+        "moins de {p}",
+    ),
+    (
+        "image.verdict.inconnus",
+        "\u{202f}; {p}\u{202f}% inconnus",
+    ),
+    (
+        "image.verdict.inconnu",
+        "Part imprimable inconnue avec ce profil",
+    ),
+    (
+        "image.point_noir",
+        "Compensation du point noir",
+    ),
+    (
+        "image.point_noir.aide",
+        "Le noir de l’image est ramené sur le noir le plus profond du papier, comme le fait le pilote d’impression en colorimétrique relatif avec compensation. Changer ce réglage relance l’analyse.",
+    ),
+    (
+        "image.legende.point_noir",
+        "Écart d’au plus {s}\u{202f}ΔE00, {profil}, avec compensation du point noir. En vert, au-delà.",
+    ),
+    (
+        "image.rendu.point_noir",
+        "Colorimétrique relatif, avec compensation du point noir",
+    ),
+    (
+        "image.rendu.relatif",
+        "Colorimétrique relatif, sans compensation du point noir",
+    ),
+    (
+        "image.agrandir",
+        "Agrandir",
+    ),
+    (
+        "image.agrandie.titre",
+        "Image agrandie",
+    ),
+    (
+        "image.agrandie.fermer",
+        "Fermer",
+    ),
+    (
+        "image.agrandie.aide",
+        "Cliquez sur l’image pour voir la couleur d’un point. Échap ou un clic à côté de l’image pour revenir.",
+    ),
+    (
+        "pastilles.pipette.visee",
+        "Couleur visée après compensation du point noir\u{202f}: {lab}, à {e}\u{202f}ΔE00 de la couleur de l’image",
+    ),
+    (
+        "pastilles.pipette.visee_identique",
+        "Compensation du point noir\u{202f}: la couleur visée est celle de l’image.",
+    ),
+    (
+        "pastilles.aria.visee",
+        "Couleur visée\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "image.pixel.hors_image",
+        "Ce point est en dehors de l’image.",
+    ),
+    (
+        "image.pixel.transparent",
+        "Ce point de l’image est transparent\u{202f}: il n’a pas de couleur à imprimer.",
+    ),
+    (
+        "image.pixel.inconnu",
+        "L’écart de cette couleur n’a pas pu être calculé.",
+    ),
+    (
+        "pastilles.titre",
+        "Couleurs hors gamut",
+    ),
+    (
+        "pastilles.lecture",
+        "À gauche la couleur de l’image, à droite la couleur imprimée avec le profil choisi\u{202f}; dessous, l’écart et la part de l’image. Les plus présentes d’abord.",
+    ),
+    (
+        "pastilles.aucune",
+        "Aucune des couleurs les plus présentes de l’image n’est au-delà de {s}\u{202f}ΔE00 avec {profil}.",
+    ),
+    (
+        "pastilles.precaution",
+        "Couleurs approchées à l’écran (écran non calibré).",
+    ),
+    (
+        "pastilles.ecart",
+        "{e}\u{202f}ΔE00",
+    ),
+    (
+        "pastilles.part",
+        "{p}\u{202f}%",
+    ),
+    (
+        "pastilles.aria.image",
+        "Couleur de l’image\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "pastilles.aria.imprimee",
+        "Couleur imprimée\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "pastilles.image",
+        "Image",
+    ),
+    (
+        "pastilles.imprimee",
+        "Imprimé",
+    ),
+    (
+        "pastilles.lab",
+        "L* {l}  a* {a}  b* {b}",
+    ),
+    (
+        "pastilles.pipette.titre",
+        "Couleur du point cliqué",
+    ),
+    (
+        "pastilles.pipette.aide",
+        "Cliquez sur l’image pour voir la couleur d’un point et sa couleur imprimée.",
+    ),
+    (
+        "pastilles.pipette.au_dela",
+        "Au-delà du seuil d’alerte de {s}\u{202f}ΔE00",
+    ),
+    (
+        "pastilles.pipette.en_deca",
+        "En deçà du seuil d’alerte de {s}\u{202f}ΔE00",
+    ),
+    (
+        "pastilles.pipette.inconnu",
+        "Couleur imprimée inconnue avec {profil}\u{202f}: {raison}",
     ),
     (
         "comparer.zone.gris",
@@ -553,7 +981,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "comparer.vue3d.aria.profil",
-        "{nom}, volume {volume} unités L*a*b* au cube",
+        "{nom}, volume {volume} unités L*a*b* au cube, blanc du papier L* {blanc}",
     ),
     (
         "comparer.vue3d.aria.vide",
@@ -562,6 +990,10 @@ const FRANCAIS: Catalogue = &[
     (
         "comparer.vue3d.bulle",
         "{nom}\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "comparer.vue3d.blanc",
+        "Blanc du papier L* {l}",
     ),
     (
         "comparer.graphique.teinte",
@@ -2241,6 +2673,10 @@ const ANGLAIS: Catalogue = &[
         "This profile does not give the media white: its absolute colours cannot be computed. It is not compared.",
     ),
     (
+        "comparer.refus.sans_table_inverse",
+        "This profile has no readable inverse table (B2A1): which colours the printer would render from the image cannot be computed. This stays unknown.",
+    ),
+    (
         "comparer.refus.trop_de_profils",
         "At most four profiles are compared. Remove one, then start again.",
     ),
@@ -2263,6 +2699,430 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.refus.fichier_trop_grand",
         "This file is far too large for an ICC profile: it is not opened.",
+    ),
+    (
+        "comparer.image.refus.en_tete",
+        "The profile embedded in this image is not a readable ICC profile ({detail}).",
+    ),
+    (
+        "comparer.image.refus.pas_rvb",
+        "The profile embedded in this image is a CMYK profile. CMYK images are planned for a second stage.",
+    ),
+    (
+        "comparer.image.refus.sans_conversion",
+        "The profile embedded in this image does not say which colours its pixels ask for: it has no A2B table, no matrix and curves, no grey curve.",
+    ),
+    (
+        "comparer.image.refus.structure",
+        "The profile embedded in this image has a structure myiro-libre does not read yet ({detail}).",
+    ),
+    (
+        "comparer.image.refus.tronque",
+        "The profile embedded in this image is incomplete: a part ({detail}) goes beyond the end of the profile.",
+    ),
+    (
+        "comparer.image.refus.illisible",
+        "The profile embedded in this image is damaged or incomplete: it cannot be read ({detail}).",
+    ),
+    (
+        "image.ouvrir",
+        "Add an image",
+    ),
+    (
+        "image.filtre",
+        "JPEG, PNG or TIFF images",
+    ),
+    (
+        "image.traiter_srvb",
+        "Treat as sRGB",
+    ),
+    (
+        "image.refus.cmjn",
+        "This image is in CMYK. Comparing CMYK images will come in a second stage. Open an RGB version of the photo.",
+    ),
+    (
+        "image.refus.profil",
+        "The profile embedded in the image cannot be read ({detail}). Choose “Treat as sRGB” if the photo comes from a camera or a website in sRGB.",
+    ),
+    (
+        "image.refus.trop_grande",
+        "This image is too large to open (more than 120 million pixels, or a file over 1 GB). Open a reduced version of the photo.",
+    ),
+    (
+        "image.refus.illisible",
+        "This file cannot be read as an image. Check that it still exists and opens in another program, then open it again.",
+    ),
+    (
+        "image.refus.format",
+        "This image format is not supported. Open the photo as JPEG, PNG or TIFF.",
+    ),
+    (
+        "image.refus.aucune",
+        "No image is open. Add one, then start again.",
+    ),
+    (
+        "image.refus.sans_ecarts",
+        "The differences for this profile are not computed. Run the image analysis again.",
+    ),
+    (
+        "image.annulee",
+        "Image analysis cancelled.",
+    ),
+    (
+        "image.erreur.calcul",
+        "The computation for this profile stopped on a myiro-libre error. This stays unknown.",
+    ),
+    (
+        "image.profil.embarque",
+        "Image profile: {nom}",
+    ),
+    (
+        "image.profil.sans_nom",
+        "unnamed embedded profile",
+    ),
+    (
+        "image.profil.ecartee",
+        "Table {table} of the image profile not used: {raison}",
+    ),
+    (
+        "image.profil.srvb",
+        "Image profile: sRGB (no embedded profile)",
+    ),
+    (
+        "image.profil.suppose",
+        "sRGB, assumed: chosen by you",
+    ),
+    (
+        "image.approche",
+        "Computed on 1 pixel in {n}",
+    ),
+    (
+        "image.seize_bits",
+        "16-bit values reduced to 8 bits",
+    ),
+    (
+        "image.titre",
+        "Image",
+    ),
+    (
+        "image.aide",
+        "Open a customer photo in RGB (JPEG, PNG or TIFF): for each displayed profile, the page shows the pixels the printer will not be able to reproduce. The image stays in memory for the comparison only; it is neither stored nor copied.",
+    ),
+    (
+        "image.remplacer",
+        "Open another image",
+    ),
+    (
+        "image.retirer",
+        "Remove the image",
+    ),
+    (
+        "image.en_cours",
+        "Analysing the image…",
+    ),
+    (
+        "image.annuler",
+        "Cancel",
+    ),
+    (
+        "image.relancer",
+        "Analyse again",
+    ),
+    (
+        "image.taille",
+        "Analysis image of {l} × {h} pixels, taken from a {lo} × {ho} pixel photo",
+    ),
+    (
+        "image.surimpression.profil",
+        "Overlay profile",
+    ),
+    (
+        "image.surimpression.inconnue",
+        "No overlay for this profile: {raison}",
+    ),
+    (
+        "image.seuil.valeur",
+        "Alert threshold {s} ΔE00",
+    ),
+    (
+        "image.affichage",
+        "Show",
+    ),
+    (
+        "image.affichage.image",
+        "Image",
+    ),
+    (
+        "image.affichage.les_deux",
+        "Image and alert",
+    ),
+    (
+        "image.affichage.alerte",
+        "Alert only",
+    ),
+    (
+        "nuage.bascule",
+        "Image colours",
+    ),
+    (
+        "nuage.aide",
+        "Each point is the average of a group of close colours of the image, placed on the paper white of {profil}. It takes the alert colour as soon as one of its colours exceeds {s} ΔE00.",
+    ),
+    (
+        "nuage.indisponible",
+        "The image colours appear here once an image is analysed against the profile chosen for the overlay.",
+    ),
+    (
+        "nuage.aria",
+        "Image colours: {n} points, {a} of them beyond the alert threshold.",
+    ),
+    (
+        "nuage.compte",
+        "Image colours in the slice (L* {l} ± {d}): {n} points, {a} of them beyond the alert threshold.",
+    ),
+    (
+        "nuage.legende",
+        "Image colours, L* {l} ± {d}",
+    ),
+    (
+        "nuage.legende.alerte",
+        "Image colour beyond the alert threshold",
+    ),
+    (
+        "image.legende",
+        "Difference of at most {s} ΔE00, {profil}, without black point compensation. In green, beyond.",
+    ),
+    (
+        "image.canvas.aria",
+        "{p}% of the image beyond {s} ΔE00 with {profil}. Click the image to see the colour of a point and its printed colour.",
+    ),
+    (
+        "image.chiffres",
+        "Image figures",
+    ),
+    (
+        "image.chiffres.part",
+        "Share of the image beyond {s} ΔE00",
+    ),
+    (
+        "image.classe.leger",
+        "Slight, 2 to 5 ΔE00",
+    ),
+    (
+        "image.classe.moyen",
+        "Medium, 5 to 10 ΔE00",
+    ),
+    (
+        "image.classe.fort",
+        "Strong, over 10 ΔE00",
+    ),
+    (
+        "image.chiffres.teintes",
+        "Most affected hues",
+    ),
+    (
+        "image.chiffres.inconnus",
+        "Pixels with an unknown difference",
+    ),
+    (
+        "image.chiffres.couleurs",
+        "Distinct colours",
+    ),
+    (
+        "image.chiffres.raison",
+        "Reason",
+    ),
+    (
+        "image.valeur.pourcent",
+        "{p}%",
+    ),
+    (
+        "image.teinte.valeur",
+        "{nom} {p}%",
+    ),
+    (
+        "image.teintes.aucune",
+        "none",
+    ),
+    (
+        "image.inconnus.valeur",
+        "{n} pixels ({p}%), never counted as good",
+    ),
+    (
+        "image.inconnus.aucun",
+        "none",
+    ),
+    (
+        "image.teinte.rouge",
+        "Reds",
+    ),
+    (
+        "image.teinte.jaune",
+        "Yellows",
+    ),
+    (
+        "image.teinte.vert",
+        "Greens",
+    ),
+    (
+        "image.teinte.cyan",
+        "Cyans",
+    ),
+    (
+        "image.teinte.bleu",
+        "Blues",
+    ),
+    (
+        "image.teinte.magenta",
+        "Magentas",
+    ),
+    (
+        "image.teinte.gris",
+        "Greys (C* < 5)",
+    ),
+    (
+        "image.verdict",
+        "{p}% of the image is printable on this paper with this profile",
+    ),
+    (
+        "image.verdict.plus_de",
+        "over {p}",
+    ),
+    (
+        "image.verdict.moins_de",
+        "under {p}",
+    ),
+    (
+        "image.verdict.inconnus",
+        "; {p}% unknown",
+    ),
+    (
+        "image.verdict.inconnu",
+        "Printable share unknown with this profile",
+    ),
+    (
+        "image.point_noir",
+        "Black point compensation",
+    ),
+    (
+        "image.point_noir.aide",
+        "The image black is brought onto the deepest black of the paper, as the printer driver does in relative colorimetric with compensation. Changing this setting runs the analysis again.",
+    ),
+    (
+        "image.legende.point_noir",
+        "Difference of at most {s} ΔE00, {profil}, with black point compensation. In green, beyond.",
+    ),
+    (
+        "image.rendu.point_noir",
+        "Relative colorimetric, with black point compensation",
+    ),
+    (
+        "image.rendu.relatif",
+        "Relative colorimetric, without black point compensation",
+    ),
+    (
+        "image.agrandir",
+        "Enlarge",
+    ),
+    (
+        "image.agrandie.titre",
+        "Enlarged image",
+    ),
+    (
+        "image.agrandie.fermer",
+        "Close",
+    ),
+    (
+        "image.agrandie.aide",
+        "Click the image to see the colour of a point. Escape or a click beside the image to go back.",
+    ),
+    (
+        "pastilles.pipette.visee",
+        "Target colour after black point compensation: {lab}, {e} ΔE00 from the image colour",
+    ),
+    (
+        "pastilles.pipette.visee_identique",
+        "Black point compensation: the target colour is the image colour.",
+    ),
+    (
+        "pastilles.aria.visee",
+        "Target colour: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "image.pixel.hors_image",
+        "This point is outside the image.",
+    ),
+    (
+        "image.pixel.transparent",
+        "This point of the image is transparent: it has no colour to print.",
+    ),
+    (
+        "image.pixel.inconnu",
+        "The difference for this colour could not be calculated.",
+    ),
+    (
+        "pastilles.titre",
+        "Out-of-gamut colours",
+    ),
+    (
+        "pastilles.lecture",
+        "Left, the image colour; right, the colour printed with the chosen profile; below, the difference and the share of the image. Most present first.",
+    ),
+    (
+        "pastilles.aucune",
+        "None of the most present image colours is beyond {s} ΔE00 with {profil}.",
+    ),
+    (
+        "pastilles.precaution",
+        "Approximate on-screen colours (uncalibrated screen).",
+    ),
+    (
+        "pastilles.ecart",
+        "{e} ΔE00",
+    ),
+    (
+        "pastilles.part",
+        "{p}%",
+    ),
+    (
+        "pastilles.aria.image",
+        "Image colour: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "pastilles.aria.imprimee",
+        "Printed colour: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "pastilles.image",
+        "Image",
+    ),
+    (
+        "pastilles.imprimee",
+        "Printed",
+    ),
+    (
+        "pastilles.lab",
+        "L* {l}  a* {a}  b* {b}",
+    ),
+    (
+        "pastilles.pipette.titre",
+        "Colour of the clicked point",
+    ),
+    (
+        "pastilles.pipette.aide",
+        "Click the image to see the colour of a point and its printed colour.",
+    ),
+    (
+        "pastilles.pipette.au_dela",
+        "Beyond the {s} ΔE00 alert threshold",
+    ),
+    (
+        "pastilles.pipette.en_deca",
+        "Within the {s} ΔE00 alert threshold",
+    ),
+    (
+        "pastilles.pipette.inconnu",
+        "Printed colour unknown with {profil}: {raison}",
     ),
     (
         "comparer.zone.gris",
@@ -2398,7 +3258,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "comparer.vue3d.aria.profil",
-        "{nom}, volume {volume} cubic L*a*b* units",
+        "{nom}, volume {volume} cubic L*a*b* units, paper white L* {blanc}",
     ),
     (
         "comparer.vue3d.aria.vide",
@@ -2407,6 +3267,10 @@ const ANGLAIS: Catalogue = &[
     (
         "comparer.vue3d.bulle",
         "{nom}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "comparer.vue3d.blanc",
+        "Paper white L* {l}",
     ),
     (
         "comparer.graphique.teinte",
@@ -3868,6 +4732,32 @@ mod tests {
             let calcul = texte(langue, "mesurer.calcul");
             assert!(calcul.contains("myiro-libre"), "{calcul}");
             assert!(calcul.contains("D50") && calcul.contains("2°"), "{calcul}");
+        }
+    }
+
+    /// Chaque refus du profil d'une image (#80) a son texte, dans les deux
+    /// langues.
+    #[test]
+    fn les_refus_d_un_profil_d_image_ont_leur_texte() {
+        use gamut::{ErreurIcc, ProfilSource};
+        let refus = [
+            ErreurIcc::EnTete(String::new()),
+            ErreurIcc::PasRvb {
+                espace: "CMYK".into(),
+            },
+            ErreurIcc::SansTable,
+            ErreurIcc::StructureNonPriseEnCharge {
+                structure: "mAB".into(),
+            },
+            ErreurIcc::Tronque {
+                balise: "kTRC".into(),
+            },
+        ];
+        for erreur in &refus {
+            let cle = ProfilSource::cle_refus(erreur);
+            for langue in [Langue::Francais, Langue::Anglais] {
+                assert_ne!(texte(langue, cle), cle, "{cle} manque");
+            }
         }
     }
 

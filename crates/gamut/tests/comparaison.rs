@@ -22,6 +22,7 @@ fn profil(cible: fn([f64; 3]) -> [f64; 3], mesures: Option<String>) -> ProfilIcc
         grille: 9,
         blanc: [100.0, 0.0, 0.0],
         cible,
+        inverse: None,
         description: "Profil d'essai".into(),
         mesures,
     });

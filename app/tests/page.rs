@@ -237,17 +237,40 @@ fn un_nom_long_de_l_arbre_se_lit_au_survol() {
     }
 }
 
-/// Toutes les barres de défilement sont fines, partout.
+/// Les ascenseurs sont larges partout (demande du mainteneur, 30 octobre
+/// 2026) : jeton `--ascenseur`, pseudo-éléments `::-webkit-scrollbar` (le
+/// moteur de la fenêtre) avec une poignée d'au moins
+/// `--ascenseur-longueur-min`, et `scrollbar-width` laissé aux autres
+/// moteurs seulement (posé, il ferait ignorer les pseudo-éléments). Plus
+/// aucun ascenseur fin.
 #[test]
-fn toutes_les_barres_de_defilement_sont_fines() {
+fn les_ascenseurs_sont_larges_partout() {
     let css = composants();
-    assert!(
-        regle(&css, "*")
-            .iter()
-            .any(|c| c.contains("scrollbar-width:thin")),
-        "pas de règle universelle"
-    );
-    assert!(css.iter().all(|(_, c)| !c.contains("scrollbar-width:auto")));
+    let barre = regle(&css, "::-webkit-scrollbar").join(";");
+    for attendu in ["width:var(--ascenseur)", "height:var(--ascenseur)"] {
+        assert!(barre.contains(attendu), "{attendu} : {barre}");
+    }
+    let poignee = regle(&css, "::-webkit-scrollbar-thumb").join(";");
+    for attendu in [
+        "background:var(--ascenseur-poignee)",
+        "min-height:var(--ascenseur-longueur-min)",
+    ] {
+        assert!(poignee.contains(attendu), "{attendu} : {poignee}");
+    }
+    assert!(regle(&css, "::-webkit-scrollbar-track")
+        .iter()
+        .any(|c| c.contains("background:var(--ascenseur-piste)")));
+    assert!(css.iter().all(|(_, c)| !c.contains("scrollbar-width:thin")));
+    let brut = lire("../design-system/components.css");
+    assert!(brut.contains("@supports not selector(::-webkit-scrollbar) {"));
+    for zone in [".zone-centre", ".defile"] {
+        assert!(
+            regle(&css, zone)
+                .iter()
+                .any(|c| c.contains("scrollbar-gutter:stable")),
+            "{zone} sans place gardée"
+        );
+    }
 }
 
 /// Un nœud de l'arbre de la bibliothèque tient sur deux lignes au plus (nom,
@@ -1466,7 +1489,13 @@ fn un_chiffre_inconnu_s_ecrit_inconnu() {
     assert!(graphiques.contains("nombre,"), "formateur non partagé");
     let vue3d = lire("interface/vue3d.js");
     assert!(vue3d.contains("window.Graphiques.nombre(v, decimales)"));
-    for (nom, script) in [("graphiques.js", &graphiques), ("vue3d.js", &vue3d)] {
+    let axes = lire("interface/vue3d-axes.js");
+    assert!(axes.contains("window.Graphiques.nombre(v, decimales)"));
+    for (nom, script) in [
+        ("graphiques.js", &graphiques),
+        ("vue3d.js", &vue3d),
+        ("vue3d-axes.js", &axes),
+    ] {
         assert!(
             !script.contains(".toFixed("),
             "{nom} écrit un chiffre sans le formateur"
@@ -1538,7 +1567,9 @@ fn les_graphiques_sont_des_composants_du_systeme() {
 #[test]
 fn les_textes_de_la_vue_3d_et_des_graphiques_existent_en_deux_langues() {
     use app::textes::{texte, Langue};
-    let script = lire("interface/vue3d.js") + &lire("interface/graphiques.js");
+    let script = lire("interface/vue3d.js")
+        + &lire("interface/vue3d-axes.js")
+        + &lire("interface/graphiques.js");
     let demandees: Vec<&str> = script
         .match_indices("t(\"")
         .filter(|(i, _)| {
@@ -1593,7 +1624,7 @@ fn la_vue_3d_trie_par_profondeur_et_suit_le_theme() {
         .expect("dessiner absent");
     let dessiner = &dessiner[..dessiner.find("\n    }").unwrap_or(dessiner.len())];
     assert!(
-        dessiner.contains("dessinerTriangles(ctx, k);"),
+        dessiner.contains("dessinerTriangles(ctx, k, places);"),
         "{dessiner}"
     );
     assert!(dessiner.contains("projeter(r);"), "{dessiner}");
@@ -1875,7 +1906,7 @@ fn la_comparaison_en_cours_ne_reste_pas_sur_une_vue_vide() {
 /// l'essai d'écran du 28 octobre 2026 : « les axes ne sont pas à 0 ? ».
 #[test]
 fn les_axes_de_la_vue_3d_partent_du_plancher_l_0() {
-    let script = lire("interface/vue3d.js");
+    let script = lire("interface/vue3d.js") + &lire("interface/vue3d-axes.js");
     for attendu in [
         "{ nom: \"L*\", de: [0, 0, 0], a: [100, 0, 0], pas: (v) => [v, 0, 0], debut: 0, fin: 100 },",
         "{ nom: \"a*\", de: [0, -120, 0], a: [0, 120, 0], pas: (v) => [0, v, 0], debut: -100, fin: 100 },",
@@ -2040,6 +2071,393 @@ fn une_seule_autre_plage_se_dit_au_singulier() {
     );
     let script = lire("interface/calcul-profil.js");
     assert!(script.contains("c.autres === 1 ? t(\"profil.coherence.autre\")"));
+}
+
+/// La vue 3D marque sur l'axe L* le blanc du papier de chaque profil
+/// affiché (`analyse.blanc`, envoyé par la page), dans sa couleur de série,
+/// avec son étiquette et sa valeur écrite par `Graphiques.nombre` (virgule en
+/// français). Les étiquettes trop proches sont écartées l'une de l'autre ; un
+/// blanc inconnu (`null`) ne donne aucune marque. Le texte de remplacement dit
+/// aussi chaque blanc. Le fichier reste sous 400 lignes.
+#[test]
+fn la_vue_3d_marque_le_blanc_du_papier_de_chaque_profil() {
+    use app::textes::{texte, Langue};
+    let comparer = lire("interface/comparer.js");
+    let formes = comparer
+        .split("function formes(liste) {")
+        .nth(1)
+        .expect("formes absent");
+    let formes = &formes[..formes.find("\n  }").unwrap_or(formes.len())];
+    assert!(formes.contains("blanc: p.analyse.blanc"), "{formes}");
+
+    let script = lire("interface/vue3d.js");
+    assert!(script.lines().count() < 400, "vue3d.js dépasse 400 lignes");
+    assert!(
+        script.contains(
+            "blanc: Array.isArray(f.blanc) && Number.isFinite(f.blanc[0]) ? f.blanc[0] : null,"
+        ),
+        "un blanc inconnu doit rester inconnu"
+    );
+    let dessiner = script
+        .split("function dessiner() {")
+        .nth(1)
+        .expect("dessiner absent");
+    let dessiner = &dessiner[..dessiner.find("\n    }").unwrap_or(dessiner.len())];
+    assert!(
+        dessiner.contains(
+            "window.Vue3dAxes.axes(ctx, jetons, ecran, true);\n      window.Vue3dAxes.blancs(ctx, jetons, ecran, formes);"
+        ),
+        "{dessiner}"
+    );
+    assert!(script.contains(".replace(\"{blanc}\", () => nombre(f.blanc, 1))"));
+
+    // Axes et marques vivent dans vue3d-axes.js.
+    let axes = lire("interface/vue3d-axes.js");
+    assert!(axes.contains("window.Vue3dAxes = "));
+    let blancs = axes
+        .split("function blancs(ctx, jetons, ecran, formes) {")
+        .nth(1)
+        .expect("blancs absent");
+    let blancs = &blancs[..blancs.find("\n  }").unwrap_or(blancs.len())];
+    for attendu in [
+        "formes.filter((f) => f.blanc !== null)",
+        "ecran([f.blanc, 0, 0])",
+        // Rangées de haut en bas, chacune au moins une hauteur d'étiquette sous la précédente.
+        ".sort((u, v) => u.q[1] - v.q[1])",
+        "Math.max(q[1], bas + hauteur)",
+        "jetons.series[f.serie - 1]",
+        "t(\"comparer.vue3d.blanc\").replace(\"{l}\", () => nombre(f.blanc, 1))",
+        // Fond de la carte sous l'étiquette, marge par jeton, texte à l'encre.
+        "ctx.fillStyle = jetons.carte;",
+        "ctx.fillRect(droite - largeur, bas - hauteur / 2, largeur, hauteur);",
+        "jetons.ecart * 2",
+        "ctx.fillStyle = jetons.encre;",
+        // Une étiquette décalée est reliée à son trait par un filet de sa couleur.
+        "if (bas !== q[1]) {",
+    ] {
+        assert!(blancs.contains(attendu), "{attendu} :\n{blancs}");
+    }
+    let fond = blancs.find("ctx.fillRect(").unwrap_or(usize::MAX);
+    let texte_peint = blancs.find("ctx.fillText(").unwrap_or(0);
+    assert!(fond < texte_peint, "le fond doit passer sous le texte");
+
+    assert_eq!(
+        texte(Langue::Francais, "comparer.vue3d.blanc"),
+        "Blanc du papier L* {l}"
+    );
+    assert_eq!(
+        texte(Langue::Anglais, "comparer.vue3d.blanc"),
+        "Paper white L* {l}"
+    );
+    for langue in [Langue::Francais, Langue::Anglais] {
+        assert!(texte(langue, "comparer.vue3d.aria.profil").contains("{blanc}"));
+    }
+}
+
+/// Les axes de la vue 3D vivent dans vue3d-axes.js, chargé avant vue3d.js
+/// qui s'en sert.
+#[test]
+fn vue3d_axes_js_est_charge_avant_vue3d_js() {
+    let page = lire("interface/index.html");
+    let position = |nom: &str| page.find(&format!("<script src=\"{nom}\" defer>"));
+    let (axes, vue) = (position("vue3d-axes.js"), position("vue3d.js"));
+    assert!(axes.is_some() && vue.is_some());
+    assert!(axes < vue, "ordre des scripts");
+    assert!(lire("interface/vue3d.js").contains("window.Vue3dAxes"));
+}
+
+// ---- Comparer une image et un profil : section « Image » (ticket #80) ----
+
+/// Bloc d'un thème dans tokens.css : le sombre (bloc d'en-tête) ou le clair.
+fn bloc_du_theme(jetons: &str, clair: bool) -> &str {
+    let (sombre, reste) = jetons
+        .split_once(":root[data-theme=\"light\"]")
+        .expect("thème clair");
+    if clair {
+        &reste[..reste.find('}').unwrap()]
+    } else {
+        &sombre[sombre
+            .find(":root[data-theme=\"dark\"]")
+            .expect("thème sombre")..]
+    }
+}
+
+/// comparer-image.js est chargé après ses outils et avant comparer.js qui
+/// s'en sert. Il n'écrit aucune couleur en dur : l'alerte est le jeton
+/// `--couleur-hors-gamut` (vert fluo), le fond de « alerte seule »
+/// `--couleur-hors-gamut-fond`, tous deux définis dans les deux thèmes et
+/// montrés par le système graphique. Les pixels sont posés par
+/// `putImageData`, jamais par une URL `data:` (CSP `img-src 'self'`).
+#[test]
+fn comparer_image_js_est_charge_et_sans_couleur_en_dur() {
+    let page = lire("interface/index.html");
+    let position = |nom: &str| {
+        page.find(&format!("<script src=\"{nom}\" defer>"))
+            .unwrap_or_else(|| panic!("{nom} non chargé"))
+    };
+    let image = position("comparer-image.js");
+    assert!(position("graphiques.js") < image && position("comparer-details.js") < image);
+    assert!(
+        image < position("comparer.js"),
+        "comparer-image.js avant comparer.js"
+    );
+
+    let script = lire("interface/comparer-image.js");
+    assert!(
+        script.lines().count() < 400,
+        "comparer-image.js dépasse 400 lignes"
+    );
+    assert!(script.contains("window.ComparerImage = "));
+    let hexa = script.match_indices('#').any(|(i, _)| {
+        script[i + 1..]
+            .chars()
+            .take_while(char::is_ascii_hexdigit)
+            .count()
+            >= 3
+    });
+    assert!(!hexa, "couleur hexadécimale en dur");
+    for interdit in ["rgb(", "rgba(", "hsl(", "data:", "toDataURL", ".src ="] {
+        assert!(!script.contains(interdit), "{interdit}");
+    }
+    assert!(script.contains("putImageData("));
+    for jeton in ["--couleur-hors-gamut-calque", "--couleur-hors-gamut-fond"] {
+        assert!(script.contains(&format!("\"{jeton}\"")), "{jeton} non lu");
+    }
+    assert!(
+        lire("interface/verdict-image.js").contains("var(--couleur-hors-gamut)"),
+        "légende"
+    );
+
+    let jetons = lire("../design-system/tokens.css");
+    for clair in [false, true] {
+        let bloc = bloc_du_theme(&jetons, clair);
+        for jeton in [
+            "--couleur-hors-gamut:",
+            "--couleur-hors-gamut-fond:",
+            "--couleur-hors-gamut-calque:",
+        ] {
+            assert!(bloc.contains(jeton), "{jeton} absent (clair : {clair})");
+        }
+    }
+    let exemple = lire("../design-system/ui-kit.html");
+    assert!(
+        exemple.contains("--couleur-hors-gamut"),
+        "ui-kit sans l'alerte"
+    );
+    assert!(lire("../design-system/brand-book.html").contains("--couleur-hors-gamut"));
+    assert!(lire("../design-system/README.md").contains("--couleur-hors-gamut"));
+}
+
+/// Corps d'une fonction `function nom(…) {` de `script`, jusqu'à sa fin
+/// indentée de deux espaces.
+fn corps_de<'a>(script: &'a str, entete: &str) -> &'a str {
+    let corps = script
+        .split(entete)
+        .nth(1)
+        .unwrap_or_else(|| panic!("{entete} absent"));
+    &corps[..corps.find("\n  }").unwrap_or(corps.len())]
+}
+
+/// Chaque texte de la section « Image » (`t("…")`, et les débuts de clé
+/// complétés à l'écran) existe en français et en anglais ; les noms des
+/// familles de teinte de la crate `gamut`, dans son ordre, aussi. Les classes d'écart sont celles du
+/// mainteneur (2 à 5, 5 à 10, plus de 10).
+#[test]
+fn les_textes_de_la_section_image_existent_en_deux_langues() {
+    use app::textes::{texte, Langue};
+    let image = lire("interface/comparer-image.js");
+    let script =
+        image.clone() + &lire("interface/reglages-image.js") + &lire("interface/image-agrandie.js");
+    let mut demandees: Vec<String> = script
+        .match_indices("\"image.")
+        .filter_map(|(i, _)| script[i + 1..].split('"').next())
+        .map(String::from)
+        .collect();
+    assert!(demandees.len() > 15, "clés lues : {demandees:?}");
+    let prefixes: Vec<String> = demandees
+        .iter()
+        .filter(|c| c.ends_with('.'))
+        .cloned()
+        .collect();
+    demandees.retain(|c| !c.ends_with('.'));
+    for prefixe in &prefixes {
+        let fins: Vec<String> = match prefixe.as_str() {
+            "image.teinte." => gamut::FAMILLES_TEINTE.map(String::from).to_vec(),
+            "image.classe." => ["leger", "moyen", "fort"].map(String::from).to_vec(),
+            "image.affichage." => ["image", "les_deux", "alerte"].map(String::from).to_vec(),
+            autre => panic!("début de clé inattendu : {autre}"),
+        };
+        demandees.extend(fins.iter().map(|f| format!("{prefixe}{f}")));
+    }
+    assert!(
+        prefixes.iter().any(|p| p == "image.teinte."),
+        "noms des teintes absents"
+    );
+    let absentes: Vec<_> = demandees
+        .iter()
+        .filter(|c| {
+            [Langue::Francais, Langue::Anglais]
+                .iter()
+                .any(|l| texte(*l, c) == c.as_str())
+        })
+        .collect();
+    assert!(absentes.is_empty(), "clés absentes : {absentes:?}");
+    assert_eq!(
+        texte(Langue::Francais, "image.classe.leger"),
+        "Léger, de 2 à 5\u{202f}ΔE00"
+    );
+    assert_eq!(
+        texte(Langue::Francais, "image.classe.moyen"),
+        "Moyen, de 5 à 10\u{202f}ΔE00"
+    );
+    assert_eq!(
+        texte(Langue::Francais, "image.classe.fort"),
+        "Fort, plus de 10\u{202f}ΔE00"
+    );
+    // Les lignes de `par_teinte` suivent l'ordre de `gamut::FAMILLES_TEINTE`.
+    let familles = gamut::FAMILLES_TEINTE
+        .map(|f| format!("\"{f}\""))
+        .join(", ");
+    assert!(
+        script.contains(&format!("const FAMILLES = [{familles}];")),
+        "familles de teinte"
+    );
+    assert_eq!(
+        texte(Langue::Francais, "image.teinte.gris"),
+        "Gris (C* < 5)"
+    );
+    // Bornes des classes en codes d'écart (dixièmes de ΔE00).
+    assert!(script.contains(
+        "const CLASSES = [[\"leger\", 20, 50], [\"moyen\", 50, 100], [\"fort\", 100, 255]];"
+    ));
+    assert!(texte(Langue::Francais, "image.canvas.aria").contains("{profil}"));
+}
+
+/// Le seuil d'alerte va de 0,5 à 10 par pas de 0,5, à 2,0 au départ. Le
+/// changer ne relance aucune commande : le calque et les chiffres se
+/// refont depuis les octets d'écart et l'histogramme. Un pixel est au-delà
+/// du seuil si son code vaut au moins `round(10 × seuil)` et n'est pas 255
+/// (inconnu ou transparent). La part se calcule sur les pixels dont l'écart
+/// est connu ; les inconnus s'affichent à part.
+#[test]
+fn le_seuil_se_regle_sans_relancer_le_calcul() {
+    let script = lire("interface/comparer-image.js");
+    for attendu in [
+        "let seuil = 2;",
+        "const code = (s) => Math.round(s * 10);",
+        "const INCONNU = 255;",
+        "e !== INCONNU && e >= k",
+        "a.pixels_comptes - a.pixels_inconnus",
+        "t(\"image.inconnus.valeur\")",
+        "R.seuil(seuil, changerSeuil)",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+    let reglages = lire("interface/reglages-image.js");
+    assert!(reglages.contains("type: \"range\", min: 0.5, max: 10, step: 0.5,"));
+    let changer = corps_de(&script, "function changerSeuil(valeur) {");
+    assert!(!changer.contains("invoke("), "{changer}");
+    for attendu in ["calque();", "dessinerChiffres();"] {
+        assert!(changer.contains(attendu), "{attendu} :\n{changer}");
+    }
+    // Sans pixel à l'écart connu, la part est inconnue, jamais 0 %.
+    let part = corps_de(&script, "function part(");
+    assert!(part.contains("if (!connus) return null;"), "{part}");
+}
+
+/// comparer.js range la section « Image » sous les chiffres clés, relance
+/// l'analyse de l'image quand les profils changent, et ferme l'image avec la
+/// comparaison. Pendant le calcul, « Annuler » arrête l'analyse.
+#[test]
+fn la_vue_comparer_porte_la_section_image() {
+    let comparer = lire("interface/comparer.js");
+    assert!(
+        comparer.contains("corps.append(chiffres(liste), image.section(liste), volume3d(liste));"),
+        "section sous les chiffres clés"
+    );
+    let fermer = corps_de(&comparer, "function fermer() {");
+    assert!(fermer.contains("image.fermer();"), "{fermer}");
+    assert!(comparer.contains("image.profilsChanges(choisis.map((c) => c.source));"));
+    let script = lire("interface/comparer-image.js");
+    assert!(script.contains("invoke(\"image_annuler\")"));
+    // Les écarts se demandent par le numéro de l'analyse qui les a calculés.
+    assert!(script.contains("invoke(\"image_ecarts\", { analyse: reponse.numero, index })"));
+    assert!(script.contains(
+        "const reponse = await invoke(\"image_analyser\", { sources, compensation: pointNoir });"
+    ));
+    assert!(script.contains("t(\"image.en_cours\")"));
+    // Un profil intégré refusé n'est jamais remplacé sans le choix de l'opérateur.
+    assert!(script.contains("invoke(\"image_traiter_comme_srvb\")"));
+    assert!(script.contains("actions([\"image.traiter_srvb\", traiterCommeSrvb])"));
+}
+
+/// Sur le canvas, au-dessus de la photo, l'alerte est le vert fluo choisi par
+/// le mainteneur dans les deux thèmes (`--couleur-hors-gamut-calque`) ; la
+/// légende et les textes gardent `--couleur-hors-gamut`, plus sombre en
+/// clair. Un jeton illisible ne donne aucune marque, jamais une couleur de
+/// repli écrite en dur.
+#[test]
+fn le_calque_est_vert_fluo_dans_les_deux_themes() {
+    let jetons = lire("../design-system/tokens.css");
+    for clair in [false, true] {
+        let ligne = bloc_du_theme(&jetons, clair)
+            .lines()
+            .find(|l| l.contains("--couleur-hors-gamut-calque:"))
+            .unwrap_or_default();
+        assert!(ligne.contains("#39ff14"), "clair : {clair} : {ligne}");
+    }
+    let script = lire("interface/comparer-image.js");
+    assert!(!script.contains("128, 128, 128"), "couleur de repli en dur");
+    let jeton = corps_de(&script, "function jeton(nom) {");
+    assert!(jeton.contains(": null;"), "{jeton}");
+    let calque = corps_de(&script, "function calque() {");
+    assert!(
+        calque.contains("const alerte = jeton(\"--couleur-hors-gamut-calque\");"),
+        "{calque}"
+    );
+    assert!(calque.contains("if (!alerte || !fond)"), "{calque}");
+    for fichier in ["brand-book.html", "README.md", "ui-kit.html"] {
+        assert!(
+            lire(&format!("../design-system/{fichier}")).contains("--couleur-hors-gamut-calque"),
+            "{fichier}"
+        );
+    }
+}
+
+/// Relecture de la section « Image » : une nouvelle analyse efface l'ancien
+/// message ; une nouvelle image oublie l'ancien aperçu dans la même
+/// affectation ; changer de profil ne redessine que le calque (le choix
+/// garde le focus du clavier) ; fermer oublie les éléments vivants ; le
+/// calque réutilise son ImageData.
+#[test]
+fn la_section_image_ne_garde_rien_de_perime() {
+    let script = lire("interface/comparer-image.js");
+    let analyser = corps_de(&script, "async function analyser() {");
+    let tete = analyser.find("message = \"\";").unwrap_or(usize::MAX);
+    assert!(
+        tete < analyser.find("invoke(").unwrap_or(0),
+        "message vidé en tête : {analyser}"
+    );
+    let ouvrir = corps_de(&script, "async function ouvrir() {");
+    assert!(
+        ouvrir.contains("[resume, apercu, analyses, ecarts] = [r, null, null, []];"),
+        "{ouvrir}"
+    );
+    let reglages = lire("interface/reglages-image.js");
+    let choix = corps_de(&reglages, "function profil(profils, choisi, choisir) {");
+    assert!(choix.contains("choisir(Number(s.value))"), "{choix}");
+    assert!(script.contains("R.profil(profils, choisi, choisirProfil)"));
+    let choisir = corps_de(&script, "function choisirProfil(rang) {");
+    assert!(choisir.contains("calque();"), "{choisir}");
+    assert!(!choisir.contains("dessiner()"), "{choisir}");
+    let fermer = corps_de(&script, "function fermer() {");
+    assert!(
+        fermer.contains("canvas = legende = tableauChiffres = null;"),
+        "{fermer}"
+    );
+    let calque = corps_de(&script, "function calque() {");
+    assert!(calque.contains("imageCalque"), "{calque}");
+    assert!(calque.contains("const d = imageCalque.data;"), "{calque}");
 }
 
 /// Une saisie illisible de l'avancé (« abc ») est refusée sur place, avec sa
