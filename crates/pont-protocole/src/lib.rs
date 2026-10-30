@@ -3,10 +3,12 @@
 //! Une ligne JSON par message, dans chaque sens. Ce crate ne dépend ni de
 //! Windows ni d'une DLL de fabricant.
 
+mod avancement;
 mod calage;
 mod feuille;
 mod mesure;
 
+pub use avancement::*;
 pub use calage::*;
 pub use feuille::*;
 pub use mesure::*;
@@ -178,6 +180,12 @@ pub enum Reponse {
         /// pas lus (réponse écrite avant le ticket #34 comprise).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         calage: Option<CalageFeuille>,
+    },
+    /// FD-9 : étape de la feuille en cours, écrite avant la réponse finale
+    /// de `prenumeriser` ou `mesurer_feuille` (ticket #34). Ce n'est pas la
+    /// réponse de la requête : la suivante l'est.
+    Avancement {
+        avancement: AvancementFeuille,
     },
     /// La ligne reçue n'est pas une requête valable ; rien n'a été fait.
     RequeteInvalide {

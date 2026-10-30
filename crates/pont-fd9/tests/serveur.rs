@@ -7,8 +7,8 @@ use commun::{Fd9Simule, EMPREINTE_SIMULEE};
 use pont_fd9::serveur::{servir, Garde, DELAI_FERMETURE};
 use pont_fd9::{Session, ATTENTE_APRES_DECONNEXION, PALIER_MAX};
 use pont_protocole::{
-    lire_reponse, Empreinte, ErreurPont, Info, InstrumentFd9, LectureFeuille, LiaisonFd9, Palier,
-    RemiseAuRepos, Reponse,
+    lire_reponse, AvancementFeuille, Empreinte, ErreurPont, Info, InstrumentFd9, LectureFeuille,
+    LiaisonFd9, Palier, RemiseAuRepos, Reponse,
 };
 use std::sync::mpsc;
 use std::time::Duration;
@@ -38,8 +38,22 @@ fn dialoguer(
     (lignes, session)
 }
 
+/// Réponses finales, une par requête : l'avancement d'une feuille, écrit
+/// avant sa réponse, est écarté.
 fn reponses(lignes: &[String]) -> Vec<Reponse> {
-    lignes.iter().map(|l| lire_reponse(l).unwrap()).collect()
+    lignes
+        .iter()
+        .map(|l| lire_reponse(l).unwrap())
+        .filter(|r| !matches!(r, Reponse::Avancement { .. }))
+        .collect()
+}
+
+/// Lignes des réponses finales, sans celles de l'avancement.
+fn finales(lignes: &[String]) -> Vec<&String> {
+    lignes
+        .iter()
+        .filter(|l| !l.starts_with(r#"{"rep":"avancement""#))
+        .collect()
 }
 
 #[test]
@@ -353,7 +367,7 @@ fn mesurer_feuille_rend_la_mesure_de_toutes_les_plages() {
         calage,
     } = &reponses[2]
     else {
-        panic!("{}", lignes[2])
+        panic!("{}", finales(&lignes)[2])
     };
     assert_eq!(mesure.plages().len(), 6);
     // Points visés et image de la feuille, à côté de la mesure.
@@ -364,6 +378,53 @@ fn mesurer_feuille_rend_la_mesure_de_toutes_les_plages() {
     // La feuille est close avant la réponse.
     assert_eq!(*remise_au_repos, Info::Confirmee(RemiseAuRepos::AuRepos {}));
     assert_eq!(reponses[3], Reponse::Ferme {});
+}
+
+/// Pendant la feuille, le pont écrit son avancement (ticket #34), une ligne
+/// par étape, avant la réponse finale : l'écran suit la feuille au lieu de
+/// rester sur « glissez la feuille ».
+#[test]
+fn mesurer_feuille_ecrit_son_avancement_avant_la_mesure() {
+    let mire = mire(2, 3);
+    let (lignes, _) = dialoguer(
+        Fd9Simule::avec_une_rgb2520(),
+        Palier::Feuille,
+        &[
+            r#"{"cmd":"version"}"#,
+            r#"{"cmd":"connecter_adresse","adresse":"192.0.2.40"}"#,
+            &format!(r#"{{"cmd":"mesurer_feuille","mire":{mire}}}"#),
+            r#"{"cmd":"fermer"}"#,
+        ],
+    );
+    let toutes: Vec<Reponse> = lignes.iter().map(|l| lire_reponse(l).unwrap()).collect();
+    let etapes: Vec<&str> = toutes[2..]
+        .iter()
+        .map(|r| match r {
+            Reponse::Avancement { avancement } => match avancement {
+                AvancementFeuille::FeuilleEngagee {} => "engagee",
+                AvancementFeuille::Lecture {} => "lecture",
+                AvancementFeuille::CalagePret { .. } => "calage",
+                AvancementFeuille::Mesure { .. } => "mesure",
+            },
+            Reponse::Mesure { .. } => "MESURE",
+            Reponse::Ferme {} => "FERME",
+            autre => panic!("{autre:?}"),
+        })
+        .collect();
+    assert_eq!(
+        etapes,
+        ["engagee", "lecture", "calage", "mesure", "mesure", "MESURE", "FERME"]
+    );
+    // Le compte de plages est celui du rappel : 0 au départ, puis 6 sur 6.
+    assert_eq!(
+        toutes[6],
+        Reponse::Avancement {
+            avancement: AvancementFeuille::Mesure {
+                mesurees: 6,
+                plages: 6
+            }
+        }
+    );
 }
 
 #[test]
@@ -380,7 +441,7 @@ fn prenumeriser_rend_la_lecture_de_la_feuille() {
         ],
     );
     let Reponse::Prenumerisee { lecture, calage } = &reponses(&lignes)[2] else {
-        panic!("{}", lignes[2])
+        panic!("{}", finales(&lignes)[2])
     };
     assert_eq!(
         *lecture,
@@ -395,7 +456,8 @@ fn prenumeriser_rend_la_lecture_de_la_feuille() {
     let calage = calage.as_ref().unwrap();
     assert_eq!(calage.points.len(), 2_520);
     assert_eq!(calage.image.as_ref().unwrap().largeur(), 40);
-    assert!(lignes[2].contains(r#""calage":{"decalage":[0,0],"ecart_max":0,"points":[{"zone":0"#));
+    assert!(finales(&lignes)[2]
+        .contains(r#""calage":{"decalage":[0,0],"ecart_max":0,"points":[{"zone":0"#));
     assert_eq!(reponses(&lignes)[3], Reponse::Ferme {});
     assert!(!session
         .sdk()

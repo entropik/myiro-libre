@@ -57,6 +57,23 @@ Pour montrer, comme FD-S2w, l'image de la feuille et les points visés, le pont 
 - `image` : l'image de [FD9_GetChartImage](FD9_GetChartImage.md), lue juste après les points, réduite par le pont à 1 000 pixels de haut au plus (carrés de k × k pixels moyennés, k diviseur de 300 : 60 ppp pour une A3), gris 8 bits, une rangée après l'autre, en base64. Un point tombe sur le pixel `(x × ppp / 2540, y × ppp / 2540)` (supposé, fiche `FD9_GetChartImage`). Elle ne contient ni adresse ni identifiant, mais peut montrer ce que l'opérateur a écrit sur la feuille : jamais dans un fichier versionné. Si la DLL ne la rend pas, `image` est absent et la feuille continue.
 - Champs facultatifs : une réponse sans `calage`, ou un calage sans `image`, reste lisible. Le calage n'entre pas dans la mesure conservée (`myiro-libre/mesure/1`).
 
+### Avancement de la feuille (fait le 30 octobre 2026, ticket #34)
+
+Pendant `prenumeriser` et `mesurer_feuille`, le pont écrit, avant sa réponse finale, une ligne par étape :
+
+```json
+{"rep":"avancement","avancement":{"etape":"feuille_engagee"}}
+{"rep":"avancement","avancement":{"etape":"lecture"}}
+{"rep":"avancement","avancement":{"etape":"calage_pret","calage":{...}}}
+{"rep":"avancement","avancement":{"etape":"mesure","mesurees":0,"plages":2520}}
+```
+
+- `feuille_engagee` : premier état 2 ou 3 de la feuille (lu par `FD9_GetStatus` ou reçu du rappel), une fois.
+- `lecture` : `FD9_StartCapture` accepté (image, QR, reconnaissance).
+- `calage_pret` : le calage ci-dessus, dès les contrôles passés, **avant** `FD9_StartMeasurement2` : l'application montre les points pendant la mesure.
+- `mesure` : 0 dès `FD9_StartMeasurement2` accepté, puis le 4ᵉ nombre de chaque événement 11 du rappel (`mesurees`, nom tiré du symbole de la bibliothèque Mac), un compte répété n'étant pas réécrit. Qu'il compte les plages déjà mesurées est **supposé** (table des états) ; à l'essai E4, seul le journal l'a vu.
+- Une feuille refusée s'arrête à la dernière étape atteinte, puis sa réponse d'erreur. Un pont d'avant ce contrat n'écrit que sa réponse finale : l'application la lit comme avant.
+
 ## À vérifier sur l'instrument
 
 - Le décalage et l'écart rendus pour la RGB-2520 imprimée sur A3 (essai E4 ter).

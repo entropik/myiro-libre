@@ -100,7 +100,7 @@ fn terminer(code: u8) -> ! {
 pub fn servir<S: SdkFd9>(
     session: &mut Session<S>,
     entree: impl BufRead + Send + 'static,
-    sortie: &mut impl Write,
+    sortie: &mut (impl Write + Send),
     garde: Garde,
 ) -> io::Result<()> {
     let (envoi, lignes) = mpsc::channel();
@@ -206,7 +206,7 @@ fn lire(
 fn repondre<S: SdkFd9>(
     session: &mut Session<S>,
     lignes: Receiver<io::Result<String>>,
-    sortie: &mut impl Write,
+    sortie: &mut (impl Write + Send),
     feuille_active: &AtomicBool,
     garde: &mut Option<Garde>,
 ) -> io::Result<()> {
@@ -226,7 +226,11 @@ fn repondre<S: SdkFd9>(
             }
             Ok(requete) => {
                 let feuille = est_une_feuille(&requete);
-                let (reponse, fin) = traiter(session, requete, garde);
+                let (reponse, fin) = if feuille {
+                    traiter_en_suivant(session, requete, garde, sortie)?
+                } else {
+                    traiter(session, requete, garde)
+                };
                 if feuille {
                     // Avant la réponse : qui la lit peut aussitôt en envoyer
                     // une autre.
@@ -253,6 +257,40 @@ fn repondre<S: SdkFd9>(
         }
     }
     Ok(())
+}
+
+/// Une feuille, dont l'avancement (ticket #34) est écrit sur `sortie` au fil
+/// de l'eau, une ligne par étape, par un fil à part : la session, elle, reste
+/// dans ce fil-ci avec la DLL. Toutes les lignes d'avancement sont écrites
+/// avant que la réponse finale le soit.
+fn traiter_en_suivant<S: SdkFd9>(
+    session: &mut Session<S>,
+    requete: Requete,
+    garde: &mut Option<Garde>,
+    sortie: &mut (impl Write + Send),
+) -> io::Result<(Option<Reponse>, bool)> {
+    std::thread::scope(|portee| {
+        let (envoi, avancements) = mpsc::channel();
+        let ecrivain = portee.spawn(move || -> io::Result<()> {
+            for avancement in avancements {
+                writeln!(
+                    sortie,
+                    "{}",
+                    ecrire_reponse(&Reponse::Avancement { avancement })
+                )?;
+                sortie.flush()?;
+            }
+            Ok(())
+        });
+        session.suivre(envoi);
+        let resultat = traiter(session, requete, garde);
+        // Le destinataire part avec le suivi : le fil d'écriture finit.
+        session.ne_plus_suivre();
+        let ecrit = ecrivain
+            .join()
+            .unwrap_or_else(|_| Err(io::Error::other("écriture de l'avancement interrompue")));
+        ecrit.map(|()| resultat)
+    })
 }
 
 /// Exécute une requête ; le booléen indique que le pont doit s'arrêter. Pas

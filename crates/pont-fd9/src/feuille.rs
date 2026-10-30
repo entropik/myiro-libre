@@ -20,7 +20,9 @@ use fd9_sys::{
     CoordonneesMire, CouleursMire, DonneesQr, EtatSdk, ModeReconnaissance, PointMesure, ResultatQr,
     ZONES_MAX,
 };
-use pont_protocole::{DefinitionFeuille, ErreurPont, Info, LectureFeuille, Palier, RemiseAuRepos};
+use pont_protocole::{
+    AvancementFeuille, DefinitionFeuille, ErreurPont, Info, LectureFeuille, Palier, RemiseAuRepos,
+};
 
 /// Écart de pas admis entre la reconnaissance et la définition, et écart
 /// d'un point de mesure à la grille une fois le décalage retiré : 3 mm, en
@@ -83,6 +85,8 @@ impl<S: SdkFd9> Session<S> {
     ) -> Result<MireConvertie, ErreurPont> {
         // Le calage d'une feuille précédente ne passe jamais pour celui-ci.
         self.calage = None;
+        self.engagee_annoncee = false;
+        self.dernier_compte = None;
         self.autoriser(palier, Some(Palier::Connexion))?;
         self.exiger_connexion()?;
         self.exiger_composant_qr()?;
@@ -156,6 +160,7 @@ impl<S: SdkFd9> Session<S> {
         self.attendre_feuille()?;
         let code = self.sdk.capturer();
         self.verifier("FD9_StartCapture", code)?;
+        self.avancer(AvancementFeuille::Lecture {});
         self.attendre_ou_conclure(EtatSdk::CaptureFinie, Attente::Etape)?;
         let (qr, taille_capture) = self.lire_capture()?;
         if let Info::Confirmee(texte) = &qr {
@@ -219,6 +224,9 @@ impl<S: SdkFd9> Session<S> {
         // État 7, avant l'arrêt ou la mesure : l'image de la feuille pour
         // l'application, avec les points visés.
         self.retenir_calage(&calage, &points, taille_capture);
+        if let Some(calage) = self.calage.clone() {
+            self.avancer(AvancementFeuille::CalagePret { calage });
+        }
         Ok(LectureFeuille {
             qr,
             zones: lue.zones,
@@ -244,8 +252,12 @@ impl<S: SdkFd9> Session<S> {
         let etat = EtatSdk::depuis(statut[4]);
         self.dernier_etat = Some(etat);
         match etat {
-            EtatSdk::AlimentationFinie => Ok(()),
+            EtatSdk::AlimentationFinie => {
+                self.annoncer_engagement();
+                Ok(())
+            }
             EtatSdk::Alimentation => {
+                self.annoncer_engagement();
                 self.attendre_ou_conclure(EtatSdk::AlimentationFinie, Attente::Etape)
             }
             EtatSdk::Attente => {

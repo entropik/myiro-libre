@@ -68,6 +68,9 @@ impl<S: SdkFd9> Session<S> {
         let lecture = self.lire_feuille(mire, &convertie)?;
         let code = self.sdk.mesurer();
         self.verifier("FD9_StartMeasurement2", code)?;
+        // Bornée par PLAGES_MAX : le nombre tient dans un u32.
+        self.plages_feuille = mire.plages() as u32;
+        self.annoncer_compte(0);
         self.attendre_ou_conclure(EtatSdk::MesureFinie, Attente::Mesure)?;
         let lues = self.lire_plages(mire);
         // Toutes les plages lues, ou la lecture refusée : la feuille est

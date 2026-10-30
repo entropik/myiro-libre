@@ -36,9 +36,12 @@ use fd9_sys::{
     Appareil, CleOption, CoordonneesMire, CouleursMire, DonneesQr, EtatSdk, ModeReconnaissance,
     NomApplication, PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES,
 };
-use pont_protocole::{CalageFeuille, ErreurPont, Identite, Palier, RemiseAuRepos};
+use pont_protocole::{
+    AvancementFeuille, CalageFeuille, ErreurPont, Identite, Palier, RemiseAuRepos,
+};
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::sync::mpsc::Sender;
 use std::time::Duration;
 
 /// Dernier palier que ce pont sait franchir, quel que soit le plafond demandé.
@@ -223,6 +226,13 @@ pub struct Session<S: SdkFd9> {
     /// Points visés et image de la dernière feuille reconnue, pas encore
     /// rendus (`prendre_calage`).
     calage: Option<CalageFeuille>,
+    /// Destinataire de l'avancement de la feuille en cours (`suivre`).
+    avancement: Option<Sender<AvancementFeuille>>,
+    /// La feuille en cours a déjà été annoncée engagée.
+    engagee_annoncee: bool,
+    /// Plages de la feuille en cours de mesure, et dernier compte annoncé.
+    plages_feuille: u32,
+    dernier_compte: Option<u32>,
 }
 
 const APPAREIL_VIDE: Appareil = Appareil {
@@ -253,6 +263,44 @@ impl<S: SdkFd9> Session<S> {
             dernier_etat: None,
             dossier_du_pont: DossierDuPont::NonVerifie,
             calage: None,
+            avancement: None,
+            engagee_annoncee: false,
+            plages_feuille: 0,
+            dernier_compte: None,
+        }
+    }
+
+    /// Envoie à `envoi`, pendant chaque feuille, son avancement (ticket
+    /// #34) : feuille engagée, lecture, calage prêt, mesure en cours. Un
+    /// destinataire parti n'arrête rien.
+    pub fn suivre(&mut self, envoi: Sender<AvancementFeuille>) {
+        self.avancement = Some(envoi);
+    }
+
+    /// Plus d'avancement envoyé.
+    pub fn ne_plus_suivre(&mut self) {
+        self.avancement = None;
+    }
+
+    pub(crate) fn avancer(&mut self, avancement: AvancementFeuille) {
+        if let Some(envoi) = &self.avancement {
+            let _ = envoi.send(avancement);
+        }
+    }
+
+    /// La feuille est prise par l'instrument : annoncé une fois par feuille.
+    pub(crate) fn annoncer_engagement(&mut self) {
+        if !std::mem::replace(&mut self.engagee_annoncee, true) {
+            self.avancer(AvancementFeuille::FeuilleEngagee {});
+        }
+    }
+
+    /// Plages déjà mesurées, telles que le rappel les compte ; un compte
+    /// répété n'est pas réannoncé.
+    pub(crate) fn annoncer_compte(&mut self, mesurees: u32) {
+        if self.dernier_compte.replace(mesurees) != Some(mesurees) {
+            let plages = self.plages_feuille;
+            self.avancer(AvancementFeuille::Mesure { mesurees, plages });
         }
     }
 

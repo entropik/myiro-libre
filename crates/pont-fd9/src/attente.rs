@@ -117,6 +117,13 @@ impl<S: SdkFd9> Session<S> {
             while let Some(evenement) = self.recus.pop_front() {
                 self.journaliser(&evenement, "");
                 match evenement.etat {
+                    EtatSdk::Alimentation | EtatSdk::AlimentationFinie => {
+                        self.annoncer_engagement()
+                    }
+                    EtatSdk::AvisPlages => self.annoncer_compte(evenement.compte),
+                    _ => {}
+                }
+                match evenement.etat {
                     etat if etat == voulu => return Ok(()),
                     // L'arrêt a croisé la fin de la mesure : la feuille est
                     // finie, et `ExitMeasurement` est admis à l'état 9 comme
