@@ -124,7 +124,7 @@ Paramètre de connexion propre au FD-9 : son adresse IP (par exemple 192.0.2.40)
 _Éviter_ : IP (à l'écran), hôte, port
 
 **Autorisation du pare-feu** :
-Règle du pare-feu de Windows que myiro-libre ajoute pour laisser passer la réponse du FD-9 à la détection : entrante, UDP, port local 49152, réseau local, pour le seul programme pont du FD-9. Nom fixe « myiro-libre - FD-9 - detection (UDP 49152) ». Demandée une fois, par la fenêtre de contrôle de compte de Windows, à la première détection qui ne trouve rien.
+Règle du pare-feu de Windows que myiro-libre ajoute pour laisser passer la réponse du FD-9 à la détection : entrante, UDP, port local 49152, réseau local seulement, sans programme (elle vaut quel que soit l'emplacement du pont). Nom fixe « myiro-libre - FD-9 - detection (UDP 49152) ». Posée par l'installateur et retirée par le désinstallateur ; si elle manque ou est à refaire (ancienne règle liée à un programme), l'application la redemande une fois, par la fenêtre de contrôle de compte de Windows, à la première détection qui ne trouve rien.
 _Éviter_ : ouvrir les ports, exception, désactiver le pare-feu
 
 **Armement** :

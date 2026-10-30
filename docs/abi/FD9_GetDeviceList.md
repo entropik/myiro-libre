@@ -32,6 +32,8 @@ int32_t __stdcall FD9_GetDeviceList(tFD9_DeviceData *liste,      /* obligatoire 
   netsh advfirewall firewall add rule name="FD-9 - pont-fd9 - UDP local" dir=in action=allow protocol=UDP localport=49152 remoteip=192.0.2.40 profile=any program="C:\Program Files\myiro-libre\pont-fd9-x86.exe"
   ```
 
+  La règle que myiro-libre pose depuis le 30 octobre 2026 n'a plus de programme : port local 49152, UDP, réseau local (`remoteip=localsubnet`), quel que soit le pont lancé (ADR 0005, complément du ticket #85).
+
   Le chemin est celui du pont installé ; en développement, celui de `target\i686-pc-windows-msvc\debug\pont-fd9.exe`.
 - **Ce que FD-S2w fait de plus** : rien (confirmé, `FD-S2w.exe` `0x41ed50..0x41eda8`) : le même appel, tableau de 10 entrées, capacité 10, sans appel préalable à la DLL. Qu'il trouve le FD-9 sans règle de pare-feu visible n'est pas expliqué (question ouverte).
 
