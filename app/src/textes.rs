@@ -35,6 +35,8 @@ type Catalogue = &'static [(&'static str, &'static str)];
 // Typographie française : apostrophe courbe (’), espace fine insécable
 // (\u{202f}) avant `: ; ! ?` et entre un nombre et son unité.
 const FRANCAIS: Catalogue = &[
+    // Titre de la fenêtre, avec `--bibliotheque <dossier>`
+    ("fenetre.titre.essai", "myiro-libre — bibliothèque d’essai"),
     // Barre du haut
     ("nav.libelle", "Tâches"),
     ("tache.mesurer", "Mesurer"),
@@ -2314,6 +2316,8 @@ const FRANCAIS: Catalogue = &[
 ];
 
 const ANGLAIS: Catalogue = &[
+    // Window title, with `--bibliotheque <folder>`
+    ("fenetre.titre.essai", "myiro-libre — trial library"),
     // Top bar
     ("nav.libelle", "Tasks"),
     ("tache.mesurer", "Measure"),
@@ -4756,6 +4760,18 @@ mod tests {
             for langue in [Langue::Francais, Langue::Anglais] {
                 assert_ne!(texte(langue, cle), cle, "{cle} manque");
             }
+        }
+    }
+
+    /// Avec `--bibliotheque <dossier>`, le titre de la fenêtre dit que la
+    /// bibliothèque ouverte est celle d'essai (#86).
+    #[test]
+    fn le_titre_de_la_fenetre_dit_la_bibliotheque_d_essai() {
+        // « test library » est à éviter (GLOSSARY.md) : on dit « trial ».
+        for (langue, mot) in [(Langue::Francais, "essai"), (Langue::Anglais, "trial")] {
+            let titre = texte(langue, "fenetre.titre.essai");
+            assert!(titre.starts_with("myiro-libre"), "{titre}");
+            assert!(titre.contains(mot), "{titre}");
         }
     }
 
