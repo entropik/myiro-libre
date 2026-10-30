@@ -257,6 +257,8 @@ fn graphique(partie: &str, svg: &str) -> GraphiquePartie {
         svg: Some(svg.into()),
         png_base64: None,
         tableau: None,
+        texte: None,
+        legende: None,
     }
 }
 
@@ -317,6 +319,8 @@ fn un_tableau_de_la_page_devient_un_tableau() {
             entetes: vec!["Couleur".into(), "Profil".into()],
             lignes: vec![vec!["Rouge".into(), "L* 50".into()]],
         }),
+        texte: None,
+        legende: None,
     }];
     let doc = document(&b, &d);
     let s = doc
@@ -498,4 +502,55 @@ fn une_partie_a_deux_graphiques_les_garde_tous() {
         .find(|s| s.titre == "Courbes le long d’un chemin du cube RVB")
         .unwrap();
     assert_eq!(chemin.blocs.len(), 2);
+}
+
+/// Une partie garde le texte qui situe ses tableaux (« Écarts de B par
+/// rapport à A », sous-titres) et la légende de ses graphiques.
+#[test]
+fn une_partie_garde_ses_textes_et_ses_legendes() {
+    let (b, _, numero) = prepare();
+    let mut d = demande(numero);
+    d.parties = vec!["comparer.ecarts".into(), "comparer.chemin".into()];
+    let texte = |t: &str| GraphiquePartie {
+        partie: "comparer.ecarts".into(),
+        svg: None,
+        png_base64: None,
+        tableau: None,
+        texte: Some(t.into()),
+        legende: None,
+    };
+    let tableau = GraphiquePartie {
+        tableau: Some(TableauPage {
+            entetes: vec!["Zone".into(), "ΔE00".into()],
+            lignes: vec![vec!["Neutres".into(), "1,2".into()]],
+        }),
+        texte: None,
+        ..texte("")
+    };
+    d.graphiques = vec![
+        texte("Écarts de B par rapport à A"),
+        tableau.clone(),
+        texte("Zones"),
+        tableau,
+        GraphiquePartie {
+            legende: Some("Du bleu au cyan".into()),
+            ..graphique("comparer.chemin", SVG)
+        },
+    ];
+    let doc = document(&b, &d);
+    let ecarts = doc
+        .sections
+        .iter()
+        .find(|s| s.titre == "Écarts au profil de référence")
+        .unwrap();
+    assert!(matches!(&ecarts.blocs[0], Bloc::Paragraphe(t) if t == "Écarts de B par rapport à A"));
+    assert!(matches!(&ecarts.blocs[1], Bloc::Tableau { .. }));
+    assert!(matches!(&ecarts.blocs[2], Bloc::Paragraphe(t) if t == "Zones"));
+    assert_eq!(ecarts.blocs.len(), 4);
+    let chemin = doc
+        .sections
+        .iter()
+        .find(|s| s.titre == "Courbes le long d’un chemin du cube RVB")
+        .unwrap();
+    assert!(matches!(&chemin.blocs[0], Bloc::Svg { legende, .. } if legende == "Du bleu au cyan"));
 }

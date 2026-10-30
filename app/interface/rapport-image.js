@@ -72,23 +72,34 @@ window.RapportImage = (() => {
 
   const texte = (cellule) => cellule.textContent.replace(/\s+/g, " ").trim();
 
-  // Les tableaux d'un nœud, en textes : en-têtes, puis lignes.
-  function tableaux(partie, noeud, zone) {
+  // Le contenu d'une partie, dans l'ordre de la page : les textes qui situent les tableaux (« Écarts
+  // de B par rapport à A », sous-titres, avis) et les tableaux, en textes (en-têtes, puis lignes).
+  // L'en-tête de la partie (son titre et sa coche) n'en fait pas partie.
+  function contenu(partie, noeud, zone) {
     zone.append(noeud);
-    return [...noeud.querySelectorAll("table")].map((table) => ({
-      partie,
-      tableau: {
-        entetes: [...(table.tHead?.rows[0]?.cells || [])].map(texte),
-        lignes: [...table.tBodies].flatMap((b) => [...b.rows].map((r) => [...r.cells].map(texte))),
-      },
-    }));
+    const racine = noeud.querySelector(".accordeon__corps") || noeud;
+    const morceaux = [];
+    for (const element of racine.querySelectorAll("table, p, .label")) {
+      if (element.tagName === "TABLE") {
+        morceaux.push({
+          partie,
+          tableau: {
+            entetes: [...(element.tHead?.rows[0]?.cells || [])].map(texte),
+            lignes: [...element.tBodies].flatMap((b) => [...b.rows].map((r) => [...r.cells].map(texte))),
+          },
+        });
+      } else if (!element.closest("table") && !element.parentElement.closest("p, .label") && texte(element)) {
+        morceaux.push({ partie, texte: texte(element) });
+      }
+    }
+    return morceaux;
   }
 
-  // `n` SVG posés dans la zone, dessinés par `dessiner`, puis sérialisés.
-  function svgs(partie, zone, n, dessiner) {
+  // `n` SVG posés dans la zone, dessinés par `dessiner`, puis sérialisés avec leur légende.
+  function svgs(partie, zone, n, dessiner, legende = "") {
     const liste = [...Array(n)].map(() => zone.appendChild(document.createElementNS(NS, "svg")));
     dessiner(liste);
-    return liste.map((s) => ({ partie, svg: serialiser(s) }));
+    return liste.map((s) => ({ partie, svg: serialiser(s), legende }));
   }
 
   const serie = (p, valeurs) => ({ valeurs, serie: p.serie, nom: p.nom });
@@ -114,9 +125,11 @@ window.RapportImage = (() => {
     "comparer.coupe": (d, zone) => svgs("comparer.coupe", zone, 1, ([s]) => window.Graphiques.coupe(s,
       d.liste.map((p) => serie(p, p.analyse.coupes[d.reglages.l])), d.reglages.l, window.NuageImage.points())),
     "comparer.chemin": (d, zone) => svgs("comparer.chemin", zone, 2, ([l, c]) => window.Graphiques.chemin(l, c,
-      d.liste.map((p) => ({ ...serie(p, (d.chemins[p.rang] || {}).points || []), mesures: (d.chemins[p.rang] || {}).mesures || [] })))),
-    "comparer.primaires": (d, zone) => tableaux("comparer.primaires", window.ComparerEcarts.primaires(d.liste), zone),
-    "comparer.ecarts": (d, zone) => (d.comparaison ? tableaux("comparer.ecarts",
+      d.liste.map((p) => ({ ...serie(p, (d.chemins[p.rang] || {}).points || []), mesures: (d.chemins[p.rang] || {}).mesures || [] }))),
+    t("rapport.chemin").replace("{depart}", () => t("comparer.primaire." + d.reglages.depart))
+      .replace("{arrivee}", () => t("comparer.primaire." + d.reglages.arrivee))),
+    "comparer.primaires": (d, zone) => contenu("comparer.primaires", window.ComparerEcarts.primaires(d.liste), zone),
+    "comparer.ecarts": (d, zone) => (d.comparaison ? contenu("comparer.ecarts",
       window.ComparerEcarts.ecarts(d.comparaison, d.profils, window.ComparerDetails.texteFidelite), zone) : []),
   };
 
@@ -134,9 +147,16 @@ window.RapportImage = (() => {
       racine.lang = langue;
       racine.dataset.theme = "light";
       document.body.append(zone);
-      if (d.liste.length) graphiques.push(...tableaux("comparer.chiffres", window.ComparerDetails.chiffres(d.liste), zone));
-      for (const cle of window.Accordeon.cochees()) {
-        if (DESSINS[cle] && d.liste.length) graphiques.push(...DESSINS[cle](d, zone));
+      const parties = { "comparer.chiffres": (donnees, z) => contenu("comparer.chiffres", window.ComparerDetails.chiffres(donnees.liste), z) };
+      for (const cle of window.Accordeon.cochees()) if (DESSINS[cle]) parties[cle] = DESSINS[cle];
+      // Une partie dont le dessin échoue est remplacée par une phrase : les autres continuent.
+      for (const [cle, dessiner] of Object.entries(parties)) {
+        if (!d.liste.length) break;
+        try {
+          graphiques.push(...dessiner(d, zone));
+        } catch {
+          graphiques.push({ partie: cle, texte: t("rapport.graphique_refuse") });
+        }
       }
     } finally {
       zone.remove();

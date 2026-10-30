@@ -2432,6 +2432,7 @@ const FRANCAIS: Catalogue = &[
     ("rapport.en_cours", "Rapport en cours…"),
     ("rapport.enregistre", "Rapport enregistré\u{202f}: {nom}"),
     ("rapport.filtre", "Document PDF"),
+    ("rapport.chemin", "Chemin\u{202f}: {depart} → {arrivee}"),
     // Formulaire « Atelier » (ticket #89)
     ("atelier.titre", "Atelier"),
     (
@@ -4841,6 +4842,7 @@ const ANGLAIS: Catalogue = &[
     ("rapport.en_cours", "Report in progress…"),
     ("rapport.enregistre", "Report saved: {nom}"),
     ("rapport.filtre", "PDF document"),
+    ("rapport.chemin", "Path: {depart} → {arrivee}"),
     // Studio form (ticket #89)
     ("atelier.titre", "Studio"),
     (

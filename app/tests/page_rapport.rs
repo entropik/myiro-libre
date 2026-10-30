@@ -236,3 +236,57 @@ fn les_textes_du_rapport_existent_en_deux_langues() {
         }
     }
 }
+
+/// Les tableaux d'une partie partent avec le texte qui les situe, dans
+/// l'ordre de la page (« Écarts de B par rapport à A », sous-titres) ; le
+/// graphique du chemin part avec sa légende « Chemin : départ → arrivée ».
+#[test]
+fn les_tableaux_partent_avec_leur_contexte() {
+    let script = lire("interface/rapport-image.js");
+    let contenu = corps(&script, "function contenu(partie, noeud, zone) {");
+    for attendu in [
+        "noeud.querySelector(\".accordeon__corps\") || noeud",
+        "querySelectorAll(\"table, p, .label\")",
+        "closest(\"table\")",
+        "texte: texte(element)",
+        "tableau: {",
+    ] {
+        assert!(contenu.contains(attendu), "{attendu} :\n{contenu}");
+    }
+    assert!(script.contains("t(\"rapport.chemin\")"));
+    assert!(script.contains("({ partie, svg: serialiser(s), legende })"));
+}
+
+/// Après « Garder ce point » ou « Retirer », le focus reste dans la liste :
+/// sur « Garder ce point », ou, s'il est devenu inactif (huit points), sur le
+/// dernier « Retirer ».
+#[test]
+fn le_focus_reste_dans_la_liste_des_points() {
+    let script = lire("interface/pastilles-image.js");
+    let focus = corps(&script, "function focusGarder() {");
+    for attendu in [
+        "if (garder && !garder.disabled) return garder.focus();",
+        "querySelectorAll(\"[data-retirer]\")",
+    ] {
+        assert!(focus.contains(attendu), "{attendu} :\n{focus}");
+    }
+    let releves = corps(&script, "function releves() {");
+    assert_eq!(releves.matches("focusGarder();").count(), 2, "{releves}");
+    assert!(
+        releves.contains("retirer.dataset.retirer = \"\";"),
+        "{releves}"
+    );
+}
+
+/// Une partie dont le dessin échoue est remplacée par une phrase ; les
+/// autres parties et le rapport continuent.
+#[test]
+fn une_partie_en_echec_n_arrete_pas_l_export() {
+    let script = lire("interface/rapport-image.js");
+    let captures = corps(&script, "function captures(catalogue, langue) {");
+    assert!(captures.contains("} catch {"), "{captures}");
+    assert!(
+        captures.contains("texte: t(\"rapport.graphique_refuse\")"),
+        "{captures}"
+    );
+}

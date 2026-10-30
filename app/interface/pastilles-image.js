@@ -234,7 +234,7 @@ window.PastillesImage = (() => {
       const p = etat && etat.etat === "calcule" ? etat.paire : {};
       gardes.push({ x: pixel.x, y: pixel.y, image: p.couleur_demandee, imprime: p.couleur_reproduite });
       ecrire();
-      racine?.querySelector("[data-garder]")?.focus();
+      focusGarder();
     });
     const tete = el("div", "actions");
     tete.append(garder, el("p", "why", raison));
@@ -250,10 +250,11 @@ window.PastillesImage = (() => {
           couleurs.append(s);
         }
         const retirer = el("button", "btn", t("rapport.points.retirer"));
+        retirer.dataset.retirer = "";
         retirer.addEventListener("click", () => {
           gardes.splice(i, 1);
           ecrire();
-          racine?.querySelector("[data-garder]")?.focus();
+          focusGarder();
         });
         ligne.append(couleurs, el("span", "", t("rapport.point").replace("{n}", () => i + 1)
           .replace("{x}", () => g.x).replace("{y}", () => g.y)), retirer);
@@ -262,6 +263,14 @@ window.PastillesImage = (() => {
     }
     bloc.append(el("span", "label", t("rapport.points")), tete, liste);
     return bloc;
+  }
+
+  // Le focus reste dans la liste : sur « Garder ce point », ou, inactif, sur le dernier « Retirer ».
+  function focusGarder() {
+    const garder = racine?.querySelector("[data-garder]");
+    if (garder && !garder.disabled) return garder.focus();
+    const retirers = racine?.querySelectorAll("[data-retirer]") || [];
+    retirers[retirers.length - 1]?.focus();
   }
 
   // Les points relevés, en pixels de l'image d'analyse, pour le rapport (rapport-image.js).

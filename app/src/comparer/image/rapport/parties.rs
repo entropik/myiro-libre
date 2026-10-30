@@ -37,13 +37,19 @@ pub struct TableauPage {
     pub lignes: Vec<Vec<String>>,
 }
 
-/// Le graphique d'une partie, tel que la page l'a dessiné.
+/// Un morceau d'une partie, tel que la page l'a dessiné : un texte qui situe
+/// ce qui suit (« Écarts de B par rapport à A », sous-titre), un tableau, un
+/// graphique SVG ou une image PNG, avec sa légende.
 #[derive(Clone, Debug, Deserialize)]
 pub struct GraphiquePartie {
     pub partie: String,
     pub svg: Option<String>,
     pub png_base64: Option<String>,
     pub tableau: Option<TableauPage>,
+    #[serde(default)]
+    pub texte: Option<String>,
+    #[serde(default)]
+    pub legende: Option<String>,
 }
 
 fn cellule(c: &str) -> String {
@@ -63,6 +69,10 @@ fn png(base64: &str) -> Option<Vec<u8>> {
 
 fn blocs(g: &GraphiquePartie, langue: Langue) -> Vec<Bloc> {
     let refuse = || vec![Bloc::Paragraphe(t(langue, "rapport.graphique_refuse"))];
+    let legende = g.legende.as_deref().map(cellule).unwrap_or_default();
+    if let Some(texte) = &g.texte {
+        return vec![Bloc::Paragraphe(cellule(texte))];
+    }
     if let Some(tableau) = &g.tableau {
         let entetes: Vec<String> = tableau
             .entetes
@@ -88,17 +98,14 @@ fn blocs(g: &GraphiquePartie, langue: Langue) -> Vec<Bloc> {
     }
     if let Some(svg) = &g.svg {
         return match rapport::nettoyer_svg(svg) {
-            Ok(svg) => vec![Bloc::Svg {
-                svg,
-                legende: String::new(),
-            }],
+            Ok(svg) => vec![Bloc::Svg { svg, legende }],
             Err(_) => refuse(),
         };
     }
     match g.png_base64.as_deref().and_then(png) {
         Some(png) => vec![Bloc::Images(vec![rapport::Figure {
             png,
-            legende: String::new(),
+            legende,
             largeur_mm: 140.0,
         }])],
         None => refuse(),
