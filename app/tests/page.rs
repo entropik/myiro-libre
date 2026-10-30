@@ -1182,6 +1182,26 @@ fn un_etat_de_verification_inconnu_est_montre_non_verifie() {
     );
 }
 
+// ---- Numéro de série jamais montré (ticket #84) ----
+
+/// La vue d'une résolution et la feuille des mesures montrent l'instrument
+/// que Rust leur donne, déjà réduit au modèle ; elles ne lisent aucun numéro
+/// de série.
+#[test]
+fn la_resolution_et_la_feuille_ne_montrent_que_le_modele() {
+    let reglage = lire("interface/reglage.js");
+    let bibliotheque = lire("interface/bibliotheque.js");
+    for (nom, script) in [("reglage.js", &reglage), ("bibliotheque.js", &bibliotheque)] {
+        assert!(!script.contains("numero_serie"), "{nom}");
+        assert!(!script.contains("details.numero"), "{nom}");
+    }
+    assert!(bibliotheque.contains("function instrument(i) {\n    return i.modele;\n  }"));
+    assert!(bibliotheque.contains(
+        "const instrumentLu = qualifiee(d.instrument, (i) => i, \"cartouche.inconnu\");"
+    ));
+    assert!(reglage.contains("cleValeur(\"parc.instrument\", instrumentDeclare(d))"));
+}
+
 // ---- Relecture finale du ticket #40 ----
 
 /// La commande arrive même sans ArgyllCMS ; la raison qui empêchera le

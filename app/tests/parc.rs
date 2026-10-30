@@ -325,3 +325,73 @@ fn les_libelles_a_verifier_existent_en_deux_langues() {
     assert!(texte(Langue::Francais, "profil.fait").contains("à vérifier"));
     assert!(texte(Langue::Anglais, "profil.fait").contains("to be verified"));
 }
+
+// ---- Instrument d'une mesure importée dans la vue d'une résolution (ticket #84) ----
+
+/// Export fictif à la manière de FD-S2w, qui déclare `instrumentation` et un
+/// numéro de série fictif : trois plages, RVB sur 255, Lab, M1.
+fn export_declarant(instrumentation: &str) -> String {
+    format!(
+        "CGATS.17\r\nORIGINATOR\t\"Fabricant fictif\"\r\nFILE_DESCRIPTOR\t\"FD-S2w\"\r\n\
+         INSTRUMENTATION\t\"{instrumentation}\"\r\nSERIAL\t\"12345678\"\r\n\
+         MEASUREMENT_SOURCE\t\"D50\"\r\nBEGIN_DATA_FORMAT\r\n\
+         SAMPLE_ID\tRGB_R\tRGB_G\tRGB_B\tLAB_L\tLAB_A\tLAB_B\r\nEND_DATA_FORMAT\r\n\
+         NUMBER_OF_SETS\t3\r\nBEGIN_DATA\r\n\
+         1\t255\t255\t255\t95\t0\t2\r\n\
+         2\t0\t117.61\t199.05\t42.09\t-28\t-60.57\r\n\
+         3\t0\t0\t0\t3.1\t0.2\t-0.4\r\nEND_DATA\r\n"
+    )
+}
+
+/// Importe l'export dans la résolution, par l'aperçu, comme la page.
+fn importer(dossier: &Path, ouverte: &BibliothequeOuverte, condition: IdCondition, texte: &str) {
+    let chemin = fichier(dossier, "mesure00001_M1.txt", texte.as_bytes());
+    let apercu = ouverte.apercu_cgats(&chemin).unwrap();
+    ouverte.ranger_apercu(apercu.numero, condition).unwrap();
+}
+
+/// La vue d'une résolution ne reçoit que le modèle reconnu, jamais le
+/// numéro de série que la ligne `INSTRUMENTATION` porte.
+#[test]
+fn la_vue_d_une_resolution_ne_recoit_que_le_modele_de_l_instrument() {
+    use pont_protocole::Info;
+    let (dossier, ouverte) = ouverte();
+    let condition = reglage(&ouverte);
+    importer(
+        dossier.path(),
+        &ouverte,
+        condition,
+        &export_declarant("KONICA MINOLTA, INC. MYIRO-9 (FD-9), Serial No. 12345678"),
+    );
+
+    let detail = ouverte.detail_reglage(condition).unwrap();
+    assert_eq!(detail.importees.len(), 1);
+    assert_eq!(
+        detail.importees[0].instrument,
+        Info::Confirmee("FD-9".into())
+    );
+    let page = serde_json::to_string(&detail).unwrap();
+    assert!(!page.contains("12345678"), "{page}");
+    assert!(!page.contains("Serial"), "{page}");
+}
+
+/// Sans modèle reconnu, l'instrument est inconnu : la ligne brute ne part
+/// jamais vers la page.
+#[test]
+fn sans_modele_reconnu_l_instrument_de_la_resolution_est_inconnu() {
+    use pont_protocole::Info;
+    let (dossier, ouverte) = ouverte();
+    let condition = reglage(&ouverte);
+    importer(
+        dossier.path(),
+        &ouverte,
+        condition,
+        &export_declarant("Spectrophotomètre fictif, Serial No. 12345678"),
+    );
+
+    let detail = ouverte.detail_reglage(condition).unwrap();
+    assert_eq!(detail.importees[0].instrument, Info::Inconnue);
+    let page = serde_json::to_string(&detail).unwrap();
+    assert!(!page.contains("12345678"), "{page}");
+    assert!(!page.contains("Spectrophotomètre fictif"), "{page}");
+}

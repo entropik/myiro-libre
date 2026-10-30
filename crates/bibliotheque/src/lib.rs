@@ -188,6 +188,9 @@ pub struct ConditionImpression {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct Instrument {
     pub modele: String,
+    /// Jamais envoyé à la page (ticket #84) : une capture d'écran partagée
+    /// le publierait. Il reste dans la base et sert à la recherche.
+    #[serde(skip_serializing)]
     pub numero_serie: u32,
 }
 
