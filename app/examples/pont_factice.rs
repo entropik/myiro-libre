@@ -10,7 +10,9 @@
 //! - `erreur_inconnue` : répond par une erreur d'un type inconnu du protocole ;
 //! - `bloque` : lit une requête et ne répond jamais (DLL bloquée) ;
 //! - `sortie_fermee` : lit une requête, ferme sa sortie et ne se termine pas ;
-//! - `mesure_lente` : répond à une mesure ponctuelle après 800 ms ;
+//! - `etalonnage_lent` : répond à l'étalonnage 1,1 s après l'avoir lu ;
+//! - `etalonnage_trop_lent` : ne répond jamais à l'étalonnage ;
+//! - `mesure_lente` : répond à une mesure ponctuelle 1 s après l'avoir lue ;
 //! - `mesure_muette` : un MYIRO-1 fictif qui s'étalonne, puis ne répond jamais à la mesure ;
 //! - `annulable` : comme `normal`, mais la mesure attend `annuler`, puis
 //!   répond `mesure_annulee` et `annulation appliquee` (ticket #26) ;
@@ -187,10 +189,10 @@ fn main() -> ExitCode {
                 writeln!(sortie, "pas du JSON").unwrap();
                 continue;
             }
-            // Étalonnage plus long que le délai d'une autre demande (300 ms
-            // dans le test), mais moins que le double.
+            // Étalonnage plus long que le délai d'une autre demande (1 s dans
+            // le test), mais moins que le double.
             "etalonnage_lent" if matches!(requete, Ok(Requete::Etalonner {})) => {
-                std::thread::sleep(std::time::Duration::from_millis(450));
+                std::thread::sleep(std::time::Duration::from_millis(1100));
                 Reponse::Etalonne {
                     date: Horodatage::new("2026-10-07T09:30:00+02:00").unwrap(),
                 }
@@ -200,10 +202,10 @@ fn main() -> ExitCode {
                 std::thread::sleep(std::time::Duration::from_secs(60));
             },
             // Mesure plus longue que trois fois le délai d'une autre demande
-            // (200 ms dans le test), mais moins que six fois ; l'instrument
+            // (300 ms dans le test), mais moins que six fois ; l'instrument
             // fictif n'a pas vu d'appui sur son bouton.
             "mesure_lente" if matches!(requete, Ok(Requete::MesurerPonctuelle { .. })) => {
-                std::thread::sleep(std::time::Duration::from_millis(800));
+                std::thread::sleep(std::time::Duration::from_millis(1000));
                 Reponse::Erreur {
                     erreur: ErreurPont::Delai {},
                 }
