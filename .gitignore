@@ -61,3 +61,10 @@ docs/mires/
 
 # Maquettes et prototypes du compagnon visuel (locaux)
 .superpowers/
+
+# Diagnostic des essais FD-9 : journal du SDK (créé par FD9SDK.dll si l'un de
+# ces dossiers existe dans le dossier courant) et vidages mémoire du pont. Ils
+# contiennent l'adresse et l'identifiant de l'instrument : jamais versionnés.
+DebugSDK/
+DebugImage/
+*.dmp

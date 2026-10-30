@@ -17,7 +17,9 @@ pub mod evenements;
 mod feuille;
 mod fichier;
 mod plages;
+pub mod plantage;
 pub mod serveur;
+pub mod trace;
 
 pub use arret::ATTENTE_APRES_ARRET_REFUSE;
 pub use attente::{Annulation, Delais, ATTENTE_APRES_DECONNEXION};

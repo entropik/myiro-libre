@@ -22,6 +22,20 @@ fn dll() -> PathBuf {
     }
 }
 
+/// Arguments de diagnostic donnés par l'opérateur : `FD9_TRACE` (non vide)
+/// ajoute `--trace`, `FD9_VIDAGE` ajoute `--vidage <fichier>` (vidage local,
+/// jamais versionné).
+fn diagnostic() -> Vec<String> {
+    let mut arguments = Vec::new();
+    if std::env::var("FD9_TRACE").is_ok_and(|v| !v.is_empty()) {
+        arguments.push("--trace".to_string());
+    }
+    if let Ok(vidage) = std::env::var("FD9_VIDAGE") {
+        arguments.extend(["--vidage".to_string(), vidage]);
+    }
+    arguments
+}
+
 /// Lance le pont avec ce plafond, lui envoie ces lignes et rend ses réponses.
 fn dialoguer(plafond: &str, requetes: &[&str]) -> Vec<String> {
     dialoguer_avec(plafond, &[], requetes)
@@ -38,6 +52,7 @@ fn dialoguer_avec(plafond: &str, arguments: &[&str], requetes: &[&str]) -> Vec<S
         .arg(dll())
         .args(["--plafond", plafond])
         .args(arguments)
+        .args(diagnostic())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

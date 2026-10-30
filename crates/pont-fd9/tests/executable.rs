@@ -69,6 +69,24 @@ fn une_attente_ou_une_reconnaissance_illisible_est_refusee_au_lancement() {
 }
 
 #[test]
+fn la_trace_et_le_vidage_sont_acceptes_au_lancement() {
+    // Le pont va jusqu'au chargement de la DLL (absente ici).
+    let sortie = pont()
+        .args(["--dll", "C:/nulle-part/FD9SDK.dll", "--trace"])
+        .args(["--vidage", "C:/nulle-part/pont-fd9.dmp"])
+        .output()
+        .unwrap();
+    assert_eq!(sortie.status.code(), Some(3));
+    // Sans chemin, le vidage est refusé.
+    let sortie = pont()
+        .args(["--dll", "x.dll", "--vidage"])
+        .output()
+        .unwrap();
+    assert_eq!(sortie.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&sortie.stderr).contains("--vidage"));
+}
+
+#[test]
 fn combine_est_refuse_au_lancement() {
     // Essai E3 : sans couleurs ni image modèle, COMBINE fait planter la DLL.
     let sortie = pont()

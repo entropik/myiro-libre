@@ -2,9 +2,18 @@
 //! l'entrée et la sortie standard (ADR 0005), comme `pont-myiro1`.
 //!
 //! Usage : `pont-fd9 --dll <chemin de FD9SDK.dll> [--plafond <palier>]
-//! [--attente-feuille <secondes>] [--reconnaissance coordinate]`
+//! [--attente-feuille <secondes>] [--reconnaissance coordinate] [--trace]
+//! [--vidage <fichier.dmp>]`
 //! Paliers déclarés par ce pont : version (par défaut), detection, connexion,
 //! prenumerisation, feuille. Tout autre palier est refusé au lancement.
+//!
+//! Diagnostic des essais : un plantage est toujours rapporté sur la sortie
+//! d'erreur (code, module et décalage de l'adresse fautive, fil), puis le
+//! pont s'arrête avec le code de l'exception (`pont_fd9::plantage`).
+//! `--trace` écrit aussi, au fil de l'eau, chaque appel à la DLL avant et
+//! après, chaque entrée et sortie du rappel, et les exceptions graves dès
+//! leur premier passage. `--vidage` écrit au plantage un vidage mémoire,
+//! local : il contient l'adresse et l'identifiant de l'instrument.
 //!
 //! Codes de sortie : 0 fin normale, 1 erreur de lecture ou d'écriture,
 //! 2 arguments refusés, 3 DLL non chargée, 4 fermeture qui n'a pas rendu la
@@ -14,8 +23,11 @@
 use fd9_sys::ModeReconnaissance;
 use pont_fd9::dll::Fd9Dll;
 use pont_fd9::serveur::{servir, Garde, DELAI_FERMETURE};
-use pont_fd9::{Delais, Session};
+use pont_fd9::trace::{self, SdkTrace};
+use pont_fd9::{evenements, plantage, Delais, SdkFd9, Session};
 use pont_protocole::Palier;
+use std::io::Write;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
 
@@ -35,6 +47,8 @@ struct Arguments {
     plafond: Palier,
     delais: Delais,
     reconnaissance: ModeReconnaissance,
+    trace: bool,
+    vidage: Option<PathBuf>,
 }
 
 fn arguments() -> Result<Arguments, String> {
@@ -42,6 +56,8 @@ fn arguments() -> Result<Arguments, String> {
     let mut plafond = Palier::Version;
     let mut delais = Delais::default();
     let mut reconnaissance = ModeReconnaissance::Coordonnees;
+    let mut trace = false;
+    let mut vidage = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -75,6 +91,14 @@ fn arguments() -> Result<Arguments, String> {
                     }
                 };
             }
+            "--trace" => trace = true,
+            "--vidage" => {
+                let chemin = args.next().unwrap_or_default();
+                if chemin.is_empty() {
+                    return Err("--vidage <fichier.dmp> : chemin manquant".into());
+                }
+                vidage = Some(PathBuf::from(chemin));
+            }
             autre => return Err(format!("argument inconnu : {autre}")),
         }
     }
@@ -83,29 +107,57 @@ fn arguments() -> Result<Arguments, String> {
         plafond,
         delais,
         reconnaissance,
+        trace,
+        vidage,
     })
+}
+
+/// Écrit une ligne sur la sortie d'erreur sans jamais paniquer.
+fn noter(ligne: &str) {
+    let _ = writeln!(std::io::stderr(), "pont-fd9 : {ligne}");
 }
 
 fn main() -> ExitCode {
     let arguments = match arguments() {
         Ok(a) => a,
         Err(erreur) => {
-            eprintln!("pont-fd9 : {erreur}");
+            noter(&erreur);
             return ExitCode::from(2);
         }
     };
+    // Avant le chargement : un plantage dans l'initialisation de la DLL est
+    // rapporté lui aussi.
+    trace::depuis_le_lancement();
+    plantage::installer(arguments.vidage.as_deref(), arguments.trace);
+    evenements::tracer(arguments.trace);
     let dll = match Fd9Dll::charger(&arguments.dll) {
         Ok(dll) => dll,
         Err(erreur) => {
-            eprintln!("pont-fd9 : {erreur:?}");
+            noter(&format!("{erreur:?}"));
             return ExitCode::from(3);
         }
     };
-    let mut session = Session::new(dll, arguments.plafond)
+    if arguments.trace {
+        noter("trace des appels à la DLL et du rappel active");
+        servir_avec(SdkTrace::new(dll, noter), &arguments)
+    } else {
+        servir_avec(dll, &arguments)
+    }
+}
+
+fn servir_avec<S: SdkFd9>(sdk: S, arguments: &Arguments) -> ExitCode {
+    let trace = arguments.trace;
+    let mut session = Session::new(sdk, arguments.plafond)
         .avec_delais(arguments.delais)
         .avec_reconnaissance(arguments.reconnaissance)
         // Au fil de l'eau : un pont arrêté de force a déjà tout écrit.
-        .avec_echo_journal(|ligne| eprintln!("pont-fd9 : {ligne}"));
+        .avec_echo_journal(move |ligne| {
+            if trace {
+                noter(&format!("{} {ligne}", trace::entete()));
+            } else {
+                noter(ligne);
+            }
+        });
     let resultat = servir(
         &mut session,
         std::io::BufReader::new(std::io::stdin()),
@@ -114,12 +166,14 @@ fn main() -> ExitCode {
     );
     let orphelins = session.rappels_orphelins();
     if orphelins > 0 {
-        eprintln!("pont-fd9 : {orphelins} rappel(s) de la DLL reçu(s) sans session, ignoré(s)");
+        noter(&format!(
+            "{orphelins} rappel(s) de la DLL reçu(s) sans session, ignoré(s)"
+        ));
     }
     match resultat {
         Ok(()) => ExitCode::SUCCESS,
         Err(erreur) => {
-            eprintln!("pont-fd9 : {erreur}");
+            noter(&erreur.to_string());
             ExitCode::from(1)
         }
     }
