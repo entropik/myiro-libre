@@ -7,3 +7,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+# Typst en bibliothèque (Apache-2.0) : compilation en mémoire, aucun paquet
+# téléchargé, aucune police du système (ADR 0008).
+typst = "0.15.1"
+typst-layout = "0.15.1"
+typst-pdf = "0.15.1"

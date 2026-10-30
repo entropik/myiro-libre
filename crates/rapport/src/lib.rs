@@ -11,9 +11,11 @@
 //! Un rapport est dans une seule langue, ne porte aucun identifiant
 //! d'instrument, et ne lit aucun fichier hors de ceux qu'on lui donne.
 
+mod pdf;
 mod source;
 mod svg;
 
+pub use pdf::{pdf, ErreurRapport, PagePdf, Pdf};
 pub use source::{chaine_typst, source_typst, SourceTypst};
 pub use svg::{nettoyer_svg, RefusSvg};
 

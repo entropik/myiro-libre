@@ -90,7 +90,7 @@ pub fn document_complet() -> Document {
                 },
                 Bloc::Paragraphe("Les couleurs à l'écran sont approchées.".into()),
                 Bloc::Svg {
-                    svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10 10\"><rect width=\"10\" height=\"10\"/></svg>".into(),
+                    svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 20\"><rect width=\"100\" height=\"20\"/></svg>".into(),
                     legende: "Coupe".into(),
                 },
                 Bloc::Pre("ligne 1\nligne 2".into()),
