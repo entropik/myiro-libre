@@ -7,7 +7,7 @@
 ```c
 int32_t __stdcall FD9_StartPatchRecognition(const uint32_t *mode,                   /* FD9_eRecogMode */
                                             const tFD9_ChartCoordinate *coordonnees, /* 0xd70 octets en x86 */
-                                            const tFD9_PatchColors *couleurs,        /* NULL : jamais en COMBINE sans modèle */
+                                            const tFD9_PatchColors *couleurs,        /* exigé en COMBINE sans modèle */
                                             const uint32_t *rangees,                 /* mode MATRIX */
                                             const uint32_t *colonnes);               /* x86 : ret 0x14 */
 ```
@@ -67,7 +67,18 @@ Taille **0xd70 octets (3 440) en x86**, **0xd78 (3 448) en x64**. Tous les nombr
 
 Les positions jusqu'à +0xd60 sont les mêmes en 32 et 64 bits ; seule l'image finale grandit, à cause du pointeur.
 
-`tFD9_PatchColors` : `{type, nombre, liste*}`, entrées de 28 octets `{zone, rangée, colonne, 4 flottants}` ; 12 octets en x86 (copie `0x100ad4b7..0x100ad537`), 16 en x64. Le pont n'en passe pas.
+## Contenu de `tFD9_PatchColors` (étude du 30 octobre 2026)
+
+`{type, nombre, entrées*}` : 12 octets en x86 (copie `0x100ad4b7..0x100ad537`), 16 en x64. Entrées de 28 octets `{zone, rangée, colonne, v0, v1, v2, v3}` (entiers puis 4 flottants).
+
+| Point | Niveau | Preuve |
+|---|---|---|
+| `type` 1 = **RVB** (trois valeurs), 0 = **CMJN** (quatre valeurs), autre : refus interne 0x856 | confirmé | textes « RGB » et « CMYK » de `CreateChartImage` (`0x100afa00`), nombre de valeurs `0x100a1683..0x100a169b` |
+| RVB de **0 à 255** en flottants (CMJN en %, converti par `(1 − v/100) × 255`) | confirmé | peinture de l'image modèle `0x100af2b0` : plafond 242 pour un blanc au-dessus de 242, arrondi à l'octet |
+| Les valeurs sont peintes **dans l'ordre de la liste**, zone par zone, rangée par rangée, de gauche à droite ; `zone` sert à grouper, `rangée` et `colonne` ne placent rien | confirmé | regroupement par zone `0x100a16d7..0x100a17b1`, parcours rangée puis colonne `0x100af2b0` |
+| L'image modèle est dessinée à **300 ppp** depuis la définition (`× 300 / 2540`) : les coordonnées sont bien au **1/100 mm** | confirmé | constante 0,11811… (`0x100af860`, `0x100af2b0`) |
+| MYIROtools : `type` = 1 pour une plage RVB, entrées `{zone, rangée, colonne}` comptées depuis 0 dans l'ordre de la définition, valeurs = `ColorValue` de sa définition `.cdx` **divisée par 100** (8500 → 85,0) | confirmé | `mit-x64` `0x1402642e0` (liste), `0x140232f06` (lecture ÷ 100,0), `0x14023ad1c` (écriture × 100,0) |
+| MYIROtools n'accepte une définition **qu'avec** ses couleurs | confirmé | `mit-x64` `0x1403ec2a0` |
 
 ## La RGB-2520
 
@@ -80,20 +91,22 @@ Nombres relevés dans la définition de mire de MYIROtools (unité : 1/100 mm) :
 
 ## Ce qui est supposé
 
-- COORDINATE place les plages d'après la définition seule : un décalage de la feuille doit rester dans l'écart admis par le pont (3 mm), sinon la feuille est refusée (`MireNonReconnue`). À vérifier à l'essai E3 suivant.
+- COORDINATE place les plages d'après la définition seule, sans aucun recalage : c'est la cause de la mesure fausse de l'essai E4 bis (confirmé par la mesure ; le mécanisme est supposé : `CoordinateMatching` n'a pas été suivi jusqu'au bout).
+- FD-S2w : sa première reconnaissance est en mode 4 (réglage par défaut) ; après correction des points à la main (« Edit measurement points »), il la relance à l'événement 7 (`CFD9SDKController::ReStartPatchRecognition`, `s2w-x86` `0x41f4c0`) en mode 1 (DEFINITION) ou 2 (COORDINATE) selon un réglage, avec la définition corrigée. Aucun export n'envoie de points corrigés : on renvoie une définition corrigée.
 - L'unité des coordonnées est le 1/100 mm : FD-S2w recopie les définitions de mire champ par champ, sans conversion (`fd9-feuille.md` § 5), et ses fichiers donnent des plages de 600 pour 6 mm.
-- COMBINE = reconnaissance automatique des plages, puis comparaison aux coordonnées données ; il corrige un décalage de la feuille (tolérance de 21 mm d'après le manuel de FD-S2w). Il exige les couleurs des plages (ou une image modèle) : le pont pourra y venir en passant les couleurs RVB de la mire, type et échelle à établir sur MYIROtools.
+- COMBINE = reconnaissance automatique des plages, puis comparaison aux coordonnées données ; il corrige un décalage de la feuille (tolérance de 21 mm d'après le manuel de FD-S2w).
 
 ## Pour le pont
 
 - Construire la structure à zéro, puis y écrire la définition ; refuser avant l'appel une définition hors bornes (mêmes règles que la DLL).
-- Mode **COORDINATE (2)**, `couleurs` nul, `rangees` et `colonnes` vers des zéros.
-- **COMBINE (4) refusé** tant que le pont ne passe ni couleurs ni image modèle : la session le refuse avant la feuille (`parametre_refuse`), l'adapter de la DLL ne fait pas l'appel, l'exécutable refuse `--reconnaissance combine` au lancement.
+- Mode **COMBINE (4) avec les couleurs RVB de la mire** (type 1, 0 à 255, ordre de la définition), comme MYIROtools et FD-S2w : la DLL retrouve la feuille sur l'image prise, et la mesure vise les plages trouvées. **Jamais COORDINATE** : à l'essai E4 bis, la RGB-2520 imprimée sur A3 était décalée d'environ 8,8 mm, et COORDINATE a mesuré à côté des plages (ΔE00 moyen de 38 avec la mesure de FD-S2w de la même feuille).
+- Une mire sans couleurs est refusée avant la feuille (`parametre_refuse`) ; l'adapter de la DLL refuse COMBINE sans couleurs ni modèle (essai E3) ; l'option `--reconnaissance` est retirée.
+- `rangees` et `colonnes` vers des zéros.
 - L'appeler dans le fil de la session, après l'événement 5 et la lecture du QR ; attendre ensuite l'événement 7.
 
 ## À vérifier sur l'instrument
 
-- ~~COMBINE sans couleurs reconnaît-il la RGB-2520 ?~~ Non : il plante (essai E3, cause établie par lecture). COORDINATE reconnaît-il la RGB-2520, et avec quel écart (essai E3 suivant) ?
+- ~~COMBINE sans couleurs reconnaît-il la RGB-2520 ?~~ Non : il plante (essai E3). ~~COORDINATE ?~~ Non : il mesure à côté (essai E4 bis). COMBINE avec les couleurs : fiabilité, décalage et écart des points pour la RGB-2520 sur A3 (essai E4 ter).
 - L'unité et l'écart de la géométrie rendue par [FD9_GetPatchRecognitionResult2](FD9_GetPatchRecognitionResult2.md).
 
 ## Preuves (locales)

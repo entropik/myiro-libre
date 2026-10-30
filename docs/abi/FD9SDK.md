@@ -69,11 +69,11 @@ Référence : **MYIROtools**, le logiciel du fabricant qui imprime la mire RGB-2
 1. [FD9_RegisterDeviceEventHandler](FD9_RegisterDeviceEventHandler.md), puis [FD9_Connect](FD9_Connect.md) : succès si 0 ou 1901 ; puis [FD9_GetSystemInfo](FD9_GetSystemInfo.md) et [FD9_GetStatus](FD9_GetStatus.md).
 2. L'opérateur glisse la feuille. Événement 3 : [FD9_StartCapture](FD9_StartCapture.md).
 3. Événement 5 : [FD9_GetCaptureResult](FD9_GetCaptureResult.md) deux fois (taille, puis image et QR) ; contrôle du QR.
-4. [FD9_StartPatchRecognition](FD9_StartPatchRecognition.md) en mode **COORDINATE** (2), avec la définition de la mire, sans couleurs. MYIROtools passe en COMBINE (4) **avec** les couleurs des plages ; COMBINE sans couleurs ni image modèle fait lire un pointeur nul à la DLL (plantage de l'essai E3) : le pont le refuse.
-5. Événement 7 : [FD9_GetPatchRecognitionResult2](FD9_GetPatchRecognitionResult2.md), puis **comparaison à la définition** (zones et plages, comme MYIROtools ; origine et pas, en plus pour le pont). Au palier Prénumérisation, la feuille s'arrête là : [FD9_StopMeasurement](FD9_StopMeasurement.md)`(faux)`, puis attente de l'événement 10.
-6. Palier Feuille : [FD9_GetMeasurePoint](FD9_GetMeasurePoint.md), puis [FD9_StartMeasurement2](FD9_StartMeasurement2.md)`(1, 1)`.
+4. [FD9_StartPatchRecognition](FD9_StartPatchRecognition.md) en mode **COMBINE** (4), avec la définition de la mire **et les couleurs RVB de ses plages** (0 à 255), comme MYIROtools et FD-S2w : la feuille est retrouvée sur l'image. Sans couleurs, COMBINE fait planter la DLL (essai E3) ; COORDINATE mesure à côté d'une feuille décalée (essai E4 bis) : ni l'un ni l'autre.
+5. Événement 7 : [FD9_GetPatchRecognitionResult2](FD9_GetPatchRecognitionResult2.md) (fiabilité non nulle : refus, comme FD-S2w), **comparaison à la définition** (zones, plages et pas), puis [FD9_GetMeasurePoint](FD9_GetMeasurePoint.md) : les points visés, trouvés sur l'image, chaque plage une fois, décalage de la feuille ≤ 21 mm, écart à la grille ≤ 3 mm. Au palier Prénumérisation, la feuille s'arrête là : [FD9_StopMeasurement](FD9_StopMeasurement.md)`(faux)`, puis attente de l'événement 10.
+6. Palier Feuille : [FD9_StartMeasurement2](FD9_StartMeasurement2.md)`(1, 1)`.
 7. Événements 11 : nombre de plages mesurées. Événement 9 : mesure finie.
-8. Lecture de chaque plage : [FD9_SetOption](FD9_SetOption.md)`(3, 0x0c)` et [FD9_GetData](FD9_GetData.md) (152 données brutes), **dans l'ordre de mesure de l'instrument** (serpentin à l'essai E4), puis rangement par la position rendue dans l'ordre de la mire (chaque position une fois), puis M0, M1, M2 par [FD9_CalculateData](FD9_CalculateData.md).
+8. Lecture de chaque plage : [FD9_SetOption](FD9_SetOption.md)`(3, 0x0c)` et [FD9_GetData](FD9_GetData.md) (152 données brutes), **dans l'ordre de mesure de l'instrument** (serpentin à l'essai E4), puis rangement par la position rendue dans l'ordre de la mire (chaque position une fois), puis M0, M1, M2 par [FD9_CalculateData](FD9_CalculateData.md), puis **contrôle de vraisemblance** : les L* M1 doivent suivre la clarté des couleurs imprimées (corrélation ≥ 0,5, sinon `mesure_invraisemblable`, rien n'est rendu).
 9. [FD9_ExitMeasurement](FD9_ExitMeasurement.md)`(0, NULL)`. À la fermeture de la session : [FD9_Disconnect](FD9_Disconnect.md), puis désinscription du rappel.
 
 ### États admis par chaque fonction (confirmé)
@@ -159,3 +159,11 @@ Les fiches 1 à 5 et 7 couvrent la liste blanche actuelle de `crates/fd9-sys`. L
 - `retroanalyse/logiciels/fd-s2w.md` : étude de FD-S2w 1.6.0 et 1.6.1, signatures tirées des symboles Mac (§ 3 et 4), séquence de FD-S2w (§ 5), table des codes (§ 6), transport (§ 7).
 - `retroanalyse/logiciels/fd9-feuille.md` : étude de la mesure d'une feuille (28 octobre 2026) : séquence de MYIROtools (§ 3), définition de la RGB-2520 (§ 2, nombres seulement), contrôles de la DLL (§ 4).
 - Codes publics : table de regroupement `fd9-x86` `0x10108ca0` (groupes de 100 mots : code public, puis codes internes jusqu'à −1), lue dans le fichier.
+
+## Hors liste blanche
+
+Exports étudiés pour la fonction « Measured Point » de FD-S2w, **jamais appelés par le pont** (étude statique du 30 octobre 2026) :
+
+- `FD9_GetChartImage(tFD9_Image *image, tFD9_PatchMeasurePoint *points, const uint32_t *nombre)` (`fd9-x86` `0x100b17d0`) : l'image de la feuille prise, refusée aux états 1 à 6 (0x1f74). FD-S2w l'appelle à l'événement 7, sans points, pour l'onglet « Measured Point » (`s2w-x86` `0x41ed00`). Candidat pour montrer la feuille dans l'application.
+- `FD9_MatchingChart(tFD9_ChartCoordinate *sortie, tFD9_PatchMeasurePoint *points, const uint32_t *nombre, const tFD9_ChartCoordinate *entree)` (`0x100b1730`, travail `0x1009d390`) : à l'état 7 seulement, recale une définition sur l'image prise et rend coordonnées et points. FD-S2w ne l'importe pas.
+- FD-S2w renvoie des points corrigés à la main en relançant `FD9_StartPatchRecognition` (mode 1 ou 2) avec une définition corrigée (`ReStartPatchRecognition`, `s2w-x86` `0x41f4c0`).
