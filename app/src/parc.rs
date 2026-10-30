@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use bibliotheque::ResumeTirage;
 use bibliotheque::{
     nom_profil_propose, Bibliotheque, ConditionImpression, ErreurBibliotheque, EtatVerification,
     IdCondition, IdImprimante, IdPapier, IdProfil, Imprimante, NouveauProfil, Parc, ResumeImportee,
@@ -106,6 +107,9 @@ pub struct DetailReglage {
     /// Les mesures importées vues comme sources d'un profil, dans le même
     /// ordre que `importees`.
     pub sources: Vec<SourceProfil>,
+    /// Mires préparées pour la résolution, de la plus récente à la plus
+    /// ancienne.
+    pub tirages: Vec<ResumeTirage>,
     /// Le profil actif est installé dans Windows, à l'identique. Faux tant
     /// que le système n'a pas été regardé ([`BibliothequeOuverte::detail_reglage_installe`]).
     pub installe: bool,
@@ -145,7 +149,7 @@ pub fn instant_utc(instant: SystemTime) -> String {
 }
 
 /// Lit un fichier choisi comme profil, borné à [`TAILLE_MAX_PROFIL`].
-fn lire_profil(fichier: &Path) -> Result<Vec<u8>, String> {
+pub(crate) fn lire_profil(fichier: &Path) -> Result<Vec<u8>, String> {
     let illisible = |e: std::io::Error| {
         eprintln!("{} : {e}", fichier.display());
         "parc.erreur.fichier_illisible".to_string()
@@ -258,6 +262,7 @@ impl BibliothequeOuverte {
                 mesures,
                 importees,
                 sources,
+                tirages: b.tirages(condition)?,
                 installe: false,
             }))
         })?;

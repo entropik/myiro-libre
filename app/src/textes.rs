@@ -367,6 +367,1150 @@ const FRANCAIS: Catalogue = &[
         "profil.sans_mesure",
         "Importez d’abord un export CGATS de FD-S2w ou de MYIROtools dans cette résolution.",
     ),
+    (
+        "profil.erreur.outil_manquant",
+        "Un outil d’ArgyllCMS manque dans le dossier argyll à côté de l’application. Remplacez ce dossier par une copie complète d’ArgyllCMS 3.5.0, puis relancez l’application.",
+    ),
+    (
+        "comparer.refus.en_tete",
+        "Ce fichier n’est pas un profil ICC lisible.",
+    ),
+    (
+        "comparer.refus.pas_rvb",
+        "Ce profil n’est pas un profil RVB. La comparaison CMJN n’est pas encore prévue.",
+    ),
+    (
+        "comparer.refus.sans_table",
+        "Ce profil n’a pas de table colorimétrique (A2B1)\u{202f}: c’est peut-être un profil d’écran. Il n’est pas comparé.",
+    ),
+    (
+        "comparer.refus.structure",
+        "La table colorimétrique de ce profil est d’une structure que myiro-libre ne lit pas encore ({detail}). Il n’est pas comparé.",
+    ),
+    (
+        "comparer.refus.tronque",
+        "Ce profil est incomplet\u{202f}: une partie ({detail}) sort du fichier. Il n’est pas comparé.",
+    ),
+    (
+        "comparer.refus.sans_blanc",
+        "Ce profil ne dit pas quel est le blanc du support\u{202f}: ses couleurs absolues ne se calculent pas. Il n’est pas comparé.",
+    ),
+    (
+        "comparer.refus.sans_table_inverse",
+        "Ce profil n’a pas de table inverse lisible (B2A1)\u{202f}: on ne sait pas quelles couleurs l’imprimante rendrait de l’image. Ce point reste inconnu.",
+    ),
+    (
+        "comparer.refus.trop_de_profils",
+        "On compare quatre profils au plus. Retirez-en un, puis recommencez.",
+    ),
+    (
+        "comparer.refus.fichier_ferme",
+        "Ce fichier n’est plus ouvert. Ouvrez-le de nouveau.",
+    ),
+    (
+        "comparer.refus.aucun_profil",
+        "Choisissez au moins un profil à comparer.",
+    ),
+    (
+        "comparer.refus.profil_inconnu",
+        "Ce profil n’est plus dans la bibliothèque. Choisissez-en un autre dans la liste.",
+    ),
+    (
+        "comparer.refus.fichier_illisible",
+        "Ce fichier ne peut pas être lu. Vérifiez qu’il existe toujours, puis ouvrez-le de nouveau.",
+    ),
+    (
+        "comparer.refus.fichier_trop_grand",
+        "Ce fichier est bien trop grand pour un profil ICC\u{202f}: il n’est pas ouvert.",
+    ),
+    (
+        "comparer.image.refus.en_tete",
+        "Le profil embarqué dans cette image n’est pas un profil ICC lisible ({detail}).",
+    ),
+    (
+        "comparer.image.refus.pas_rvb",
+        "Le profil embarqué dans cette image est un profil CMJN. Les images CMJN sont prévues dans une seconde étape.",
+    ),
+    (
+        "comparer.image.refus.sans_conversion",
+        "Le profil embarqué dans cette image ne dit pas quelles couleurs ses pixels demandent\u{202f}: il n’a ni table A2B, ni matrice et courbes, ni courbe de gris.",
+    ),
+    (
+        "comparer.image.refus.structure",
+        "Le profil embarqué dans cette image est d’une structure que myiro-libre ne lit pas encore ({detail}).",
+    ),
+    (
+        "comparer.image.refus.tronque",
+        "Le profil embarqué dans cette image est incomplet\u{202f}: une partie ({detail}) sort du profil.",
+    ),
+    (
+        "comparer.image.refus.illisible",
+        "Le profil embarqué dans cette image est abîmé ou incomplet\u{202f}: il ne se lit pas ({detail}).",
+    ),
+    (
+        "image.ouvrir",
+        "Ajouter une image",
+    ),
+    (
+        "image.filtre",
+        "Images JPEG, PNG ou TIFF",
+    ),
+    (
+        "image.traiter_srvb",
+        "Traiter comme sRVB",
+    ),
+    (
+        "image.refus.cmjn",
+        "Cette image est en CMJN. La comparaison des images CMJN viendra dans une seconde étape. Ouvrez une version RVB de la photo.",
+    ),
+    (
+        "image.refus.profil",
+        "Le profil intégré à l’image ne se lit pas ({detail}). Choisissez «\u{202f}Traiter comme sRVB\u{202f}» si la photo vient d’un appareil ou d’un site en sRVB.",
+    ),
+    (
+        "image.refus.trop_grande",
+        "Cette image est trop grande pour être ouverte (plus de 120 millions de pixels, ou un fichier de plus de 1\u{202f}Go). Ouvrez une version réduite de la photo.",
+    ),
+    (
+        "image.refus.illisible",
+        "Ce fichier ne se lit pas comme une image. Vérifiez qu’il existe toujours et qu’il s’ouvre dans un autre logiciel, puis ouvrez-le de nouveau.",
+    ),
+    (
+        "image.refus.format",
+        "Ce format d’image n’est pas pris en charge. Ouvrez la photo en JPEG, PNG ou TIFF.",
+    ),
+    (
+        "image.refus.aucune",
+        "Aucune image n’est ouverte. Ajoutez-en une, puis recommencez.",
+    ),
+    (
+        "image.refus.sans_ecarts",
+        "Les écarts de ce profil ne sont pas calculés. Relancez l’analyse de l’image.",
+    ),
+    (
+        "image.annulee",
+        "Analyse de l’image annulée.",
+    ),
+    (
+        "image.erreur.calcul",
+        "Le calcul de ce profil s’est arrêté sur une erreur de myiro-libre. Ce point reste inconnu.",
+    ),
+    (
+        "image.profil.embarque",
+        "Profil de l’image\u{202f}: {nom}",
+    ),
+    (
+        "image.profil.sans_nom",
+        "profil intégré sans nom",
+    ),
+    (
+        "image.profil.ecartee",
+        "Table {table} du profil de l’image non utilisée\u{202f}: {raison}",
+    ),
+    (
+        "image.profil.srvb",
+        "Profil de l’image\u{202f}: sRVB (aucun profil intégré)",
+    ),
+    (
+        "image.profil.suppose",
+        "sRVB, supposé\u{202f}: choisi par vous",
+    ),
+    (
+        "image.approche",
+        "Calculé sur 1 pixel sur {n}",
+    ),
+    (
+        "image.seize_bits",
+        "Valeurs 16 bits ramenées à 8 bits",
+    ),
+    (
+        "image.titre",
+        "Image",
+    ),
+    (
+        "image.aide",
+        "Ouvrez une photo de client en RVB (JPEG, PNG ou TIFF)\u{202f}: pour chaque profil affiché, la page montre les pixels que l’imprimante ne pourra pas reproduire. L’image reste en mémoire le temps de la comparaison\u{202f}; elle n’est ni rangée ni copiée.",
+    ),
+    (
+        "image.remplacer",
+        "Ouvrir une autre image",
+    ),
+    (
+        "image.retirer",
+        "Retirer l’image",
+    ),
+    (
+        "image.en_cours",
+        "Analyse de l’image en cours…",
+    ),
+    (
+        "image.annuler",
+        "Annuler",
+    ),
+    (
+        "image.relancer",
+        "Relancer l’analyse",
+    ),
+    (
+        "image.taille",
+        "Image d’analyse de {l} × {h} pixels, tirée d’une photo de {lo} × {ho} pixels",
+    ),
+    (
+        "image.surimpression.profil",
+        "Profil de la surimpression",
+    ),
+    (
+        "image.surimpression.inconnue",
+        "Pas de surimpression pour ce profil\u{202f}: {raison}",
+    ),
+    (
+        "image.seuil.valeur",
+        "Seuil d’alerte {s}\u{202f}ΔE00",
+    ),
+    (
+        "image.affichage",
+        "Afficher",
+    ),
+    (
+        "image.affichage.image",
+        "Image",
+    ),
+    (
+        "image.affichage.les_deux",
+        "Image et alerte",
+    ),
+    (
+        "image.affichage.alerte",
+        "Alerte seule",
+    ),
+    (
+        "nuage.bascule",
+        "Couleurs de l’image",
+    ),
+    (
+        "nuage.aide",
+        "Chaque point est la moyenne d’un groupe de couleurs proches de l’image, placée sur le blanc du papier de {profil}. Il passe dans la couleur d’alerte dès qu’une de ses couleurs dépasse {s}\u{202f}ΔE00.",
+    ),
+    (
+        "nuage.indisponible",
+        "Les couleurs de l’image apparaissent ici quand une image est analysée face au profil choisi pour la surimpression.",
+    ),
+    (
+        "nuage.aria",
+        "Couleurs de l’image\u{202f}: {n} points, dont {a} au-delà du seuil d’alerte.",
+    ),
+    (
+        "nuage.compte",
+        "Couleurs de l’image dans la coupe (L* {l} ± {d})\u{202f}: {n} points, dont {a} au-delà du seuil d’alerte.",
+    ),
+    (
+        "nuage.legende",
+        "Couleurs de l’image, L* {l} ± {d}",
+    ),
+    (
+        "nuage.legende.alerte",
+        "Couleur de l’image au-delà du seuil d’alerte",
+    ),
+    (
+        "image.legende",
+        "Écart d’au plus {s}\u{202f}ΔE00, {profil}, sans compensation du point noir. En vert, au-delà.",
+    ),
+    (
+        "image.canvas.aria",
+        "{p}\u{202f}% de l’image au-delà de {s}\u{202f}ΔE00 avec {profil}. Cliquez sur l’image pour voir la couleur d’un point et sa couleur imprimée.",
+    ),
+    (
+        "image.chiffres",
+        "Chiffres de l’image",
+    ),
+    (
+        "image.chiffres.part",
+        "Part de l’image au-delà de {s}\u{202f}ΔE00",
+    ),
+    (
+        "image.classe.leger",
+        "Léger, de 2 à 5\u{202f}ΔE00",
+    ),
+    (
+        "image.classe.moyen",
+        "Moyen, de 5 à 10\u{202f}ΔE00",
+    ),
+    (
+        "image.classe.fort",
+        "Fort, plus de 10\u{202f}ΔE00",
+    ),
+    (
+        "image.chiffres.teintes",
+        "Teintes les plus touchées",
+    ),
+    (
+        "image.chiffres.inconnus",
+        "Pixels à l’écart inconnu",
+    ),
+    (
+        "image.chiffres.couleurs",
+        "Couleurs distinctes",
+    ),
+    (
+        "image.chiffres.raison",
+        "Raison",
+    ),
+    (
+        "image.valeur.pourcent",
+        "{p}\u{202f}%",
+    ),
+    (
+        "image.teinte.valeur",
+        "{nom} {p}\u{202f}%",
+    ),
+    (
+        "image.teintes.aucune",
+        "aucune",
+    ),
+    (
+        "image.inconnus.valeur",
+        "{n} pixels ({p}\u{202f}%), jamais comptés comme bons",
+    ),
+    (
+        "image.inconnus.aucun",
+        "aucun",
+    ),
+    (
+        "image.teinte.rouge",
+        "Rouges",
+    ),
+    (
+        "image.teinte.jaune",
+        "Jaunes",
+    ),
+    (
+        "image.teinte.vert",
+        "Verts",
+    ),
+    (
+        "image.teinte.cyan",
+        "Cyans",
+    ),
+    (
+        "image.teinte.bleu",
+        "Bleus",
+    ),
+    (
+        "image.teinte.magenta",
+        "Magentas",
+    ),
+    (
+        "image.teinte.gris",
+        "Gris (C* < 5)",
+    ),
+    (
+        "image.verdict",
+        "{p}\u{202f}% de l’image est imprimable sur ce papier avec ce profil",
+    ),
+    (
+        "image.verdict.plus_de",
+        "plus de {p}",
+    ),
+    (
+        "image.verdict.moins_de",
+        "moins de {p}",
+    ),
+    (
+        "image.verdict.inconnus",
+        "\u{202f}; {p}\u{202f}% inconnus",
+    ),
+    (
+        "image.verdict.inconnu",
+        "Part imprimable inconnue avec ce profil",
+    ),
+    (
+        "image.point_noir",
+        "Compensation du point noir",
+    ),
+    (
+        "image.point_noir.aide",
+        "Le noir de l’image est ramené sur le noir le plus profond du papier, comme le fait le pilote d’impression en colorimétrique relatif avec compensation. Changer ce réglage relance l’analyse.",
+    ),
+    (
+        "image.legende.point_noir",
+        "Écart d’au plus {s}\u{202f}ΔE00, {profil}, avec compensation du point noir. En vert, au-delà.",
+    ),
+    (
+        "image.rendu.point_noir",
+        "Colorimétrique relatif, avec compensation du point noir",
+    ),
+    (
+        "image.rendu.relatif",
+        "Colorimétrique relatif, sans compensation du point noir",
+    ),
+    (
+        "image.agrandir",
+        "Agrandir",
+    ),
+    (
+        "image.agrandie.titre",
+        "Image agrandie",
+    ),
+    (
+        "image.agrandie.fermer",
+        "Fermer",
+    ),
+    (
+        "image.agrandie.aide",
+        "Cliquez sur l’image pour voir la couleur d’un point. Échap ou un clic à côté de l’image pour revenir.",
+    ),
+    (
+        "pastilles.pipette.visee",
+        "Couleur visée après compensation du point noir\u{202f}: {lab}, à {e}\u{202f}ΔE00 de la couleur de l’image",
+    ),
+    (
+        "pastilles.pipette.visee_identique",
+        "Compensation du point noir\u{202f}: la couleur visée est celle de l’image.",
+    ),
+    (
+        "pastilles.aria.visee",
+        "Couleur visée\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "image.pixel.hors_image",
+        "Ce point est en dehors de l’image.",
+    ),
+    (
+        "image.pixel.transparent",
+        "Ce point de l’image est transparent\u{202f}: il n’a pas de couleur à imprimer.",
+    ),
+    (
+        "image.pixel.inconnu",
+        "L’écart de cette couleur n’a pas pu être calculé.",
+    ),
+    (
+        "pastilles.titre",
+        "Couleurs hors gamut",
+    ),
+    (
+        "pastilles.lecture",
+        "À gauche la couleur de l’image, à droite la couleur imprimée avec le profil choisi\u{202f}; dessous, l’écart et la part de l’image. Les plus présentes d’abord.",
+    ),
+    (
+        "pastilles.aucune",
+        "Aucune des couleurs les plus présentes de l’image n’est au-delà de {s}\u{202f}ΔE00 avec {profil}.",
+    ),
+    (
+        "pastilles.precaution",
+        "Couleurs approchées à l’écran (écran non calibré).",
+    ),
+    (
+        "pastilles.ecart",
+        "{e}\u{202f}ΔE00",
+    ),
+    (
+        "pastilles.part",
+        "{p}\u{202f}%",
+    ),
+    (
+        "pastilles.aria.image",
+        "Couleur de l’image\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "pastilles.aria.imprimee",
+        "Couleur imprimée\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "pastilles.image",
+        "Image",
+    ),
+    (
+        "pastilles.imprimee",
+        "Imprimé",
+    ),
+    (
+        "pastilles.lab",
+        "L* {l}  a* {a}  b* {b}",
+    ),
+    (
+        "pastilles.pipette.titre",
+        "Couleur du point cliqué",
+    ),
+    (
+        "pastilles.pipette.aide",
+        "Cliquez sur l’image pour voir la couleur d’un point et sa couleur imprimée.",
+    ),
+    (
+        "pastilles.pipette.au_dela",
+        "Au-delà du seuil d’alerte de {s}\u{202f}ΔE00",
+    ),
+    (
+        "pastilles.pipette.en_deca",
+        "En deçà du seuil d’alerte de {s}\u{202f}ΔE00",
+    ),
+    (
+        "pastilles.pipette.inconnu",
+        "Couleur imprimée inconnue avec {profil}\u{202f}: {raison}",
+    ),
+    (
+        "comparer.zone.gris",
+        "Gris",
+    ),
+    (
+        "comparer.zone.ombres",
+        "Ombres",
+    ),
+    (
+        "comparer.zone.clairs",
+        "Tons clairs",
+    ),
+    (
+        "comparer.zone.saturee.rouge",
+        "Rouges saturés",
+    ),
+    (
+        "comparer.zone.saturee.jaune",
+        "Jaunes saturés",
+    ),
+    (
+        "comparer.zone.saturee.vert",
+        "Verts saturés",
+    ),
+    (
+        "comparer.zone.saturee.cyan",
+        "Cyans saturés",
+    ),
+    (
+        "comparer.zone.saturee.bleu",
+        "Bleus saturés",
+    ),
+    (
+        "comparer.zone.saturee.magenta",
+        "Magentas saturés",
+    ),
+    (
+        "comparer.zone.moyenne.rouge",
+        "Rouges moyens",
+    ),
+    (
+        "comparer.zone.moyenne.jaune",
+        "Jaunes moyens",
+    ),
+    (
+        "comparer.zone.moyenne.vert",
+        "Verts moyens",
+    ),
+    (
+        "comparer.zone.moyenne.cyan",
+        "Cyans moyens",
+    ),
+    (
+        "comparer.zone.moyenne.bleu",
+        "Bleus moyens",
+    ),
+    (
+        "comparer.zone.moyenne.magenta",
+        "Magentas moyens",
+    ),
+    (
+        "comparer.fidelite.sans_mesures",
+        "Inconnue\u{202f}: ce profil n’embarque pas ses mesures.",
+    ),
+    (
+        "comparer.fidelite.illisible",
+        "Inconnue\u{202f}: les mesures embarquées dans ce profil ne se lisent pas.",
+    ),
+    (
+        "comparer.fidelite.echelle_spectre",
+        "Inconnue\u{202f}: la plus forte valeur des spectres embarqués est entre 1,5 et 2. On ne sait pas s’ils sont en réflectance de 0 à 1 ou en pourcentage, et rien n’est deviné.",
+    ),
+    (
+        "comparer.fidelite.rvb_inconnus",
+        "Inconnue\u{202f}: les mesures embarquées ne disent pas quelles valeurs RVB ont été imprimées, ou dans quelle échelle.",
+    ),
+    (
+        "comparer.fidelite.rvb_hors_echelle",
+        "Inconnue\u{202f}: une plage des mesures embarquées a une valeur RVB hors de l’échelle prévue.",
+    ),
+    (
+        "comparer.fidelite.lab_inconnu",
+        "Inconnue\u{202f}: une plage des mesures embarquées n’a ni Lab ni spectre utilisable.",
+    ),
+    (
+        "comparer.limite.sans_argyll",
+        "La limite du gamut demande ArgyllCMS 3.5.0, introuvable à côté de l’application. La surface brute est montrée, et le reste de la comparaison est calculé.",
+    ),
+    (
+        "comparer.limite.sans_iccgamut",
+        "L’outil iccgamut d’ArgyllCMS manque\u{202f}: la limite du gamut n’est pas calculée, le reste de la comparaison l’est. Remplacez le dossier argyll par une copie complète d’ArgyllCMS 3.5.0.",
+    ),
+    (
+        "comparer.limite.argyll_version",
+        "ArgyllCMS {version} a été trouvé, mais seule la version 3.5.0 est validée\u{202f}: la limite du gamut n’est pas calculée, le reste de la comparaison l’est.",
+    ),
+    (
+        "comparer.limite.argyll_illisible",
+        "ArgyllCMS ne répond pas comme prévu\u{202f}: la limite du gamut n’est pas calculée, le reste de la comparaison l’est.",
+    ),
+    (
+        "comparer.limite.fichier",
+        "Un fichier de travail d’iccgamut n’a pas pu être lu ou écrit\u{202f}: la limite du gamut n’est pas calculée, le reste de la comparaison l’est. Réessayez.",
+    ),
+    (
+        "comparer.limite.illisible",
+        "La limite du gamut écrite par iccgamut ne se lit pas\u{202f}: elle n’est pas montrée, le reste de la comparaison est calculé.",
+    ),
+    (
+        "comparer.limite.interrompue",
+        "iccgamut s’est arrêté avant la fin, sans dire d’erreur\u{202f}: la limite du gamut n’est pas calculée, le reste de la comparaison l’est. Recommencez la comparaison.",
+    ),
+    (
+        "comparer.erreur.limite",
+        "Le calcul de la limite du gamut a échoué dans ArgyllCMS (iccgamut)\u{202f}: elle n’est pas montrée, le reste de la comparaison est calculé.",
+    ),
+    (
+        "comparer.origine.bibliotheque",
+        "Bibliothèque\u{202f}: {chemin}, profil du {date}",
+    ),
+    (
+        "comparer.origine.fichier",
+        "Fichier\u{202f}: {nom} (ouvert pour la comparaison, pas dans la bibliothèque)",
+    ),
+    (
+        "comparer.inconnu",
+        "inconnu",
+    ),
+    (
+        "comparer.vue3d.aria",
+        "Gamuts en volume (flèches pour tourner, + et − pour zoomer, 0 pour revenir à la vue de départ)\u{202f}: {profils}.",
+    ),
+    (
+        "comparer.vue3d.aria.profil",
+        "{nom}, volume {volume} unités L*a*b* au cube, blanc du papier L* {blanc}",
+    ),
+    (
+        "comparer.vue3d.aria.vide",
+        "Gamuts en volume\u{202f}: aucun profil affiché.",
+    ),
+    (
+        "comparer.vue3d.bulle",
+        "{nom}\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "comparer.vue3d.blanc",
+        "Blanc du papier L* {l}",
+    ),
+    (
+        "comparer.graphique.teinte",
+        "Teinte h (°)",
+    ),
+    (
+        "comparer.graphique.chroma",
+        "Chroma C*",
+    ),
+    (
+        "comparer.graphique.clarte",
+        "Clarté L*",
+    ),
+    (
+        "comparer.graphique.position",
+        "Position sur le chemin (0 à 255)",
+    ),
+    (
+        "comparer.graphique.mesures",
+        "Plages mesurées sur ce chemin",
+    ),
+    (
+        "comparer.graphique.valeurs",
+        "Valeurs",
+    ),
+    (
+        "comparer.graphique.plage_mesuree",
+        "{position} (plage mesurée)",
+    ),
+    (
+        "comparer.graphique.teintes.aria",
+        "Chroma maximale C* par teinte, de 0 à 360°\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
+    ),
+    (
+        "comparer.graphique.coupe.aria",
+        "Coupe du gamut à clarté L* {l}, dans le plan a*b*\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
+    ),
+    (
+        "comparer.graphique.chemin.l.aria",
+        "Clarté L* le long du chemin du cube RVB\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
+    ),
+    (
+        "comparer.graphique.chemin.c.aria",
+        "Chroma C* le long du chemin du cube RVB\u{202f}: {profils}. Les valeurs se lisent dans le tableau «\u{202f}Valeurs\u{202f}».",
+    ),
+    (
+        "comparer.titre",
+        "Comparer des profils",
+    ),
+    (
+        "comparer.aide",
+        "De un à quatre profils RVB, rangés dans la bibliothèque ou ouverts depuis un fichier. Le premier sert de référence aux écarts.",
+    ),
+    (
+        "comparer.profils",
+        "Profils comparés",
+    ),
+    (
+        "comparer.ajouter",
+        "Ajouter un profil",
+    ),
+    (
+        "comparer.ajouter.chargement",
+        "Lecture de la liste des profils en cours…",
+    ),
+    (
+        "comparer.ajouter.max",
+        "Quatre profils au plus\u{202f}: retirez-en un pour en ajouter un autre.",
+    ),
+    (
+        "comparer.fermer",
+        "Fermer la comparaison",
+    ),
+    (
+        "comparer.en_cours",
+        "Comparaison en cours\u{202f}: la limite du gamut peut prendre quelques secondes par profil.",
+    ),
+    (
+        "comparer.ouvrir",
+        "Comparer",
+    ),
+    (
+        "comparer.ouvrir.actuel",
+        "Comparer à l’actuel",
+    ),
+    (
+        "comparer.retirer",
+        "Retirer",
+    ),
+    (
+        "comparer.reference",
+        "référence",
+    ),
+    (
+        "comparer.choix.titre",
+        "Profils de la bibliothèque",
+    ),
+    (
+        "comparer.choix.vide",
+        "Aucun profil rangé dans la bibliothèque pour l’instant.",
+    ),
+    (
+        "comparer.choix.actuel",
+        "actuel",
+    ),
+    (
+        "comparer.choix.fichier",
+        "Ouvrir un fichier .icc",
+    ),
+    (
+        "comparer.vide",
+        "Ajoutez un profil pour commencer la comparaison.",
+    ),
+    (
+        "comparer.chiffres",
+        "Chiffres clés",
+    ),
+    (
+        "comparer.chiffres.blanc",
+        "Blanc du papier",
+    ),
+    (
+        "comparer.chiffres.noir",
+        "Noir",
+    ),
+    (
+        "comparer.chiffres.noir.valeur",
+        "L* {l} · densité ≈ {d}",
+    ),
+    (
+        "comparer.chiffres.volume_surface",
+        "Volume, surface brute",
+    ),
+    (
+        "comparer.chiffres.volume_limite",
+        "Volume, limite du gamut",
+    ),
+    (
+        "comparer.chiffres.limite_indisponible",
+        "non calculé",
+    ),
+    (
+        "comparer.chiffres.fidelite",
+        "Fidélité à ses mesures",
+    ),
+    (
+        "comparer.chiffres.fidelite.valeur",
+        "moyenne {moyenne}, p95 {p95}, max {max} ΔE00 sur {plages} plages",
+    ),
+    (
+        "comparer.chiffres.repetabilite",
+        "Répétabilité des mesures",
+    ),
+    (
+        "comparer.chiffres.repetabilite.valeur",
+        "moyenne {moyenne}, max {max} ΔE00 ({couleurs} couleurs, {paires} paires)",
+    ),
+    (
+        "comparer.chiffres.repetabilite.inconnue",
+        "inconnue\u{202f}: aucune plage mesurée deux fois",
+    ),
+    (
+        "comparer.valeur.lab",
+        "L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "comparer.valeur.volume",
+        "{volume} unités L*a*b* au cube",
+    ),
+    (
+        "comparer.volume",
+        "Gamut en volume",
+    ),
+    (
+        "comparer.volume.affiches",
+        "Profils affichés",
+    ),
+    (
+        "comparer.volume.couleur",
+        "Couleur",
+    ),
+    (
+        "comparer.volume.couleur.serie",
+        "Par profil",
+    ),
+    (
+        "comparer.volume.couleur.reelle",
+        "Couleurs réelles",
+    ),
+    (
+        "comparer.volume.couleur.aide",
+        "En couleurs réelles, seul le premier profil affiché est habillé de ses couleurs\u{202f}: le profil de référence, quand il est coché. Les autres profils affichés sont dessinés en fil de fer, dans leur couleur de profil, pour qu’on les distingue.",
+    ),
+    (
+        "comparer.volume.forme",
+        "Forme",
+    ),
+    (
+        "comparer.volume.forme.limite",
+        "Limite du gamut",
+    ),
+    (
+        "comparer.volume.forme.surface",
+        "Surface brute",
+    ),
+    (
+        "comparer.volume.rendu",
+        "Rendu",
+    ),
+    (
+        "comparer.volume.rendu.opaque",
+        "Opaque",
+    ),
+    (
+        "comparer.volume.rendu.transparent",
+        "Transparent",
+    ),
+    (
+        "comparer.volume.aide",
+        "Glisser pour tourner, molette pour zoomer\u{202f}; au clavier, flèches, + et −, 0 pour revenir.",
+    ),
+    (
+        "comparer.volume.surface_montree",
+        "{nom}\u{202f}: surface brute montrée. {raison}",
+    ),
+    (
+        "comparer.teintes",
+        "Chroma maximale par teinte",
+    ),
+    (
+        "comparer.coupe",
+        "Coupe à clarté constante",
+    ),
+    (
+        "comparer.coupe.clarte",
+        "Clarté L*",
+    ),
+    (
+        "comparer.chemin",
+        "Courbes le long d’un chemin du cube RVB",
+    ),
+    (
+        "comparer.chemin.depart",
+        "Départ",
+    ),
+    (
+        "comparer.chemin.arrivee",
+        "Arrivée",
+    ),
+    (
+        "comparer.primaires",
+        "Couleurs de base",
+    ),
+    (
+        "comparer.primaire.blanc",
+        "Blanc",
+    ),
+    (
+        "comparer.primaire.noir",
+        "Noir",
+    ),
+    (
+        "comparer.primaire.rouge",
+        "Rouge",
+    ),
+    (
+        "comparer.primaire.vert",
+        "Vert",
+    ),
+    (
+        "comparer.primaire.bleu",
+        "Bleu",
+    ),
+    (
+        "comparer.primaire.cyan",
+        "Cyan",
+    ),
+    (
+        "comparer.primaire.magenta",
+        "Magenta",
+    ),
+    (
+        "comparer.primaire.jaune",
+        "Jaune",
+    ),
+    (
+        "comparer.primaires.couleur",
+        "Couleur",
+    ),
+    (
+        "comparer.primaires.profil",
+        "Profil",
+    ),
+    (
+        "comparer.primaires.pastille",
+        "Pastille",
+    ),
+    (
+        "comparer.primaires.approchee",
+        "approchée",
+    ),
+    (
+        "comparer.primaires.sans_teinte",
+        "—",
+    ),
+    (
+        "comparer.ecarts",
+        "Écarts au profil de référence",
+    ),
+    (
+        "comparer.ecarts.deux",
+        "Les écarts se calculent à partir de deux profils.",
+    ),
+    (
+        "comparer.ecarts.titre",
+        "{nom} comparé à {reference}",
+    ),
+    (
+        "comparer.ecarts.identiques",
+        "Profils identiques\u{202f}: aucun écart sur les 35 937 valeurs RVB.",
+    ),
+    (
+        "comparer.ecarts.memes_mesures",
+        "Mêmes mesures\u{202f}: seul le logiciel de calcul change.",
+    ),
+    (
+        "comparer.ecarts.refuse",
+        "Pas d’écarts\u{202f}: ce profil, ou le profil de référence, n’est pas comparé.",
+    ),
+    (
+        "comparer.ecarts.grille",
+        "Sur 35 937 valeurs RVB",
+    ),
+    (
+        "comparer.ecarts.moyenne",
+        "Moyenne",
+    ),
+    (
+        "comparer.ecarts.mediane",
+        "Médiane",
+    ),
+    (
+        "comparer.ecarts.p95",
+        "p95",
+    ),
+    (
+        "comparer.ecarts.max",
+        "Max",
+    ),
+    (
+        "comparer.ecarts.sup_1",
+        "Au-delà de 1 ΔE00",
+    ),
+    (
+        "comparer.ecarts.sup_2",
+        "Au-delà de 2 ΔE00",
+    ),
+    (
+        "comparer.ecarts.part",
+        "{part}\u{202f}%",
+    ),
+    (
+        "comparer.ecarts.zones",
+        "Par zone",
+    ),
+    (
+        "comparer.ecarts.zone",
+        "Zone",
+    ),
+    (
+        "comparer.ecarts.nombre",
+        "Valeurs",
+    ),
+    (
+        "comparer.ecarts.pires",
+        "Les 10 écarts les plus forts",
+    ),
+    (
+        "comparer.ecarts.rvb",
+        "RVB",
+    ),
+    (
+        "comparer.ecarts.lab_reference",
+        "L*a*b* de référence",
+    ),
+    (
+        "comparer.ecarts.lab_compare",
+        "L*a*b* comparé",
+    ),
+    (
+        "comparer.ecarts.ecart",
+        "ΔE00",
+    ),
+    (
+        "comparer.ecarts.primaires",
+        "Couleurs de base",
+    ),
+    (
+        "comparer.ecarts.fidelites",
+        "Fidélités côte à côte",
+    ),
+    (
+        "comparer.methode",
+        "Méthode",
+    ),
+    (
+        "comparer.methode.resume",
+        "Méthode\u{202f}: ce qui est calculé, ce qui est approché",
+    ),
+    (
+        "comparer.methode.calcule.titre",
+        "Calculé",
+    ),
+    (
+        "comparer.methode.calcule",
+        "Valeurs lues dans les tables A2B1 des profils, en colorimétrie absolue (blanc du papier compris). Volume de la surface du cube RVB, à 33 points par arête. Limite du gamut et son volume par iccgamut (ArgyllCMS 3.5.0). Écarts ΔE00 sur 35 937 valeurs RVB.",
+    ),
+    (
+        "comparer.methode.approche.titre",
+        "Approché",
+    ),
+    (
+        "comparer.methode.approche",
+        "Coupe\u{202f}: section du gamut à la clarté choisie, lue tous les 2°. Chroma par teinte\u{202f}: la plus forte trouvée dans chaque tranche de 2°. Densité du noir tirée de Y, et non densité ISO status T. Pastilles d’écran\u{202f}: une couleur hors de l’écran est ramenée, et marquée «\u{202f}approchée\u{202f}».",
+    ),
+    (
+        "comparer.methode.volume",
+        "Le volume dit l’étendue des couleurs d’un profil, pas sa qualité.",
+    ),
+    (
+        "comparer.methode.fidelite",
+        "La fidélité se mesure sur les plages qui ont servi au calcul\u{202f}: elle avantage le profil qui les suit au plus près. Pour savoir lequel prédit le mieux un nouveau tirage, il faut mesurer une mire de contrôle (vérification, prévue).",
+    ),
+    (
+        "comparer.provenance.origine",
+        "Origine",
+    ),
+    (
+        "comparer.provenance.version",
+        "Version ICC",
+    ),
+    (
+        "comparer.provenance.description",
+        "Description",
+    ),
+    (
+        "comparer.provenance.aucune",
+        "aucune",
+    ),
+    (
+        "comparer.provenance.grille",
+        "Grille A2B1",
+    ),
+    (
+        "comparer.provenance.grille.valeur",
+        "{n} points par arête",
+    ),
+    (
+        "comparer.provenance.mesures",
+        "Mesures embarquées",
+    ),
+    (
+        "comparer.provenance.mesures.valeur",
+        "{n} plages",
+    ),
+    (
+        "comparer.provenance.condition",
+        "Condition de mesure",
+    ),
+    (
+        "comparer.provenance.condition.inconnue",
+        "inconnue",
+    ),
+    (
+        "comparer.provenance.supposee",
+        "supposée",
+    ),
+    (
+        "comparer.provenance.rvb",
+        "Valeurs RVB",
+    ),
+    (
+        "comparer.provenance.rvb_supposes",
+        "échelle 0 à 255 supposée",
+    ),
+    (
+        "comparer.provenance.lab",
+        "L*a*b* des mesures",
+    ),
+    (
+        "comparer.provenance.lab_calcule",
+        "calculé par myiro-libre depuis les spectres",
+    ),
+    (
+        "comparer.provenance.lab_lu",
+        "lu dans le fichier",
+    ),
+    (
+        "comparer.avance",
+        "Avancé\u{202f}: commande et journal d’iccgamut",
+    ),
+    (
+        "comparer.avance.commande",
+        "Commande",
+    ),
+    (
+        "comparer.avance.sans_commande",
+        "Sans ArgyllCMS, aucune commande n’est lancée.",
+    ),
+    (
+        "comparer.avance.journal",
+        "Journal d’iccgamut, {nom}",
+    ),
+    (
+        "comparer.avance.cause",
+        "Message d’ArgyllCMS, {nom}",
+    ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "Journal d’ArgyllCMS"),
     ("profil.rvb", "Valeurs RVB"),
@@ -381,6 +1525,39 @@ const FRANCAIS: Catalogue = &[
     (
         "profil.precision.valeur",
         "{moyenne} en moyenne, {max} au plus (ΔE00)",
+    ),
+    // Contrôle de cohérence des mesures (ticket #1)
+    (
+        "profil.refus.incoherent",
+        "Les mesures ne correspondent pas aux plages de la mire\u{202f}: le profil serait faux. Plages en cause\u{202f}: {plages}. Relisez la mire, vérifiez le sens de la feuille et l’ordre de lecture, et que ce fichier est bien celui de cette mire.",
+    ),
+    ("profil.coherence.autres", "et {n} autres"),
+    ("profil.coherence.autre", "et 1 autre"),
+    (
+        "profil.coherence.decalage",
+        "Les mesures semblent décalées de {n} plages.",
+    ),
+    (
+        "profil.coherence.decalage_une",
+        "Les mesures semblent décalées d’une plage.",
+    ),
+    (
+        "profil.coherence.criteres",
+        "Contrôles qui les signalent\u{202f}: {criteres}.",
+    ),
+    (
+        "profil.coherence.critere.degrade_gris",
+        "dégradé gris, du foncé au clair",
+    ),
+    ("profil.coherence.critere.blanc_noir", "blanc papier et noir"),
+    ("profil.coherence.critere.doublons", "plages répétées"),
+    ("profil.coherence.critere.voisines", "plages voisines"),
+    ("profil.coherence", "Mesures contrôlées"),
+    ("profil.coherence.accepte", "cohérentes"),
+    ("profil.coherence.non_fait", "Contrôles non faits"),
+    (
+        "profil.coherence.non_controle",
+        "non, profil calculé avant ce contrôle",
     ),
     // Installation dans Windows
     ("installation.installe", "Installé dans Windows"),
@@ -1031,6 +2208,114 @@ const FRANCAIS: Catalogue = &[
         "probleme.repos_incertain.action",
         "Pour mesurer de nouveau, cliquez sur «\u{202f}Réessayer\u{202f}»\u{202f}: l’instrument sera reconnecté, puis à étalonner.",
     ),
+    // Préparer une mire (ticket #33)
+    (
+        "mire.erreur.cote",
+        "Côté de plage refusé\u{202f}: le MYIRO-1 lit des plages de 7\u{202f}mm au moins, et la bande doit tenir sur la page. Choisissez un autre côté.",
+    ),
+    (
+        "mire.erreur.nombre_libre",
+        "Nombre de plages refusé\u{202f}: choisissez de 24 à 3\u{202f}000 plages.",
+    ),
+    (
+        "mire.erreur.ti1",
+        "Les plages choisies par ArgyllCMS sont illisibles. Rien n’a été préparé. Relancez la préparation.",
+    ),
+    (
+        "mire.erreur.nombre",
+        "ArgyllCMS n’a pas rendu le nombre de plages demandé. Rien n’a été préparé. Relancez la préparation.",
+    ),
+    (
+        "mire.erreur.generation",
+        "ArgyllCMS n’a pas pu choisir les plages de la mire. Rien n’a été préparé.",
+    ),
+    (
+        "mire.erreur.contraste",
+        "Plages trop proches pour être lues\u{202f}: certaines ne se distinguent pas assez de leur voisine ou du blanc du papier. Rien n’a été préparé. Choisissez un plus grand nombre de plages.",
+    ),
+    (
+        "mire.erreur.ecriture",
+        "Les pages de la mire n’ont pas pu être écrites dans le dossier Documents\\myiro-libre\\Mires. Vérifiez qu’il reste de la place et que le dossier n’est pas protégé, puis recommencez.",
+    ),
+    (
+        "mire.erreur.fichier_existant",
+        "Un fichier du même nom existe déjà dans le dossier Documents\\myiro-libre\\Mires\u{202f}: il n’a pas été remplacé, et rien n’a été préparé. Déplacez ou renommez l’ancien fichier, puis recommencez.",
+    ),
+    (
+        "mire.erreur.fd9_introuvable",
+        "Mire RGB-2520 introuvable. Placez le fichier «\u{202f}RGB-2520 A3 - 1p.tif\u{202f}» dans le dossier mire-fd9 à côté de l’application. Le MYIRO-1 reste utilisable.",
+    ),
+    (
+        "mire.erreur.fd9_autre",
+        "Ce fichier n’est pas la mire RGB-2520 retenue\u{202f}: il a été modifié ou remplacé. Rien n’a été préparé. Reprenez le fichier d’origine, sans l’ouvrir ni l’enregistrer dans un autre logiciel.",
+    ),
+    (
+        "mire.erreur.fd9_illisible",
+        "La mire RGB-2520 est illisible ou n’a pas la forme attendue. Rien n’a été préparé. Reprenez le fichier d’origine.",
+    ),
+    (
+        "mire.erreur.fd9_fixe",
+        "La mire du FD-9 est RGB-2520, sur une page A3\u{202f}: ni taille, ni format, ni côté à choisir.",
+    ),
+    ("mire.ouvrir", "Préparer une mire"),
+    ("mire.titre", "Préparer une mire"),
+    ("mire.instrument", "Instrument"),
+    ("mire.instrument.fd9", "FD-9"),
+    ("mire.instrument.myiro1", "MYIRO-1"),
+    ("mire.fd9.carte", "Mire RGB-2520 · 2\u{202f}520 plages · 1 page A3"),
+    (
+        "mire.myiro1.carte",
+        "Pages en bandes, taille et format au choix",
+    ),
+    ("mire.fd9.attendu", "Fichier attendu\u{202f}: {chemin}"),
+    ("mire.taille", "Taille"),
+    ("mire.taille.nom.rapide", "Rapide"),
+    ("mire.taille.nom.standard", "Standard"),
+    ("mire.taille.nom.approfondi", "Approfondi"),
+    ("mire.plages", "{n} plages"),
+    ("mire.pages.une", "1 page"),
+    ("mire.pages.plusieurs", "{n} pages"),
+    ("mire.format", "Format"),
+    ("mire.format.a4", "A4"),
+    ("mire.format.a3", "A3"),
+    ("mire.avance", "Avancé"),
+    ("mire.avance.resume", "{cote}\u{202f}mm, {plages} plages"),
+    ("mire.cote", "Côté des plages, en millimètres"),
+    (
+        "mire.cote.limites",
+        "{min}\u{202f}mm au moins (manuel du MYIRO-1), et la bande doit tenir sur la page.",
+    ),
+    (
+        "mire.nombre",
+        "Nombre de plages (vide pour garder la taille choisie)",
+    ),
+    ("mire.nombre.limites", "De 24 à 3\u{202f}000 plages."),
+    (
+        "mire.saisie.nombre",
+        "Saisie refusée\u{202f}: écrivez un nombre, par exemple 8 ou 8,5. Rien n’est lancé.",
+    ),
+    (
+        "mire.saisie.entier",
+        "Saisie refusée\u{202f}: écrivez un nombre entier de plages, par exemple 500. Rien n’est lancé.",
+    ),
+    ("mire.commande", "Commande équivalente"),
+    ("mire.preparer", "Préparer la mire"),
+    ("mire.fait", "Mire préparée et rangée avec cette résolution."),
+    (
+        "mire.deja_preparee",
+        "Mire déjà préparée le {date}, pas encore mesurée\u{202f}: ses fichiers sont repris, sans doublon.",
+    ),
+    ("mire.fichiers", "Fichiers à imprimer"),
+    ("mire.ouvrir_dossier", "Ouvrir le dossier"),
+    (
+        "mire.rappel",
+        "Imprimez à 100\u{202f}%, sans gestion des couleurs (dans le pilote et dans le logiciel d’impression).",
+    ),
+    ("mire.preparees", "Mires préparées"),
+    (
+        "mire.preparees.vide",
+        "Aucune mire préparée pour cette résolution.",
+    ),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -1363,6 +2648,1150 @@ const ANGLAIS: Catalogue = &[
         "profil.sans_mesure",
         "First import a CGATS export from FD-S2w or MYIROtools into this resolution.",
     ),
+    (
+        "profil.erreur.outil_manquant",
+        "A tool of ArgyllCMS is missing from the argyll folder next to the application. Replace this folder with a complete copy of ArgyllCMS 3.5.0, then restart the application.",
+    ),
+    (
+        "comparer.refus.en_tete",
+        "This file is not a readable ICC profile.",
+    ),
+    (
+        "comparer.refus.pas_rvb",
+        "This profile is not an RGB profile. CMYK comparison is not planned yet.",
+    ),
+    (
+        "comparer.refus.sans_table",
+        "This profile has no colorimetric table (A2B1): it may be a display profile. It is not compared.",
+    ),
+    (
+        "comparer.refus.structure",
+        "The colorimetric table of this profile has a structure myiro-libre does not read yet ({detail}). It is not compared.",
+    ),
+    (
+        "comparer.refus.tronque",
+        "This profile is incomplete: a part ({detail}) goes beyond the end of the file. It is not compared.",
+    ),
+    (
+        "comparer.refus.sans_blanc",
+        "This profile does not give the media white: its absolute colours cannot be computed. It is not compared.",
+    ),
+    (
+        "comparer.refus.sans_table_inverse",
+        "This profile has no readable inverse table (B2A1): which colours the printer would render from the image cannot be computed. This stays unknown.",
+    ),
+    (
+        "comparer.refus.trop_de_profils",
+        "At most four profiles are compared. Remove one, then start again.",
+    ),
+    (
+        "comparer.refus.fichier_ferme",
+        "This file is no longer open. Open it again.",
+    ),
+    (
+        "comparer.refus.aucun_profil",
+        "Choose at least one profile to compare.",
+    ),
+    (
+        "comparer.refus.profil_inconnu",
+        "This profile is no longer in the library. Choose another one from the list.",
+    ),
+    (
+        "comparer.refus.fichier_illisible",
+        "This file cannot be read. Check that it still exists, then open it again.",
+    ),
+    (
+        "comparer.refus.fichier_trop_grand",
+        "This file is far too large for an ICC profile: it is not opened.",
+    ),
+    (
+        "comparer.image.refus.en_tete",
+        "The profile embedded in this image is not a readable ICC profile ({detail}).",
+    ),
+    (
+        "comparer.image.refus.pas_rvb",
+        "The profile embedded in this image is a CMYK profile. CMYK images are planned for a second stage.",
+    ),
+    (
+        "comparer.image.refus.sans_conversion",
+        "The profile embedded in this image does not say which colours its pixels ask for: it has no A2B table, no matrix and curves, no grey curve.",
+    ),
+    (
+        "comparer.image.refus.structure",
+        "The profile embedded in this image has a structure myiro-libre does not read yet ({detail}).",
+    ),
+    (
+        "comparer.image.refus.tronque",
+        "The profile embedded in this image is incomplete: a part ({detail}) goes beyond the end of the profile.",
+    ),
+    (
+        "comparer.image.refus.illisible",
+        "The profile embedded in this image is damaged or incomplete: it cannot be read ({detail}).",
+    ),
+    (
+        "image.ouvrir",
+        "Add an image",
+    ),
+    (
+        "image.filtre",
+        "JPEG, PNG or TIFF images",
+    ),
+    (
+        "image.traiter_srvb",
+        "Treat as sRGB",
+    ),
+    (
+        "image.refus.cmjn",
+        "This image is in CMYK. Comparing CMYK images will come in a second stage. Open an RGB version of the photo.",
+    ),
+    (
+        "image.refus.profil",
+        "The profile embedded in the image cannot be read ({detail}). Choose “Treat as sRGB” if the photo comes from a camera or a website in sRGB.",
+    ),
+    (
+        "image.refus.trop_grande",
+        "This image is too large to open (more than 120 million pixels, or a file over 1 GB). Open a reduced version of the photo.",
+    ),
+    (
+        "image.refus.illisible",
+        "This file cannot be read as an image. Check that it still exists and opens in another program, then open it again.",
+    ),
+    (
+        "image.refus.format",
+        "This image format is not supported. Open the photo as JPEG, PNG or TIFF.",
+    ),
+    (
+        "image.refus.aucune",
+        "No image is open. Add one, then start again.",
+    ),
+    (
+        "image.refus.sans_ecarts",
+        "The differences for this profile are not computed. Run the image analysis again.",
+    ),
+    (
+        "image.annulee",
+        "Image analysis cancelled.",
+    ),
+    (
+        "image.erreur.calcul",
+        "The computation for this profile stopped on a myiro-libre error. This stays unknown.",
+    ),
+    (
+        "image.profil.embarque",
+        "Image profile: {nom}",
+    ),
+    (
+        "image.profil.sans_nom",
+        "unnamed embedded profile",
+    ),
+    (
+        "image.profil.ecartee",
+        "Table {table} of the image profile not used: {raison}",
+    ),
+    (
+        "image.profil.srvb",
+        "Image profile: sRGB (no embedded profile)",
+    ),
+    (
+        "image.profil.suppose",
+        "sRGB, assumed: chosen by you",
+    ),
+    (
+        "image.approche",
+        "Computed on 1 pixel in {n}",
+    ),
+    (
+        "image.seize_bits",
+        "16-bit values reduced to 8 bits",
+    ),
+    (
+        "image.titre",
+        "Image",
+    ),
+    (
+        "image.aide",
+        "Open a customer photo in RGB (JPEG, PNG or TIFF): for each displayed profile, the page shows the pixels the printer will not be able to reproduce. The image stays in memory for the comparison only; it is neither stored nor copied.",
+    ),
+    (
+        "image.remplacer",
+        "Open another image",
+    ),
+    (
+        "image.retirer",
+        "Remove the image",
+    ),
+    (
+        "image.en_cours",
+        "Analysing the image…",
+    ),
+    (
+        "image.annuler",
+        "Cancel",
+    ),
+    (
+        "image.relancer",
+        "Analyse again",
+    ),
+    (
+        "image.taille",
+        "Analysis image of {l} × {h} pixels, taken from a {lo} × {ho} pixel photo",
+    ),
+    (
+        "image.surimpression.profil",
+        "Overlay profile",
+    ),
+    (
+        "image.surimpression.inconnue",
+        "No overlay for this profile: {raison}",
+    ),
+    (
+        "image.seuil.valeur",
+        "Alert threshold {s} ΔE00",
+    ),
+    (
+        "image.affichage",
+        "Show",
+    ),
+    (
+        "image.affichage.image",
+        "Image",
+    ),
+    (
+        "image.affichage.les_deux",
+        "Image and alert",
+    ),
+    (
+        "image.affichage.alerte",
+        "Alert only",
+    ),
+    (
+        "nuage.bascule",
+        "Image colours",
+    ),
+    (
+        "nuage.aide",
+        "Each point is the average of a group of close colours of the image, placed on the paper white of {profil}. It takes the alert colour as soon as one of its colours exceeds {s} ΔE00.",
+    ),
+    (
+        "nuage.indisponible",
+        "The image colours appear here once an image is analysed against the profile chosen for the overlay.",
+    ),
+    (
+        "nuage.aria",
+        "Image colours: {n} points, {a} of them beyond the alert threshold.",
+    ),
+    (
+        "nuage.compte",
+        "Image colours in the slice (L* {l} ± {d}): {n} points, {a} of them beyond the alert threshold.",
+    ),
+    (
+        "nuage.legende",
+        "Image colours, L* {l} ± {d}",
+    ),
+    (
+        "nuage.legende.alerte",
+        "Image colour beyond the alert threshold",
+    ),
+    (
+        "image.legende",
+        "Difference of at most {s} ΔE00, {profil}, without black point compensation. In green, beyond.",
+    ),
+    (
+        "image.canvas.aria",
+        "{p}% of the image beyond {s} ΔE00 with {profil}. Click the image to see the colour of a point and its printed colour.",
+    ),
+    (
+        "image.chiffres",
+        "Image figures",
+    ),
+    (
+        "image.chiffres.part",
+        "Share of the image beyond {s} ΔE00",
+    ),
+    (
+        "image.classe.leger",
+        "Slight, 2 to 5 ΔE00",
+    ),
+    (
+        "image.classe.moyen",
+        "Medium, 5 to 10 ΔE00",
+    ),
+    (
+        "image.classe.fort",
+        "Strong, over 10 ΔE00",
+    ),
+    (
+        "image.chiffres.teintes",
+        "Most affected hues",
+    ),
+    (
+        "image.chiffres.inconnus",
+        "Pixels with an unknown difference",
+    ),
+    (
+        "image.chiffres.couleurs",
+        "Distinct colours",
+    ),
+    (
+        "image.chiffres.raison",
+        "Reason",
+    ),
+    (
+        "image.valeur.pourcent",
+        "{p}%",
+    ),
+    (
+        "image.teinte.valeur",
+        "{nom} {p}%",
+    ),
+    (
+        "image.teintes.aucune",
+        "none",
+    ),
+    (
+        "image.inconnus.valeur",
+        "{n} pixels ({p}%), never counted as good",
+    ),
+    (
+        "image.inconnus.aucun",
+        "none",
+    ),
+    (
+        "image.teinte.rouge",
+        "Reds",
+    ),
+    (
+        "image.teinte.jaune",
+        "Yellows",
+    ),
+    (
+        "image.teinte.vert",
+        "Greens",
+    ),
+    (
+        "image.teinte.cyan",
+        "Cyans",
+    ),
+    (
+        "image.teinte.bleu",
+        "Blues",
+    ),
+    (
+        "image.teinte.magenta",
+        "Magentas",
+    ),
+    (
+        "image.teinte.gris",
+        "Greys (C* < 5)",
+    ),
+    (
+        "image.verdict",
+        "{p}% of the image is printable on this paper with this profile",
+    ),
+    (
+        "image.verdict.plus_de",
+        "over {p}",
+    ),
+    (
+        "image.verdict.moins_de",
+        "under {p}",
+    ),
+    (
+        "image.verdict.inconnus",
+        "; {p}% unknown",
+    ),
+    (
+        "image.verdict.inconnu",
+        "Printable share unknown with this profile",
+    ),
+    (
+        "image.point_noir",
+        "Black point compensation",
+    ),
+    (
+        "image.point_noir.aide",
+        "The image black is brought onto the deepest black of the paper, as the printer driver does in relative colorimetric with compensation. Changing this setting runs the analysis again.",
+    ),
+    (
+        "image.legende.point_noir",
+        "Difference of at most {s} ΔE00, {profil}, with black point compensation. In green, beyond.",
+    ),
+    (
+        "image.rendu.point_noir",
+        "Relative colorimetric, with black point compensation",
+    ),
+    (
+        "image.rendu.relatif",
+        "Relative colorimetric, without black point compensation",
+    ),
+    (
+        "image.agrandir",
+        "Enlarge",
+    ),
+    (
+        "image.agrandie.titre",
+        "Enlarged image",
+    ),
+    (
+        "image.agrandie.fermer",
+        "Close",
+    ),
+    (
+        "image.agrandie.aide",
+        "Click the image to see the colour of a point. Escape or a click beside the image to go back.",
+    ),
+    (
+        "pastilles.pipette.visee",
+        "Target colour after black point compensation: {lab}, {e} ΔE00 from the image colour",
+    ),
+    (
+        "pastilles.pipette.visee_identique",
+        "Black point compensation: the target colour is the image colour.",
+    ),
+    (
+        "pastilles.aria.visee",
+        "Target colour: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "image.pixel.hors_image",
+        "This point is outside the image.",
+    ),
+    (
+        "image.pixel.transparent",
+        "This point of the image is transparent: it has no colour to print.",
+    ),
+    (
+        "image.pixel.inconnu",
+        "The difference for this colour could not be calculated.",
+    ),
+    (
+        "pastilles.titre",
+        "Out-of-gamut colours",
+    ),
+    (
+        "pastilles.lecture",
+        "Left, the image colour; right, the colour printed with the chosen profile; below, the difference and the share of the image. Most present first.",
+    ),
+    (
+        "pastilles.aucune",
+        "None of the most present image colours is beyond {s} ΔE00 with {profil}.",
+    ),
+    (
+        "pastilles.precaution",
+        "Approximate on-screen colours (uncalibrated screen).",
+    ),
+    (
+        "pastilles.ecart",
+        "{e} ΔE00",
+    ),
+    (
+        "pastilles.part",
+        "{p}%",
+    ),
+    (
+        "pastilles.aria.image",
+        "Image colour: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "pastilles.aria.imprimee",
+        "Printed colour: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "pastilles.image",
+        "Image",
+    ),
+    (
+        "pastilles.imprimee",
+        "Printed",
+    ),
+    (
+        "pastilles.lab",
+        "L* {l}  a* {a}  b* {b}",
+    ),
+    (
+        "pastilles.pipette.titre",
+        "Colour of the clicked point",
+    ),
+    (
+        "pastilles.pipette.aide",
+        "Click the image to see the colour of a point and its printed colour.",
+    ),
+    (
+        "pastilles.pipette.au_dela",
+        "Beyond the {s} ΔE00 alert threshold",
+    ),
+    (
+        "pastilles.pipette.en_deca",
+        "Within the {s} ΔE00 alert threshold",
+    ),
+    (
+        "pastilles.pipette.inconnu",
+        "Printed colour unknown with {profil}: {raison}",
+    ),
+    (
+        "comparer.zone.gris",
+        "Greys",
+    ),
+    (
+        "comparer.zone.ombres",
+        "Shadows",
+    ),
+    (
+        "comparer.zone.clairs",
+        "Highlights",
+    ),
+    (
+        "comparer.zone.saturee.rouge",
+        "Saturated reds",
+    ),
+    (
+        "comparer.zone.saturee.jaune",
+        "Saturated yellows",
+    ),
+    (
+        "comparer.zone.saturee.vert",
+        "Saturated greens",
+    ),
+    (
+        "comparer.zone.saturee.cyan",
+        "Saturated cyans",
+    ),
+    (
+        "comparer.zone.saturee.bleu",
+        "Saturated blues",
+    ),
+    (
+        "comparer.zone.saturee.magenta",
+        "Saturated magentas",
+    ),
+    (
+        "comparer.zone.moyenne.rouge",
+        "Medium reds",
+    ),
+    (
+        "comparer.zone.moyenne.jaune",
+        "Medium yellows",
+    ),
+    (
+        "comparer.zone.moyenne.vert",
+        "Medium greens",
+    ),
+    (
+        "comparer.zone.moyenne.cyan",
+        "Medium cyans",
+    ),
+    (
+        "comparer.zone.moyenne.bleu",
+        "Medium blues",
+    ),
+    (
+        "comparer.zone.moyenne.magenta",
+        "Medium magentas",
+    ),
+    (
+        "comparer.fidelite.sans_mesures",
+        "Unknown: this profile does not embed its measurements.",
+    ),
+    (
+        "comparer.fidelite.illisible",
+        "Unknown: the measurements embedded in this profile cannot be read.",
+    ),
+    (
+        "comparer.fidelite.echelle_spectre",
+        "Unknown: the highest value of the embedded spectra is between 1.5 and 2. It is not known whether they are a reflectance from 0 to 1 or a percentage, and nothing is guessed.",
+    ),
+    (
+        "comparer.fidelite.rvb_inconnus",
+        "Unknown: the embedded measurements do not say which RGB values were printed, or on which scale.",
+    ),
+    (
+        "comparer.fidelite.rvb_hors_echelle",
+        "Unknown: a patch of the embedded measurements has an RGB value outside the expected scale.",
+    ),
+    (
+        "comparer.fidelite.lab_inconnu",
+        "Unknown: a patch of the embedded measurements has neither Lab nor a usable spectrum.",
+    ),
+    (
+        "comparer.limite.sans_argyll",
+        "The gamut boundary needs ArgyllCMS 3.5.0, which cannot be found next to the application. The raw surface is shown, and the rest of the comparison is computed.",
+    ),
+    (
+        "comparer.limite.sans_iccgamut",
+        "The iccgamut tool of ArgyllCMS is missing: the gamut boundary is not computed, the rest of the comparison is. Replace the argyll folder with a complete copy of ArgyllCMS 3.5.0.",
+    ),
+    (
+        "comparer.limite.argyll_version",
+        "ArgyllCMS {version} was found, but only version 3.5.0 is validated: the gamut boundary is not computed, the rest of the comparison is.",
+    ),
+    (
+        "comparer.limite.argyll_illisible",
+        "ArgyllCMS does not answer as expected: the gamut boundary is not computed, the rest of the comparison is.",
+    ),
+    (
+        "comparer.limite.fichier",
+        "A working file of iccgamut could not be read or written: the gamut boundary is not computed, the rest of the comparison is. Try again.",
+    ),
+    (
+        "comparer.limite.illisible",
+        "The gamut boundary written by iccgamut cannot be read: it is not shown, the rest of the comparison is computed.",
+    ),
+    (
+        "comparer.limite.interrompue",
+        "iccgamut stopped before the end without reporting an error: the gamut boundary is not computed, the rest of the comparison is. Run the comparison again.",
+    ),
+    (
+        "comparer.erreur.limite",
+        "Computing the gamut boundary failed in ArgyllCMS (iccgamut): it is not shown, the rest of the comparison is computed.",
+    ),
+    (
+        "comparer.origine.bibliotheque",
+        "Library: {chemin}, profile of {date}",
+    ),
+    (
+        "comparer.origine.fichier",
+        "File: {nom} (opened for the comparison, not in the library)",
+    ),
+    (
+        "comparer.inconnu",
+        "unknown",
+    ),
+    (
+        "comparer.vue3d.aria",
+        "Gamuts in 3D (arrow keys to rotate, + and − to zoom, 0 to return to the starting view): {profils}.",
+    ),
+    (
+        "comparer.vue3d.aria.profil",
+        "{nom}, volume {volume} cubic L*a*b* units, paper white L* {blanc}",
+    ),
+    (
+        "comparer.vue3d.aria.vide",
+        "Gamuts in 3D: no profile shown.",
+    ),
+    (
+        "comparer.vue3d.bulle",
+        "{nom}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "comparer.vue3d.blanc",
+        "Paper white L* {l}",
+    ),
+    (
+        "comparer.graphique.teinte",
+        "Hue h (°)",
+    ),
+    (
+        "comparer.graphique.chroma",
+        "Chroma C*",
+    ),
+    (
+        "comparer.graphique.clarte",
+        "Lightness L*",
+    ),
+    (
+        "comparer.graphique.position",
+        "Position along the path (0 to 255)",
+    ),
+    (
+        "comparer.graphique.mesures",
+        "Patches measured on this path",
+    ),
+    (
+        "comparer.graphique.valeurs",
+        "Values",
+    ),
+    (
+        "comparer.graphique.plage_mesuree",
+        "{position} (measured patch)",
+    ),
+    (
+        "comparer.graphique.teintes.aria",
+        "Maximum chroma C* by hue, from 0 to 360°: {profils}. The values are in the “Values” table.",
+    ),
+    (
+        "comparer.graphique.coupe.aria",
+        "Gamut slice at lightness L* {l}, in the a*b* plane: {profils}. The values are in the “Values” table.",
+    ),
+    (
+        "comparer.graphique.chemin.l.aria",
+        "Lightness L* along the RGB cube path: {profils}. The values are in the “Values” table.",
+    ),
+    (
+        "comparer.graphique.chemin.c.aria",
+        "Chroma C* along the RGB cube path: {profils}. The values are in the “Values” table.",
+    ),
+    (
+        "comparer.titre",
+        "Compare profiles",
+    ),
+    (
+        "comparer.aide",
+        "One to four RGB profiles, stored in the library or opened from a file. The first one is the reference for the differences.",
+    ),
+    (
+        "comparer.profils",
+        "Compared profiles",
+    ),
+    (
+        "comparer.ajouter",
+        "Add a profile",
+    ),
+    (
+        "comparer.ajouter.chargement",
+        "Reading the list of profiles…",
+    ),
+    (
+        "comparer.ajouter.max",
+        "Four profiles at most: remove one to add another.",
+    ),
+    (
+        "comparer.fermer",
+        "Close the comparison",
+    ),
+    (
+        "comparer.en_cours",
+        "Comparison in progress: the gamut boundary can take a few seconds per profile.",
+    ),
+    (
+        "comparer.ouvrir",
+        "Compare",
+    ),
+    (
+        "comparer.ouvrir.actuel",
+        "Compare with current",
+    ),
+    (
+        "comparer.retirer",
+        "Remove",
+    ),
+    (
+        "comparer.reference",
+        "reference",
+    ),
+    (
+        "comparer.choix.titre",
+        "Library profiles",
+    ),
+    (
+        "comparer.choix.vide",
+        "No profile stored in the library yet.",
+    ),
+    (
+        "comparer.choix.actuel",
+        "current",
+    ),
+    (
+        "comparer.choix.fichier",
+        "Open an .icc file",
+    ),
+    (
+        "comparer.vide",
+        "Add a profile to start the comparison.",
+    ),
+    (
+        "comparer.chiffres",
+        "Key figures",
+    ),
+    (
+        "comparer.chiffres.blanc",
+        "Paper white",
+    ),
+    (
+        "comparer.chiffres.noir",
+        "Black",
+    ),
+    (
+        "comparer.chiffres.noir.valeur",
+        "L* {l} · density ≈ {d}",
+    ),
+    (
+        "comparer.chiffres.volume_surface",
+        "Volume, raw surface",
+    ),
+    (
+        "comparer.chiffres.volume_limite",
+        "Volume, gamut boundary",
+    ),
+    (
+        "comparer.chiffres.limite_indisponible",
+        "not computed",
+    ),
+    (
+        "comparer.chiffres.fidelite",
+        "Fidelity to its measurements",
+    ),
+    (
+        "comparer.chiffres.fidelite.valeur",
+        "mean {moyenne}, p95 {p95}, max {max} ΔE00 over {plages} patches",
+    ),
+    (
+        "comparer.chiffres.repetabilite",
+        "Measurement repeatability",
+    ),
+    (
+        "comparer.chiffres.repetabilite.valeur",
+        "mean {moyenne}, max {max} ΔE00 ({couleurs} colours, {paires} pairs)",
+    ),
+    (
+        "comparer.chiffres.repetabilite.inconnue",
+        "unknown: no patch measured twice",
+    ),
+    (
+        "comparer.valeur.lab",
+        "L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "comparer.valeur.volume",
+        "{volume} cubic L*a*b* units",
+    ),
+    (
+        "comparer.volume",
+        "Gamut in 3D",
+    ),
+    (
+        "comparer.volume.affiches",
+        "Profiles shown",
+    ),
+    (
+        "comparer.volume.couleur",
+        "Colour",
+    ),
+    (
+        "comparer.volume.couleur.serie",
+        "By profile",
+    ),
+    (
+        "comparer.volume.couleur.reelle",
+        "Real colours",
+    ),
+    (
+        "comparer.volume.couleur.aide",
+        "In real colours, only the first profile shown is dressed in its colours: the reference profile, when it is ticked. The other profiles shown are drawn as a wireframe, in their profile colour, so they can be told apart.",
+    ),
+    (
+        "comparer.volume.forme",
+        "Shape",
+    ),
+    (
+        "comparer.volume.forme.limite",
+        "Gamut boundary",
+    ),
+    (
+        "comparer.volume.forme.surface",
+        "Raw surface",
+    ),
+    (
+        "comparer.volume.rendu",
+        "Rendering",
+    ),
+    (
+        "comparer.volume.rendu.opaque",
+        "Opaque",
+    ),
+    (
+        "comparer.volume.rendu.transparent",
+        "Transparent",
+    ),
+    (
+        "comparer.volume.aide",
+        "Drag to rotate, wheel to zoom; with the keyboard, arrows, + and −, 0 to reset.",
+    ),
+    (
+        "comparer.volume.surface_montree",
+        "{nom}: raw surface shown. {raison}",
+    ),
+    (
+        "comparer.teintes",
+        "Maximum chroma by hue",
+    ),
+    (
+        "comparer.coupe",
+        "Constant lightness slice",
+    ),
+    (
+        "comparer.coupe.clarte",
+        "Lightness L*",
+    ),
+    (
+        "comparer.chemin",
+        "Curves along a path of the RGB cube",
+    ),
+    (
+        "comparer.chemin.depart",
+        "Start",
+    ),
+    (
+        "comparer.chemin.arrivee",
+        "End",
+    ),
+    (
+        "comparer.primaires",
+        "Primary colours",
+    ),
+    (
+        "comparer.primaire.blanc",
+        "White",
+    ),
+    (
+        "comparer.primaire.noir",
+        "Black",
+    ),
+    (
+        "comparer.primaire.rouge",
+        "Red",
+    ),
+    (
+        "comparer.primaire.vert",
+        "Green",
+    ),
+    (
+        "comparer.primaire.bleu",
+        "Blue",
+    ),
+    (
+        "comparer.primaire.cyan",
+        "Cyan",
+    ),
+    (
+        "comparer.primaire.magenta",
+        "Magenta",
+    ),
+    (
+        "comparer.primaire.jaune",
+        "Yellow",
+    ),
+    (
+        "comparer.primaires.couleur",
+        "Colour",
+    ),
+    (
+        "comparer.primaires.profil",
+        "Profile",
+    ),
+    (
+        "comparer.primaires.pastille",
+        "Swatch",
+    ),
+    (
+        "comparer.primaires.approchee",
+        "approximate",
+    ),
+    (
+        "comparer.primaires.sans_teinte",
+        "—",
+    ),
+    (
+        "comparer.ecarts",
+        "Differences from the reference profile",
+    ),
+    (
+        "comparer.ecarts.deux",
+        "Differences are computed from two profiles.",
+    ),
+    (
+        "comparer.ecarts.titre",
+        "{nom} compared with {reference}",
+    ),
+    (
+        "comparer.ecarts.identiques",
+        "Identical profiles: no difference over the 35,937 RGB values.",
+    ),
+    (
+        "comparer.ecarts.memes_mesures",
+        "Same measurements: only the computing software changes.",
+    ),
+    (
+        "comparer.ecarts.refuse",
+        "No differences: this profile, or the reference profile, is not compared.",
+    ),
+    (
+        "comparer.ecarts.grille",
+        "Over 35,937 RGB values",
+    ),
+    (
+        "comparer.ecarts.moyenne",
+        "Mean",
+    ),
+    (
+        "comparer.ecarts.mediane",
+        "Median",
+    ),
+    (
+        "comparer.ecarts.p95",
+        "p95",
+    ),
+    (
+        "comparer.ecarts.max",
+        "Max",
+    ),
+    (
+        "comparer.ecarts.sup_1",
+        "Above 1 ΔE00",
+    ),
+    (
+        "comparer.ecarts.sup_2",
+        "Above 2 ΔE00",
+    ),
+    (
+        "comparer.ecarts.part",
+        "{part}%",
+    ),
+    (
+        "comparer.ecarts.zones",
+        "By area",
+    ),
+    (
+        "comparer.ecarts.zone",
+        "Area",
+    ),
+    (
+        "comparer.ecarts.nombre",
+        "Values",
+    ),
+    (
+        "comparer.ecarts.pires",
+        "The 10 largest differences",
+    ),
+    (
+        "comparer.ecarts.rvb",
+        "RGB",
+    ),
+    (
+        "comparer.ecarts.lab_reference",
+        "Reference L*a*b*",
+    ),
+    (
+        "comparer.ecarts.lab_compare",
+        "Compared L*a*b*",
+    ),
+    (
+        "comparer.ecarts.ecart",
+        "ΔE00",
+    ),
+    (
+        "comparer.ecarts.primaires",
+        "Primary colours",
+    ),
+    (
+        "comparer.ecarts.fidelites",
+        "Fidelities side by side",
+    ),
+    (
+        "comparer.methode",
+        "Method",
+    ),
+    (
+        "comparer.methode.resume",
+        "Method: what is computed, what is approximated",
+    ),
+    (
+        "comparer.methode.calcule.titre",
+        "Computed",
+    ),
+    (
+        "comparer.methode.calcule",
+        "Values read from the A2B1 tables of the profiles, in absolute colorimetry (paper white included). Volume of the RGB cube surface, 33 points per edge. Gamut boundary and its volume by iccgamut (ArgyllCMS 3.5.0). ΔE00 differences over 35,937 RGB values.",
+    ),
+    (
+        "comparer.methode.approche.titre",
+        "Approximated",
+    ),
+    (
+        "comparer.methode.approche",
+        "Slice: section of the gamut at the chosen lightness, read every 2°. Chroma by hue: the highest found in each 2° step. Black density derived from Y, not an ISO status T density. Screen swatches: a colour outside the screen is brought back, and marked “approximate”.",
+    ),
+    (
+        "comparer.methode.volume",
+        "The volume tells the extent of a profile’s colours, not its quality.",
+    ),
+    (
+        "comparer.methode.fidelite",
+        "Fidelity is measured on the patches used for the computation: it favours the profile that follows them most closely. To know which one best predicts a new print, a control chart must be measured (verification, planned).",
+    ),
+    (
+        "comparer.provenance.origine",
+        "Origin",
+    ),
+    (
+        "comparer.provenance.version",
+        "ICC version",
+    ),
+    (
+        "comparer.provenance.description",
+        "Description",
+    ),
+    (
+        "comparer.provenance.aucune",
+        "none",
+    ),
+    (
+        "comparer.provenance.grille",
+        "A2B1 grid",
+    ),
+    (
+        "comparer.provenance.grille.valeur",
+        "{n} points per edge",
+    ),
+    (
+        "comparer.provenance.mesures",
+        "Embedded measurements",
+    ),
+    (
+        "comparer.provenance.mesures.valeur",
+        "{n} patches",
+    ),
+    (
+        "comparer.provenance.condition",
+        "Measurement condition",
+    ),
+    (
+        "comparer.provenance.condition.inconnue",
+        "unknown",
+    ),
+    (
+        "comparer.provenance.supposee",
+        "assumed",
+    ),
+    (
+        "comparer.provenance.rvb",
+        "RGB values",
+    ),
+    (
+        "comparer.provenance.rvb_supposes",
+        "0 to 255 scale assumed",
+    ),
+    (
+        "comparer.provenance.lab",
+        "Measurement L*a*b*",
+    ),
+    (
+        "comparer.provenance.lab_calcule",
+        "computed by myiro-libre from the spectra",
+    ),
+    (
+        "comparer.provenance.lab_lu",
+        "read from the file",
+    ),
+    (
+        "comparer.avance",
+        "Advanced: iccgamut command and log",
+    ),
+    (
+        "comparer.avance.commande",
+        "Command",
+    ),
+    (
+        "comparer.avance.sans_commande",
+        "Without ArgyllCMS, no command is run.",
+    ),
+    (
+        "comparer.avance.journal",
+        "iccgamut log, {nom}",
+    ),
+    (
+        "comparer.avance.cause",
+        "ArgyllCMS message, {nom}",
+    ),
     ("profil.version", "ArgyllCMS"),
     ("profil.journal", "ArgyllCMS log"),
     ("profil.rvb", "RGB values"),
@@ -1377,6 +3806,36 @@ const ANGLAIS: Catalogue = &[
     (
         "profil.precision.valeur",
         "{moyenne} on average, {max} at most (ΔE00)",
+    ),
+    // Measurement consistency check (ticket #1)
+    (
+        "profil.refus.incoherent",
+        "The measurements do not match the patches of the chart: the profile would be wrong. Patches involved: {plages}. Read the chart again, check the sheet orientation and the reading order, and that this file belongs to this chart.",
+    ),
+    ("profil.coherence.autres", "and {n} others"),
+    ("profil.coherence.autre", "and 1 other"),
+    (
+        "profil.coherence.decalage",
+        "The measurements seem shifted by {n} patches.",
+    ),
+    (
+        "profil.coherence.decalage_une",
+        "The measurements seem shifted by one patch.",
+    ),
+    ("profil.coherence.criteres", "Checks that flag them: {criteres}."),
+    (
+        "profil.coherence.critere.degrade_gris",
+        "grey ramp, dark to light",
+    ),
+    ("profil.coherence.critere.blanc_noir", "paper white and black"),
+    ("profil.coherence.critere.doublons", "repeated patches"),
+    ("profil.coherence.critere.voisines", "neighbouring patches"),
+    ("profil.coherence", "Measurements checked"),
+    ("profil.coherence.accepte", "consistent"),
+    ("profil.coherence.non_fait", "Checks not done"),
+    (
+        "profil.coherence.non_controle",
+        "no, profile calculated before this check",
     ),
     // Installing in Windows
     ("installation.installe", "Installed in Windows"),
@@ -2020,6 +4479,111 @@ const ANGLAIS: Catalogue = &[
         "probleme.repos_incertain.action",
         "To measure again, click “Try again”: the instrument will be reconnected, then needs calibrating.",
     ),
+    // Prepare a chart (ticket #33)
+    (
+        "mire.erreur.cote",
+        "Patch size refused: the MYIRO-1 reads patches of at least 7 mm, and the strip must fit on the page. Choose another size.",
+    ),
+    (
+        "mire.erreur.nombre_libre",
+        "Number of patches refused: choose from 24 to 3,000 patches.",
+    ),
+    (
+        "mire.erreur.ti1",
+        "The patches chosen by ArgyllCMS cannot be read. Nothing was prepared. Prepare the chart again.",
+    ),
+    (
+        "mire.erreur.nombre",
+        "ArgyllCMS did not return the number of patches requested. Nothing was prepared. Prepare the chart again.",
+    ),
+    (
+        "mire.erreur.generation",
+        "ArgyllCMS could not choose the patches of the chart. Nothing was prepared.",
+    ),
+    (
+        "mire.erreur.contraste",
+        "Patches too close to be read: some do not stand out enough from their neighbour or from the paper white. Nothing was prepared. Choose a larger number of patches.",
+    ),
+    (
+        "mire.erreur.ecriture",
+        "The chart pages could not be written to the Documents\\myiro-libre\\Mires folder. Check that there is space left and that the folder is not protected, then try again.",
+    ),
+    (
+        "mire.erreur.fichier_existant",
+        "A file with the same name already exists in the Documents\\myiro-libre\\Mires folder: it was not replaced, and nothing was prepared. Move or rename the old file, then try again.",
+    ),
+    (
+        "mire.erreur.fd9_introuvable",
+        "RGB-2520 chart not found. Place the file “RGB-2520 A3 - 1p.tif” in the mire-fd9 folder next to the application. The MYIRO-1 can still be used.",
+    ),
+    (
+        "mire.erreur.fd9_autre",
+        "This file is not the selected RGB-2520 chart: it has been modified or replaced. Nothing was prepared. Use the original file, without opening or saving it in another program.",
+    ),
+    (
+        "mire.erreur.fd9_illisible",
+        "The RGB-2520 chart cannot be read or does not have the expected layout. Nothing was prepared. Use the original file.",
+    ),
+    (
+        "mire.erreur.fd9_fixe",
+        "The FD-9 chart is RGB-2520, on one A3 page: no size, format or patch size to choose.",
+    ),
+    ("mire.ouvrir", "Prepare a chart"),
+    ("mire.titre", "Prepare a chart"),
+    ("mire.instrument", "Instrument"),
+    ("mire.instrument.fd9", "FD-9"),
+    ("mire.instrument.myiro1", "MYIRO-1"),
+    ("mire.fd9.carte", "RGB-2520 chart · 2,520 patches · 1 A3 page"),
+    ("mire.myiro1.carte", "Pages in strips, size and format to choose"),
+    ("mire.fd9.attendu", "Expected file: {chemin}"),
+    ("mire.taille", "Size"),
+    ("mire.taille.nom.rapide", "Quick"),
+    ("mire.taille.nom.standard", "Standard"),
+    ("mire.taille.nom.approfondi", "Thorough"),
+    ("mire.plages", "{n} patches"),
+    ("mire.pages.une", "1 page"),
+    ("mire.pages.plusieurs", "{n} pages"),
+    ("mire.format", "Format"),
+    ("mire.format.a4", "A4"),
+    ("mire.format.a3", "A3"),
+    ("mire.avance", "Advanced"),
+    ("mire.avance.resume", "{cote} mm, {plages} patches"),
+    ("mire.cote", "Patch size, in millimetres"),
+    (
+        "mire.cote.limites",
+        "At least {min} mm (MYIRO-1 manual), and the strip must fit on the page.",
+    ),
+    (
+        "mire.nombre",
+        "Number of patches (empty to keep the chosen size)",
+    ),
+    ("mire.nombre.limites", "From 24 to 3,000 patches."),
+    (
+        "mire.saisie.nombre",
+        "Entry refused: write a number, for example 8 or 8.5. Nothing is started.",
+    ),
+    (
+        "mire.saisie.entier",
+        "Entry refused: write a whole number of patches, for example 500. Nothing is started.",
+    ),
+    ("mire.commande", "Equivalent command"),
+    ("mire.preparer", "Prepare the chart"),
+    ("mire.fait", "Chart prepared and stored with this resolution."),
+    (
+        "mire.deja_preparee",
+        "Chart already prepared on {date}, not yet measured: its files are reused, no duplicate.",
+    ),
+    ("mire.fichiers", "Files to print"),
+    ("mire.ouvrir_dossier", "Open the folder"),
+    (
+        "mire.rappel",
+        "Print at 100%, without colour management (in the driver and in the printing software).",
+    ),
+    ("mire.preparees", "Prepared charts"),
+    (
+        "mire.preparees.vide",
+        "No chart prepared for this resolution.",
+    ),
 ];
 
 fn catalogue(langue: Langue) -> Catalogue {
@@ -2176,6 +4740,32 @@ mod tests {
             let calcul = texte(langue, "mesurer.calcul");
             assert!(calcul.contains("myiro-libre"), "{calcul}");
             assert!(calcul.contains("D50") && calcul.contains("2°"), "{calcul}");
+        }
+    }
+
+    /// Chaque refus du profil d'une image (#80) a son texte, dans les deux
+    /// langues.
+    #[test]
+    fn les_refus_d_un_profil_d_image_ont_leur_texte() {
+        use gamut::{ErreurIcc, ProfilSource};
+        let refus = [
+            ErreurIcc::EnTete(String::new()),
+            ErreurIcc::PasRvb {
+                espace: "CMYK".into(),
+            },
+            ErreurIcc::SansTable,
+            ErreurIcc::StructureNonPriseEnCharge {
+                structure: "mAB".into(),
+            },
+            ErreurIcc::Tronque {
+                balise: "kTRC".into(),
+            },
+        ];
+        for erreur in &refus {
+            let cle = ProfilSource::cle_refus(erreur);
+            for langue in [Langue::Francais, Langue::Anglais] {
+                assert_ne!(texte(langue, cle), cle, "{cle} manque");
+            }
         }
     }
 

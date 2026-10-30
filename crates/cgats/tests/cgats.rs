@@ -1,7 +1,7 @@
 //! Export et import CGATS.17, vus par l'API publique de la crate. Toutes les
 //! mesures et tous les fichiers sont fictifs (n° 12345678), écrits ici.
 
-use cgats::{ecrire, lire, MesureImportee};
+use cgats::{ecrire, lire, lire_sans_condition, MesureImportee};
 use pont_protocole::{
     Calcul, ConditionMesure, ConditionsCalcul, DonneesBrutes, Echantillonnage, Empreinte,
     Geometrie, Horodatage, Illuminant, Info, InstrumentMesurant, Lab, Mesure, Observateur, Plage,
@@ -352,6 +352,35 @@ fn sans_condition_de_mesure_le_fichier_est_refuse_plutot_que_devine() {
 }
 
 #[test]
+fn un_ti3_sans_condition_se_lit_sans_condition_mais_pas_a_l_import() {
+    // Tel que colprof le réécrit dans la balise `targ` d'un profil.
+    let ti3 = "CTI3   \n\nORIGINATOR \"myiro-libre\"\nCOLOR_REP \"iRGB_LAB\"\n\n\
+               NUMBER_OF_FIELDS 7\nBEGIN_DATA_FORMAT\n\
+               SAMPLE_ID RGB_R RGB_G RGB_B LAB_L LAB_A LAB_B \nEND_DATA_FORMAT\n\n\
+               NUMBER_OF_SETS 1\nBEGIN_DATA\n\
+               1 100.0000 50.00000 0.00000 60.00000 20.00000 70.00000 \nEND_DATA\n";
+    assert!(lire(ti3).is_err());
+    let relue = lire_sans_condition(ti3).unwrap();
+    assert_eq!(
+        relue.conditions,
+        [Info::Inconnue, Info::Inconnue, Info::Inconnue]
+    );
+    let plage = &relue.plages[0];
+    assert_eq!(plage.rvb, Info::Confirmee([1.0, 0.5, 0.0]));
+    assert_eq!(
+        plage
+            .lab
+            .iter()
+            .filter_map(Info::valeur)
+            .collect::<Vec<_>>(),
+        vec![&Lab::new([60.0, 20.0, 70.0]).unwrap()]
+    );
+    // Une condition écrite se lit comme avec `lire`.
+    let tiers = export_tiers("D50", true);
+    assert_eq!(lire_sans_condition(&tiers), lire(&tiers));
+}
+
+#[test]
 fn un_fichier_mal_forme_est_refuse_en_clair() {
     let tronque = export_tiers("D50", true).replace("END_DATA\r\n", "");
     assert!(lire(&tronque).unwrap_err().0.contains("incomplet"));
@@ -400,6 +429,82 @@ fn un_spectre_en_pourcentage_ou_de_0_a_1_se_relit_en_reflectance() {
     }
     // Deux échelles dans le même tableau : refusé plutôt que deviné.
     assert!(lire(&fichier_spectre("SPEC_400\tnm410", "50\t0.5")).is_err());
+}
+
+/// Colonnes `SPECTRAL_NM_400` et `SPECTRAL_NM_410` (nom CGATS.17, celui des
+/// exports MYIROtools), sur autant de plages que de lignes de `valeurs`.
+fn fichier_spectral_nm(valeurs: &[&str]) -> String {
+    let lignes: String = valeurs
+        .iter()
+        .enumerate()
+        .map(|(i, v)| format!("{}\t{v}\n", i + 1))
+        .collect();
+    format!(
+        "CGATS.17\nMEASUREMENT_SOURCE\t\"D50\"\nBEGIN_DATA_FORMAT\n\
+         SAMPLE_ID\tSPECTRAL_NM_400\tSPECTRAL_NM_410\nEND_DATA_FORMAT\n\
+         NUMBER_OF_SETS\t{}\nBEGIN_DATA\n{lignes}END_DATA\n",
+        valeurs.len()
+    )
+}
+
+#[test]
+fn un_spectre_spectral_nm_au_plus_1_5_est_une_reflectance() {
+    let importee = lire(&fichier_spectral_nm(&["0.5\t0.875", "1.5\t0.02"])).unwrap();
+    assert_eq!(
+        importee.plages[0].spectres[1],
+        Info::Confirmee(Spectre::new(vec![0.5, 0.875]).unwrap())
+    );
+    assert_eq!(
+        importee.plages[1].spectres[1],
+        Info::Confirmee(Spectre::new(vec![1.5, 0.02]).unwrap())
+    );
+    assert_eq!(
+        importee.longueurs_onde,
+        Info::Confirmee(Echantillonnage {
+            debut_nm: 400,
+            pas_nm: 10
+        })
+    );
+}
+
+#[test]
+fn un_spectre_spectral_nm_d_au_moins_2_est_un_pourcentage() {
+    // Le maximum se prend sur tout le fichier : la plage sombre (0,8 et 1,2)
+    // suit l'échelle que donne la plage claire.
+    let importee = lire(&fichier_spectral_nm(&["50\t87.5", "0.8\t1.2"])).unwrap();
+    assert_eq!(
+        importee.plages[0].spectres[1],
+        Info::Confirmee(Spectre::new(vec![0.5, 0.875]).unwrap())
+    );
+    assert_eq!(
+        importee.plages[1].spectres[1],
+        Info::Confirmee(Spectre::new(vec![0.008, 0.012]).unwrap())
+    );
+    let deux = lire(&fichier_spectral_nm(&["2\t1"])).unwrap();
+    assert_eq!(
+        deux.plages[0].spectres[1],
+        Info::Confirmee(Spectre::new(vec![0.02, 0.01]).unwrap())
+    );
+}
+
+#[test]
+fn un_spectre_spectral_nm_entre_1_5_et_2_est_refuse_en_clair() {
+    let erreur = lire(&fichier_spectral_nm(&["0.5\t1.7"])).unwrap_err();
+    assert!(erreur.echelle_spectre_indecidable(), "{erreur}");
+    assert!(erreur.0.contains("1.7"), "{erreur}");
+    assert!(erreur.0.contains("SPECTRAL_NM_"), "{erreur}");
+    // Juste au-dessus de 1,5 et juste sous 2 : refusés aussi.
+    for v in ["1.51", "1.99"] {
+        let texte = fichier_spectral_nm(&[&format!("0.5\t{v}")]);
+        assert!(
+            lire(&texte).unwrap_err().echelle_spectre_indecidable(),
+            "{v}"
+        );
+    }
+    // Les autres refus ne sont pas pris pour celui-là.
+    assert!(!lire("").unwrap_err().echelle_spectre_indecidable());
+    // Avec une autre famille de colonnes de spectre : deux sortes, refusé.
+    assert!(lire(&fichier_spectre("SPECTRAL_NM_400\tnm410", "0.5\t0.5")).is_err());
 }
 
 #[test]

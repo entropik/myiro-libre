@@ -14,8 +14,24 @@ _Éviter_ : charte, chart, cible, target
 Mire servant à comparer deux instruments sur un même tirage (36 plages de 20 mm, lisible en feuille et en bande), produite par `outils/mire_comparaison.py`.
 _Éviter_ : mire de test, charte de contrôle
 
+**Mire RGB-2520** :
+La mire du FD-9 : 2 520 plages RVB sur une seule page A3, avec son QR code d'origine, reprise telle quelle (décision du mainteneur, 26 octobre 2026). myiro-libre en vérifie l'empreinte et la copie octet pour octet ; il ne la redessine pas.
+_Éviter_ : mire FD-9 dessinée, charte RGB
+
+**Taille de mire** :
+Nombre de plages d'une mire MYIRO-1 : rapide (232), standard (464) ou approfondi (928). Point de départ validé par le mainteneur le 23 octobre 2026, à corriger après essais.
+_Éviter_ : résolution de mire, densité de mire
+
+**Gabarit** :
+Mise en page des bandes du MYIRO-1 pour un format (A4 ou A3) et un côté de plage : nombre de plages par bande, de bandes par page, bandeau du texte et du QR code.
+_Éviter_ : modèle, template
+
+**Plan de lecture** :
+Ordre et place de chaque plage d'une mire, page par page, bande par bande. Il est rangé avec la mire, avec son empreinte, et sert à relire les mesures dans le bon ordre.
+_Éviter_ : layout, disposition
+
 **Tirage** :
-Réalisation physique d'une mire, imprimée dans une condition d'impression donnée ; c'est ce que l'instrument mesure.
+Réalisation physique d'une mire, imprimée dans une condition d'impression donnée ; c'est ce que l'instrument mesure. Le tirage rangé dans la bibliothèque à la préparation d'une mire en est la trace (date, mire, nombre de pages), avant même l'impression.
 _Éviter_ : épreuve, impression, feuille (au sens d'objet mesuré)
 
 **Mesure** :
@@ -181,6 +197,10 @@ _Éviter_ : OK/KO, bon/mauvais, pass/fail
 Angle de la couleur dans le plan a*b*, en degrés (0 à 360). Un gris parfait (chroma nulle) n'a pas de teinte : elle est inconnue, pas nulle.
 _Éviter_ : hue, nuance
 
+**Chroma** :
+Distance d'une couleur à l'axe des gris dans le plan a\*b\* (C\*) : plus elle est grande, plus la couleur est vive. Un gris a une chroma nulle. La chroma ne dépend pas de la clarté, au contraire de la saturation au sens courant.
+_Éviter_ : saturation, pureté
+
 ### Impression
 
 **Condition d'impression** :
@@ -222,6 +242,106 @@ _Éviter_ : preset, mode, qualité seule
 **Précision du calcul** :
 Écart ΔE00 moyen et maximal entre les mesures qui ont servi au calcul et ce que le profil prédit pour elles. Elle dit si le calcul a bien suivi les mesures, pas si le profil est bon : un profil calculé reste « à vérifier » (« Profil calculé, à vérifier ») jusqu'à la vérification de profil.
 _Éviter_ : qualité du profil, vérification
+
+**Contrôle de cohérence** :
+Vérification, avant un calcul de profil, que les mesures correspondent aux plages de la mire : dégradé gris du foncé au clair, blanc papier et noir aux bonnes plages, plages répétées mesurées pareil, chaque plage proche de ses voisines. S'il signale une plage, le calcul est refusé, avec les plages en cause et, si un décalage de lecture l'explique, ce décalage ; rien n'est corrigé. Son résultat est gardé dans la provenance du profil. Les seuils sont des choix, à vérifier sur des mesures réelles.
+_Éviter_ : validation des mesures, correction des mesures
+
+### Comparaison de profils
+
+**Gamut** :
+Ensemble des couleurs qu'une condition d'impression peut produire, tel que son profil ICC le décrit. Il se lit dans la table colorimétrique du profil, en colorimétrie absolue : le blanc du papier est compris.
+_Éviter_ : espace couleur, gamme
+
+**Surface brute** :
+Forme du gamut obtenue en passant les six faces du cube RVB par le profil. Elle est calculée sans ArgyllCMS, mais se replie là où la couleur fait demi-tour (bleus et violets sombres).
+_Éviter_ : enveloppe, coque
+
+**Limite du gamut** :
+Enveloppe extérieure du gamut, calculée par ArgyllCMS (`iccgamut`) : une forme propre, sans replis. C'est la forme montrée par défaut ; sans ArgyllCMS ou sans `iccgamut`, la surface brute la remplace, avec la raison.
+_Éviter_ : frontière, contour
+
+**Volume du gamut** :
+Taille du gamut en unités L\*a\*b\* au cube. Il dit l'étendue des couleurs d'un profil, pas sa qualité : un grand volume n'est pas un meilleur profil.
+_Éviter_ : score, note
+
+**Coupe à clarté constante** :
+Tranche du gamut à une clarté L\* donnée, vue dans le plan a\*b\* : la chroma atteinte dans chaque teinte à cette clarté. C'est la section du gamut par cette clarté, lue tous les 2° : une valeur approchée.
+_Éviter_ : section, slice
+
+**Chroma par teinte** :
+Chroma la plus forte atteinte par un profil dans chaque teinte, toutes clartés confondues. Valeur approchée, par tranches de 2°.
+_Éviter_ : saturation par teinte
+
+**Couleurs de base** :
+Les huit coins du cube RVB passés par le profil : blanc, noir, rouge, vert, bleu, cyan, magenta et jaune.
+_Éviter_ : primaires seules, coins
+
+**Table inverse** :
+Table B2A1 d'un profil de sortie : d'une couleur demandée (L\*a\*b\*), elle donne les valeurs RVB à envoyer à l'imprimante, en colorimétrique relatif. Une couleur hors du gamut y est ramenée sur sa limite. Un profil sans table inverse lisible se compare quand même, mais ne dit pas ce qu'il ferait d'une image.
+_Éviter_ : table B2A, LUT inverse
+
+**Couleur demandée** :
+Couleur qu'un pixel d'une photo demande, lue par le profil de l'image (sRVB si la photo n'en a pas), en L\*a\*b\* relatif D50 : le blanc de l'image vaut L\* = 100. C'est elle que l'imprimante doit rendre ; la couleur reproduite dit ce qu'elle rendra.
+Dans le code : `ProfilSource::demande`.
+_Éviter_ : couleur d'origine, couleur source
+
+**Couleur reproduite** :
+Couleur que l'imprimante rend d'une couleur demandée : la couleur passée par la table inverse, puis par la table colorimétrique (aller-retour B2A1 puis A2B1, en colorimétrique relatif). L'écart ΔE00 entre les deux dit si la couleur est dans le gamut.
+_Éviter_ : couleur simulée, épreuve
+
+**Profil de l'image** :
+Profil ICC embarqué dans une photo, qui dit quelle couleur chaque pixel demande (la couleur demandée, en L\*a\*b\* relatif). Une photo sans profil est lue en sRVB. Un profil embarqué illisible ou en CMJN est refusé avec sa raison, jamais remplacé en silence.
+Dans le code : `ProfilSource` (le « profil source » de l'ICC).
+_Éviter_ : profil d'entrée
+
+**Nuage de couleurs** :
+Les couleurs d'une photo placées dans l'espace L\*a\*b\*, regroupées par petits cubes de 4 unités : au plus 4 000 points, les plus peuplés d'abord. Chaque point est placé sur le blanc du papier du profil choisi et garde le plus grand écart de ses pixels.
+_Éviter_ : nuage de points, histogramme 3D
+
+**Pastille hors gamut** :
+Sous la photo comparée, deux carrés côte à côte : à gauche une couleur de la photo (couleur demandée), à droite la couleur que l'imprimante en rendra (couleur reproduite) avec le profil choisi, puis leur écart en ΔE00 et la part de la photo. Chaque pastille représente un petit cube du nuage par sa couleur la plus fréquente ; l'écran en montre au plus 12, celles au-delà du seuil d'alerte, les plus présentes d'abord. Couleurs approchées à l'écran.
+Dans le code : `Pastille`, `Paire`.
+_Éviter_ : échantillon, swatch, vignette
+
+**Compensation du point noir** :
+Réglage d'impression qui ramène le noir de la photo sur le noir le plus profond que le papier peut rendre, en éclaircissant un peu toutes les ombres, sans toucher au blanc. Sans elle, un papier dont le noir est moins profond que celui de la photo « boucherait » les ombres, et la comparaison signalerait à tort toutes les ombres hors gamut. Elle est cochée par défaut, comme dans un pilote d'impression en colorimétrique relatif. La couleur obtenue est la couleur visée : c'est elle que l'imprimante doit rendre.
+Dans le code : `Rendu::PointNoir`, `PointNoir`.
+_Éviter_ : BPC, compensation du noir
+
+**Pipette** :
+Un clic sur la photo comparée montre la couleur du point touché et sa couleur imprimée, en pastilles, avec leurs L\*a\*b\*, l'écart et s'il dépasse le seuil d'alerte. Le point est marqué sur la photo. Calcul fait à la demande sur l'image d'analyse.
+Dans le code : `paire_couleur`, commande `image_pixel`.
+_Éviter_ : compte-gouttes, sélecteur de couleur
+
+**Image d'analyse** :
+La photo ramenée à 2 048 pixels de côté au plus, en prenant un pixel sur N dans chaque sens, sans mélanger les voisins : c'est sur elle que se calculent les écarts, et l'écran dit « 1 pixel sur N » quand elle est réduite. Elle n'existe qu'en mémoire, le temps de la séance ; la photo n'est jamais rangée ni copiée.
+_Éviter_ : vignette, aperçu, image réduite
+
+**Seuil d'alerte** :
+Écart ΔE00 entre couleur demandée et couleur reproduite au-delà duquel un pixel est signalé en vert fluo sur la photo : 2,0 au départ, réglable de 0,5 à 10 par pas de 0,5, sans relancer le calcul. Quel que soit le seuil, les écarts se classent aussi en léger (2 à 5), moyen (5 à 10) et fort (plus de 10). Un pixel dont l'écart ne se calcule pas est dit « inconnu », jamais compté comme bon. À ne pas confondre avec l'écart accepté d'une mesure, qui donne un verdict.
+_Éviter_ : tolérance, seuil hors gamut
+
+**Famille de teinte** :
+Pour les teintes touchées d'une photo : rouges, jaunes, verts, cyans, bleus ou magentas, chaque famille centrée sur la teinte de la couleur sRVB pure du même nom et bornée à mi-chemin des voisines ; une couleur de chroma inférieure à 5 est un gris. À ne pas confondre avec la famille d'une zone du cube RVB dans les écarts entre profils.
+Dans le code : `familles_teinte`.
+_Éviter_ : secteur de teinte
+
+**Profil de référence** :
+Dans une comparaison, le premier profil choisi : les écarts des autres profils se calculent par rapport à lui. Dans un avant / après, c'est le profil actif. À ne pas confondre avec la référence d'un contrôle d'impression.
+_Éviter_ : profil maître, profil de base
+
+**Fidélité d'un profil** :
+Écart ΔE00 entre ce que le profil prédit et les mesures qu'il embarque, plage par plage, recalculé par myiro-libre pour tout profil, d'où qu'il vienne. Elle se mesure sur les plages qui ont servi au calcul : elle avantage le profil qui les suit au plus près, et ne dit pas lequel prédit le mieux un nouveau tirage (c'est la vérification de profil). Sans mesures embarquées lisibles, elle est inconnue, avec la raison.
+_Éviter_ : précision du calcul (donnée par ArgyllCMS au calcul), qualité
+
+**Répétabilité** :
+Écart ΔE00 entre les plages répétées d'une même mire (mêmes valeurs RVB imprimées et mesurées plusieurs fois). Elle dit le bruit de la mesure et de la feuille, pas le profil. Sans plage répétée, elle est inconnue.
+_Éviter_ : reproductibilité, dispersion seule
+
+**Mêmes mesures** :
+Deux profils embarquent les mêmes mesures quand ils ont le même nombre de plages, les mêmes valeurs RVB une fois triées et au plus 0,1 ΔE00 d'écart plage par plage. La comparaison le dit : seul le logiciel de calcul change.
+_Éviter_ : même mire, même fichier
 
 ### Densitométrie et contrôle
 

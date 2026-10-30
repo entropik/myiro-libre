@@ -220,6 +220,17 @@
   }
 
   function dessinerCentre() {
+    // La comparaison (comparer.js) prend la place de la vue d'une résolution et de la feuille.
+    if (window.Comparer.ouverte()) {
+      vue.hidden = true;
+      feuille.hidden = true;
+      details.hidden = true;
+      document.querySelector("[data-details-choix]").hidden = true;
+      document.querySelector("[data-details-vide]").hidden = true;
+      dessinerAriane();
+      if (tacheCourante() === "bibliotheque") ariane.append(" / ", el("b", "", t("comparer.titre")));
+      return;
+    }
     const montre = Boolean(reglage) && reglage.condition.id === contexte.condition;
     vue.hidden = !montre;
     feuille.hidden = montre;
@@ -282,6 +293,7 @@
 
   // Quitte la résolution : la feuille des mesures reprend le centre.
   function quitterReglage() {
+    window.Comparer.fermer();
     contexte = { imprimante: null, papier: null, condition: null };
     reglage = null;
     mesureChoisie = null;
@@ -299,6 +311,8 @@
       dessinerArbre();
       return;
     }
+    // Un choix dans l'arbre ferme la comparaison : ce qui est choisi reprend le centre.
+    window.Comparer.fermer();
     if (d.mesure || d.importee) {
       contexte = { imprimante: null, papier: null, condition: null };
       reglage = null;
@@ -359,6 +373,7 @@
     attente = setTimeout(charger, 150);
   });
   document.addEventListener("tache-affichee", (e) => { if (e.detail === "bibliotheque") dessinerCentre(); });
+  for (const evenement of ["comparer-ouverte", "comparer-fermee"]) document.addEventListener(evenement, dessinerCentre);
   // Une mesure rangée (Mesurer), importée ou restaurée : l'arbre et la vue suivent.
   for (const evenement of ["bibliotheque-modifiee", "parc-modifie"]) {
     document.addEventListener(evenement, async (e) => {

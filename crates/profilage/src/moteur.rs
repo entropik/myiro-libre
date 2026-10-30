@@ -7,7 +7,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
-use crate::argyll::lignes_commandes;
+use crate::argyll::{ligne_targen, lignes_commandes};
 
 /// Seule version d'ArgyllCMS acceptée : en changer est une décision
 /// explicite (ADR 0002).
@@ -76,6 +76,20 @@ pub struct ProfilCalcule {
     pub precision: Precision,
 }
 
+/// Plages d'une mire choisies par le moteur (`targen`), avec de quoi refaire
+/// et comprendre le choix.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlagesGenerees {
+    /// Texte du fichier `.ti1`.
+    pub ti1: String,
+    /// Version d'ArgyllCMS qui a choisi les plages.
+    pub version: String,
+    /// Ligne de commande lancée, chemins réduits à leur nom.
+    pub commande: String,
+    /// Sortie de l'outil.
+    pub journal: String,
+}
+
 /// Étape du calcul où une erreur survient.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Etape {
@@ -85,6 +99,10 @@ pub enum Etape {
     Profil,
     /// Contrôle du profil contre les mesures (`profcheck`).
     Controle,
+    /// Choix des plages d'une mire (`targen`).
+    Plages,
+    /// Limite du gamut d'un profil (`iccgamut`, comparaison des profils).
+    Gamut,
 }
 
 /// Pourquoi le moteur n'a pas rendu de profil.
@@ -94,6 +112,9 @@ pub enum ErreurMoteur {
     Introuvable,
     /// ArgyllCMS est là, mais pas en version [`VERSION_ARGYLL`].
     VersionNonValidee { trouvee: String },
+    /// ArgyllCMS est là, mais il lui manque cet outil (par exemple
+    /// `iccgamut`, pour la limite du gamut).
+    OutilManquant { outil: String },
     /// Un outil a échoué ; `cause` est la dernière ligne non vide de sa
     /// sortie d'erreur.
     Echec { etape: Etape, cause: String },
@@ -114,6 +135,7 @@ impl ErreurMoteur {
         match self {
             ErreurMoteur::Introuvable => "profil.erreur.argyll_introuvable",
             ErreurMoteur::VersionNonValidee { .. } => "profil.erreur.argyll_version",
+            ErreurMoteur::OutilManquant { .. } => "profil.erreur.outil_manquant",
             ErreurMoteur::Echec {
                 etape: Etape::Version,
                 ..
@@ -126,6 +148,14 @@ impl ErreurMoteur {
                 etape: Etape::Controle,
                 ..
             } => "profil.erreur.controle",
+            ErreurMoteur::Echec {
+                etape: Etape::Plages,
+                ..
+            } => "mire.erreur.generation",
+            ErreurMoteur::Echec {
+                etape: Etape::Gamut,
+                ..
+            } => "comparer.erreur.limite",
             ErreurMoteur::Fichier(_) => "profil.erreur.fichier",
             ErreurMoteur::RecetteEnReglage => "profil.erreur.recette_en_reglage",
             ErreurMoteur::Interrompu { .. } => "profil.erreur.interrompu",
@@ -141,6 +171,9 @@ impl fmt::Display for ErreurMoteur {
                 f,
                 "ArgyllCMS est en version {trouvee}, seule la version {VERSION_ARGYLL} est validée"
             ),
+            ErreurMoteur::OutilManquant { outil } => {
+                write!(f, "l'outil {outil} d'ArgyllCMS manque")
+            }
             ErreurMoteur::Echec { etape, cause } => {
                 write!(f, "échec à l'étape {} : {cause}", nom_etape(*etape))
             }
@@ -164,6 +197,8 @@ fn nom_etape(etape: Etape) -> &'static str {
         Etape::Version => "lecture de la version",
         Etape::Profil => "calcul du profil",
         Etape::Controle => "contrôle du profil",
+        Etape::Plages => "choix des plages de la mire",
+        Etape::Gamut => "calcul de la limite du gamut",
     }
 }
 
@@ -261,13 +296,20 @@ pub trait MoteurProfil: Send + Sync {
         demande: &DemandeProfil,
         avancement: &mut dyn FnMut(Avancement),
     ) -> Result<ProfilCalcule, ErreurMoteur>;
+    /// Commande qui choisirait `nombre` plages RVB, sans rien lancer.
+    fn commande_plages(&self, nombre: usize) -> String;
+    /// Choisit `nombre` plages RVB pour une mire, blanches et noires
+    /// comprises. En cas d'erreur, rien n'est rendu.
+    fn generer_plages(&self, nombre: usize) -> Result<PlagesGenerees, ErreurMoteur>;
 }
 
 /// Moteur des tests : rend toujours le même résultat et garde les demandes
-/// reçues par `calculer`.
+/// reçues par `calculer` et `generer_plages`.
 pub struct MoteurSimule {
     resultat: Result<Vec<u8>, ErreurMoteur>,
     demandes: Mutex<Vec<(String, Recette)>>,
+    ti1: Option<String>,
+    plages_demandees: Mutex<Vec<usize>>,
 }
 
 impl MoteurSimule {
@@ -276,6 +318,8 @@ impl MoteurSimule {
         MoteurSimule {
             resultat: Ok(icc),
             demandes: Mutex::new(Vec::new()),
+            ti1: None,
+            plages_demandees: Mutex::new(Vec::new()),
         }
     }
 
@@ -284,12 +328,32 @@ impl MoteurSimule {
         MoteurSimule {
             resultat: Err(erreur),
             demandes: Mutex::new(Vec::new()),
+            ti1: None,
+            plages_demandees: Mutex::new(Vec::new()),
         }
     }
 
     /// Les demandes reçues par `calculer` : le `.ti3` et la recette.
     pub fn demandes(&self) -> Vec<(String, Recette)> {
         self.demandes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// `generer_plages` rend ce `.ti1`, quel que soit le nombre demandé ;
+    /// sans lui, il échoue à l'étape des plages. Un moteur qui échoue
+    /// ([`MoteurSimule::echoue`]) échoue aussi pour les plages.
+    pub fn avec_plages(self, ti1: String) -> Self {
+        MoteurSimule {
+            ti1: Some(ti1),
+            ..self
+        }
+    }
+
+    /// Les nombres de plages demandés à `generer_plages`.
+    pub fn plages_demandees(&self) -> Vec<usize> {
+        self.plages_demandees
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone()
@@ -326,6 +390,28 @@ impl MoteurProfil for MoteurSimule {
                 moyenne_de00: 0.5,
                 max_de00: 2.0,
             },
+        })
+    }
+
+    fn commande_plages(&self, nombre: usize) -> String {
+        ligne_targen(nombre)
+    }
+
+    fn generer_plages(&self, nombre: usize) -> Result<PlagesGenerees, ErreurMoteur> {
+        self.plages_demandees
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(nombre);
+        self.resultat.clone()?;
+        let ti1 = self.ti1.clone().ok_or_else(|| ErreurMoteur::Echec {
+            etape: Etape::Plages,
+            cause: "moteur simulé sans .ti1".to_string(),
+        })?;
+        Ok(PlagesGenerees {
+            ti1,
+            version: VERSION_ARGYLL.to_string(),
+            commande: self.commande_plages(nombre),
+            journal: "moteur simulé\n".to_string(),
         })
     }
 }

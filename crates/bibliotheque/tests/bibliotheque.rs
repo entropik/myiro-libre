@@ -577,7 +577,7 @@ fn une_bibliotheque_d_avant_les_noms_se_relit_sans_perte() {
         .unwrap()
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 5);
+    assert_eq!(version, 6);
 }
 
 // ---- Couleur de référence (ticket #8) ----
@@ -773,7 +773,7 @@ fn une_bibliotheque_d_organisation_1_se_relit_sans_perte_apres_mise_a_niveau() {
         .unwrap()
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 5);
+    assert_eq!(version, 6);
 }
 
 /// Fichier CGATS fictif d'un autre logiciel : Lab seuls, en M1 par la
@@ -937,7 +937,7 @@ fn une_bibliotheque_d_organisation_2_garde_ses_noms_apres_mise_a_niveau() {
         .unwrap()
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 5);
+    assert_eq!(version, 6);
 }
 
 #[test]
@@ -1186,7 +1186,7 @@ fn verifier_cle_etrangere(chemin: &std::path::Path) {
 }
 
 #[test]
-fn une_bibliotheque_d_organisation_3_passe_a_l_organisation_5_sans_perte() {
+fn une_bibliotheque_d_organisation_3_passe_a_l_organisation_6_sans_perte() {
     let dossier = tempfile::tempdir().unwrap();
     let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
     let (bande, ponctuelle) = base_organisation_3(&chemin);
@@ -1207,12 +1207,12 @@ fn une_bibliotheque_d_organisation_3_passe_a_l_organisation_5_sans_perte() {
         Err(ErreurBibliotheque::MesureInconnue(IdMesure(7)))
     );
     drop(biblio);
-    assert_eq!(organisation(&chemin), 5);
+    assert_eq!(organisation(&chemin), 6);
     verifier_cle_etrangere(&chemin);
 }
 
 #[test]
-fn une_bibliotheque_d_organisation_2_passe_a_l_organisation_5_pas_a_pas() {
+fn une_bibliotheque_d_organisation_2_passe_a_l_organisation_6_pas_a_pas() {
     let dossier = tempfile::tempdir().unwrap();
     let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
     let (bande, _) = base_organisation_2(&chemin);
@@ -1226,7 +1226,7 @@ fn une_bibliotheque_d_organisation_2_passe_a_l_organisation_5_pas_a_pas() {
     );
     biblio.designer_reference(IdMesure(5), None).unwrap();
     drop(biblio);
-    assert_eq!(organisation(&chemin), 5);
+    assert_eq!(organisation(&chemin), 6);
     verifier_cle_etrangere(&chemin);
 }
 
@@ -1245,9 +1245,9 @@ fn une_bibliotheque_d_organisation_4_est_refusee_par_l_ancienne_regle() {
     // La règle d'aujourd'hui refuse de même une organisation plus récente.
     rusqlite::Connection::open(&chemin)
         .unwrap()
-        .pragma_update(None, "user_version", 6)
+        .pragma_update(None, "user_version", 7)
         .unwrap();
     let refus = Bibliotheque::ouvrir(dossier.path()).err().unwrap();
-    assert_eq!(refus, ErreurBibliotheque::VersionBase(6));
-    assert!(refus.to_string().contains("attendu 5 au plus"), "{refus}");
+    assert_eq!(refus, ErreurBibliotheque::VersionBase(7));
+    assert!(refus.to_string().contains("attendu 6 au plus"), "{refus}");
 }

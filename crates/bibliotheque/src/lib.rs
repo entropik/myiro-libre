@@ -13,8 +13,10 @@ use pont_protocole::{ecrire_mesure, lire_mesure, Geometrie, Info, Mesure};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, TransactionBehavior, MAIN_DB};
 use serde::Serialize;
 
+mod mires;
 mod parc;
 mod profils;
+pub use mires::*;
 pub use parc::*;
 pub use profils::*;
 
@@ -68,7 +70,7 @@ fn fichier_libre(chemin: &Path) -> std::path::PathBuf {
 }
 
 /// Version de l'organisation de la base ; une base plus récente est refusée.
-const VERSION_BASE: i32 = 5;
+const VERSION_BASE: i32 = 6;
 
 /// Ce qui peut empêcher une opération sur la bibliothèque.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -104,6 +106,10 @@ pub enum ErreurBibliotheque {
     /// Le fichier à restaurer n'est pas une sauvegarde utilisable ; la
     /// bibliothèque n'a pas été touchée.
     SauvegardeInvalide(String),
+    /// Une mire à ranger est incomplète ou d'un instrument inconnu ; rien
+    /// n'est enregistré.
+    MireInvalide(String),
+    TirageInconnu(IdTirage),
     /// Erreur du fichier ou de la base elle-même.
     Base(String),
 }
@@ -142,6 +148,10 @@ impl fmt::Display for ErreurBibliotheque {
             Self::SauvegardeInvalide(detail) => {
                 write!(f, "sauvegarde inutilisable, rien n'a été restauré : {detail}")
             }
+            Self::MireInvalide(detail) => {
+                write!(f, "mire refusée, rien n'a été enregistré : {detail}")
+            }
+            Self::TirageInconnu(id) => write!(f, "tirage n° {} inconnu", id.0),
             Self::Base(detail) => write!(f, "bibliothèque : {detail}"),
         }
     }
@@ -943,6 +953,7 @@ fn migrer(base: &mut Connection) -> Resultat<()> {
             2 => transaction.execute_batch(ORGANISATION_3)?,
             3 => transaction.execute_batch(ORGANISATION_4)?,
             4 => transaction.execute_batch(ORGANISATION_5)?,
+            5 => transaction.execute_batch(ORGANISATION_6)?,
             autre => unreachable!("aucune migration depuis l'organisation {autre}"),
         }
         version += 1;
@@ -1069,6 +1080,33 @@ CREATE TABLE profils (
 );
 CREATE INDEX profils_par_condition ON profils (condition);
 CREATE UNIQUE INDEX un_profil_actif_par_condition ON profils (condition) WHERE actif = 1;
+";
+
+/// Organisation 6 (ticket #33), par-dessus l'organisation 5 : les mires de
+/// profilage et leurs tirages. Une mire est rangée une fois par empreinte ;
+/// chaque préparation ajoute un tirage dans sa condition. L'état `prepare`
+/// est le seul pour l'instant. Rien n'est réécrit ni effacé.
+const ORGANISATION_6: &str = "
+CREATE TABLE mires (
+    id INTEGER PRIMARY KEY,
+    nom TEXT NOT NULL,
+    instrument TEXT NOT NULL CHECK (instrument IN ('fd9', 'myiro1')),
+    plages INTEGER NOT NULL CHECK (plages > 0),
+    generation TEXT NOT NULL,
+    valeurs TEXT NOT NULL,
+    mise_en_page TEXT NOT NULL,
+    empreinte TEXT NOT NULL UNIQUE,
+    horodatage TEXT NOT NULL
+);
+CREATE TABLE tirages (
+    id INTEGER PRIMARY KEY,
+    condition INTEGER NOT NULL REFERENCES conditions (id),
+    mire INTEGER NOT NULL REFERENCES mires (id),
+    pages INTEGER NOT NULL CHECK (pages > 0),
+    horodatage TEXT NOT NULL,
+    etat TEXT NOT NULL DEFAULT 'prepare' CHECK (etat IN ('prepare'))
+);
+CREATE INDEX tirages_par_condition ON tirages (condition);
 ";
 
 #[cfg(test)]

@@ -1,0 +1,14 @@
+[package]
+name = "photo"
+version = "0.1.0"
+description = "Ouvrir une photo RVB (JPEG, PNG, TIFF) en mémoire : profil embarqué, orientation, image d'analyse (ticket #80)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
+
+[dev-dependencies]
+fdeflate = "0.3"
+tiff = "0.11"

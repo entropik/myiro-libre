@@ -66,14 +66,14 @@ fn produire_fixture_organisation_4() {
 }
 
 #[test]
-fn une_base_neuve_est_en_organisation_5() {
+fn une_base_neuve_est_en_organisation_6() {
     let (dossier, biblio) = bibliotheque_temporaire();
     drop(biblio);
     let base = rusqlite::Connection::open(dossier.path().join(bibliotheque::FICHIER_BASE)).unwrap();
     let version: i32 = base
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 5);
+    assert_eq!(version, 6);
     base.prepare("SELECT papier, resolution FROM conditions")
         .unwrap();
     base.prepare("SELECT id, nom FROM imprimantes").unwrap();
@@ -84,6 +84,13 @@ fn une_base_neuve_est_en_organisation_5() {
                 mesures, icc FROM profils",
     )
     .unwrap();
+    base.prepare(
+        "SELECT id, nom, instrument, plages, generation, valeurs, mise_en_page, empreinte,
+                horodatage FROM mires",
+    )
+    .unwrap();
+    base.prepare("SELECT id, condition, mire, pages, horodatage, etat FROM tirages")
+        .unwrap();
 }
 
 #[test]

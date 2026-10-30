@@ -31,6 +31,7 @@ window.CalculProfil = (() => {
   let erreurCalcul = ""; // dernière erreur du calcul, dite sous le bouton
   let erreurCommandes = ""; // erreur des commandes (ArgyllCMS introuvable), dite sous le bouton
   let raisonCalcul = null; // <p class="why"> sous « Calculer le profil »
+  let boutonCalculer = null; // « Calculer le profil », retiré si les mesures sont incohérentes
   let commandesBloc = null;
   let commandes = "";
   let demande = 0; // dernière demande de commandes : une réponse plus ancienne est ignorée
@@ -147,10 +148,39 @@ window.CalculProfil = (() => {
     if (detail) detail.hidden = true;
   }
 
-  // Une erreur arrive en clé du catalogue, ou en objet {cle, cause, version} (calcul d'un
-  // profil) : le texte de la clé, avec la version refusée à sa place, puis ce qu'a dit ArgyllCMS,
-  // inséré tel quel. Tout le reste (objet sans clé, exception de la page) est une erreur
-  // inattendue.
+  // Contrôles de cohérence des mesures (ticket #1), par nom reçu du module `profiler`.
+  const NOMS_CRITERES = {
+    degrade_gris: "profil.coherence.critere.degrade_gris",
+    blanc_noir: "profil.coherence.critere.blanc_noir",
+    doublons: "profil.coherence.critere.doublons",
+    voisines: "profil.coherence.critere.voisines",
+  };
+  const nomsCriteres = (criteres) => criteres.map((c) => t(NOMS_CRITERES[c] || c)).join(", ");
+
+  // Refus de cohérence : les plages en cause à la place de {plages}, les suivantes comptées,
+  // puis les contrôles qui les signalent et, s'il y en a une, la piste du décalage.
+  function texteCoherence(texte, c) {
+    let plages = c.plages.join(", ");
+    if (c.autres) {
+      plages += ` ${c.autres === 1 ? t("profil.coherence.autre")
+        : t("profil.coherence.autres").replace("{n}", () => String(c.autres))}`;
+    }
+    const morceaux = [texte.replace("{plages}", () => plages)];
+    if (c.criteres.length) {
+      morceaux.push(t("profil.coherence.criteres").replace("{criteres}", () => nomsCriteres(c.criteres)));
+    }
+    if (typeof c.decalage === "number") {
+      const n = Math.abs(c.decalage);
+      morceaux.push(n === 1 ? t("profil.coherence.decalage_une")
+        : t("profil.coherence.decalage").replace("{n}", () => String(n)));
+    }
+    return morceaux.join(" ");
+  }
+
+  // Une erreur arrive en clé du catalogue, ou en objet {cle, cause, version, coherence} (calcul
+  // d'un profil) : le texte de la clé, avec la version refusée ou les plages en cause à leur
+  // place, puis ce qu'a dit ArgyllCMS, inséré tel quel. Tout le reste (objet sans clé, exception
+  // de la page) est une erreur inattendue.
   function texteErreur(erreur) {
     if (typeof erreur === "string") return t(erreur);
     if (!erreur || typeof erreur.cle !== "string") {
@@ -159,6 +189,7 @@ window.CalculProfil = (() => {
     }
     let texte = t(erreur.cle);
     if (erreur.version) texte = texte.replace("{version}", () => erreur.version);
+    if (erreur.coherence) texte = texteCoherence(texte, erreur.coherence);
     return erreur.cause ? `${texte} ${t("profil.erreur.cause").replace("{cause}", () => erreur.cause)}` : texte;
   }
 
@@ -257,6 +288,7 @@ window.CalculProfil = (() => {
     // Section ouverte : « Calculer le profil » est le seul bouton principal de la vue.
     installer.classList.toggle("btn--primary", !ouvert);
     raisonCalcul = null;
+    boutonCalculer = null;
     commandesBloc = null;
     oublierBarre();
     if (!ouvert) return calcul.replaceChildren();
@@ -293,6 +325,7 @@ window.CalculProfil = (() => {
     if (choix.mesure === null) calculer.dataset.inactif = "";
     calculer.addEventListener("click", () => parc.agir(calculerProfil));
     actions.append(calculer);
+    boutonCalculer = calculer;
     raisonCalcul = el("p", "why");
     raisonCalcul.setAttribute("role", "status");
     corps.append(actions, raisonCalcul);
@@ -321,6 +354,8 @@ window.CalculProfil = (() => {
         }
       } catch (erreur) {
         if (n === demande) erreurCommandes = texteErreur(erreur);
+        // Mesures incohérentes : le refus prend la place du bouton, dès le choix de la mesure.
+        if (n === demande && erreur?.coherence && boutonCalculer) boutonCalculer.remove();
       }
     }
     if (n !== demande) return;
@@ -416,6 +451,11 @@ window.CalculProfil = (() => {
     );
     // Durée du calcul, seulement si elle a été gardée : un profil plus ancien n'en a pas.
     if (typeof p.duree_s === "number") lignes.push(cleValeur("profil.duree", duree(Math.round(p.duree_s) * 1000)));
+    // Contrôle de cohérence des mesures, puis les contrôles impossibles sur cette mesure ; un
+    // profil calculé avant ce contrôle est dit non contrôlé.
+    const c = p.coherence;
+    lignes.push(cleValeur("profil.coherence", t(c ? "profil.coherence.accepte" : "profil.coherence.non_controle")));
+    if (c && c.non_faits.length) lignes.push(cleValeur("profil.coherence.non_fait", nomsCriteres(c.non_faits)));
     lignes.push(avance);
     return lignes;
   }
