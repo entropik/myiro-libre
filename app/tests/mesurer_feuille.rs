@@ -15,15 +15,16 @@ use app::instrument::feuille::{
 };
 use app::instrument::parefeu::{AutorisationPareFeu, PareFeuSimule};
 use app::instrument::{Etat, Instrument, DELAI_FEUILLE};
-use app::mesurer_feuille::{lire_rgb2520, DOSSIER_MESURES_FD9};
+use app::mesurer_feuille::{lire_calage, lire_rgb2520, DOSSIER_MESURES_FD9};
 use app::pont::{Architecture, Panne, Pont};
 use bibliotheque::IdCondition;
 use mires::{MireFd9, RGB2520_GEOMETRIE, RGB2520_NOM};
 use pont_protocole::{
-    AdresseReseau, Calcul, ConditionMesure, ConditionsCalcul, DefinitionFeuille, DonneesBrutes,
-    Echantillonnage, ErreurPont, Geometrie, Horodatage, Identite, Illuminant, Info, InstrumentFd9,
-    InstrumentMesurant, Lab, LectureFeuille, LiaisonFd9, Mesure, Observateur, Palier, Plage,
-    Provenance, RemiseAuRepos, Reponse, Requete, Spectre, MODELE_FD9,
+    AdresseReseau, AvancementFeuille, CalageFeuille, Calcul, ConditionMesure, ConditionsCalcul,
+    DefinitionFeuille, DonneesBrutes, Echantillonnage, ErreurPont, Geometrie, Horodatage, Identite,
+    Illuminant, ImageFeuille, Info, InstrumentFd9, InstrumentMesurant, Lab, LectureFeuille,
+    LiaisonFd9, Mesure, Observateur, Palier, Plage, Provenance, RemiseAuRepos, Reponse, Requete,
+    Spectre, MODELE_FD9,
 };
 use profilage::{MoteurSimule, Recette};
 use tempfile::TempDir;
@@ -151,10 +152,30 @@ struct PontFeuilleSimule {
     /// Résultat imposé à `mesurer_feuille` ; une panne arrête le pont, comme
     /// `PontProcessus` arrêté de force.
     feuille: Option<Result<Reponse, Panne>>,
+    /// Lignes d'avancement écrites avant la réponse de la feuille ; vide :
+    /// un pont d'avant le ticket #34.
+    avancements: Vec<AvancementFeuille>,
     arrete: bool,
 }
 
 impl Pont for PontFeuilleSimule {
+    fn demander_suivi(
+        &mut self,
+        requete: &Requete,
+        _annulation: &app::pont::Annulation,
+        suivi: &mut dyn FnMut(AvancementFeuille),
+    ) -> app::pont::Echange {
+        if matches!(requete, Requete::MesurerFeuille { .. }) && self.plafond == Palier::Feuille {
+            for avancement in self.avancements.clone() {
+                suivi(avancement);
+            }
+        }
+        app::pont::Echange {
+            reponse: self.demander(requete),
+            annulation: None,
+        }
+    }
+
     fn demander(&mut self, requete: &Requete) -> Result<Reponse, Panne> {
         self.journal
             .borrow_mut()
@@ -235,8 +256,12 @@ struct Banc {
     journal: Journal,
     /// Réponse imposée à `mesurer_feuille`, pour les ponts lancés ensuite.
     feuille: Feuille,
+    /// Avancement écrit par les ponts lancés ensuite.
+    avancements: Avancements,
     instrument: Instrument<PontFeuilleSimule>,
 }
+
+type Avancements = Rc<RefCell<Vec<AvancementFeuille>>>;
 
 /// Résultat imposé à `mesurer_feuille`, partagé avec le lanceur.
 type Feuille = Rc<RefCell<Option<Result<Reponse, Panne>>>>;
@@ -253,6 +278,7 @@ fn banc() -> Banc {
     fausse_dll(&sdk.join("Module").join("FD9SDK.dll"));
     let journal = Journal::default();
     let feuille = Rc::new(RefCell::new(None));
+    let avancements = Avancements::default();
     let mut autorisation = AutorisationPareFeu::new(PareFeuSimule {
         regle: Some(PathBuf::from("pont-fd9-x86.exe")),
         ..Default::default()
@@ -260,7 +286,7 @@ fn banc() -> Banc {
     let instrument = Instrument::ouvrir_fd9(
         &[sdk],
         &[(Architecture::X86, PathBuf::from("pont-fd9-x86.exe"))],
-        lanceur(&journal, &feuille),
+        lanceur(&journal, &feuille, &avancements),
         &mut autorisation,
     );
     Banc {
@@ -269,6 +295,7 @@ fn banc() -> Banc {
         condition,
         journal,
         feuille,
+        avancements,
         instrument,
     }
 }
@@ -276,13 +303,15 @@ fn banc() -> Banc {
 fn lanceur(
     journal: &Journal,
     feuille: &Feuille,
+    avancements: &Avancements,
 ) -> impl FnMut(&Path, &Path, Palier) -> Result<PontFeuilleSimule, Panne> {
-    let (journal, feuille) = (journal.clone(), feuille.clone());
+    let (journal, feuille, avancements) = (journal.clone(), feuille.clone(), avancements.clone());
     move |_, _, plafond| {
         Ok(PontFeuilleSimule {
             plafond,
             journal: journal.clone(),
             feuille: feuille.borrow().clone(),
+            avancements: avancements.borrow().clone(),
             arrete: false,
         })
     }
@@ -309,7 +338,7 @@ impl Banc {
             &mut self.instrument,
             mire,
             &dossier,
-            &mut lanceur(&self.journal, &self.feuille),
+            &mut lanceur(&self.journal, &self.feuille, &self.avancements),
             &mut |etape| etapes.push(etape),
         );
         (resultat, etapes)
@@ -659,4 +688,212 @@ fn une_feuille_refusee_par_le_pont_ne_range_rien_et_revient_au_plafond_connexion
         .unwrap()
         .importees
         .is_empty());
+}
+
+// ---- Avancement de la feuille et calage (ticket #34) ----
+
+/// Calage synthétique : deux points, image de 4 × 3 pixels à 60 ppp.
+fn calage(decalage: i32) -> CalageFeuille {
+    CalageFeuille {
+        decalage: [decalage, -110],
+        ecart_max: 40,
+        points: vec![
+            pont_protocole::PointVise {
+                zone: 0,
+                rangee: 0,
+                colonne: 0,
+                x: 1_649 + decalage,
+                y: 2_490,
+            },
+            pont_protocole::PointVise {
+                zone: 0,
+                rangee: 0,
+                colonne: 1,
+                x: 2_250 + decalage,
+                y: 2_490,
+            },
+        ],
+        image: Some(ImageFeuille::new(4, 3, 60, (0..12).collect()).unwrap()),
+    }
+}
+
+fn avancement_complet(calage: CalageFeuille) -> Vec<AvancementFeuille> {
+    vec![
+        AvancementFeuille::FeuilleEngagee {},
+        AvancementFeuille::Lecture {},
+        AvancementFeuille::CalagePret { calage },
+        AvancementFeuille::Mesure {
+            mesurees: 0,
+            plages: 2_520,
+        },
+        AvancementFeuille::Mesure {
+            mesurees: 2_520,
+            plages: 2_520,
+        },
+    ]
+}
+
+/// L'avancement écrit par le pont est relayé à l'écran, dans l'ordre, entre
+/// « glissez la feuille » et le rangement.
+#[test]
+fn l_avancement_du_pont_est_relaye_a_l_ecran_dans_l_ordre() {
+    let mut b = banc();
+    *b.avancements.borrow_mut() = avancement_complet(calage(880));
+    let (resultat, etapes) = b.mesurer(Ok(mire()));
+    resultat.unwrap();
+    assert_eq!(
+        etapes,
+        vec![
+            EtapeFeuille::Connexion,
+            EtapeFeuille::GlisserFeuille,
+            EtapeFeuille::FeuilleEngagee,
+            EtapeFeuille::Lecture,
+            EtapeFeuille::CalagePret {
+                calage: calage(880)
+            },
+            EtapeFeuille::Mesure {
+                mesurees: 0,
+                plages: 2_520
+            },
+            EtapeFeuille::Mesure {
+                mesurees: 2_520,
+                plages: 2_520
+            },
+            EtapeFeuille::Rangement,
+        ]
+    );
+}
+
+/// L'étape « calage prêt » part à la page sans les pixels de l'image : ses
+/// dimensions seulement (les pixels passent en binaire, ADR 0003).
+#[test]
+fn le_calage_annonce_a_la_page_n_a_pas_les_pixels() {
+    let texte = serde_json::to_string(&EtapeFeuille::CalagePret {
+        calage: calage(880),
+    })
+    .unwrap();
+    assert!(
+        texte.starts_with(r#"{"etape":"calage_pret","calage":{"decalage":[880,-110],"ecart_max":40,"points":[{"zone":0,"rangee":0,"colonne":0,"x":2529,"y":2490}"#),
+        "{texte}"
+    );
+    assert!(
+        texte.ends_with(r#""image":{"largeur":4,"hauteur":3,"ppp":60}}}"#),
+        "{texte}"
+    );
+    assert!(!texte.contains("gris"), "{texte}");
+    assert_eq!(
+        serde_json::to_string(&EtapeFeuille::GlisserFeuille).unwrap(),
+        r#"{"etape":"glisser_feuille"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&EtapeFeuille::Mesure {
+            mesurees: 12,
+            plages: 2_520
+        })
+        .unwrap(),
+        r#"{"etape":"mesure","mesurees":12,"plages":2520}"#
+    );
+}
+
+/// Le calage est gardé à côté de la mesure complète, fichier local de la
+/// bibliothèque (`mesures-fd9/<n°>.calage.json`), et se relit : c'est le
+/// dernier de la résolution.
+#[test]
+fn le_calage_est_garde_a_cote_de_la_mesure_et_se_relit() {
+    let mut b = banc();
+    *b.avancements.borrow_mut() = avancement_complet(calage(880));
+    let rangee = b.mesurer(Ok(mire())).0.unwrap();
+    let attendu = b
+        .bibliotheque()
+        .join(DOSSIER_MESURES_FD9)
+        .join(format!("{}.calage.json", rangee.mesure.0));
+    assert_eq!(rangee.calage.as_deref(), Some(attendu.as_path()));
+    assert_eq!(
+        lire_calage(&b.bibliotheque(), rangee.mesure),
+        Some(calage(880))
+    );
+    assert_eq!(
+        b.ouverte.dernier_calage_fd9(b.condition, &b.bibliotheque()),
+        Some((rangee.mesure, calage(880)))
+    );
+
+    // Une deuxième feuille : son calage devient le dernier.
+    *b.avancements.borrow_mut() = avancement_complet(calage(500));
+    let seconde = b.mesurer(Ok(mire())).0.unwrap();
+    assert_ne!(seconde.mesure, rangee.mesure);
+    assert_eq!(
+        b.ouverte.dernier_calage_fd9(b.condition, &b.bibliotheque()),
+        Some((seconde.mesure, calage(500)))
+    );
+}
+
+/// Le calage de la réponse finale l'emporte sur celui de l'avancement ; un
+/// pont d'avant l'avancement le donne seulement dans sa réponse.
+#[test]
+fn le_calage_de_la_reponse_finale_l_emporte() {
+    let mut b = banc();
+    *b.avancements.borrow_mut() = avancement_complet(calage(880));
+    let mesure = mesure_de(&definition_rgb2520(&mire()).unwrap());
+    *b.feuille.borrow_mut() = Some(Ok(Reponse::Mesure {
+        mesure: mesure.clone(),
+        remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
+        calage: Some(calage(300)),
+    }));
+    let rangee = b.mesurer(Ok(mire())).0.unwrap();
+    assert_eq!(
+        lire_calage(&b.bibliotheque(), rangee.mesure),
+        Some(calage(300))
+    );
+
+    b.avancements.borrow_mut().clear();
+    let (rangee, etapes) = b.mesurer(Ok(mire()));
+    let rangee = rangee.unwrap();
+    assert_eq!(
+        etapes,
+        vec![
+            EtapeFeuille::Connexion,
+            EtapeFeuille::GlisserFeuille,
+            EtapeFeuille::Rangement
+        ]
+    );
+    assert_eq!(
+        lire_calage(&b.bibliotheque(), rangee.mesure),
+        Some(calage(300))
+    );
+}
+
+/// Sans calage ni dans l'avancement ni dans la réponse, rien n'est écrit et
+/// la résolution n'a pas de dernier calage.
+#[test]
+fn sans_calage_rien_n_est_garde() {
+    let mut b = banc();
+    let rangee = b.mesurer(Ok(mire())).0.unwrap();
+    assert_eq!(rangee.calage, None);
+    assert_eq!(lire_calage(&b.bibliotheque(), rangee.mesure), None);
+    assert_eq!(
+        b.ouverte.dernier_calage_fd9(b.condition, &b.bibliotheque()),
+        None
+    );
+}
+
+/// Une feuille refusée après le calage (mesure invraisemblable) ne garde
+/// rien : ni mesure ni calage.
+#[test]
+fn une_feuille_refusee_apres_le_calage_ne_garde_rien() {
+    let mut b = banc();
+    *b.avancements.borrow_mut() = avancement_complet(calage(880));
+    *b.feuille.borrow_mut() = Some(Ok(Reponse::Erreur {
+        erreur: ErreurPont::MesureInvraisemblable {
+            correlation_milliemes: 120,
+        },
+    }));
+    let (resultat, etapes) = b.mesurer(Ok(mire()));
+    assert_eq!(
+        resultat.unwrap_err().cle,
+        "feuille_fd9.mesure_invraisemblable"
+    );
+    assert!(etapes
+        .iter()
+        .any(|e| matches!(e, EtapeFeuille::CalagePret { .. })));
+    assert!(!b.bibliotheque().join(DOSSIER_MESURES_FD9).exists());
 }

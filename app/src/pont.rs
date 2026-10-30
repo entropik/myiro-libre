@@ -12,10 +12,10 @@ use std::time::{Duration, Instant};
 
 use crate::instrument::Delais;
 use pont_protocole::{
-    lire_reponse, Calcul, ConditionMesure, ConditionsCalcul, DonneesBrutes, Echantillonnage,
-    EffetAnnulation, ErreurPont, Geometrie, Horodatage, Identite, Illuminant, Info,
-    InstrumentDetecte, InstrumentMesurant, Lab, Mesure, Observateur, Palier, Plage, Provenance,
-    RemiseAuRepos, Reponse, Requete, Spectre, MODELE_MYIRO1,
+    lire_reponse, AvancementFeuille, Calcul, ConditionMesure, ConditionsCalcul, DonneesBrutes,
+    Echantillonnage, EffetAnnulation, ErreurPont, Geometrie, Horodatage, Identite, Illuminant,
+    Info, InstrumentDetecte, InstrumentMesurant, Lab, Mesure, Observateur, Palier, Plage,
+    Provenance, RemiseAuRepos, Reponse, Requete, Spectre, MODELE_MYIRO1,
 };
 
 /// Le pont n'a pas pu répondre : ce n'est pas une erreur de l'instrument, mais
@@ -106,6 +106,20 @@ pub trait Pont {
             reponse: self.demander(requete),
             annulation: None,
         }
+    }
+
+    /// Comme `demander_annulable`, et chaque ligne d'avancement écrite par
+    /// le pont avant sa réponse (feuille au FD-9, ticket #34) est donnée à
+    /// `suivi`, dans l'ordre. Un pont qui n'en écrit pas (écrit avant le
+    /// ticket #34) répond comme `demander_annulable`.
+    fn demander_suivi(
+        &mut self,
+        requete: &Requete,
+        annulation: &Annulation,
+        suivi: &mut dyn FnMut(AvancementFeuille),
+    ) -> Echange {
+        let _ = suivi;
+        self.demander_annulable(requete, annulation)
     }
 }
 
@@ -318,12 +332,20 @@ impl PontProcessus {
         let _ = self.enfant.wait();
     }
 
-    /// Lit la réponse à `ligne`, au plus `delai`.
+    /// Lit la réponse à `ligne`, au plus `delai`. Une ligne d'avancement
+    /// n'est pas une réponse : elle est écartée.
     fn recevoir(&mut self, ligne: &str, delai: Duration) -> Result<Reponse, Panne> {
-        match self.lignes.recv_timeout(delai) {
-            Ok(reponse) => lire(&reponse),
-            Err(RecvTimeoutError::Disconnected) => Err(self.arret()),
-            Err(RecvTimeoutError::Timeout) => Err(self.couper(ligne, delai)),
+        let debut = Instant::now();
+        loop {
+            let reste = delai.saturating_sub(debut.elapsed());
+            match self.lignes.recv_timeout(reste) {
+                Ok(reponse) => match lire(&reponse) {
+                    Ok(Reponse::Avancement { .. }) => {}
+                    lue => return lue,
+                },
+                Err(RecvTimeoutError::Disconnected) => return Err(self.arret()),
+                Err(RecvTimeoutError::Timeout) => return Err(self.couper(ligne, delai)),
+            }
         }
     }
 }
@@ -340,12 +362,22 @@ impl Pont for PontProcessus {
         self.recevoir(&ligne, self.delais.reponse(requete))
     }
 
+    fn demander_annulable(&mut self, requete: &Requete, annulation: &Annulation) -> Echange {
+        self.demander_suivi(requete, annulation, &mut |_| {})
+    }
+
     /// La requête est envoyée, puis sa réponse attendue par tranches courtes :
     /// dès que l'annulation est demandée, `annuler` part sans attendre, et le
     /// délai restant devient celui de l'annulation (le pont désarme avant de
-    /// répondre). Les deux réponses sont lues dans l'ordre ; un pont qui ne
-    /// confirme pas l'annulation est arrêté.
-    fn demander_annulable(&mut self, requete: &Requete, annulation: &Annulation) -> Echange {
+    /// répondre). Les lignes d'avancement lues entre-temps vont à `suivi`.
+    /// Les deux réponses sont lues dans l'ordre ; un pont qui ne confirme pas
+    /// l'annulation est arrêté.
+    fn demander_suivi(
+        &mut self,
+        requete: &Requete,
+        annulation: &Annulation,
+        suivi: &mut dyn FnMut(AvancementFeuille),
+    ) -> Echange {
         let sans_annulation = |reponse| Echange {
             reponse,
             annulation: None,
@@ -371,7 +403,10 @@ impl Pont for PontProcessus {
             }
             let reste = delai.saturating_sub(debut.elapsed());
             match self.lignes.recv_timeout(reste.min(PAS_ATTENTE_REPONSE)) {
-                Ok(texte) => break lire(&texte),
+                Ok(texte) => match lire(&texte) {
+                    Ok(Reponse::Avancement { avancement }) => suivi(avancement),
+                    lue => break lue,
+                },
                 Err(RecvTimeoutError::Disconnected) => break Err(self.arret()),
                 Err(RecvTimeoutError::Timeout) if reste.is_zero() => {
                     break Err(self.couper(&ligne, delai))

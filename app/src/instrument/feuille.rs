@@ -6,8 +6,8 @@ use std::path::Path;
 
 use mires::{MireFd9, RGB2520_NOM};
 use pont_protocole::{
-    AdresseReseau, DefinitionFeuille, ErreurPont, Geometrie, Mesure, Palier, Reponse, Requete,
-    ZoneFeuille,
+    AdresseReseau, AvancementFeuille, CalageFeuille, DefinitionFeuille, ErreurPont, Geometrie,
+    Mesure, Palier, PointVise, Reponse, Requete, ZoneFeuille,
 };
 use serde::Serialize;
 
@@ -55,17 +55,84 @@ pub fn definition_rgb2520(mire: &MireFd9) -> Result<DefinitionFeuille, String> {
     Ok(definition)
 }
 
-/// Étapes annoncées pendant la mesure d'une feuille, dans l'ordre.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
+/// Étapes annoncées pendant la mesure d'une feuille, dans l'ordre. Celles
+/// entre `GlisserFeuille` et `Rangement` viennent de l'avancement écrit par
+/// le pont (ticket #34) ; un pont qui n'en écrit pas passe directement de
+/// l'une à l'autre. Envoyées à la page en JSON (`{"etape":"lecture"}`), le
+/// calage sans les pixels de son image ([`VueCalage`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "etape", rename_all = "snake_case")]
 pub enum EtapeFeuille {
     /// Le pont est relancé au plafond Feuille et se connecte au FD-9.
     Connexion,
-    /// La mesure est demandée : glisser la feuille ; le FD-9 la lit, puis
-    /// mesure ses plages. Le pont ne dit rien de plus avant sa réponse.
+    /// La mesure est demandée : glisser la feuille.
     GlisserFeuille,
+    /// Le FD-9 a pris la feuille.
+    FeuilleEngagee,
+    /// Image, QR et repérage des plages.
+    Lecture,
+    /// Points visés et image de la feuille, avant la mesure.
+    CalagePret {
+        #[serde(serialize_with = "calage_pour_la_page")]
+        calage: CalageFeuille,
+    },
+    /// `mesurees` plages mesurées sur `plages`, tel que le pont le compte.
+    Mesure { mesurees: u32, plages: u32 },
     /// La mesure est reçue et rangée dans la résolution.
     Rangement,
+}
+
+impl EtapeFeuille {
+    fn depuis(avancement: AvancementFeuille) -> Self {
+        match avancement {
+            AvancementFeuille::FeuilleEngagee {} => EtapeFeuille::FeuilleEngagee,
+            AvancementFeuille::Lecture {} => EtapeFeuille::Lecture,
+            AvancementFeuille::CalagePret { calage } => EtapeFeuille::CalagePret { calage },
+            AvancementFeuille::Mesure { mesurees, plages } => {
+                EtapeFeuille::Mesure { mesurees, plages }
+            }
+        }
+    }
+}
+
+/// Dimensions de l'image d'un calage, sans ses pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct DimensionsImage {
+    pub largeur: u32,
+    pub hauteur: u32,
+    pub ppp: u32,
+}
+
+/// Ce que la page reçoit d'un calage : décalage, écart, points visés et
+/// dimensions de l'image. Les pixels passent à part, en binaire (ADR 0003).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct VueCalage<'a> {
+    pub decalage: [i32; 2],
+    pub ecart_max: u32,
+    pub points: &'a [PointVise],
+    pub image: Option<DimensionsImage>,
+}
+
+impl<'a> VueCalage<'a> {
+    pub fn de(calage: &'a CalageFeuille) -> Self {
+        VueCalage {
+            decalage: calage.decalage,
+            ecart_max: calage.ecart_max,
+            points: &calage.points,
+            image: calage.image.as_ref().map(|i| DimensionsImage {
+                largeur: i.largeur(),
+                hauteur: i.hauteur(),
+                ppp: i.ppp(),
+            }),
+        }
+    }
+}
+
+fn calage_pour_la_page<S: serde::Serializer>(
+    calage: &CalageFeuille,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    VueCalage::de(calage).serialize(s)
 }
 
 /// Feuille mesurée, telle que le pont l'a rendue.
@@ -74,6 +141,9 @@ pub struct FeuilleMesuree {
     pub mesure: Mesure,
     /// Fermeture du pont de la feuille ; la mesure vaut quelle qu'elle soit.
     pub fermeture: Fermeture,
+    /// Points visés et image : ceux de la réponse, sinon ceux annoncés par
+    /// l'avancement ; aucun si le pont n'en a pas rendu.
+    pub calage: Option<CalageFeuille>,
 }
 
 /// Pourquoi une feuille n'a pas été mesurée.
@@ -196,16 +266,27 @@ fn mesurer_avec<P: Pont>(
     let lue = connecter(&mut pont, adresse).and_then(|()| {
         suivi(EtapeFeuille::GlisserFeuille);
         annulation.commencer();
-        let echange = pont.demander_annulable(&Requete::MesurerFeuille { mire }, annulation);
+        // Calage annoncé pendant la feuille, gardé si la réponse n'en a pas.
+        let mut annonce = None;
+        let echange = pont.demander_suivi(
+            &Requete::MesurerFeuille { mire },
+            annulation,
+            &mut |avancement| {
+                if let AvancementFeuille::CalagePret { calage } = &avancement {
+                    annonce = Some(calage.clone());
+                }
+                suivi(EtapeFeuille::depuis(avancement));
+            },
+        );
         annulation.terminer();
         let reponse = echange
             .reponse
             .map_err(|panne| ErreurFeuille::Instrument(panne.into()))?;
         match reponse {
-            Reponse::Mesure { mesure, .. }
+            Reponse::Mesure { mesure, calage, .. }
                 if mesure.provenance().geometrie == (Geometrie::Feuille {}) =>
             {
-                Ok(mesure)
+                Ok((mesure, calage.or(annonce)))
             }
             // L'installation est incomplète, pas la feuille : le problème
             // de l'instrument, avec ses textes.
@@ -219,7 +300,11 @@ fn mesurer_avec<P: Pont>(
         }
     });
     let fermeture = fermer_pont(pont);
-    lue.map(|mesure| FeuilleMesuree { mesure, fermeture })
+    lue.map(|(mesure, calage)| FeuilleMesuree {
+        mesure,
+        fermeture,
+        calage,
+    })
 }
 
 /// Version de la DLL, puis connexion à l'adresse de la détection.

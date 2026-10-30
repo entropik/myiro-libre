@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use bibliotheque::{IdCondition, IdMesure};
 use mires::{lire_mire_fd9, ErreurMire, MireFd9};
-use pont_protocole::{ecrire_mesure, Mesure, Palier};
+use pont_protocole::{ecrire_mesure, CalageFeuille, Mesure, Palier};
 use serde::Serialize;
 
 use crate::colonne::BibliothequeOuverte;
@@ -58,6 +58,10 @@ pub struct FeuilleRangee {
     /// Fermeture du pont de la feuille confirmée ; sinon, l'instrument est
     /// peut-être resté dans un état incertain (la mesure vaut).
     pub fermeture_confirmee: bool,
+    /// Points visés et image de la feuille gardés à côté
+    /// (`mesures-fd9/<n°>.calage.json`) ; rien si le pont n'en a pas rendu
+    /// ou s'ils n'ont pas pu s'écrire.
+    pub calage: Option<PathBuf>,
 }
 
 /// Pourquoi une feuille n'est pas rangée : clé du catalogue (`mire.erreur.*`,
@@ -133,14 +137,72 @@ impl BibliothequeOuverte {
         let fichier = nom_feuille(&feuille.mesure);
         let mesure = self.avec(|b| b.importer_mesure(condition, &fichier, &texte))?;
         let json = garder_mesure(dossier, mesure, &feuille.mesure);
+        let calage = feuille
+            .calage
+            .as_ref()
+            .and_then(|calage| garder_calage(dossier, mesure, calage));
         Ok(FeuilleRangee {
             mesure,
             fichier,
             plages: feuille.mesure.plages().len(),
             json,
             fermeture_confirmee: feuille.fermeture == Fermeture::Confirmee,
+            calage,
         })
     }
+
+    /// Calage de la dernière feuille FD-9 rangée dans la résolution
+    /// `condition` (le plus grand n° de mesure qui en a un), relu depuis
+    /// `<dossier>/mesures-fd9/`.
+    pub fn dernier_calage_fd9(
+        &self,
+        condition: IdCondition,
+        dossier: &Path,
+    ) -> Option<(IdMesure, CalageFeuille)> {
+        let detail = self.detail_reglage(condition).ok()?;
+        let mut ids: Vec<IdMesure> = detail.importees.iter().map(|m| m.id).collect();
+        ids.sort_by_key(|id| std::cmp::Reverse(id.0));
+        ids.into_iter()
+            .find_map(|id| lire_calage(dossier, id).map(|calage| (id, calage)))
+    }
+}
+
+fn fichier_calage(dossier: &Path, id: IdMesure) -> PathBuf {
+    dossier
+        .join(DOSSIER_MESURES_FD9)
+        .join(format!("{}.calage.json", id.0))
+}
+
+/// Écrit le calage d'une feuille (points visés, image réduite en base64)
+/// dans `<dossier>/mesures-fd9/<n°>.calage.json`, sans remplacer un fichier
+/// déjà là. L'image peut montrer l'écriture de l'opérateur : ce fichier
+/// reste dans la bibliothèque du poste, jamais dans le dépôt.
+fn garder_calage(dossier: &Path, id: IdMesure, calage: &CalageFeuille) -> Option<PathBuf> {
+    let fichier = fichier_calage(dossier, id);
+    let texte = serde_json::to_string(calage).expect("un calage se sérialise toujours");
+    let ecrit = fs::create_dir_all(dossier.join(DOSSIER_MESURES_FD9)).and_then(|()| {
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&fichier)?
+            .write_all(texte.as_bytes())
+    });
+    match ecrit {
+        Ok(()) => Some(fichier),
+        Err(e) => {
+            eprintln!("{} : {e}", fichier.display());
+            None
+        }
+    }
+}
+
+/// Calage gardé avec la mesure `id`, s'il y en a un et qu'il se relit
+/// (contrôlé comme une réponse du pont : image de la bonne taille).
+pub fn lire_calage(dossier: &Path, id: IdMesure) -> Option<CalageFeuille> {
+    let texte = fs::read_to_string(fichier_calage(dossier, id)).ok()?;
+    serde_json::from_str(&texte)
+        .map_err(|e| eprintln!("calage de la mesure {} : {e}", id.0))
+        .ok()
 }
 
 /// Écrit la mesure au format conservable (`myiro-libre/mesure/1`,

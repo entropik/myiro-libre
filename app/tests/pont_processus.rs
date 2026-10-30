@@ -304,6 +304,118 @@ fn une_demande_annulable_sans_annulation_reste_une_demande() {
     assert_eq!(echange.annulation, None);
 }
 
+// ---- Avancement d'une feuille au FD-9 (ticket #34) ----
+
+/// Requête de feuille quelconque : le pont factice ne la lit pas.
+fn feuille() -> Requete {
+    Requete::MesurerFeuille {
+        mire: pont_protocole::DefinitionFeuille {
+            nom: "RGB-2520 - 1P MY9".into(),
+            largeur: 27_940,
+            hauteur: 41_660,
+            zones: vec![pont_protocole::ZoneFeuille {
+                gauche: 1_349,
+                haut: 2_300,
+                largeur_plage: 601,
+                hauteur_plage: 601,
+                pas_x: 601,
+                pas_y: 601,
+                rangees: 1,
+                colonnes: 6,
+            }],
+            couleurs: None,
+        },
+    }
+}
+
+/// Les lignes d'avancement écrites avant la réponse sont données au suivi,
+/// dans l'ordre ; la réponse de la requête est la ligne qui suit.
+#[test]
+fn l_avancement_d_une_feuille_est_suivi_jusqu_a_sa_reponse() {
+    use pont_protocole::AvancementFeuille as A;
+    let mut pont = lancer("feuille_suivie");
+    let mut vus = Vec::new();
+
+    let echange = pont.demander_suivi(&feuille(), &app::pont::Annulation::default(), &mut |a| {
+        vus.push(a)
+    });
+
+    assert_eq!(
+        vus,
+        vec![
+            A::FeuilleEngagee {},
+            A::Lecture {},
+            A::Mesure {
+                mesurees: 0,
+                plages: 6
+            },
+            A::Mesure {
+                mesurees: 6,
+                plages: 6
+            },
+        ]
+    );
+    assert_eq!(
+        echange.reponse,
+        Ok(Reponse::Erreur {
+            erreur: pont_protocole::ErreurPont::FeuilleAbsente {}
+        })
+    );
+    assert_eq!(echange.annulation, None);
+    assert_eq!(
+        pont.demander(&Requete::Version {}),
+        Ok(Reponse::Version { parties: [1, 0, 1] })
+    );
+}
+
+/// Une demande ordinaire, ou annulable sans suivi, ne prend jamais une ligne
+/// d'avancement pour sa réponse.
+#[test]
+fn sans_suivi_l_avancement_est_ecarte() {
+    let mut pont = lancer("feuille_suivie");
+    assert_eq!(
+        pont.demander(&feuille()),
+        Ok(Reponse::Erreur {
+            erreur: pont_protocole::ErreurPont::FeuilleAbsente {}
+        })
+    );
+    let echange = pont.demander_annulable(&feuille(), &app::pont::Annulation::default());
+    assert_eq!(
+        echange.reponse,
+        Ok(Reponse::Erreur {
+            erreur: pont_protocole::ErreurPont::FeuilleAbsente {}
+        })
+    );
+}
+
+/// L'annulation part pendant que le pont écrit son avancement ; ce qui
+/// arrive avant la réponse est encore suivi, puis les deux réponses sont
+/// lues dans l'ordre.
+#[test]
+fn une_feuille_suivie_reste_annulable() {
+    use pont_protocole::AvancementFeuille as A;
+    let mut pont = lancer("feuille_suivie_annulable").avec_delai(Duration::from_millis(300));
+    let mut vus = Vec::new();
+
+    let echange = pont.demander_suivi(
+        &feuille(),
+        &annuler_apres(Duration::from_millis(50)),
+        &mut |a| vus.push(a),
+    );
+
+    assert_eq!(vus, vec![A::FeuilleEngagee {}, A::Lecture {}]);
+    assert!(matches!(
+        echange.reponse,
+        Ok(Reponse::Erreur {
+            erreur: pont_protocole::ErreurPont::MesureAnnulee { .. }
+        })
+    ));
+    assert_eq!(
+        echange.annulation,
+        Some(Ok(pont_protocole::EffetAnnulation::Appliquee))
+    );
+}
+
 /// Fin de la sortie du pont (processus perdu) pendant la mesure.
 #[test]
 fn la_perte_du_pont_pendant_la_mesure_est_vue() {

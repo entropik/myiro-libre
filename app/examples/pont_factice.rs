@@ -17,14 +17,19 @@
 //! - `resultat_tardif` : la mesure attend `annuler`, puis rend son résultat
 //!   (un délai) et `annulation sans_effet` ;
 //! - `annulation_illisible` : la mesure attend `annuler`, puis répond par une
-//!   ligne hors protocole, suivie d'une réponse correcte à `annuler`.
+//!   ligne hors protocole, suivie d'une réponse correcte à `annuler` ;
+//! - `feuille_suivie` : une feuille écrit son avancement (engagée, lecture,
+//!   mesure 0 puis 6 sur 6), puis répond `feuille_absente` (ticket #34) ;
+//! - `feuille_suivie_annulable` : une feuille écrit « engagée » et
+//!   « lecture », attend `annuler`, puis répond `mesure_annulee` et
+//!   `annulation appliquee`.
 
 use std::io::{BufRead, Write};
 use std::process::ExitCode;
 
 use pont_protocole::{
-    ecrire_reponse, lire_requete, EffetAnnulation, ErreurPont, Horodatage, Identite,
-    InstrumentDetecte, RemiseAuRepos, Reponse, Requete,
+    ecrire_reponse, lire_requete, AvancementFeuille, EffetAnnulation, ErreurPont, Horodatage,
+    Identite, InstrumentDetecte, RemiseAuRepos, Reponse, Requete,
 };
 
 /// Ferme la sortie standard sans terminer le processus.
@@ -96,6 +101,44 @@ fn main() -> ExitCode {
                 )
                 .unwrap();
                 Reponse::Annulation { effet }
+            }
+            "feuille_suivie" | "feuille_suivie_annulable"
+                if matches!(requete, Ok(Requete::MesurerFeuille { .. })) =>
+            {
+                let mut etapes = vec![
+                    AvancementFeuille::FeuilleEngagee {},
+                    AvancementFeuille::Lecture {},
+                ];
+                if scenario == "feuille_suivie" {
+                    for mesurees in [0, 6] {
+                        etapes.push(AvancementFeuille::Mesure {
+                            mesurees,
+                            plages: 6,
+                        });
+                    }
+                }
+                for avancement in etapes {
+                    let ligne = ecrire_reponse(&Reponse::Avancement { avancement });
+                    writeln!(sortie, "{ligne}").unwrap();
+                    sortie.flush().unwrap();
+                }
+                if scenario == "feuille_suivie" {
+                    Reponse::Erreur {
+                        erreur: ErreurPont::FeuilleAbsente {},
+                    }
+                } else {
+                    let suivante = lignes.next().and_then(Result::ok).unwrap_or_default();
+                    assert_eq!(lire_requete(&suivante), Ok(Requete::Annuler {}));
+                    let annulee = Reponse::Erreur {
+                        erreur: ErreurPont::MesureAnnulee {
+                            remise_au_repos: RemiseAuRepos::AuRepos {},
+                        },
+                    };
+                    writeln!(sortie, "{}", ecrire_reponse(&annulee)).unwrap();
+                    Reponse::Annulation {
+                        effet: EffetAnnulation::Appliquee,
+                    }
+                }
             }
             "muet" => {
                 eprintln!("arrêt simulé");
