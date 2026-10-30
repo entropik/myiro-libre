@@ -1,8 +1,9 @@
 //! Mesurer la mire RGB-2520 au FD-9 et la ranger dans une résolution
 //! (ticket #34). La mesure entre comme une mesure importée de FD-S2w : un
 //! CGATS de myiro-libre avec les RVB de la mire et les spectres, que le
-//! calcul de profil prend sans changement. La réponse entière du pont est
-//! gardée à côté, dans `<bibliothèque>/mesures-fd9/<n°>.json`.
+//! calcul de profil prend sans changement. La mesure complète (spectres,
+//! données brutes, provenance), au format conservable `myiro-libre/mesure/1`,
+//! est gardée à côté, dans `<bibliothèque>/mesures-fd9/<n°>.json`.
 //!
 //! Méthodes de [`BibliothequeOuverte`], sans Tauri ; l'instrument et son
 //! pont sont ceux du module `instrument`. Les erreurs rendues sont des clés
@@ -14,16 +15,16 @@ use std::path::{Path, PathBuf};
 
 use bibliotheque::{IdCondition, IdMesure};
 use mires::{lire_mire_fd9, ErreurMire, MireFd9};
-use pont_protocole::{Mesure, Palier};
+use pont_protocole::{ecrire_mesure, Mesure, Palier};
 use serde::Serialize;
 
 use crate::colonne::BibliothequeOuverte;
 use crate::instrument::choix::Fermeture;
-use crate::instrument::feuille::{definition_rgb2520, EtapeFeuille, FeuilleMesuree};
+use crate::instrument::feuille::{definition_rgb2520, ErreurFeuille, EtapeFeuille, FeuilleMesuree};
 use crate::instrument::Instrument;
 use crate::pont::{Panne, Pont};
 
-/// Dossier de la bibliothèque où la réponse entière du pont est gardée.
+/// Dossier de la bibliothèque où la mesure complète est gardée.
 pub const DOSSIER_MESURES_FD9: &str = "mesures-fd9";
 
 /// Lit et vérifie la mire RGB-2520 trouvée (`chercher_mire_fd9`) ; sans
@@ -50,7 +51,8 @@ pub struct FeuilleRangee {
     /// Nom sous lequel elle est rangée.
     pub fichier: String,
     pub plages: usize,
-    /// Réponse entière du pont, gardée ; rien si elle n'a pas pu s'écrire
+    /// Mesure complète gardée (`myiro-libre/mesure/1`) ; rien si elle n'a
+    /// pas pu s'écrire
     /// (la mesure reste rangée, la console dit pourquoi).
     pub json: Option<PathBuf>,
     /// Fermeture du pont de la feuille confirmée ; sinon, l'instrument est
@@ -88,7 +90,7 @@ impl BibliothequeOuverte {
     /// lancé. Sinon le pont est relancé au plafond Feuille pour cette
     /// mesure seulement, puis revient au plafond ordinaire (voir
     /// [`Instrument::mesurer_feuille`]). `dossier` : celui de la
-    /// bibliothèque, où va la réponse entière du pont.
+    /// bibliothèque, où va la mesure complète.
     pub fn mesurer_feuille_fd9<P: Pont>(
         &self,
         condition: IdCondition,
@@ -100,16 +102,17 @@ impl BibliothequeOuverte {
     ) -> Result<FeuilleRangee, EchecFeuille> {
         let mire = mire?;
         self.detail_reglage(condition)?;
+        let echec = |e: ErreurFeuille| EchecFeuille {
+            cle: e.cle(),
+            detail: e.detail(),
+        };
         let definition = definition_rgb2520(&mire).map_err(|e| {
             eprintln!("définition de la RGB-2520 : {e}");
-            ErreurMire::MireFd9Illisible(e).cle().to_string()
+            echec(ErreurFeuille::Definition(e))
         })?;
         let feuille = instrument
             .mesurer_feuille(definition, lancer, suivi)
-            .map_err(|e| EchecFeuille {
-                cle: e.cle(),
-                detail: e.detail(),
-            })?;
+            .map_err(echec)?;
         suivi(EtapeFeuille::Rangement);
         Ok(self.ranger_feuille_fd9(condition, &feuille, &mire, dossier)?)
     }
@@ -129,7 +132,7 @@ impl BibliothequeOuverte {
         })?;
         let fichier = nom_feuille(&feuille.mesure);
         let mesure = self.avec(|b| b.importer_mesure(condition, &fichier, &texte))?;
-        let json = garder_reponse(dossier, mesure, &feuille.reponse);
+        let json = garder_mesure(dossier, mesure, &feuille.mesure);
         Ok(FeuilleRangee {
             mesure,
             fichier,
@@ -140,18 +143,20 @@ impl BibliothequeOuverte {
     }
 }
 
-/// Écrit `<dossier>/mesures-fd9/<n°>.json`, sans jamais remplacer un
-/// fichier déjà là (une bibliothèque restaurée peut réemployer un numéro).
-fn garder_reponse(dossier: &Path, mesure: IdMesure, reponse: &str) -> Option<PathBuf> {
+/// Écrit la mesure au format conservable (`myiro-libre/mesure/1`,
+/// `ecrire_mesure`) dans `<dossier>/mesures-fd9/<n°>.json`, sans jamais
+/// remplacer un fichier déjà là (une bibliothèque restaurée peut réemployer
+/// un numéro).
+fn garder_mesure(dossier: &Path, id: IdMesure, mesure: &Mesure) -> Option<PathBuf> {
     let fichier = dossier
         .join(DOSSIER_MESURES_FD9)
-        .join(format!("{}.json", mesure.0));
+        .join(format!("{}.json", id.0));
     let ecrit = fs::create_dir_all(dossier.join(DOSSIER_MESURES_FD9)).and_then(|()| {
         fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&fichier)?
-            .write_all(reponse.as_bytes())
+            .write_all(ecrire_mesure(mesure).as_bytes())
     });
     match ecrit {
         Ok(()) => Some(fichier),

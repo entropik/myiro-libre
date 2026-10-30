@@ -10,9 +10,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use app::colonne::{emplacement, BibliothequeOuverte};
 use app::instrument::fd9::PLAFOND_FD9;
-use app::instrument::feuille::{definition_rgb2520, EtapeFeuille, FEUILLE_RGB2520, ZONE_RGB2520};
+use app::instrument::feuille::{
+    definition_rgb2520, ErreurFeuille, EtapeFeuille, FEUILLE_RGB2520, ZONE_RGB2520,
+};
 use app::instrument::parefeu::{AutorisationPareFeu, PareFeuSimule};
-use app::instrument::{Etat, Instrument};
+use app::instrument::{Etat, Instrument, DELAI_FEUILLE};
 use app::mesurer_feuille::{lire_rgb2520, DOSSIER_MESURES_FD9};
 use app::pont::{Architecture, Panne, Pont};
 use bibliotheque::IdCondition;
@@ -146,8 +148,10 @@ type Journal = Rc<RefCell<Vec<(Palier, Requete)>>>;
 struct PontFeuilleSimule {
     plafond: Palier,
     journal: Journal,
-    /// Réponse imposée à `mesurer_feuille`.
-    feuille: Option<Reponse>,
+    /// Résultat imposé à `mesurer_feuille` ; une panne arrête le pont, comme
+    /// `PontProcessus` arrêté de force.
+    feuille: Option<Result<Reponse, Panne>>,
+    arrete: bool,
 }
 
 impl Pont for PontFeuilleSimule {
@@ -155,6 +159,16 @@ impl Pont for PontFeuilleSimule {
         self.journal
             .borrow_mut()
             .push((self.plafond, requete.clone()));
+        if self.arrete {
+            return Err(Panne::Arret {
+                code: None,
+                detail: "pont arrêté".into(),
+            });
+        }
+        if let (Requete::MesurerFeuille { .. }, Some(Err(panne))) = (requete, &self.feuille) {
+            self.arrete = true;
+            return Err(panne.clone());
+        }
         Ok(match requete {
             Requete::Version {} => Reponse::VersionDll {
                 version_fichier: Info::Confirmee([1, 3, 2, 3]),
@@ -185,10 +199,13 @@ impl Pont for PontFeuilleSimule {
                     plafond: self.plafond,
                 },
             },
-            Requete::MesurerFeuille { mire } => self.feuille.clone().unwrap_or(Reponse::Mesure {
-                mesure: mesure_de(mire),
-                remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
-            }),
+            Requete::MesurerFeuille { mire } => match &self.feuille {
+                Some(Ok(reponse)) => reponse.clone(),
+                _ => Reponse::Mesure {
+                    mesure: mesure_de(mire),
+                    remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
+                },
+            },
             Requete::Fermer {} => Reponse::Ferme {},
             _ => Reponse::RequeteInvalide {
                 detail: "hors du simulé".into(),
@@ -216,9 +233,12 @@ struct Banc {
     condition: IdCondition,
     journal: Journal,
     /// Réponse imposée à `mesurer_feuille`, pour les ponts lancés ensuite.
-    feuille: Rc<RefCell<Option<Reponse>>>,
+    feuille: Feuille,
     instrument: Instrument<PontFeuilleSimule>,
 }
+
+/// Résultat imposé à `mesurer_feuille`, partagé avec le lanceur.
+type Feuille = Rc<RefCell<Option<Result<Reponse, Panne>>>>;
 
 fn banc() -> Banc {
     let dossier = tempfile::tempdir().unwrap();
@@ -254,7 +274,7 @@ fn banc() -> Banc {
 
 fn lanceur(
     journal: &Journal,
-    feuille: &Rc<RefCell<Option<Reponse>>>,
+    feuille: &Feuille,
 ) -> impl FnMut(&Path, &Path, Palier) -> Result<PontFeuilleSimule, Panne> {
     let (journal, feuille) = (journal.clone(), feuille.clone());
     move |_, _, plafond| {
@@ -262,6 +282,7 @@ fn lanceur(
             plafond,
             journal: journal.clone(),
             feuille: feuille.borrow().clone(),
+            arrete: false,
         })
     }
 }
@@ -466,11 +487,12 @@ fn le_json_complet_est_garde_a_cote() {
         .join(DOSSIER_MESURES_FD9)
         .join(format!("{}.json", rangee.mesure.0));
     assert_eq!(rangee.json.as_deref(), Some(attendu.as_path()));
-    // La réponse du pont, entière : relue, c'est la mesure rendue.
+    // La mesure au format conservable `myiro-libre/mesure/1`, sans perte :
+    // spectres, données brutes et provenance du pont, rien d'autre.
     let texte = std::fs::read_to_string(&attendu).unwrap();
-    let Ok(Reponse::Mesure { mesure, .. }) = pont_protocole::lire_reponse(&texte) else {
-        panic!("{texte}")
-    };
+    assert!(texte.contains("\"myiro-libre/mesure/1\""), "{texte:.200}");
+    assert!(!texte.contains("remise_au_repos"));
+    let mesure = pont_protocole::lire_mesure(&texte).unwrap();
     assert_eq!(mesure, mesure_de(&definition_rgb2520(&mire()).unwrap()));
 }
 
@@ -503,25 +525,94 @@ fn sans_mire_rgb2520_la_mesure_est_refusee_en_clair() {
 /// 20 min avant de le dire bloqué, et pas plus longtemps aux autres demandes.
 #[test]
 fn la_feuille_a_le_temps_d_etre_mesuree() {
+    assert_eq!(DELAI_FEUILLE, Duration::from_secs(20 * 60));
     let delais = app::instrument::Delais::default();
     let feuille = Requete::MesurerFeuille {
         mire: definition_rgb2520(&mire()).unwrap(),
     };
-    assert_eq!(delais.reponse(&feuille), Duration::from_secs(20 * 60));
+    assert_eq!(delais.reponse(&feuille), DELAI_FEUILLE);
     assert_eq!(
         delais.reponse(&Requete::Version {}),
         Duration::from_secs(30)
     );
 }
 
+/// Le pont ne répond pas à la feuille dans [`DELAI_FEUILLE`] : arrêté de
+/// force (`PontProcessus`), il est dit bloqué ; rien n'est rangé et le pont
+/// ordinaire est relancé.
+#[test]
+fn un_delai_depasse_en_pleine_mesure_ne_range_rien_et_relance_le_pont_ordinaire() {
+    let mut b = banc();
+    *b.feuille.borrow_mut() = Some(Err(Panne::SansReponse {
+        detail: "aucune réponse en 1200000 ms à mesurer_feuille ; pont arrêté de force".into(),
+    }));
+    let echec = b.mesurer(Ok(mire())).0.unwrap_err();
+    assert_eq!(echec.cle, "probleme.pont_bloque");
+    assert!(echec.detail.unwrap().contains("arrêté de force"));
+    assert_eq!(
+        b.plafonds(),
+        vec![Palier::Connexion, Palier::Feuille, Palier::Connexion]
+    );
+    assert!(matches!(b.instrument.etat(), Etat::Detecte { .. }));
+    assert!(b
+        .ouverte
+        .detail_reglage(b.condition)
+        .unwrap()
+        .importees
+        .is_empty());
+    assert!(!b.bibliotheque().join(DOSSIER_MESURES_FD9).exists());
+}
+
+/// La mire a été lue, mais elle n'a pas une couleur par plage de la
+/// RGB-2520 : la définition est refusée sous son propre nom, rien n'est lancé.
+#[test]
+fn une_definition_refusee_n_est_pas_une_mire_illisible() {
+    let mut b = banc();
+    let mut courte = mire();
+    courte.valeurs.pop();
+    assert!(definition_rgb2520(&courte).is_err());
+    let echec = b.mesurer(Ok(courte)).0.unwrap_err();
+    assert_eq!(echec.cle, "feuille_fd9.definition_refusee");
+    assert!(echec
+        .detail
+        .unwrap()
+        .contains("2519 couleurs pour 2520 plages"));
+    assert_eq!(b.plafonds(), vec![Palier::Connexion]);
+}
+
 #[test]
 fn une_feuille_refusee_par_le_pont_ne_range_rien_et_revient_au_plafond_connexion() {
     let mut b = banc();
-    *b.feuille.borrow_mut() = Some(Reponse::Erreur {
+    *b.feuille.borrow_mut() = Some(Ok(Reponse::Erreur {
         erreur: ErreurPont::FeuilleAbsente {},
-    });
+    }));
     let echec = b.mesurer(Ok(mire())).0.unwrap_err();
     assert_eq!(echec.cle, "feuille_fd9.feuille_absente");
+    // Chaque refus du pont a sa clé, du nom de son type dans le protocole.
+    for (erreur, cle) in [
+        (
+            ErreurPont::IncidentFeuille {
+                etat: 102,
+                premesure: None,
+            },
+            "feuille_fd9.incident_feuille",
+        ),
+        (
+            ErreurPont::AutreMire {
+                texte: "RGB-1617".into(),
+            },
+            "feuille_fd9.autre_mire",
+        ),
+        (
+            ErreurPont::MesureInvraisemblable {
+                correlation_milliemes: 120,
+            },
+            "feuille_fd9.mesure_invraisemblable",
+        ),
+        (ErreurPont::Delai {}, "feuille_fd9.delai"),
+    ] {
+        assert_eq!(ErreurFeuille::Feuille(erreur).cle(), cle);
+    }
     assert_eq!(
         b.plafonds(),
         vec![Palier::Connexion, Palier::Feuille, Palier::Connexion]

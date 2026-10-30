@@ -6,8 +6,8 @@ use std::path::Path;
 
 use mires::{MireFd9, RGB2520_NOM};
 use pont_protocole::{
-    ecrire_reponse, AdresseReseau, DefinitionFeuille, ErreurPont, Geometrie, Mesure, Palier,
-    Reponse, Requete, ZoneFeuille,
+    AdresseReseau, DefinitionFeuille, ErreurPont, Geometrie, Mesure, Palier, Reponse, Requete,
+    ZoneFeuille,
 };
 use serde::Serialize;
 
@@ -72,9 +72,6 @@ pub enum EtapeFeuille {
 #[derive(Clone, Debug, PartialEq)]
 pub struct FeuilleMesuree {
     pub mesure: Mesure,
-    /// La réponse entière du pont, en JSON, à garder telle quelle : tout ce
-    /// qu'il a rendu avec la mesure y reste.
-    pub reponse: String,
     /// Fermeture du pont de la feuille ; la mesure vaut quelle qu'elle soit.
     pub fermeture: Fermeture,
 }
@@ -84,6 +81,9 @@ pub struct FeuilleMesuree {
 pub enum ErreurFeuille {
     /// Aucun FD-9 détecté : rien n'est lancé.
     SansFd9,
+    /// La mire a été lue, mais sa définition est refusée (pas une couleur
+    /// par plage) : rien n'est lancé.
+    Definition(String),
     /// Le pont de la feuille n'a pas pu se lancer, se connecter ou répondre.
     Instrument(Probleme),
     /// Le pont a refusé ou interrompu la feuille, en disant pourquoi : rien
@@ -94,19 +94,15 @@ pub enum ErreurFeuille {
 impl ErreurFeuille {
     /// Clé du catalogue : `probleme.<code>` pour un problème de l'instrument
     /// (textes `.cause` et `.action` existants), `feuille_fd9.<type>` pour
-    /// un refus du pont (`feuille_fd9.feuille_absente`…), `feuille_fd9.sans_fd9`
-    /// sans FD-9 détecté.
+    /// un refus du pont, du nom de son type dans le protocole
+    /// (`feuille_fd9.feuille_absente`…), `feuille_fd9.sans_fd9` sans FD-9
+    /// détecté, `feuille_fd9.definition_refusee` pour une définition refusée.
     pub fn cle(&self) -> String {
         match self {
             ErreurFeuille::SansFd9 => "feuille_fd9.sans_fd9".into(),
+            ErreurFeuille::Definition(_) => "feuille_fd9.definition_refusee".into(),
             ErreurFeuille::Instrument(probleme) => format!("probleme.{}", probleme.code()),
-            ErreurFeuille::Feuille(erreur) => {
-                let genre = serde_json::to_value(erreur)
-                    .ok()
-                    .and_then(|v| v.get("type").and_then(|t| t.as_str()).map(String::from))
-                    .unwrap_or_else(|| "autre".into());
-                format!("feuille_fd9.{genre}")
-            }
+            ErreurFeuille::Feuille(erreur) => format!("feuille_fd9.{}", type_erreur(erreur)),
         }
     }
 
@@ -114,9 +110,44 @@ impl ErreurFeuille {
     pub fn detail(&self) -> Option<String> {
         match self {
             ErreurFeuille::SansFd9 => None,
+            ErreurFeuille::Definition(detail) => Some(detail.clone()),
             ErreurFeuille::Instrument(probleme) => probleme.detail().map(String::from),
             ErreurFeuille::Feuille(erreur) => Some(format!("{erreur:?}")),
         }
+    }
+}
+
+/// Nom du type de l'erreur dans le protocole (`"type"` du JSON), sans
+/// joker : une erreur ajoutée au protocole doit recevoir sa clé ici.
+fn type_erreur(erreur: &ErreurPont) -> &'static str {
+    match erreur {
+        ErreurPont::EtatInvalide { .. } => "etat_invalide",
+        ErreurPont::PalierNonAutorise { .. } => "palier_non_autorise",
+        ErreurPont::InstrumentInconnu {} => "instrument_inconnu",
+        ErreurPont::ParametreRefuse {} => "parametre_refuse",
+        ErreurPont::EtatIncompatible {} => "etat_incompatible",
+        ErreurPont::EtalonnageEchoue { .. } => "etalonnage_echoue",
+        ErreurPont::NonEtalonne {} => "non_etalonne",
+        ErreurPont::EtalonnageRequis {} => "etalonnage_requis",
+        ErreurPont::SessionInexploitable {} => "session_inexploitable",
+        ErreurPont::MesureEchouee { .. } => "mesure_echouee",
+        ErreurPont::DeclenchementRefuse { .. } => "declenchement_refuse",
+        ErreurPont::MesureAnnulee { .. } => "mesure_annulee",
+        ErreurPont::ReponseInattendue { .. } => "reponse_inattendue",
+        ErreurPont::Delai {} => "delai",
+        ErreurPont::InstrumentPerdu {} => "instrument_perdu",
+        ErreurPont::ReposIncertain { .. } => "repos_incertain",
+        ErreurPont::DeconnexionEchouee { .. } => "deconnexion_echouee",
+        ErreurPont::SessionFermee {} => "session_fermee",
+        ErreurPont::MireNonReconnue { .. } => "mire_non_reconnue",
+        ErreurPont::AutreMire { .. } => "autre_mire",
+        ErreurPont::FeuilleAbsente {} => "feuille_absente",
+        ErreurPont::InstrumentIndisponible { .. } => "instrument_indisponible",
+        ErreurPont::IncidentFeuille { .. } => "incident_feuille",
+        ErreurPont::ReconnaissanceDouteuse { .. } => "reconnaissance_douteuse",
+        ErreurPont::MesureInvraisemblable { .. } => "mesure_invraisemblable",
+        ErreurPont::PositionsPlages { .. } => "positions_plages",
+        ErreurPont::Sdk { .. } => "sdk",
     }
 }
 
@@ -169,22 +200,18 @@ fn mesurer_avec<P: Pont>(
         let reponse = echange
             .reponse
             .map_err(|panne| ErreurFeuille::Instrument(panne.into()))?;
-        match &reponse {
+        match reponse {
             Reponse::Mesure { mesure, .. }
                 if mesure.provenance().geometrie == (Geometrie::Feuille {}) =>
             {
-                Ok((mesure.clone(), ecrire_reponse(&reponse)))
+                Ok(mesure)
             }
-            Reponse::Erreur { erreur } => Err(ErreurFeuille::Feuille(erreur.clone())),
-            _ => Err(ErreurFeuille::Instrument(inattendue(reponse))),
+            Reponse::Erreur { erreur } => Err(ErreurFeuille::Feuille(erreur)),
+            autre => Err(ErreurFeuille::Instrument(inattendue(autre))),
         }
     });
     let fermeture = fermer_pont(pont);
-    lue.map(|(mesure, reponse)| FeuilleMesuree {
-        mesure,
-        reponse,
-        fermeture,
-    })
+    lue.map(|mesure| FeuilleMesuree { mesure, fermeture })
 }
 
 /// Version de la DLL, puis connexion à l'adresse de la détection.

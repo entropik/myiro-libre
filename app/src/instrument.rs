@@ -88,6 +88,13 @@ pub enum Issue {
 /// DLL (`pont_myiro1::DELAI_CONNEXION`), plus la lecture de l'identité.
 pub const DELAI_REPONSE: Duration = Duration::from_secs(30);
 
+/// Délai de réponse du pont FD-9 à une feuille (`mesurer_feuille`,
+/// `prenumeriser`). Le pont attend jusqu'à 2 min la feuille, 30 s chaque
+/// étape et 10 min la mesure (`pont_fd9::Delais`), puis lit les plages :
+/// 2 520 en 7 min environ à l'essai E4, lecture comprise. Au-delà, le pont
+/// est arrêté de force et dit bloqué.
+pub const DELAI_FEUILLE: Duration = Duration::from_secs(20 * 60);
+
 /// Délais du dialogue avec le pont, fixés par le module instrument et
 /// appliqués par `PontProcessus`. Bornés : passé un délai, le pont est arrêté
 /// de force et l'instrument dit dans un état incertain ; aucune demande n'est
@@ -115,15 +122,15 @@ impl Delais {
     /// (`pont_myiro1::DELAI_APPUI`), plus un désarmement avant et un après
     /// (15 s au plus chacun) et les lectures ; en automatique, l'attente de
     /// l'armement (5 s) et de la fin de mesure (30 s) y tiennent aussi.
-    /// Une feuille au FD-9 attend jusqu'à 2 min la feuille, 30 s chaque
-    /// étape, 10 min la mesure (`pont_fd9::Delais`), puis la lecture des
-    /// plages (2 520 en 7 min environ à l'essai E4, lecture comprise) : 40
-    /// fois le délai de base.
+    /// Une feuille au FD-9 attend [`DELAI_FEUILLE`] (à proportion du délai
+    /// de base).
     pub fn reponse(&self, requete: &Requete) -> Duration {
         match requete {
             Requete::Etalonner {} => self.base * 2,
             Requete::MesurerPonctuelle { .. } => self.base * 6,
-            Requete::MesurerFeuille { .. } | Requete::Prenumeriser { .. } => self.base * 40,
+            Requete::MesurerFeuille { .. } | Requete::Prenumeriser { .. } => {
+                self.base * (DELAI_FEUILLE.as_secs() / DELAI_REPONSE.as_secs()) as u32
+            }
             _ => self.base,
         }
     }

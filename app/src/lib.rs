@@ -494,8 +494,8 @@ fn mesurer(
     Ok(EcranMesurer::de(&seance, langue, Some(selection.vue())))
 }
 
-/// Dossier de la bibliothèque ouverte : la réponse entière du pont FD-9 y
-/// est gardée (`mesures-fd9/`).
+/// Dossier de la bibliothèque ouverte : les mesures complètes du FD-9 y
+/// sont gardées (`mesures-fd9/`).
 struct DossierBibliotheque(PathBuf);
 
 /// Annulation de la feuille en cours, utilisable pendant qu'elle tient
