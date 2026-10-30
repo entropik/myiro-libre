@@ -8,7 +8,9 @@ use std::rc::Rc;
 
 use app::instrument::choix::{ouvrir_l_un_ou_l_autre, Recherche};
 use app::instrument::fd9::{emplacements_fd9, EMPLACEMENTS_FD9, PLAFOND_FD9};
-use app::instrument::parefeu::{AutorisationPareFeu, EchecPareFeu, PareFeuSimule, RegleFd9};
+use app::instrument::parefeu::{
+    AutorisationPareFeu, EchecPareFeu, EtatRegle, PareFeuSimule, RegleFd9,
+};
 use app::instrument::{Etat, Instrument, Probleme};
 use app::pont::{chercher_ponts_nommes, Architecture, Panne, Pont, PontSimule};
 use app::textes::{texte, Langue};
@@ -120,11 +122,11 @@ impl Pont for PontFd9Simule {
     }
 }
 
-/// Pare-feu simulé où la règle de myiro-libre existe déjà pour le pont lancé
-/// (`pont-fd9-x86.exe`) : rien n'est demandé.
+/// Pare-feu simulé où la règle permanente de myiro-libre est déjà en place
+/// (posée par l'installateur) : rien n'est demandé.
 fn regle_presente() -> AutorisationPareFeu<PareFeuSimule> {
     AutorisationPareFeu::new(PareFeuSimule {
-        regle: Some(PathBuf::from("pont-fd9-x86.exe")),
+        regle: EtatRegle::Presente,
         ..Default::default()
     })
 }
@@ -228,7 +230,7 @@ fn sans_fd9_visible_le_pare_feu_est_cite_comme_cause_possible() {
     assert!(!vue.guide_cablage);
     let detail = vue.detail.unwrap();
     assert!(
-        detail.contains("49152") && detail.contains("pont-fd9"),
+        detail.contains("49152") && detail.contains("réseau local"),
         "{detail}"
     );
     for (langue, mot) in [
@@ -518,12 +520,6 @@ fn bloque_par_le_pare_feu() -> PontFd9Simule {
     }
 }
 
-fn regle_du_pont_x86() -> RegleFd9 {
-    RegleFd9 {
-        programme: PathBuf::from("pont-fd9-x86.exe"),
-    }
-}
-
 #[test]
 fn a_la_premiere_detection_vide_la_regle_est_demandee_puis_la_detection_relancee() {
     let simule = bloque_par_le_pare_feu();
@@ -540,8 +536,9 @@ fn a_la_premiere_detection_vide_la_regle_est_demandee_puis_la_detection_relancee
         }
     );
     assert_eq!(instrument.probleme(), None);
-    // Une seule demande, pour le pont lancé, et une seule nouvelle détection.
-    assert_eq!(autorisation.pare_feu().demandes, vec![regle_du_pont_x86()]);
+    // Une seule demande et une seule nouvelle détection.
+    assert_eq!(autorisation.pare_feu().poses, 1);
+    assert_eq!(autorisation.pare_feu().regle, EtatRegle::Presente);
     assert_eq!(
         *journal.borrow(),
         vec![
@@ -561,7 +558,7 @@ fn une_regle_deja_presente_n_est_jamais_redemandee() {
 
     let instrument = ouvrir_fd9_avec(simule, &fd_s2w("regle-presente"), &mut autorisation);
 
-    assert!(autorisation.pare_feu().demandes.is_empty());
+    assert_eq!(autorisation.pare_feu().poses, 0);
     assert_eq!(
         *journal.borrow(),
         vec![Requete::Version {}, Requete::Detecter {}]
@@ -586,7 +583,7 @@ fn la_regle_ajoutee_sans_fd9_visible_n_est_pas_redemandee() {
             Some(Probleme::AucunFd9 { .. })
         ));
     }
-    assert_eq!(autorisation.pare_feu().demandes, vec![regle_du_pont_x86()]);
+    assert_eq!(autorisation.pare_feu().poses, 1);
 }
 
 #[test]
@@ -616,10 +613,8 @@ fn un_refus_donne_un_probleme_redige_sans_nouvelle_demande_automatique() {
     assert!(!vue.guide_cablage);
     // Le détail replié donne la commande équivalente, et comment la retirer.
     let detail = vue.detail.unwrap();
-    assert!(
-        detail.contains(&regle_du_pont_x86().commande_ajout()),
-        "{detail}"
-    );
+    assert!(detail.contains(&RegleFd9::commande_ajout()), "{detail}");
+    assert!(!detail.contains("program="), "{detail}");
     assert!(detail.contains(&RegleFd9::commande_retrait()), "{detail}");
 
     // « Réessayer » : la règle manque toujours, mais rien n'est redemandé.
@@ -632,7 +627,7 @@ fn un_refus_donne_un_probleme_redige_sans_nouvelle_demande_automatique() {
         encore.probleme(),
         Some(Probleme::PareFeuFerme { .. })
     ));
-    assert_eq!(autorisation.pare_feu().demandes.len(), 1);
+    assert_eq!(autorisation.pare_feu().poses, 1);
 }
 
 #[test]
@@ -674,38 +669,57 @@ fn le_bouton_autoriser_redemande_une_fois_apres_un_refus() {
         &mut autorisation,
     );
     assert_eq!(instrument.vue().etat, "detecte");
-    assert_eq!(autorisation.pare_feu().demandes.len(), 2);
+    assert_eq!(autorisation.pare_feu().poses, 2);
 }
 
 #[test]
-fn une_regle_qui_vise_un_autre_programme_est_remplacee_une_fois() {
-    // Règle créée en développement, puis application installée : le pont
-    // lancé n'est plus celui de la règle, la réponse reste bloquée.
+fn une_ancienne_regle_a_refaire_est_remplacee_une_fois() {
+    // Ancienne règle liée à un programme (avant le ticket #85), ou d'un autre
+    // port, d'une autre étendue : la réponse peut rester bloquée.
     let mut autorisation = AutorisationPareFeu::new(PareFeuSimule {
-        regle: Some(PathBuf::from(
-            r"C:\depot\target\i686-pc-windows-msvc\debug\pont-fd9.exe",
-        )),
+        regle: EtatRegle::ARefaire,
         ..Default::default()
     });
     let instrument = ouvrir_fd9_avec(
         bloque_par_le_pare_feu(),
-        &fd_s2w("autre-programme"),
+        &fd_s2w("a-refaire"),
         &mut autorisation,
     );
     assert_eq!(instrument.vue().etat, "detecte");
-    assert_eq!(autorisation.pare_feu().demandes, vec![regle_du_pont_x86()]);
-    // Une seule règle de ce nom, pour le pont lancé.
-    assert_eq!(
-        autorisation.pare_feu().regle,
-        Some(PathBuf::from("pont-fd9-x86.exe"))
-    );
+    assert_eq!(autorisation.pare_feu().poses, 1);
+    // Une seule règle de ce nom, conforme.
+    assert_eq!(autorisation.pare_feu().regle, EtatRegle::Presente);
 
-    // Ensuite, elle vise le bon programme : rien n'est redemandé.
+    // Ensuite, elle est conforme : rien n'est redemandé.
     let mut vide = PontFd9Simule::avec_un_fd9();
     vide.liste.clear();
-    let encore = ouvrir_fd9_avec(vide, &fd_s2w("autre-programme-2"), &mut autorisation);
+    let encore = ouvrir_fd9_avec(vide, &fd_s2w("a-refaire-2"), &mut autorisation);
     assert!(matches!(encore.probleme(), Some(Probleme::AucunFd9 { .. })));
-    assert_eq!(autorisation.pare_feu().demandes.len(), 1);
+    assert_eq!(autorisation.pare_feu().poses, 1);
+}
+
+#[test]
+fn une_ancienne_regle_a_refaire_deja_demandee_est_expliquee() {
+    let mut autorisation = AutorisationPareFeu::new(PareFeuSimule {
+        regle: EtatRegle::ARefaire,
+        echec: Some(EchecPareFeu::Refuse),
+        ..Default::default()
+    });
+    ouvrir_fd9_avec(
+        bloque_par_le_pare_feu(),
+        &fd_s2w("a-refaire-refus"),
+        &mut autorisation,
+    );
+    let encore = ouvrir_fd9_avec(
+        bloque_par_le_pare_feu(),
+        &fd_s2w("a-refaire-refus-2"),
+        &mut autorisation,
+    );
+    assert!(matches!(
+        encore.probleme(),
+        Some(Probleme::PareFeuFerme { detail }) if detail.contains("à refaire")
+    ));
+    assert_eq!(autorisation.pare_feu().poses, 1);
 }
 
 #[test]
@@ -726,19 +740,17 @@ fn le_choix_des_ponts_passe_l_autorisation_au_fd9() {
         &mut autorisation,
     );
     assert_eq!(instrument.vue().etat, "detecte");
-    assert_eq!(autorisation.pare_feu().demandes, vec![regle_du_pont_x86()]);
+    assert_eq!(autorisation.pare_feu().poses, 1);
 }
 
 #[test]
-fn la_regle_est_entrante_udp_49152_reseau_local_pour_le_seul_pont() {
-    let regle = RegleFd9 {
-        programme: PathBuf::from(r"C:\Program Files\myiro-libre\pont-fd9-x86.exe"),
-    };
+fn la_regle_est_entrante_udp_49152_reseau_local_sans_programme() {
+    // Permanente (ticket #85) : par port, sans `program=`, valable quel que
+    // soit l'emplacement du pont lancé.
     assert_eq!(
-        regle.arguments_ajout(),
+        RegleFd9::arguments_ajout(),
         "advfirewall firewall add rule name=\"myiro-libre - FD-9 - detection (UDP 49152)\" \
-         dir=in action=allow protocol=UDP localport=49152 remoteip=localsubnet profile=any \
-         program=\"C:\\Program Files\\myiro-libre\\pont-fd9-x86.exe\""
+         dir=in action=allow protocol=UDP localport=49152 remoteip=localsubnet profile=any"
     );
     assert_eq!(
         RegleFd9::arguments_lecture(),
@@ -747,13 +759,12 @@ fn la_regle_est_entrante_udp_49152_reseau_local_pour_le_seul_pont() {
     // Pose en une seule élévation : la règle de ce nom est retirée, puis une
     // seule est ajoutée. Jamais deux règles du même nom.
     assert_eq!(
-        regle.arguments_pose(Path::new(r"C:\Windows\System32\netsh.exe")),
+        RegleFd9::arguments_pose(Path::new(r"C:\Windows\System32\netsh.exe")),
         "/d /s /c \"\"C:\\Windows\\System32\\netsh.exe\" advfirewall firewall delete rule \
          name=\"myiro-libre - FD-9 - detection (UDP 49152)\" & \
          \"C:\\Windows\\System32\\netsh.exe\" advfirewall firewall add rule \
          name=\"myiro-libre - FD-9 - detection (UDP 49152)\" dir=in action=allow protocol=UDP \
-         localport=49152 remoteip=localsubnet profile=any \
-         program=\"C:\\Program Files\\myiro-libre\\pont-fd9-x86.exe\"\""
+         localport=49152 remoteip=localsubnet profile=any\""
     );
     assert_eq!(
         RegleFd9::commande_retrait(),
