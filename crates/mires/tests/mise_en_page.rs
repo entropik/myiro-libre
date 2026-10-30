@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use mires::{
     estimer_lab, mettre_en_page, verifier, Defaut, ErreurMire, Format, Gabarit, MiseEnPage, Page,
-    PlagePlacee,
+    PlagePlacee, VERSION_GABARIT,
 };
 
 /// Cube RVB régulier de `pas`³ valeurs, de 0 à 100.
@@ -119,6 +119,7 @@ fn a_la_main(plages: &[(usize, usize, usize)]) -> MiseEnPage {
     MiseEnPage {
         gabarit: Gabarit::par_defaut(Format::A4),
         graine: 0,
+        version_gabarit: VERSION_GABARIT,
         pages: vec![Page {
             numero: 1,
             plages: plages
@@ -193,4 +194,37 @@ fn la_mise_en_page_se_relit_a_l_identique() {
     let relue: MiseEnPage = serde_json::from_str(&json).unwrap();
     assert_eq!(relue, m);
     assert_eq!(relue.empreinte(), m.empreinte());
+}
+
+/// Une mise en page faite avec le gabarit actuel le suit. Une mise en page
+/// d'une version plus ancienne du gabarit (version 1 : page en paysage et
+/// 15 mm entre bandes, avant le 28 octobre 2026) ne le suit plus, même à
+/// format et côté égaux : ses pages ne seraient pas celles que le gabarit
+/// dessine aujourd'hui.
+#[test]
+fn une_mise_en_page_d_une_ancienne_version_ne_suit_plus_le_gabarit() {
+    assert_eq!(VERSION_GABARIT, 2);
+    let v = grille(6);
+    let m = mettre_en_page(&v, &Gabarit::par_defaut(Format::A4), 3).unwrap();
+    assert_eq!(m.version_gabarit, VERSION_GABARIT);
+    assert!(m.suit_le_gabarit_actuel());
+    let ancienne = MiseEnPage {
+        version_gabarit: 1,
+        ..m.clone()
+    };
+    assert!(!ancienne.suit_le_gabarit_actuel());
+    // Une plage qui n'est plus à la place que le gabarit lui donne.
+    let mut deplacee = m.clone();
+    deplacee.pages[0].plages[0].colonne = 25;
+    assert!(!deplacee.suit_le_gabarit_actuel());
+}
+
+/// Le JSON d'une mise en page rangée sans version se relit : c'est la
+/// version 1, qui ne suit pas le gabarit actuel.
+#[test]
+fn une_mise_en_page_rangee_sans_version_est_de_la_version_1() {
+    let json = r#"{"gabarit":{"format":"a4","cote_mm":8.0},"graine":1,"pages":[{"numero":1,"plages":[{"index":0,"rangee":0,"colonne":0}]}]}"#;
+    let m: MiseEnPage = serde_json::from_str(json).unwrap();
+    assert_eq!(m.version_gabarit, 1);
+    assert!(!m.suit_le_gabarit_actuel());
 }

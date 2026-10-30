@@ -13,7 +13,7 @@ use colorimetrie::{xyz_vers_lab, Lab, Xyz};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::{ErreurMire, Gabarit, CONTRASTE_MIN_DE76};
+use crate::{ErreurMire, Gabarit, CONTRASTE_MIN_DE76, VERSION_GABARIT};
 
 /// Une plage à sa place : rang dans les valeurs, bande et colonne.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -35,15 +35,52 @@ pub struct Page {
 pub struct MiseEnPage {
     pub gabarit: Gabarit,
     pub graine: u64,
+    /// Version du gabarit ([`VERSION_GABARIT`]) au moment de la mise en
+    /// page ; une mise en page rangée sans elle est de la version 1.
+    #[serde(default = "version_1")]
+    pub version_gabarit: u32,
     pub pages: Vec<Page>,
 }
 
 impl MiseEnPage {
+    /// La mise en page est celle que le gabarit actuel produirait : même
+    /// version du gabarit ([`VERSION_GABARIT`]), et chaque plage à la place
+    /// que le gabarit lui donne, page après page. Une mise en page d'une
+    /// version plus ancienne ne le suit pas : ses pages ne sont pas celles
+    /// que le gabarit dessine aujourd'hui.
+    pub fn suit_le_gabarit_actuel(&self) -> bool {
+        if self.version_gabarit != VERSION_GABARIT {
+            return false;
+        }
+        let colonnes = self.gabarit.colonnes();
+        let par_page = self.gabarit.plages_par_page();
+        if colonnes == 0 {
+            return false;
+        }
+        let derniere = self.pages.len();
+        self.pages.iter().enumerate().all(|(p, page)| {
+            page.numero == p + 1
+                && (page.plages.len() == par_page
+                    || (p + 1 == derniere && page.plages.len() < par_page))
+                && page
+                    .plages
+                    .iter()
+                    .enumerate()
+                    .all(|(i, plage)| (plage.rangee, plage.colonne) == (i / colonnes, i % colonnes))
+        })
+    }
+
     /// SHA-256 hexadécimal, en minuscules, du JSON de la mise en page.
     pub fn empreinte(&self) -> String {
         let json = serde_json::to_string(self).unwrap_or_default();
         format!("{:x}", Sha256::digest(json.as_bytes()))
     }
+}
+
+/// Version d'une mise en page rangée sans version : la première, page en
+/// paysage.
+fn version_1() -> u32 {
+    1
 }
 
 /// Ce que [`verifier`] reproche à une mise en page.
@@ -275,6 +312,7 @@ pub fn mettre_en_page(
     Ok(MiseEnPage {
         gabarit: gabarit.clone(),
         graine,
+        version_gabarit: VERSION_GABARIT,
         pages,
     })
 }

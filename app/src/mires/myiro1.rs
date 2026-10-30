@@ -123,14 +123,18 @@ impl Pages<'_> {
 }
 
 /// La mire rangée a les mêmes réglages que la demande : même taille, même
-/// nombre de plages, même gabarit (format et côté). Son empreinte ne sert
-/// pas : la graine de la mise en page vient de l'heure.
+/// nombre de plages, même gabarit (format et côté), et sa mise en page suit
+/// le gabarit actuel, même version comprise (`VERSION_GABARIT`) : une mire
+/// d'une version plus ancienne (page en paysage, avant le 28 octobre 2026)
+/// n'est pas reprise. Son empreinte
+/// ne sert pas : la graine de la mise en page vient de l'heure.
 fn memes_reglages(mire: &MireRangee, d: &DemandeMyiro1) -> bool {
     let taille = serde_json::from_str::<serde_json::Value>(&mire.generation)
         .ok()
         .and_then(|g| g.get("taille")?.as_str().map(String::from));
     let gabarit = serde_json::from_str::<MiseEnPage>(&mire.mise_en_page)
         .ok()
+        .filter(MiseEnPage::suit_le_gabarit_actuel)
         .map(|m| m.gabarit);
     mire.plages == d.nombre
         && taille.as_deref() == Some(d.taille)

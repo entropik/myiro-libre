@@ -24,7 +24,7 @@ mod tiff;
 pub use gabarit::{
     Gabarit, Rectangle, CONTRASTE_MIN_DE76, DISTANCE_TEXTE_MM, MYIRO1_BANDEAU_MM,
     MYIRO1_BANDE_MAX_MM, MYIRO1_BLANC_BOUT_MM, MYIRO1_COTE_MIN_MM, MYIRO1_COTE_PAR_DEFAUT_MM,
-    MYIRO1_ECART_BANDES_MM, MYIRO1_MARGE_PAGE_MM,
+    MYIRO1_ECART_BANDES_MM, MYIRO1_MARGE_PAGE_MM, VERSION_GABARIT,
 };
 pub use mise_en_page::{
     estimer_lab, mettre_en_page, verifier, Defaut, MiseEnPage, Page, PlagePlacee,

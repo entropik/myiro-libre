@@ -8,7 +8,9 @@ mod commun_mires;
 
 use std::time::Duration;
 
+use app::colonne::emplacement;
 use app::mires::DemandeMire;
+use bibliotheque::{Bibliotheque, NouvelleMire};
 use commun_mires::*;
 use mires::TailleMire;
 
@@ -135,4 +137,57 @@ fn deux_resolutions_donnent_deux_tirages_myiro1() {
     assert_eq!(m.plages_demandees(), [232, 232]);
     assert_eq!(b.tirages(), 1);
     assert_eq!(b.ouverte.detail_reglage(autre).unwrap().tirages.len(), 1);
+}
+
+/// Un tirage de la version 1 du gabarit (JSON sans version : page en
+/// paysage, 29 plages par bande, avant le 28 octobre 2026) a les mêmes
+/// réglages (taille, nombre, format, côté) mais pas les pages d'aujourd'hui :
+/// il n'est pas repris, une nouvelle mire est préparée.
+#[test]
+fn un_tirage_de_la_version_1_du_gabarit_n_est_pas_repris() {
+    let b = banc();
+    let valeurs: Vec<[f64; 3]> = (0..232)
+        .map(|k| {
+            [
+                (k % 8) as f64 * 12.5,
+                (k / 8 % 8) as f64 * 12.5,
+                (k / 64) as f64 * 25.0,
+            ]
+        })
+        .collect();
+    let plages: Vec<serde_json::Value> = (0..232)
+        .map(|k| serde_json::json!({ "index": k, "rangee": k / 29, "colonne": k % 29 }))
+        .collect();
+    let ancienne = serde_json::json!({
+        "gabarit": { "format": "a4", "cote_mm": 8.0 },
+        "graine": 1,
+        "pages": [{ "numero": 1, "plages": plages }],
+    })
+    .to_string();
+    let valeurs = serde_json::to_string(&valeurs).unwrap();
+    {
+        let bibliotheque = Bibliotheque::ouvrir(&emplacement(b.dossier.path())).unwrap();
+        bibliotheque
+            .enregistrer_mire_et_tirage(
+                b.condition,
+                &NouvelleMire {
+                    nom: "MYIRO-1 rapide",
+                    instrument: "myiro1",
+                    plages: 232,
+                    generation: r#"{"origine":"targen","commande":"targen -v -d2 -G -f232 mire","taille":"rapide"}"#,
+                    valeurs: &valeurs,
+                    mise_en_page: &ancienne,
+                    empreinte: "version-1",
+                    horodatage: "2026-10-22T09:00:00Z",
+                },
+                1,
+            )
+            .unwrap();
+    }
+    assert_eq!(b.tirages(), 1);
+    let m = moteur(232);
+    let preparee = b.preparer(&myiro1(TailleMire::Rapide), &m, None).unwrap();
+    assert_eq!(preparee.deja_preparee, None);
+    assert_eq!(m.plages_demandees(), [232]);
+    assert_eq!(b.tirages(), 2);
 }

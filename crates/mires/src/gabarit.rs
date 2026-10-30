@@ -31,6 +31,12 @@ pub const MYIRO1_MARGE_PAGE_MM: f64 = 5.0;
 /// Bandeau du haut (texte et QR code), écart au texte compris. Choix, à
 /// vérifier.
 pub const MYIRO1_BANDEAU_MM: f64 = 22.0;
+/// Version de la disposition des pages MYIRO-1, rangée avec chaque mise en
+/// page ; elle fait partie de l'identité d'une mire. 1 : page en paysage,
+/// 15 mm entre bandes (avant le 28 octobre 2026) ; 2 : page en portrait,
+/// marge de 5 mm, bandes centrées, 3 mm entre bandes. À augmenter à chaque
+/// changement qui modifie les pages dessinées.
+pub const VERSION_GABARIT: u32 = 2;
 /// Écart ΔE*ab minimal entre deux plages voisines d'une bande (manuel
 /// MYIRO-1 : strictement supérieur).
 pub const CONTRASTE_MIN_DE76: f64 = 10.0;
