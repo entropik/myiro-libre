@@ -49,6 +49,10 @@ _Éviter_ : ton direct, spot color, nuancier
 **Feuille** :
 Géométrie de lecture du FD-9 : le tirage entier est lu en une passe.
 
+**Calage de la feuille** :
+Ce que le FD-9 a trouvé de la feuille avant de la mesurer : le point qu'il va viser sur chaque plage, le décalage de la feuille sur la mire et l'écart restant, avec une image réduite de la feuille prise. L'application peut ainsi montrer où l'instrument va mesurer. Ce n'est pas une donnée de la mesure.
+_Éviter_ : recalage (c'est ce que fait l'instrument), measured point
+
 **Bande** :
 Géométrie de lecture du MYIRO-1 : une rangée de plages lue en un balayage.
 _Éviter_ : strip, rangée

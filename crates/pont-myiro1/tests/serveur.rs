@@ -476,6 +476,7 @@ fn une_mesure_acquise_est_rendue_avec_un_repos_incertain_et_la_suivante_refusee(
     let Reponse::Mesure {
         mesure,
         remise_au_repos,
+        calage: None,
     } = lire_reponse(&lignes[4]).unwrap()
     else {
         panic!("{}", lignes[4])

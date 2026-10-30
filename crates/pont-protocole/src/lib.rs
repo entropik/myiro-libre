@@ -3,9 +3,11 @@
 //! Une ligne JSON par message, dans chaque sens. Ce crate ne dépend ni de
 //! Windows ni d'une DLL de fabricant.
 
+mod calage;
 mod feuille;
 mod mesure;
 
+pub use calage::*;
 pub use feuille::*;
 pub use mesure::*;
 use mesure::{est_mesure_initiale, mesure_initiale};
@@ -148,6 +150,11 @@ pub enum Reponse {
         /// une donnée de la mesure conservée (format `myiro-libre/mesure/1`).
         #[serde(default = "Info::inconnue")]
         remise_au_repos: Info<RemiseAuRepos>,
+        /// FD-9 : points visés et image de la feuille mesurée. Absent des
+        /// autres mesures et des réponses écrites avant le ticket #34 ; ce
+        /// n'est pas une donnée de la mesure conservée.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        calage: Option<CalageFeuille>,
     },
     /// Fermeture confirmée : désarmement prouvé puis déconnexion faite. Le pont
     /// s'arrête.
@@ -167,6 +174,10 @@ pub enum Reponse {
     /// Feuille capturée et reconnue, sans mesure (`prenumeriser`).
     Prenumerisee {
         lecture: LectureFeuille,
+        /// Points visés et image de la feuille ; absent si le pont ne les a
+        /// pas lus (réponse écrite avant le ticket #34 comprise).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        calage: Option<CalageFeuille>,
     },
     /// La ligne reçue n'est pas une requête valable ; rien n'a été fait.
     RequeteInvalide {
@@ -188,6 +199,7 @@ pub fn lire_reponse(ligne: &str) -> Result<Reponse, String> {
             .map(|mesure| Reponse::Mesure {
                 mesure,
                 remise_au_repos: Info::Inconnue,
+                calage: None,
             })
             .map_err(|erreur| erreur.to_string());
     }
@@ -446,6 +458,12 @@ pub enum ErreurPont {
     /// les plages lues ne couvrent pas la mire une fois chacune (`defaut`) :
     /// rien n'est rendu. La feuille est close.
     PositionsPlages { defaut: DefautPositions },
+    /// FD-9 : le composant de lecture du QR (`zxing.dll`, assembly .NET
+    /// chargée par la DLL du fabricant depuis le dossier du pont) manque à
+    /// `chemin`. Sans lui, la DLL arrête le pont à la lecture du QR (essai
+    /// E3, ticket #87) : la feuille n'est pas lancée, la DLL n'est pas
+    /// appelée.
+    ComposantQrIntrouvable { chemin: String },
     /// Autre code d'erreur de la DLL, conservé brut.
     Sdk { code: i32 },
 }

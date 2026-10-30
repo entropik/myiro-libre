@@ -27,6 +27,7 @@ fn la_liste_blanche_est_celle_de_la_mesure_d_une_feuille() {
             "FD9_StopMeasurement",
             "FD9_ExitMeasurement",
             "FD9_GetPremeasurementError",
+            "FD9_GetChartImage",
         ]
     );
 }
@@ -68,7 +69,6 @@ fn la_liste_blanche_n_a_ni_jig_ni_reglage_reseau() {
         "FD9_GetJobList",
         "FD9_MatchingChart",
         "FD9_ClippingChart",
-        "FD9_GetChartImage",
         "FD9_RegisterDisplayImage",
         "FD9_CreateBarcodeImage",
         "FD9_CreateChartImage",
@@ -84,6 +84,26 @@ fn la_liste_blanche_n_a_ni_jig_ni_reglage_reseau() {
     ] {
         assert!(!EXPORTS_AUTORISES.contains(&nom), "autorisé à tort : {nom}");
     }
+}
+
+#[test]
+fn l_image_de_la_feuille_est_lue_sans_rien_ecrire() {
+    // Ticket #34 : seule FD9_GetChartImage entre, en lecture (fiche
+    // FD9_GetChartImage). Les exports qui fabriquent ou envoient une image
+    // restent dehors.
+    assert!(EXPORTS_AUTORISES.contains(&"FD9_GetChartImage"));
+    for nom in [
+        "FD9_CreateChartImage",
+        "FD9_DeleteChartImage",
+        "FD9_RegisterDisplayImage",
+        "FD9_CreateBarcodeImage",
+        "FD9_WriteBmpFile",
+    ] {
+        assert!(!EXPORTS_AUTORISES.contains(&nom), "autorisé à tort : {nom}");
+    }
+    assert_eq!(fd9_sys::IMAGE_FEUILLE_LARGEUR, 3_638);
+    assert_eq!(fd9_sys::IMAGE_FEUILLE_HAUTEUR_MAX, 19_000);
+    assert_eq!(fd9_sys::IMAGE_FEUILLE_PPP, 300);
 }
 
 #[test]

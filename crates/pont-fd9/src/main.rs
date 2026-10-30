@@ -7,6 +7,10 @@
 //! Paliers déclarés par ce pont : version (par défaut), detection, connexion,
 //! prenumerisation, feuille. Tout autre palier est refusé au lancement.
 //!
+//! Avant chaque feuille, `zxing.dll` doit être à côté de cet exécutable : la
+//! DLL le charge depuis ce dossier pour lire le QR (ticket #87). Sinon, la
+//! feuille est refusée (`composant_qr_introuvable`), sans appel à la DLL.
+//!
 //! Diagnostic des essais : un plantage est toujours rapporté sur la sortie
 //! d'erreur (code, module et décalage de l'adresse fautive, fil), puis le
 //! pont s'arrête avec le code de l'exception (`pont_fd9::plantage`).
@@ -20,6 +24,7 @@
 //! main dans `DELAI_FERMETURE` (`CODE_FERMETURE_BLOQUEE` ; la réponse à
 //! `fermer` est donnée avant).
 
+use pont_fd9::composants::dossier_de_l_executable;
 use pont_fd9::dll::Fd9Dll;
 use pont_fd9::serveur::{servir, Garde, DELAI_FERMETURE};
 use pont_fd9::trace::{self, SdkTrace};
@@ -133,8 +138,19 @@ fn main() -> ExitCode {
 
 fn servir_avec<S: SdkFd9>(sdk: S, arguments: &Arguments) -> ExitCode {
     let trace = arguments.trace;
-    let mut session = Session::new(sdk, arguments.plafond)
-        .avec_delais(arguments.delais)
+    // La DLL charge le composant de lecture du QR (`zxing.dll`) depuis le
+    // dossier de l'exécutable (ticket #87) : il est vérifié avant chaque
+    // feuille. Dossier illisible : toute feuille est refusée, sans chercher
+    // ailleurs (la DLL, elle, ne cherche que là).
+    let session = Session::new(sdk, arguments.plafond).avec_delais(arguments.delais);
+    let session = match dossier_de_l_executable(std::env::current_exe()) {
+        Some(dossier) => session.avec_dossier_du_pont(dossier),
+        None => {
+            noter("dossier de l'exécutable illisible : toute feuille sera refusée (composant de lecture du QR introuvable)");
+            session.avec_dossier_du_pont_illisible()
+        }
+    };
+    let mut session = session
         // Au fil de l'eau : un pont arrêté de force a déjà tout écrit.
         .avec_echo_journal(move |ligne| {
             if trace {

@@ -68,6 +68,7 @@ type FnSortir = unsafe extern "system" fn(*const u32, *const c_void) -> i32;
 /// FD9_GetPremeasurementError).
 type FnErreurPremesure = unsafe extern "C" fn(*mut i32, *mut *const c_char) -> i32;
 type FnPointsMesure = unsafe extern "system" fn(*mut PointMesure, *const u32) -> i32;
+type FnImageFeuille = unsafe extern "system" fn(*mut ImageFd9, *mut PointMesure, *const u32) -> i32;
 type FnDeuxNombres = unsafe extern "system" fn(*const u32, *const u32) -> i32;
 type FnDonnees = unsafe extern "system" fn(
     *mut PositionPlage,
@@ -93,6 +94,7 @@ pub struct Fd9Dll {
     sortir: FnSortir,
     erreur_premesure: FnErreurPremesure,
     points_mesure: FnPointsMesure,
+    image_feuille: FnImageFeuille,
     mesurer: FnDeuxNombres,
     regler: FnDeuxNombres,
     donnees: FnDonnees,
@@ -138,6 +140,7 @@ impl Fd9Dll {
             sortir: resoudre(&bibliotheque, "FD9_ExitMeasurement")?,
             erreur_premesure: resoudre(&bibliotheque, "FD9_GetPremeasurementError")?,
             points_mesure: resoudre(&bibliotheque, "FD9_GetMeasurePoint")?,
+            image_feuille: resoudre(&bibliotheque, "FD9_GetChartImage")?,
             mesurer: resoudre(&bibliotheque, "FD9_StartMeasurement2")?,
             regler: resoudre(&bibliotheque, "FD9_SetOption")?,
             donnees: resoudre(&bibliotheque, "FD9_GetData")?,
@@ -386,6 +389,31 @@ impl SdkFd9 for Fd9Dll {
         // SAFETY : `nombre` points de 20 octets, remplis pendant l'appel
         // (fiche FD9_GetMeasurePoint).
         unsafe { (self.points_mesure)(points.as_mut_ptr(), &nombre) }
+    }
+
+    fn image_feuille(&mut self, largeur: &mut u32, hauteur: &mut u32, gris: &mut [u8]) -> i32 {
+        // La DLL se fie à `largeur × hauteur` : une place plus grande que le
+        // tampon est refusée ici.
+        if u64::from(*largeur) * u64::from(*hauteur) > gris.len() as u64 {
+            return fd9_sys::CODE_PARAMETRE_INVALIDE;
+        }
+        // 8 bits toujours : sous 8, la DLL diviserait par zéro (fiche
+        // FD9_GetChartImage, 0x100a0816).
+        let mut image = ImageFd9 {
+            largeur: *largeur,
+            hauteur: *hauteur,
+            bits: 8,
+            donnees: gris.as_mut_ptr(),
+        };
+        let nombre = 0u32;
+        // SAFETY : image de 16 octets (24 en x64) dont les données ont au
+        // moins `largeur × hauteur` octets, écrites pendant l'appel ; points
+        // nuls avec un nombre nul (lu sans test si le journal du SDK est
+        // actif) ; aucune adresse gardée (fiche FD9_GetChartImage).
+        let code = unsafe { (self.image_feuille)(&mut image, std::ptr::null_mut(), &nombre) };
+        *largeur = image.largeur;
+        *hauteur = image.hauteur;
+        code
     }
 
     fn mesurer(&mut self) -> i32 {

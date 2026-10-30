@@ -36,6 +36,38 @@ fn diagnostic() -> Vec<String> {
     arguments
 }
 
+/// Composant de lecture du QR (ticket #87) : la DLL charge `zxing.dll` (et
+/// `zxing.presentation.dll`) depuis le dossier du pont. S'ils manquent à côté
+/// de l'exécutable de test (`target/…/debug/`, ignoré par git), ils y sont
+/// copiés depuis le dossier de la DLL. `FD9_ZXING=absent` n'en copie aucun,
+/// pour l'essai sans composant : le pont doit alors refuser la feuille
+/// (`composant_qr_introuvable`). Rien n'est jamais effacé : un composant
+/// déjà là arrête l'essai, à retirer à la main.
+fn poser_zxing() {
+    let pont = PathBuf::from(env!("CARGO_BIN_EXE_pont-fd9"));
+    let dossier = pont.parent().unwrap();
+    if std::env::var("FD9_ZXING").is_ok_and(|v| v == "absent") {
+        let present = dossier.join("zxing.dll");
+        assert!(
+            !present.exists(),
+            "FD9_ZXING=absent, mais {} existe : retirez-le à la main pour cet essai",
+            present.display()
+        );
+        return;
+    }
+    let source = dll();
+    let Some(module) = source.parent() else {
+        return;
+    };
+    for nom in ["zxing.dll", "zxing.presentation.dll"] {
+        let (de, vers) = (module.join(nom), dossier.join(nom));
+        if de.is_file() && !vers.exists() {
+            std::fs::copy(&de, &vers).unwrap();
+            println!("{nom} copié à côté du pont : {}", vers.display());
+        }
+    }
+}
+
 /// Lance le pont avec ce plafond, lui envoie ces lignes et rend ses réponses.
 fn dialoguer(plafond: &str, requetes: &[&str]) -> Vec<String> {
     dialoguer_avec(plafond, &[], requetes)
@@ -47,6 +79,7 @@ fn dialoguer(plafond: &str, requetes: &[&str]) -> Vec<String> {
 /// fermée qu'après la dernière réponse. Le journal du pont (sortie d'erreur)
 /// s'affiche au fil de l'eau.
 fn dialoguer_avec(plafond: &str, arguments: &[&str], requetes: &[&str]) -> Vec<String> {
+    poser_zxing();
     let mut enfant = Command::new(env!("CARGO_BIN_EXE_pont-fd9"))
         .arg("--dll")
         .arg(dll())

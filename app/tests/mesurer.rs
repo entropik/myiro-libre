@@ -388,6 +388,7 @@ fn fiche_de(nom: &str, mesure: Mesure, langue: Langue) -> FicheMesure {
         Ok(Reponse::Mesure {
             mesure,
             remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
+            calage: None,
         }),
     );
     let mut instrument = etalonne(simule, nom);
