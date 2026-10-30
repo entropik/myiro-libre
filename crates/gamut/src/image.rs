@@ -10,6 +10,7 @@ use colorimetrie::delta_e00;
 use serde::Serialize;
 
 use crate::icc::{vers_lab, ErreurIcc, ProfilIcc};
+use crate::pastille::{pastilles, Pastille, Representant};
 use crate::source::ProfilSource;
 use crate::surface::couleur_ecran;
 use crate::teinte::{famille, familles_teinte, SECTEURS_TEINTE};
@@ -73,6 +74,10 @@ pub struct AnalyseImage {
     pub par_teinte: Vec<Vec<u64>>,
     /// Au plus `POINTS_NUAGE` cellules, les plus peuplées d'abord.
     pub nuage: Vec<PointNuage>,
+    /// Au plus `PASTILLES` cellules du nuage, les plus peuplées d'abord,
+    /// dont la couleur la plus fréquente a un écart d'au moins
+    /// `SEUIL_PASTILLES` : sa couleur demandée et sa couleur reproduite.
+    pub pastilles: Vec<Pastille>,
     /// Code d'écart de chaque pixel, dans l'ordre des lignes : dixièmes de
     /// ΔE00 (0 à 254) ou `ECART_INCONNU`.
     #[serde(skip)]
@@ -134,13 +139,14 @@ fn analyser(
         }
         let rvb = [c >> 16, c >> 8, c].map(|v| f64::from(v & 0xff) / 255.0);
         let demandee = demande(rvb);
-        let ecart = sortie
-            .reproduire(demandee)
-            .ok()
-            .and_then(|reproduite| delta_e00(vers_lab(demandee), vers_lab(reproduite)).ok());
-        let code = ecart.map_or(ECART_INCONNU, code_ecart);
+        let calcul = sortie.reproduire(demandee).ok().and_then(|reproduite| {
+            delta_e00(vers_lab(demandee), vers_lab(reproduite))
+                .ok()
+                .map(|ecart| (reproduite, ecart))
+        });
+        let code = calcul.map_or(ECART_INCONNU, |(_, ecart)| code_ecart(ecart));
         codes.insert(c, code);
-        let Some(ecart) = ecart else {
+        let Some((reproduite, ecart)) = calcul else {
             pixels_inconnus += u64::from(n);
             continue;
         };
@@ -150,7 +156,16 @@ fn analyser(
         cellules
             .entry(demandee.map(|v| (v / CELLULE).floor() as i32))
             .or_default()
-            .ajouter(demandee, n, ecart);
+            .ajouter(
+                n,
+                Representant {
+                    rvb: c,
+                    pixels: n,
+                    demandee,
+                    reproduite,
+                    ecart,
+                },
+            );
     }
 
     // 3. Code d'écart de chaque pixel.
@@ -162,6 +177,11 @@ fn analyser(
         })
         .collect();
 
+    let representees = cellules
+        .iter()
+        .filter_map(|(cle, c)| c.representant.map(|r| (*cle, c.pixels, r)))
+        .collect();
+    let pastilles = pastilles(representees, sortie);
     Ok(Ok(AnalyseImage {
         pixels_comptes,
         pixels_inconnus,
@@ -169,6 +189,7 @@ fn analyser(
         histogramme,
         par_teinte,
         nuage: nuage(cellules, sortie),
+        pastilles,
         ecarts,
     }))
 }
@@ -181,7 +202,7 @@ fn cle(p: &[u8; 4]) -> u32 {
 /// Écart en dixièmes de ΔE00, arrondi vers le bas, borné à 254. Produit
 /// par 10, et non quotient par 0,1 : 0,3 / 0,1 vaut 2,999… en virgule
 /// flottante.
-fn code_ecart(ecart: f64) -> u8 {
+pub(crate) fn code_ecart(ecart: f64) -> u8 {
     (ecart * 10.0).floor().clamp(0.0, (CASES - 1) as f64) as u8
 }
 
@@ -191,16 +212,23 @@ struct Cellule {
     somme: [f64; 3],
     pixels: u64,
     ecart_max: f64,
+    /// Couleur RVB la plus fréquente de la cellule (la première dans l'ordre
+    /// des valeurs RVB à égalité, les couleurs arrivant dans cet ordre).
+    representant: Option<Representant>,
 }
 
 impl Cellule {
-    fn ajouter(&mut self, lab: [f64; 3], pixels: u32, ecart: f64) {
+    /// Ajoute les `pixels` pixels d'une couleur RVB distincte.
+    fn ajouter(&mut self, pixels: u32, couleur: Representant) {
         let n = f64::from(pixels);
-        for (somme, v) in self.somme.iter_mut().zip(lab) {
+        for (somme, v) in self.somme.iter_mut().zip(couleur.demandee) {
             *somme += v * n;
         }
         self.pixels += u64::from(pixels);
-        self.ecart_max = self.ecart_max.max(ecart);
+        self.ecart_max = self.ecart_max.max(couleur.ecart);
+        if self.representant.is_none_or(|r| couleur.pixels > r.pixels) {
+            self.representant = Some(couleur);
+        }
     }
 }
 

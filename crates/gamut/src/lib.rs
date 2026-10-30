@@ -15,7 +15,9 @@
 //! Elle lit le profil d'une image (`ProfilSource` : matrice et courbes, gris
 //! ou table `mft2` ; sRVB quand l'image n'en embarque pas) pour donner la
 //! couleur demandée de chaque pixel, en Lab relatif D50, et mesure l'écart de
-//! chaque pixel d'une image à un profil de sortie (`analyser_pixels`).
+//! chaque pixel d'une image à un profil de sortie (`analyser_pixels`), avec
+//! les pastilles des couleurs hors gamut les plus présentes et la paire d'une
+//! couleur montrée à la pipette (`Pastille`, `paire_couleur`).
 //!
 //! De ces valeurs, elle tire la surface du cube RVB et son volume, les
 //! couleurs de base, la densité approchée du noir, la table de chroma par
@@ -40,6 +42,7 @@ mod icc;
 mod image;
 mod limite;
 mod mesures;
+mod pastille;
 mod source;
 mod surface;
 mod table;
@@ -57,6 +60,7 @@ pub use image::{
 };
 pub use limite::lire_gam;
 pub use mesures::{fidelite, memes_mesures, points_du_chemin, repetabilite, Mesure, Repetabilite};
+pub use pastille::{paire_couleur, Paire, Pastille, PASTILLES, SEUIL_PASTILLES};
 pub use source::ProfilSource;
 pub use surface::{maillage_affiche, surface_cube, volume, Maillage, MaillageAffiche};
 pub use teinte::{familles_teinte, FamilleTeinte, FAMILLES_TEINTE, SECTEURS_TEINTE};
