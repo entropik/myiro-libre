@@ -28,6 +28,9 @@ colorimetrie = { path = "../crates/colorimetrie" }
 gamut = { path = "../crates/gamut" }
 photo = { path = "../crates/photo" }
 profilage = { path = "../crates/profilage" }
+rapport = { path = "../crates/rapport" }
+# Logo de l'atelier : PNG ou JPEG lu, réduit et réencodé en PNG (#89).
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 pont-protocole = { path = "../crates/pont-protocole" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

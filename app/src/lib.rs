@@ -5,9 +5,11 @@
 //! modules `instrument` et `pont` n'en dépendent pas non plus : seul ce
 //! fichier fait le lien avec la fenêtre.
 
+pub mod atelier;
 pub mod colonne;
 pub mod comparer;
 pub mod demonstration;
+pub mod ecriture;
 pub mod installation;
 pub mod instrument;
 pub mod mesurer;
@@ -278,7 +280,16 @@ fn choisir_instrument(
 /// Ouvre la bibliothèque du poste, ou celle de démonstration avec `--demo`,
 /// dont la séance de Mesurer est alors garnie de mesures fictives.
 fn ouvrir_bibliotheque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let (ouverte, seance) = if std::env::args().any(|a| a == "--demo") {
+    let demo = std::env::args().any(|a| a == "--demo");
+    // Le réglage « Atelier » vit à côté des données, hors de la bibliothèque
+    // (ADR 0008) ; en démonstration, dans le dossier temporaire.
+    let donnees = if demo {
+        demonstration::dossier()
+    } else {
+        app.path().app_data_dir()?
+    };
+    app.manage(atelier::ReglageAtelier::new(donnees.join("atelier")));
+    let (ouverte, seance) = if demo {
         let ouverte = colonne::BibliothequeOuverte::demonstration(&demonstration::dossier());
         let seance = demonstration::seance(&ouverte);
         (ouverte, seance)
@@ -638,6 +649,11 @@ pub fn lancer() {
             comparer::image::commandes::image_ecarts,
             comparer::image::commandes::image_annuler,
             comparer::image::commandes::image_pixel,
+            atelier::commandes::atelier_lire,
+            atelier::commandes::atelier_logo,
+            atelier::commandes::atelier_enregistrer,
+            atelier::commandes::atelier_choisir_logo,
+            atelier::commandes::atelier_retirer_logo,
             etalonner,
             repondre_geste
         ])

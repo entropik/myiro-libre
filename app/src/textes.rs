@@ -2312,6 +2312,24 @@ const FRANCAIS: Catalogue = &[
         "mire.preparees.vide",
         "Aucune mire préparée pour cette résolution.",
     ),
+    // Réglage « Atelier » (ticket #89)
+    (
+        "atelier.erreur.logo_format",
+        "Ce logo n’est ni un PNG ni un JPEG. Enregistrez-le dans l’un de ces formats.",
+    ),
+    (
+        "atelier.erreur.logo_illisible",
+        "Ce logo est abîmé ou trop grand pour être lu.",
+    ),
+    ("atelier.erreur.trop_long", "Ce champ est trop long."),
+    (
+        "atelier.erreur.ecriture",
+        "Le réglage de l’atelier n’a pas pu être enregistré.",
+    ),
+    (
+        "atelier.erreur.lecture",
+        "Le réglage de l’atelier n’a pas pu être lu.",
+    ),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -4575,6 +4593,24 @@ const ANGLAIS: Catalogue = &[
     (
         "mire.preparees.vide",
         "No chart prepared for this resolution.",
+    ),
+    // Studio settings (ticket #89)
+    (
+        "atelier.erreur.logo_format",
+        "This logo is neither a PNG nor a JPEG. Save it in one of these formats.",
+    ),
+    (
+        "atelier.erreur.logo_illisible",
+        "This logo is damaged or too large to be read.",
+    ),
+    ("atelier.erreur.trop_long", "This field is too long."),
+    (
+        "atelier.erreur.ecriture",
+        "The studio settings could not be saved.",
+    ),
+    (
+        "atelier.erreur.lecture",
+        "The studio settings could not be read.",
     ),
 ];
 
