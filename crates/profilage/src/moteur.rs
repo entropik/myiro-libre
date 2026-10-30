@@ -99,6 +99,8 @@ pub enum Etape {
     Profil,
     /// Contrôle du profil contre les mesures (`profcheck`).
     Controle,
+    /// Interrogation du profil pour sa vérification (`xicclu`).
+    Verification,
     /// Choix des plages d'une mire (`targen`).
     Plages,
     /// Limite du gamut d'un profil (`iccgamut`, comparaison des profils).
@@ -113,7 +115,8 @@ pub enum ErreurMoteur {
     /// ArgyllCMS est là, mais pas en version [`VERSION_ARGYLL`].
     VersionNonValidee { trouvee: String },
     /// ArgyllCMS est là, mais il lui manque cet outil (par exemple
-    /// `iccgamut`, pour la limite du gamut).
+    /// `xicclu`, pour la vérification d'un profil, ou `iccgamut`, pour la
+    /// limite du gamut).
     OutilManquant { outil: String },
     /// Un outil a échoué ; `cause` est la dernière ligne non vide de sa
     /// sortie d'erreur.
@@ -148,6 +151,10 @@ impl ErreurMoteur {
                 etape: Etape::Controle,
                 ..
             } => "profil.erreur.controle",
+            ErreurMoteur::Echec {
+                etape: Etape::Verification,
+                ..
+            } => "verif.erreur.calcul",
             ErreurMoteur::Echec {
                 etape: Etape::Plages,
                 ..
@@ -197,6 +204,7 @@ fn nom_etape(etape: Etape) -> &'static str {
         Etape::Version => "lecture de la version",
         Etape::Profil => "calcul du profil",
         Etape::Controle => "contrôle du profil",
+        Etape::Verification => "vérification du profil",
         Etape::Plages => "choix des plages de la mire",
         Etape::Gamut => "calcul de la limite du gamut",
     }

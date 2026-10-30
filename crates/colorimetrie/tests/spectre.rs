@@ -102,3 +102,50 @@ fn un_spectre_qui_deborde_donne_un_lab_inconnu() {
         Err(Inconnu::ResultatNonFini)
     );
 }
+
+/// Lab vers XYZ est l'inverse exact de XYZ vers Lab, de part et d'autre du
+/// seuil de la partie linéaire (couleurs très sombres).
+#[test]
+fn lab_vers_xyz_est_l_inverse_de_xyz_vers_lab() {
+    let blanc = colorimetrie::blanc_d50();
+    let xyz = |x, y, z| Xyz { x, y, z };
+    for couleur in [
+        xyz(96.42, 100.0, 82.51),
+        xyz(41.2, 21.3, 1.9),
+        xyz(18.0, 19.0, 40.0),
+        xyz(0.3, 0.25, 0.2),
+        xyz(0.0, 0.0, 0.0),
+    ] {
+        let lab = xyz_vers_lab(couleur, blanc).unwrap();
+        let retour = colorimetrie::lab_vers_xyz(lab, blanc).unwrap();
+        proche(retour.x, couleur.x, 1e-9);
+        proche(retour.y, couleur.y, 1e-9);
+        proche(retour.z, couleur.z, 1e-9);
+    }
+}
+
+#[test]
+fn lab_vers_xyz_refuse_un_blanc_invalide_ou_une_valeur_non_finie() {
+    let gris = colorimetrie::Lab {
+        l: 50.0,
+        a: 0.0,
+        b: 0.0,
+    };
+    let blanc_nul = Xyz {
+        x: 0.0,
+        y: 100.0,
+        z: 82.5,
+    };
+    assert_eq!(
+        colorimetrie::lab_vers_xyz(gris, blanc_nul),
+        Err(Inconnu::BlancInvalide)
+    );
+    let nan = colorimetrie::Lab {
+        l: f64::NAN,
+        ..gris
+    };
+    assert_eq!(
+        colorimetrie::lab_vers_xyz(nan, colorimetrie::blanc_d50()),
+        Err(Inconnu::ValeurNonFinie)
+    );
+}

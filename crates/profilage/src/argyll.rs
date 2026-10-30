@@ -42,6 +42,11 @@ impl ArgyllCms {
         ArgyllCms { racine }
     }
 
+    /// Dossier d'ArgyllCMS (`bin/`, `ref/`).
+    pub(crate) fn racine(&self) -> &Path {
+        &self.racine
+    }
+
     /// Les trois fichiers dont le calcul a besoin sont là.
     fn complet(&self) -> bool {
         self.outil("colprof").is_file()
@@ -510,7 +515,7 @@ pub fn controler_version(trouvee: &str) -> Result<(), ErreurMoteur> {
 }
 
 /// Dernière ligne d'erreur d'ArgyllCMS (« … Error - … ») d'une sortie.
-fn derniere_erreur(texte: &str) -> Option<String> {
+pub(crate) fn derniere_erreur(texte: &str) -> Option<String> {
     texte
         .lines()
         .map(str::trim)

@@ -14,9 +14,13 @@
 //! - [`controler_coherence`] vérifie, avant tout calcul, que les mesures
 //!   correspondent aux plages (ticket #1) : il refuse ou laisse passer, sans
 //!   jamais corriger.
+//! - [`MoteurVerification`] interroge un profil pour le vérifier sur une
+//!   seconde mire (`xicclu`) : [`ArgyllCms`] en vrai,
+//!   [`MoteurVerificationSimule`] pour les tests.
 
 mod argyll;
 mod coherence;
+mod evaluation;
 mod limite;
 mod moteur;
 mod plages;
@@ -31,6 +35,10 @@ pub use coherence::{
     controler_coherence, ControleCoherence, Critere, PlageSuspecte, DECALAGE_MAX,
     ECART_BLANC_MAX_L, ECART_DOUBLONS_MAX_DE00, ECART_NOIR_MAX_L, ECART_VOISINES_MAX_DE00,
     RETOUR_GRIS_MAX_L, VOISINES,
+};
+pub use evaluation::{
+    arguments_xicclu, lire_sortie_xicclu, DemandeEvaluation, Evaluation, Impression,
+    MoteurVerification, MoteurVerificationSimule,
 };
 pub use limite::{
     arguments_iccgamut, lire_volume_iccgamut, LimiteCalculee, MoteurGamut, MoteurGamutSimule,
