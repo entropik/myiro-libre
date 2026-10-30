@@ -74,7 +74,7 @@ fn les_pastilles_sont_dans_le_panneau_a_cote_de_l_image() {
     for attendu in [
         "window.PastillesImage.cadre(canvas, () => ({ sources, compensation: pointNoir }))",
         "resultats.append(window.PastillesImage.section());",
-        "el(\"div\", \"image-comparee__panneau\")",
+        "el(\"div\", \"image-comparee__panneau defile-gauche\")",
         "el(\"div\", \"image-comparee__image\")",
         "colonnes.append(image, panneau);",
         "tableauChiffres = el(\"div\", \"chiffres-image\");",

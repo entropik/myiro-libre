@@ -81,6 +81,7 @@ window.ComparerImage = (() => {
     try {
       const r = await invoke("image_ouvrir", { filtre: t("image.filtre") });
       if (!r) return; // annulé : rien ne change
+      window.Accordeon.ouvrir("image.titre");
       demande++;
       [resume, apercu, analyses, ecarts] = [r, null, null, []];
       window.NuageImage.oublier(); // nouvelle image : nuage libéré, case recochée
@@ -326,7 +327,7 @@ window.ComparerImage = (() => {
   function surimpression() {
     if (!profils.some((p) => p.rang === choisi)) choisi = profils.length ? profils[0].rang : 0;
     const R = window.ReglagesImage;
-    const panneau = el("div", "image-comparee__panneau");
+    const panneau = el("div", "image-comparee__panneau defile-gauche");
     etatCalcul = R.etatCalcul(panneau, annuler, analyser);
     // Les résultats (point cliqué, pastilles, chiffres), marqués pendant une analyse relancée sur place.
     const resultats = el("div", "image-comparee__resultats");

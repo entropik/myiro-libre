@@ -319,7 +319,10 @@ fn la_mise_en_page_garde_ses_emplacements_reserves() {
         ),
         (
             ".pastilles-pipette {",
-            &["height: calc(var(--space-24) * 2.75);", "overflow: hidden;"],
+            &[
+                "grid-template-rows: calc(1em * var(--leading-normal)) calc(5em * var(--leading-normal));",
+                "overflow: hidden;",
+            ],
         ),
         (
             ".pastilles-lecture {",
@@ -327,7 +330,10 @@ fn la_mise_en_page_garde_ses_emplacements_reserves() {
         ),
         (
             ".recalcul {",
-            &["height: var(--space-12);", "visibility: hidden;"],
+            &[
+                "height: calc(1em * var(--leading-normal) + var(--space-1) * 2);",
+                "visibility: hidden;",
+            ],
         ),
         (".recalcul--actif {", &["visibility: visible;"]),
         (

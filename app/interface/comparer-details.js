@@ -47,12 +47,37 @@ window.ComparerDetails = (() => {
     return l;
   }
 
+  // Une grande partie de la vue, repliable (accordeon.js). Un contenu lourd se donne par une fonction
+  // `remplir(zone)`, suivie au besoin de `vider()`, appelées à l'ouverture et à la fermeture.
   function section(cle, ...contenu) {
-    const s = el("div", "section");
-    const tete = el("div", "section__head");
-    tete.append(el("span", "label label--ink", t(cle)));
-    s.append(tete, ...contenu);
-    return s;
+    if (typeof contenu[0] === "function") return window.Accordeon.partie(cle, [], contenu[0], contenu[1]);
+    return window.Accordeon.partie(cle, contenu);
+  }
+
+  // Choix parmi quelques valeurs (boutons « seg »), libellé par la clé `cle` ; un choix inactif dit
+  // pourquoi, juste à côté.
+  function seg(cle, valeurs, choisie, changer, inactives = {}) {
+    const champ = el("div", "field");
+    const id = "comparer-" + cle.replaceAll(".", "-");
+    const libelle = el("span", "label", t(cle));
+    libelle.id = id;
+    const groupe = el("div", "seg");
+    groupe.setAttribute("role", "group");
+    groupe.setAttribute("aria-labelledby", id);
+    for (const v of valeurs) {
+      const b = el("button", "", t(`${cle}.${v}`));
+      b.setAttribute("aria-pressed", String(v === choisie));
+      b.disabled = Boolean(inactives[v]);
+      b.addEventListener("click", () => {
+        for (const autre of groupe.children) autre.setAttribute("aria-pressed", String(autre === b));
+        changer(v);
+      });
+      groupe.append(b);
+    }
+    champ.append(libelle, groupe);
+    // Un choix inactif dit pourquoi, juste à côté.
+    for (const raison of Object.values(inactives)) champ.append(el("p", "why", raison));
+    return champ;
   }
 
   // ---- Chiffres clés : une colonne par profil, pour les lire côte à côte ----
@@ -142,5 +167,5 @@ window.ComparerDetails = (() => {
     return bloc;
   }
 
-  return { texteRefus, texteLimite, texteFidelite, section, chiffres, methode, provenance, avance };
+  return { texteRefus, texteLimite, texteFidelite, section, seg, chiffres, methode, provenance, avance };
 })();

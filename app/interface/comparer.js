@@ -2,7 +2,7 @@
 // depuis un fichier (jamais rangé), comparés par le module Rust `comparer`. Le premier sert de
 // référence. Au centre : profils, chiffres clés, image (comparer-image.js), gamut en volume
 // (vue3d.js, avec les couleurs de l'image de nuage-image.js), chroma par teinte, coupe, chemin (graphiques.js), couleurs de base et écarts
-// (comparer-ecarts.js), méthode ; à droite, la provenance de chaque profil et, sous « Avancé »,
+// (comparer-ecarts.js), méthode, chaque grande partie repliable (accordeon.js) ; à droite, la provenance de chaque profil et, sous « Avancé »,
 // la commande d'iccgamut (comparer-details.js). Un chiffre `null` s'écrit « inconnu » (Graphiques.nombre). Les textes
 // viennent du catalogue (app.js).
 "use strict";
@@ -13,7 +13,7 @@ window.Comparer = (() => {
   const nombre = (v, decimales) => window.Graphiques.nombre(v, decimales);
   const { el } = window.Arbre;
   const { carreSerie } = window.ComparerEcarts;
-  const { texteRefus, texteLimite, texteFidelite, section, chiffres, methode, provenance, avance } = window.ComparerDetails;
+  const { texteRefus, texteLimite, texteFidelite, section, seg, chiffres, methode, provenance, avance } = window.ComparerDetails;
   const image = window.ComparerImage;
 
   const vue = document.querySelector("[data-vue-comparer]");
@@ -193,30 +193,6 @@ window.Comparer = (() => {
   }
 
   // ---- Gamut en volume ----
-  function seg(cle, valeurs, choisie, changer, inactives = {}) {
-    const champ = el("div", "field");
-    const id = "comparer-" + cle.replaceAll(".", "-");
-    const libelle = el("span", "label", t(cle));
-    libelle.id = id;
-    const groupe = el("div", "seg");
-    groupe.setAttribute("role", "group");
-    groupe.setAttribute("aria-labelledby", id);
-    for (const v of valeurs) {
-      const b = el("button", "", t(`${cle}.${v}`));
-      b.setAttribute("aria-pressed", String(v === choisie));
-      b.disabled = Boolean(inactives[v]);
-      b.addEventListener("click", () => {
-        for (const autre of groupe.children) autre.setAttribute("aria-pressed", String(autre === b));
-        changer(v);
-      });
-      groupe.append(b);
-    }
-    champ.append(libelle, groupe);
-    // Un choix inactif dit pourquoi, juste à côté.
-    for (const raison of Object.values(inactives)) champ.append(el("p", "why", raison));
-    return champ;
-  }
-
   function formes(liste) {
     return liste.filter((p) => !masques.has(p.rang)).map((p) => {
       const limite = reglages.forme === "limite" && p.limite.etat === "calculee";
@@ -225,7 +201,14 @@ window.Comparer = (() => {
     });
   }
 
+  // Partie repliable (accordeon.js) : la vue 3D n'existe que partie ouverte, et se défait à la fermeture.
   function volume3d(liste) {
+    return section("comparer.volume", (zone) => remplirVolume(zone, liste), () => {
+      if (vue3d) { vue3d.detruire(); vue3d = null; }
+    });
+  }
+
+  function remplirVolume(zone, liste) {
     const calculees = liste.filter((p) => p.limite.etat === "calculee");
     if (reglages.forme === null) reglages.forme = calculees.length ? "limite" : "surface";
     const inactives = {};
@@ -262,8 +245,7 @@ window.Comparer = (() => {
     // En couleurs réelles, la vue 3D habille la référence seule ; l'aide dit pourquoi les autres sont en fil de fer.
     const aideCouleur = seg("comparer.volume.couleur", ["serie", "reelle"], reglages.couleur, regler("couleur"));
     aideCouleur.append(el("p", "", t("comparer.volume.couleur.aide")));
-    const bloc = section("comparer.volume", affiches,
-      aideCouleur,
+    zone.append(affiches, aideCouleur,
       seg("comparer.volume.forme", ["limite", "surface"], reglages.forme, changerForme, inactives),
       seg("comparer.volume.rendu", ["opaque", "transparent"], reglages.rendu, regler("rendu")),
       manques, window.NuageImage.champ(), canvas, el("p", "why", t("comparer.volume.aide")));
@@ -271,64 +253,69 @@ window.Comparer = (() => {
     vue3d = window.Vue3d.creer(canvas, { couleur: reglages.couleur, rendu: reglages.rendu });
     vue3d.afficher(formes(liste));
     vue3d.points(window.NuageImage.points());
-    return bloc;
   }
 
   // ---- Graphiques : teintes, coupe, chemin ----
   const svg = () => document.createElementNS("http://www.w3.org/2000/svg", "svg");
 
-  function graphiques(liste) {
-    const teintes = svg();
-    const coupe = svg();
-    const s1 = section("comparer.teintes", teintes);
-    const curseur = el("input", "curseur");
-    Object.assign(curseur, { type: "range", min: 5, max: 95, step: 1, value: reglages.l, id: "comparer-clarte" });
-    const libelle = el("label", "label", `${t("comparer.coupe.clarte")} ${nombre(reglages.l, 0)}`);
-    libelle.htmlFor = curseur.id;
-    const champ = el("div", "field");
-    champ.append(libelle, curseur);
-    const s2 = section("comparer.coupe", champ, coupe);
-    const serie = (p, valeurs) => ({ valeurs, serie: p.serie, nom: p.nom });
-    const dessinerCoupe = () => {
-      libelle.textContent = `${t("comparer.coupe.clarte")} ${nombre(reglages.l, 0)}`;
-      window.Graphiques.coupe(coupe, liste.map((p) => serie(p, p.analyse.coupes[reglages.l])), reglages.l, window.NuageImage.points());
-    };
-    coupeNuage = dessinerCoupe;
-    curseur.addEventListener("input", () => { reglages.l = Number(curseur.value); dessinerCoupe(); });
+  // Choix d'une couleur de base du chemin ; `redessiner` refait le graphique du chemin.
+  function selection(cle, redessiner) {
+    const c = el("div", "field");
+    const s = el("select", "input");
+    s.id = "comparer-" + cle;
+    for (const [nom] of BASES) {
+      const o = el("option", "", t("comparer.primaire." + nom));
+      o.value = nom;
+      o.selected = reglages[cle] === nom;
+      s.append(o);
+    }
+    s.addEventListener("change", async () => {
+      reglages[cle] = s.value;
+      if (await chargerChemin()) redessiner();
+    });
+    const l = el("label", "label", t("comparer.chemin." + cle));
+    l.htmlFor = s.id;
+    c.append(l, s);
+    return c;
+  }
 
-    const selection = (cle) => {
-      const c = el("div", "field");
-      const s = el("select", "input");
-      s.id = "comparer-" + cle;
-      for (const [nom] of BASES) {
-        const o = el("option", "", t("comparer.primaire." + nom));
-        o.value = nom;
-        o.selected = reglages[cle] === nom;
-        s.append(o);
-      }
-      s.addEventListener("change", async () => {
-        reglages[cle] = s.value;
-        if (await chargerChemin()) dessinerChemin();
-      });
-      const l = el("label", "label", t("comparer.chemin." + cle));
-      l.htmlFor = s.id;
-      c.append(l, s);
-      return c;
-    };
-    const cheminL = svg();
-    const cheminC = svg();
-    const s3 = section("comparer.chemin", selection("depart"), selection("arrivee"), cheminL, cheminC);
-    // Le SVG doit être dans la page avant le tableau « Valeurs » qui le suit.
-    corps.append(s1, s2, s3);
-    window.Graphiques.teintes(teintes, liste.map((p) => serie(p, p.analyse.chroma_par_teinte)));
-    dessinerCoupe();
-    function dessinerChemin() {
-      window.Graphiques.chemin(cheminL, cheminC, liste.map((p) => ({
+  // Trois parties repliables : chaque graphique se dessine à l'ouverture, une fois dans la page (le
+  // tableau « Valeurs » suit son SVG) ; replié, il ne dessine rien.
+  function graphiques(liste) {
+    const serie = (p, valeurs) => ({ valeurs, serie: p.serie, nom: p.nom });
+    const s1 = section("comparer.teintes", (zone) => {
+      const teintes = svg();
+      zone.append(teintes);
+      window.Graphiques.teintes(teintes, liste.map((p) => serie(p, p.analyse.chroma_par_teinte)));
+    });
+    const s2 = section("comparer.coupe", (zone) => {
+      const coupe = svg();
+      const curseur = el("input", "curseur");
+      Object.assign(curseur, { type: "range", min: 5, max: 95, step: 1, value: reglages.l, id: "comparer-clarte" });
+      const libelle = el("label", "label", `${t("comparer.coupe.clarte")} ${nombre(reglages.l, 0)}`);
+      libelle.htmlFor = curseur.id;
+      const champ = el("div", "field");
+      champ.append(libelle, curseur);
+      zone.append(champ, coupe);
+      const dessinerCoupe = () => {
+        libelle.textContent = `${t("comparer.coupe.clarte")} ${nombre(reglages.l, 0)}`;
+        window.Graphiques.coupe(coupe, liste.map((p) => serie(p, p.analyse.coupes[reglages.l])), reglages.l, window.NuageImage.points());
+      };
+      coupeNuage = dessinerCoupe;
+      curseur.addEventListener("input", () => { reglages.l = Number(curseur.value); dessinerCoupe(); });
+      dessinerCoupe();
+    }, () => { coupeNuage = () => {}; });
+    const s3 = section("comparer.chemin", (zone) => {
+      const cheminL = svg();
+      const cheminC = svg();
+      const dessinerChemin = () => window.Graphiques.chemin(cheminL, cheminC, liste.map((p) => ({
         ...serie(p, (chemins[p.rang] || {}).points || []),
         mesures: (chemins[p.rang] || {}).mesures || [],
       })));
-    }
-    dessinerChemin();
+      zone.append(selection("depart", dessinerChemin), selection("arrivee", dessinerChemin), cheminL, cheminC);
+      dessinerChemin();
+    });
+    corps.append(s1, s2, s3);
   }
 
   // ---- Dessin de toute la vue ----

@@ -223,7 +223,8 @@ fn le_nuage_suit_le_seuil_et_le_profil_de_la_surimpression() {
     let comparer = lire("interface/comparer.js");
     assert!(comparer.contains("window.NuageImage.suivre("));
     assert!(comparer.contains("vue3d.points(window.NuageImage.points());"));
-    let volume = corps(&comparer, "function volume3d(liste) {", 2);
+    // La vue 3D se remplit à l'ouverture de sa partie repliable (accordeon.js).
+    let volume = corps(&comparer, "function remplirVolume(zone, liste) {", 2);
     assert!(volume.contains("window.NuageImage.champ()"), "{volume}");
 }
 

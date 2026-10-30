@@ -207,7 +207,7 @@
       corps.append(tr);
     });
     table.append(thead, corps);
-    const defile = el("div", "defile");
+    const defile = el("div", "defile defile-gauche"); // dans une feuille qui défile : ascenseur à gauche
     defile.append(table);
     section.append(tete, defile);
     return section;

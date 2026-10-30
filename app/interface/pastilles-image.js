@@ -170,43 +170,48 @@ window.PastillesImage = (() => {
   }
 
   // ---- Le point cliqué, pour le profil de la surimpression ----
-  // Bloc de hauteur fixe, présent même vide : « Cliquez dans l'image… » tant qu'aucun point n'est choisi.
+  // Bloc du point cliqué, toujours de la même hauteur, celle d'une paire remplie : deux pastilles à
+  // gauche et cinq lignes à droite (Image, Imprimé, écart, seuil, visée). Avant tout clic, ou pour un
+  // profil inconnu, deux carrés vides et la phrase à la même place : aucun vide, rien ne bouge.
   function pipette() {
     const etat = pixel ? pixel.profils[rang] : null;
     const bloc = el("div", "pastilles-pipette");
     bloc.append(el("span", "label", t("pastilles.pipette.titre")));
-    if (!etat) {
-      bloc.append(el("p", "why", t("pastilles.pipette.aide")));
-      return bloc;
-    }
-    if (etat.etat !== "calcule") {
-      bloc.append(el("p", "why", t("pastilles.pipette.inconnu").replace("{profil}", () => nom)
-        .replace("{raison}", () => texteRefus(etat))));
+    const ligne = el("div", "paire paire--pipette");
+    const lignes = el("div", "paire__lignes");
+    if (!etat || etat.etat !== "calcule") {
+      const phrase = etat ? t("pastilles.pipette.inconnu").replace("{profil}", () => nom)
+        .replace("{raison}", () => texteRefus(etat)) : t("pastilles.pipette.aide");
+      lignes.append(el("p", "why", phrase));
+      ligne.append(vide().firstChild, lignes);
+      bloc.append(ligne);
       return bloc;
     }
     const p = etat.paire;
     const cle = p.code >= code(seuil) ? "pastilles.pipette.au_dela" : "pastilles.pipette.en_deca";
-    // Sous chaque pastille, son nom (« Image », « Imprimé ») et ses L*a*b* arrondis.
-    const noms = el("div", "paire__noms");
+    const couleurs = el("div", "paire__couleurs");
+    couleurs.append(pastille(p.demandee, p.couleur_demandee, "image"), pastille(p.reproduite, p.couleur_reproduite, "imprimee"));
+    // Le nom de chaque pastille (« Image », « Imprimé ») et ses L*a*b* arrondis, une ligne chacun.
     for (const [role, v] of [["pastilles.image", p.demandee], ["pastilles.imprimee", p.reproduite]]) {
-      const nomCouleur = el("span", "");
-      nomCouleur.append(el("b", "", t(role)), el("span", "", lab(v)));
-      noms.append(nomCouleur);
+      const nomCouleur = el("span", "paire__ligne");
+      nomCouleur.append(el("b", "", t(role)), " ", lab(v));
+      lignes.append(nomCouleur);
     }
-    const resultat = paire(p, [ecart(p), t(cle).replace("{s}", () => nombre(seuil, 1))], "paire--pipette");
-    resultat.insertBefore(noms, resultat.children[1] || null);
-    bloc.append(resultat);
-    if (p.visee) bloc.append(visee(p));
+    lignes.append(el("span", "paire__ligne", ecart(p)), el("span", "paire__ligne", t(cle).replace("{s}", () => nombre(seuil, 1))));
+    if (p.visee) lignes.append(visee(p));
+    ligne.append(couleurs, lignes);
+    bloc.append(ligne);
     return bloc;
   }
 
   // Avec la compensation du point noir : la couleur visée, dont l'écart à l'imprimé est mesuré, ou
   // une ligne qui dit qu'elle est celle de l'image.
   function visee(p) {
-    if (!(p.ecart_visee >= 0.1)) return el("p", "why", t("pastilles.pipette.visee_identique"));
-    const ligne = el("p", "paire__visee");
-    ligne.append(pastille(p.visee, p.couleur_visee, "visee"), el("span", "", t("pastilles.pipette.visee")
-      .replace("{lab}", () => lab(p.visee)).replace("{e}", () => nombre(p.ecart_visee, 1))));
+    if (!(p.ecart_visee >= 0.1)) return el("span", "paire__ligne why", t("pastilles.pipette.visee_identique"));
+    const ligne = el("span", "paire__ligne paire__visee");
+    const texte = t("pastilles.pipette.visee").replace("{lab}", () => lab(p.visee)).replace("{e}", () => nombre(p.ecart_visee, 1));
+    ligne.append(pastille(p.visee, p.couleur_visee, "visee"), el("span", "", texte));
+    ligne.title = texte; // une ligne, coupée au besoin : le texte entier reste au survol
     return ligne;
   }
 
