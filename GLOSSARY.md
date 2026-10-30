@@ -357,6 +357,28 @@ _Éviter_ : QC, validation
 Ensemble de valeurs cibles et de tolérances servant au contrôle d'impression, issu d'une norme ou d'un tirage validé mesuré par l'utilisateur.
 _Éviter_ : cible, target, standard
 
+### Rapports
+
+**Rapport** :
+Document PDF à remettre au client, fait par le moteur de rapport commun (crate `rapport`, ADR 0008) : un cartouche en pied de chaque page, puis des sections. Il est dans une seule langue et ne porte aucun identifiant d'instrument. Le premier est le rapport d'une image comparée (ticket #89) ; la vérification d'un profil, le contrôle et les mesures suivront.
+_Éviter_ : export, impression, fiche (réservé à la fiche d'impression)
+
+**Cartouche** :
+Bloc d'identification encadré, comme sur un plan d'architecte, en bas de chaque page d'un rapport : logo et coordonnées de l'atelier, client et objet, papier, profil, image, seuil, date, numéro de rapport et « Page n / total ». Sa hauteur est fixe ; il ne recouvre jamais le contenu.
+_Éviter_ : en-tête, pied de page, bandeau. Ne pas confondre avec le cartouche de provenance d'un profil, dans l'application.
+
+**Atelier** :
+Le réglage, rempli une fois, des coordonnées de l'imprimerie (nom, adresse, courriel, téléphone, site) et de son logo, repris sur chaque rapport. Il est gardé à côté des données de l'application, hors de la bibliothèque.
+_Éviter_ : société, entreprise, profil utilisateur
+
+**Numéro de rapport** :
+L'année puis un numéro qui se suit, remis à 1 chaque année (`2026-0001`). Il n'est pris qu'une fois le PDF écrit : un export manqué n'en consomme aucun.
+_Éviter_ : référence, identifiant
+
+**Point relevé** :
+Point de la photo cliqué à la pipette et gardé par « Garder ce point » (huit au plus) : il part dans le rapport avec sa couleur dans l'image et sa couleur imprimée.
+_Éviter_ : échantillon, mesure (réservé à l'instrument)
+
 ### Application
 
 **Tâche** :
