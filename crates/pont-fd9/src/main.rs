@@ -24,6 +24,7 @@
 //! main dans `DELAI_FERMETURE` (`CODE_FERMETURE_BLOQUEE` ; la réponse à
 //! `fermer` est donnée avant).
 
+use pont_fd9::composants::dossier_de_l_executable;
 use pont_fd9::dll::Fd9Dll;
 use pont_fd9::serveur::{servir, Garde, DELAI_FERMETURE};
 use pont_fd9::trace::{self, SdkTrace};
@@ -139,17 +140,17 @@ fn servir_avec<S: SdkFd9>(sdk: S, arguments: &Arguments) -> ExitCode {
     let trace = arguments.trace;
     // La DLL charge le composant de lecture du QR (`zxing.dll`) depuis le
     // dossier de l'exécutable (ticket #87) : il est vérifié avant chaque
-    // feuille. Dossier illisible : le dossier courant, vérifié de même.
-    let dossier_du_pont = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(PathBuf::from))
-        .unwrap_or_else(|| {
-            noter("dossier de l'exécutable illisible : composant de lecture du QR cherché dans le dossier courant");
-            PathBuf::from(".")
-        });
-    let mut session = Session::new(sdk, arguments.plafond)
-        .avec_delais(arguments.delais)
-        .avec_dossier_du_pont(dossier_du_pont)
+    // feuille. Dossier illisible : toute feuille est refusée, sans chercher
+    // ailleurs (la DLL, elle, ne cherche que là).
+    let session = Session::new(sdk, arguments.plafond).avec_delais(arguments.delais);
+    let session = match dossier_de_l_executable(std::env::current_exe()) {
+        Some(dossier) => session.avec_dossier_du_pont(dossier),
+        None => {
+            noter("dossier de l'exécutable illisible : toute feuille sera refusée (composant de lecture du QR introuvable)");
+            session.avec_dossier_du_pont_illisible()
+        }
+    };
+    let mut session = session
         // Au fil de l'eau : un pont arrêté de force a déjà tout écrit.
         .avec_echo_journal(move |ligne| {
             if trace {

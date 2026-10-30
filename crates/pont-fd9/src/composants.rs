@@ -12,6 +12,28 @@ use std::path::{Path, PathBuf};
 /// Assembly de lecture du QR, à poser à côté de `pont-fd9`.
 pub const COMPOSANT_QR: &str = "zxing.dll";
 
+/// Dossier de l'exécutable du pont, d'après `std::env::current_exe()`.
+/// Illisible, ou sans dossier : `None`, jamais le dossier courant à sa
+/// place (la DLL, elle, cherche dans celui de l'exécutable).
+pub fn dossier_de_l_executable(exe: std::io::Result<PathBuf>) -> Option<PathBuf> {
+    let exe = exe.ok()?;
+    exe.parent()
+        .filter(|dossier| !dossier.as_os_str().is_empty())
+        .map(Path::to_path_buf)
+}
+
+/// Où chercher le composant de lecture du QR avant une feuille.
+#[derive(Clone, Debug, Default)]
+pub(crate) enum DossierDuPont {
+    /// Rien n'est vérifié (instrument simulé).
+    #[default]
+    NonVerifie,
+    Connu(PathBuf),
+    /// Le chemin de l'exécutable n'a pas pu être lu : toute feuille est
+    /// refusée.
+    Illisible,
+}
+
 /// Chemin du composant de lecture du QR dans `dossier` s'il y est (un
 /// fichier), sinon le chemin où il manque. Ne charge rien.
 pub fn composant_qr(dossier: &Path) -> Result<PathBuf, PathBuf> {

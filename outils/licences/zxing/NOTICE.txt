@@ -8,6 +8,8 @@ Licence : Apache License, Version 2.0 (texte complet dans LICENSE-2.0.txt,
 à côté de ce fichier, ou https://www.apache.org/licenses/LICENSE-2.0).
 Sources : https://github.com/micjahn/ZXing.Net
 
-Ces fichiers ne sont pas modifiés. myiro-libre les pose à côté de son pont
+Ces fichiers sont ceux du logiciel FD-S2w 1.6.0, non modifiés : l'outil qui
+prépare l'installateur contrôle leur empreinte SHA-256 et refuse tout autre
+fichier. myiro-libre les pose à côté de son pont
 FD-9 (pont-fd9-x86.exe) : la bibliothèque du FD-9 les charge depuis ce
 dossier pour lire le code QR des mires.

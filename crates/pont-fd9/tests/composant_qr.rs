@@ -6,19 +6,35 @@
 mod commun;
 
 use commun::Fd9Simule;
-use pont_fd9::composants::{composant_qr, COMPOSANT_QR};
+use pont_fd9::composants::{composant_qr, dossier_de_l_executable, COMPOSANT_QR};
 use pont_fd9::{Delais, Session};
 use pont_protocole::{AdresseReseau, DefinitionFeuille, ErreurPont, Palier, ZoneFeuille};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// Dossier vide propre à ce test, sous le dossier temporaire du système.
-fn dossier(nom: &str) -> PathBuf {
+/// Dossier vide propre à un test, sous le dossier temporaire du système,
+/// effacé à la fin du test.
+struct DossierTemporaire(PathBuf);
+
+impl std::ops::Deref for DossierTemporaire {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for DossierTemporaire {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn dossier(nom: &str) -> DossierTemporaire {
     let dossier =
         std::env::temp_dir().join(format!("pont-fd9-composant-{}-{nom}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dossier);
     std::fs::create_dir_all(&dossier).unwrap();
-    dossier
+    DossierTemporaire(dossier)
 }
 
 fn rgb2520() -> DefinitionFeuille {
@@ -76,7 +92,7 @@ fn le_composant_est_cherche_a_cote_du_pont() {
 #[test]
 fn sans_zxing_la_prenumerisation_est_refusee_sans_appel_a_la_dll() {
     let vide = dossier("prenumerisation");
-    let (mut session, depuis) = connectee(Palier::Prenumerisation, vide.clone());
+    let (mut session, depuis) = connectee(Palier::Prenumerisation, vide.to_path_buf());
 
     let erreur = session.prenumeriser(&rgb2520()).unwrap_err();
 
@@ -101,7 +117,7 @@ fn sans_zxing_la_prenumerisation_est_refusee_sans_appel_a_la_dll() {
 #[test]
 fn sans_zxing_la_mesure_d_une_feuille_est_refusee_sans_appel_a_la_dll() {
     let vide = dossier("feuille");
-    let (mut session, depuis) = connectee(Palier::Feuille, vide);
+    let (mut session, depuis) = connectee(Palier::Feuille, vide.to_path_buf());
 
     let erreur = session.mesurer_feuille(&rgb2520()).unwrap_err();
 
@@ -116,7 +132,7 @@ fn sans_zxing_la_mesure_d_une_feuille_est_refusee_sans_appel_a_la_dll() {
 fn avec_zxing_la_feuille_part() {
     let plein = dossier("present");
     std::fs::write(plein.join("zxing.dll"), b"assembly factice").unwrap();
-    let (mut session, depuis) = connectee(Palier::Prenumerisation, plein);
+    let (mut session, depuis) = connectee(Palier::Prenumerisation, plein.to_path_buf());
 
     session.prenumeriser(&rgb2520()).unwrap();
 
@@ -127,10 +143,49 @@ fn avec_zxing_la_feuille_part() {
 fn le_plafond_passe_avant_le_composant() {
     // Palier refusé : la réponse est celle du plafond, comme avant.
     let vide = dossier("plafond");
-    let (mut session, _) = connectee(Palier::Connexion, vide);
+    let (mut session, _) = connectee(Palier::Connexion, vide.to_path_buf());
 
     assert!(matches!(
         session.prenumeriser(&rgb2520()),
         Err(ErreurPont::PalierNonAutorise { .. })
     ));
+}
+
+#[test]
+fn le_dossier_du_pont_est_celui_de_son_executable() {
+    assert_eq!(
+        dossier_de_l_executable(Ok(PathBuf::from("C:/myiro-libre/pont-fd9-x86.exe"))),
+        Some(PathBuf::from("C:/myiro-libre"))
+    );
+    // Chemin illisible ou sans dossier : aucun dossier, jamais le dossier
+    // courant à sa place.
+    assert_eq!(
+        dossier_de_l_executable(Err(std::io::Error::other("illisible"))),
+        None
+    );
+    assert_eq!(dossier_de_l_executable(Ok(PathBuf::new())), None);
+}
+
+#[test]
+fn sans_dossier_du_pont_lisible_la_feuille_est_refusee_sans_appel_a_la_dll() {
+    let mut session = Session::new(Fd9Simule::avec_une_rgb2520(), Palier::Prenumerisation)
+        .avec_delais(COURTS)
+        .avec_dossier_du_pont_illisible();
+    session.version().unwrap();
+    session
+        .connecter_adresse(&AdresseReseau::new("192.0.2.40").unwrap())
+        .unwrap();
+    let depuis = session.sdk().appels.len();
+
+    assert_eq!(
+        session.prenumeriser(&rgb2520()),
+        Err(ErreurPont::ComposantQrIntrouvable {
+            chemin: "zxing.dll".into()
+        })
+    );
+    assert_eq!(session.sdk().appels.len(), depuis);
+    assert!(session
+        .journal()
+        .iter()
+        .any(|l| l.contains("dossier du pont illisible")));
 }

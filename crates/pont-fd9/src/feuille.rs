@@ -13,7 +13,7 @@
 use crate::arret::EchecArret;
 use crate::attente::{Attente, Fin};
 use crate::calage::{caler, DECALAGE_ADMIS};
-use crate::composants::composant_qr;
+use crate::composants::{composant_qr, DossierDuPont, COMPOSANT_QR};
 use crate::connexion::inattendue;
 use crate::{SdkFd9, Session};
 use fd9_sys::{
@@ -111,8 +111,17 @@ impl<S: SdkFd9> Session<S> {
     /// Le composant de lecture du QR à côté du pont, sans quoi la DLL
     /// arrêterait le pont à la lecture du QR, feuille engagée (ticket #87).
     fn exiger_composant_qr(&mut self) -> Result<(), ErreurPont> {
-        let Some(dossier) = self.dossier_du_pont.clone() else {
-            return Ok(());
+        let dossier = match self.dossier_du_pont.clone() {
+            DossierDuPont::NonVerifie => return Ok(()),
+            DossierDuPont::Connu(dossier) => dossier,
+            DossierDuPont::Illisible => {
+                self.journal.push(format!(
+                    "composant de lecture du QR introuvable : dossier du pont illisible, {COMPOSANT_QR} non cherché ailleurs ; feuille non lancée"
+                ));
+                return Err(ErreurPont::ComposantQrIntrouvable {
+                    chemin: COMPOSANT_QR.into(),
+                });
+            }
         };
         composant_qr(&dossier).map(drop).map_err(|chemin| {
             let chemin = chemin.display().to_string();

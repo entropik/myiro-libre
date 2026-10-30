@@ -31,6 +31,7 @@ pub use feuille::{ECART_ADMIS, TAILLE_IMAGE_MAX};
 
 pub use plages::{CONDITIONS, LONGUEUR_SPECTRE};
 
+use composants::DossierDuPont;
 use fd9_sys::{
     Appareil, CleOption, CoordonneesMire, CouleursMire, DonneesQr, EtatSdk, ModeReconnaissance,
     NomApplication, PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES,
@@ -217,8 +218,8 @@ pub struct Session<S: SdkFd9> {
     /// plages), ou état lu au début d'une feuille.
     dernier_etat: Option<EtatSdk>,
     /// Dossier du pont, où la DLL cherche le composant de lecture du QR
-    /// (`composants`) ; `None` : rien n'est vérifié (instrument simulé).
-    dossier_du_pont: Option<PathBuf>,
+    /// (`composants`).
+    dossier_du_pont: DossierDuPont,
     /// Points visés et image de la dernière feuille reconnue, pas encore
     /// rendus (`prendre_calage`).
     calage: Option<CalageFeuille>,
@@ -250,7 +251,7 @@ impl<S: SdkFd9> Session<S> {
             annulation: Annulation::default(),
             recus: VecDeque::new(),
             dernier_etat: None,
-            dossier_du_pont: None,
+            dossier_du_pont: DossierDuPont::NonVerifie,
             calage: None,
         }
     }
@@ -259,7 +260,14 @@ impl<S: SdkFd9> Session<S> {
     /// dans `dossier` (celui de l'exécutable du pont) : sans lui, la DLL
     /// arrêterait le pont à la lecture du QR (ticket #87).
     pub fn avec_dossier_du_pont(mut self, dossier: PathBuf) -> Self {
-        self.dossier_du_pont = Some(dossier);
+        self.dossier_du_pont = DossierDuPont::Connu(dossier);
+        self
+    }
+
+    /// Le dossier de l'exécutable n'a pas pu être lu : toute feuille est
+    /// refusée (`composant_qr_introuvable`), sans chercher ailleurs.
+    pub fn avec_dossier_du_pont_illisible(mut self) -> Self {
+        self.dossier_du_pont = DossierDuPont::Illisible;
         self
     }
 

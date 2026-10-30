@@ -29,8 +29,9 @@ Usage (à la racine du dépôt) :
    Embarquée, la mire suit la même règle que `SDK/` : installateur local,
    jamais publié tel quel.
 5. Cherche `zxing.dll` (ZXing.Net 0.14.0, Apache-2.0) dans le dossier `Module`
-   de FD-S2w, puis dans `SDK/` et ses sous-dossiers ; le premier trouvé est
-   copié dans `app/binaries/zxing/` (avec `zxing.presentation.dll` s'il est
+   de FD-S2w, puis dans `SDK/` et ses sous-dossiers ; le premier trouvé, s'il
+   a l'empreinte de celui de FD-S2w (sinon tout s'arrête), est copié dans
+   `app/binaries/zxing/` (avec `zxing.presentation.dll` s'il est
    à côté) et installé à côté de `pont-fd9-x86.exe`, avec sa licence
    (`outils/licences/zxing/`). La DLL du FD-9 le charge depuis le dossier du
    pont pour lire le QR des mires (ticket #87). Sans lui, une ligne le dit et
@@ -76,6 +77,13 @@ MODULE_FD_S2W = "C:/Program Files (x86)/KONICA MINOLTA/FD-S2w/Module"
 ZXING = "zxing.dll"
 ZXING_VOISINS = ("zxing.presentation.dll",)
 ZXING_LICENCES = ("LICENSE-2.0.txt", "NOTICE.txt")
+# SHA-256 des fichiers de FD-S2w 1.6.0 (Module/), ZXing.Net 0.14.0.0 d'après
+# leur ressource de version : la DLL du fabricant attend cette assembly à nom
+# fort. Un autre fichier n'est pas embarqué.
+ZXING_EMPREINTES = {
+    "zxing.dll": "6314d5da3a64d191d0cbe0e73cc53fb87c4c118306549237c13eb097e930dc03",
+    "zxing.presentation.dll": "02b7fbb8d3a68ed6bde3516b6c79d983f11617c23f0af0e2026064213028b304",
+}
 # SHA-256 du texte de l'Apache License 2.0 publié par la fondation Apache
 # (https://www.apache.org/licenses/LICENSE-2.0.txt), fins de ligne LF.
 EMPREINTE_APACHE_2_0 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
@@ -217,34 +225,40 @@ def source_zxing(dossiers):
     return next((d / ZXING for d in dossiers if (d / ZXING).is_file()), None)
 
 
-def zxing_embarque(racine=RACINE, dossiers=None):
+def zxing_embarque(racine=RACINE, dossiers=None, empreintes=ZXING_EMPREINTES):
     """Ressources Tauri de zxing.dll, installé à côté des ponts, et de sa licence ;
-    {} si aucun n'est trouvé. Le fichier est copié dans app/binaries/zxing/ (ignoré
-    par git). Un zxing.dll qui n'est pas un exécutable Windows arrête tout."""
+    {} si aucun n'est trouvé. Chaque fichier doit avoir l'empreinte connue (celui
+    de FD-S2w), sinon tout s'arrête avant la moindre copie. Les fichiers sont
+    copiés dans app/binaries/zxing/ (ignoré par git)."""
     source = source_zxing(dossiers_zxing(racine) if dossiers is None else dossiers)
     if source is None:
         return {}
-    if architecture(source) is None:
-        sys.exit(f"{source} n'est pas un exécutable Windows : reprenez le zxing.dll de FD-S2w (ZXing.Net 0.14.0).")
+    presents = [nom for nom in (ZXING, *ZXING_VOISINS) if (source.parent / nom).is_file()]
+    for nom in presents:
+        trouvee = hashlib.sha256((source.parent / nom).read_bytes()).hexdigest()
+        if trouvee != empreintes[nom]:
+            sys.exit(f"{source.parent / nom} n'est pas celui de FD-S2w (ZXing.Net 0.14.0.0) : empreinte {trouvee}, "
+                     f"attendue {empreintes[nom]}. La DLL du FD-9 ne chargerait pas une autre version : "
+                     "reprenez le fichier du dossier Module de FD-S2w.")
     copie = racine / "app" / "binaries" / "zxing"
     copie.mkdir(parents=True, exist_ok=True)
     ressources = {}
-    for nom in (ZXING, *ZXING_VOISINS):
-        if (source.parent / nom).is_file():
-            shutil.copy2(source.parent / nom, copie / nom)
-            ressources[f"binaries/zxing/{nom}"] = nom
+    for nom in presents:
+        shutil.copy2(source.parent / nom, copie / nom)
+        ressources[f"binaries/zxing/{nom}"] = nom
     for nom in ZXING_LICENCES:
         ressources[f"../outils/licences/zxing/{nom}"] = f"licences/zxing/{nom}"
     return ressources
 
 
 def annonce_zxing(source):
-    """Une ligne sur le composant de lecture du QR du FD-9."""
+    """Une ligne sur le composant de lecture du QR du FD-9. La version n'est dite que
+    pour un fichier embarqué, donc d'empreinte vérifiée par `zxing_embarque`."""
     if source is None:
         return (f"zxing.dll introuvable ({MODULE_FD_S2W}, SDK/) : composant de lecture du QR non embarqué, "
                 "le pont FD-9 refusera de lancer une feuille.")
-    return (f"zxing.dll (ZXing.Net 0.14.0, Apache-2.0) embarqué à côté de pont-fd9-x86.exe depuis {source}, "
-            "licence jointe sous licences/zxing/.")
+    return (f"zxing.dll (ZXing.Net 0.14.0, Apache-2.0, empreinte vérifiée) embarqué à côté de pont-fd9-x86.exe "
+            f"depuis {source}, licence jointe sous licences/zxing/.")
 
 
 def main():

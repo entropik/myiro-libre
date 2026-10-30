@@ -157,6 +157,24 @@ fn une_image_moyenne_garde_l_arrondi_au_plus_proche() {
 }
 
 #[test]
+fn une_image_trop_haute_pour_mille_pixels_est_ignoree() {
+    // 300 001 pixels de haut : même réduite par 300, plus de 1 000 pixels.
+    // Le calage part sans image plutôt qu'avec une image hors contrat.
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.taille_image = 300_001;
+    sdk.image_feuille = Some((1, 300_001));
+    let (mut session, _) = connectee(sdk, Palier::Prenumerisation);
+
+    session.prenumeriser(&six_plages()).unwrap();
+
+    assert_eq!(session.prendre_calage().unwrap().image, None);
+    assert!(session
+        .journal()
+        .iter()
+        .any(|l| l.contains("FD9_GetChartImage") && l.contains("1 × 300001")));
+}
+
+#[test]
 fn sans_image_le_calage_est_rendu_quand_meme() {
     // La DLL refuse (1005 : image plus grande que le tampon) : la feuille
     // n'échoue pas, le calage est rendu sans image et le journal le dit.

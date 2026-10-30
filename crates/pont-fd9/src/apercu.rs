@@ -88,7 +88,7 @@ impl<S: SdkFd9> Session<S> {
         gris.truncate(pixels as usize);
         let Some(image) = reduire(largeur, hauteur, &gris) else {
             self.journal.push(format!(
-                "FD9_GetChartImage : image de {largeur} × {hauteur} impossible à réduire ; ignorée"
+                "FD9_GetChartImage : image de {largeur} × {hauteur} impossible à réduire à {HAUTEUR_APERCU} pixels de haut ; ignorée"
             ));
             return None;
         };
@@ -103,23 +103,23 @@ impl<S: SdkFd9> Session<S> {
 }
 
 /// Plus petit diviseur de 300 qui ramène `hauteur` à `HAUTEUR_APERCU`
-/// pixels au plus.
-fn facteur(hauteur: u32) -> u32 {
+/// pixels au plus ; `None` si même le plus grand n'y suffit pas.
+fn facteur(hauteur: u32) -> Option<u32> {
     FACTEURS
         .into_iter()
         .find(|&k| hauteur.div_ceil(k) <= HAUTEUR_APERCU)
-        .unwrap_or(IMAGE_FEUILLE_PPP)
 }
 
 /// Réduit une image grise de `largeur × hauteur` octets (non vide, à
 /// 300 ppp) : chaque pixel est la moyenne, arrondie, d'un carré de k × k
-/// pixels (moins au bord droit et en bas). `None` si l'image est vide ou ne
-/// fait pas `largeur × hauteur` octets.
+/// pixels (moins au bord droit et en bas). `None` si l'image est vide, ne
+/// fait pas `largeur × hauteur` octets, ou ne tient pas dans
+/// `HAUTEUR_APERCU` pixels de haut.
 fn reduire(largeur: u32, hauteur: u32, gris: &[u8]) -> Option<ImageFeuille> {
     if largeur == 0 || gris.len() != largeur as usize * hauteur as usize {
         return None;
     }
-    let k = facteur(hauteur);
+    let k = facteur(hauteur)?;
     let (l, h) = (largeur.div_ceil(k), hauteur.div_ceil(k));
     let (largeur, k_us) = (largeur as usize, k as usize);
     let mut sortie = Vec::with_capacity(l as usize * h as usize);

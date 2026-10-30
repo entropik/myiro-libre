@@ -1,6 +1,6 @@
 # FD9_GetChartImage
 
-**En clair** : après la reconnaissance (événement 7), rend **l'image de la feuille** prise par l'instrument, découpée au bord du papier, en gris. C'est la photo que FD-S2w montre dans son onglet « Measured Point », avec un point rouge sur chaque plage. Le pont la réduit et la donne à l'application avec les points de [FD9_GetMeasurePoint](FD9_GetMeasurePoint.md), pour que l'opérateur voie où l'instrument va mesurer. Lecture seule : rien n'est écrit dans l'instrument ni dans la DLL.
+**En clair** : après la reconnaissance (événement 7), rend **l'image de la feuille** prise par l'instrument, découpée au bord du papier, en gris. Ce n'est pas l'image de l'onglet « Measured Point » de FD-S2w : celle-là est sa copie de l'image prise entière ([FD9_GetCaptureResult](FD9_GetCaptureResult.md), voir plus bas) ; que les deux montrent la même chose au bord du papier près est supposé, à vérifier à l'essai. Le pont la réduit et la donne à l'application avec les points de [FD9_GetMeasurePoint](FD9_GetMeasurePoint.md), pour que l'opérateur voie où l'instrument va mesurer. Lecture seule : rien n'est écrit dans l'instrument ni dans la DLL.
 
 ## Signature
 
