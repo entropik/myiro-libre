@@ -420,8 +420,14 @@ select.input option { background: var(--panneau); color: var(--encre); }
 .image-comparee { container-type: inline-size; }
 .image-comparee__colonnes { display: grid; grid-template-columns: minmax(0, calc(var(--hauteur-image) * var(--ratio, 1.5))) minmax(320px, 1fr); gap: var(--space-6); align-items: start; --hauteur-image: 70vh; }
 .image-comparee__image { min-width: 0; }
-.image-comparee__barre { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: var(--space-3); height: var(--space-12); margin-bottom: var(--space-2); }
-.image-comparee__barre > .legende-alerte { flex: 1; min-width: 0; }
+.image-comparee__barre { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: var(--space-3); height: calc(var(--space-16) + var(--space-6)); margin-bottom: var(--space-2); }
+/* Verdict au-dessus de la photo, à place gardée : la part imprimable en grand (deux lignes au plus),
+   puis, en petit, le carré vert, le seuil, le profil et le rendu (deux lignes au plus). Atténué
+   pendant une analyse relancée sur place. */
+.verdict { flex: 1; min-width: 0; }
+.verdict__part { margin: 0; font-size: var(--text-lg); font-weight: 600; line-height: var(--leading-snug); color: var(--encre); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.verdict__detail { margin: var(--space-1) 0 0; }
+.verdict--perime { opacity: .45; }
 .image-comparee__barre > .btn { flex: none; }
 /* Deux lignes au plus, coupées : la légende ne change jamais la hauteur de la barre. */
 .legende-alerte > span:last-child { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }

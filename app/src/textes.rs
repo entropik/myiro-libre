@@ -613,7 +613,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "image.legende",
-        "Au-delà de {s}\u{202f}ΔE00 avec {profil}",
+        "Écart d’au plus {s}\u{202f}ΔE00, {profil}, sans compensation du point noir. En vert, au-delà.",
     ),
     (
         "image.canvas.aria",
@@ -704,6 +704,26 @@ const FRANCAIS: Catalogue = &[
         "Gris (C* < 5)",
     ),
     (
+        "image.verdict",
+        "{p}\u{202f}% de l’image est imprimable sur ce papier avec ce profil",
+    ),
+    (
+        "image.verdict.plus_de",
+        "plus de {p}",
+    ),
+    (
+        "image.verdict.moins_de",
+        "moins de {p}",
+    ),
+    (
+        "image.verdict.inconnus",
+        "\u{202f}; {p}\u{202f}% inconnus",
+    ),
+    (
+        "image.verdict.inconnu",
+        "Part imprimable inconnue avec ce profil",
+    ),
+    (
         "image.point_noir",
         "Compensation du point noir",
     ),
@@ -713,7 +733,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "image.legende.point_noir",
-        "Au-delà de {s}\u{202f}ΔE00 avec {profil}, avec compensation du point noir",
+        "Écart d’au plus {s}\u{202f}ΔE00, {profil}, avec compensation du point noir. En vert, au-delà.",
     ),
     (
         "image.rendu.point_noir",
@@ -2870,7 +2890,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "image.legende",
-        "Beyond {s} ΔE00 with {profil}",
+        "Difference of at most {s} ΔE00, {profil}, without black point compensation. In green, beyond.",
     ),
     (
         "image.canvas.aria",
@@ -2961,6 +2981,26 @@ const ANGLAIS: Catalogue = &[
         "Greys (C* < 5)",
     ),
     (
+        "image.verdict",
+        "{p}% of the image is printable on this paper with this profile",
+    ),
+    (
+        "image.verdict.plus_de",
+        "over {p}",
+    ),
+    (
+        "image.verdict.moins_de",
+        "under {p}",
+    ),
+    (
+        "image.verdict.inconnus",
+        "; {p}% unknown",
+    ),
+    (
+        "image.verdict.inconnu",
+        "Printable share unknown with this profile",
+    ),
+    (
         "image.point_noir",
         "Black point compensation",
     ),
@@ -2970,7 +3010,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "image.legende.point_noir",
-        "Beyond {s} ΔE00 with {profil}, with black point compensation",
+        "Difference of at most {s} ΔE00, {profil}, with black point compensation. In green, beyond.",
     ),
     (
         "image.rendu.point_noir",

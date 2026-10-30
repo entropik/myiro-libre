@@ -2223,7 +2223,10 @@ fn comparer_image_js_est_charge_et_sans_couleur_en_dur() {
     for jeton in ["--couleur-hors-gamut-calque", "--couleur-hors-gamut-fond"] {
         assert!(script.contains(&format!("\"{jeton}\"")), "{jeton} non lu");
     }
-    assert!(script.contains("var(--couleur-hors-gamut)"), "légende");
+    assert!(
+        lire("interface/verdict-image.js").contains("var(--couleur-hors-gamut)"),
+        "légende"
+    );
 
     let jetons = lire("../design-system/tokens.css");
     for clair in [false, true] {

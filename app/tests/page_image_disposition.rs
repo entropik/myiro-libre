@@ -184,7 +184,7 @@ fn la_compensation_du_point_noir_se_regle_et_se_rappelle() {
     assert!(fermer.contains("\"les_deux\", true, true]"), "{fermer}");
     let calque = corps(&image, "function calque() {");
     assert!(
-        calque.contains("t(compense ? \"image.legende.point_noir\" : \"image.legende\")"),
+        calque.contains("window.VerdictImage.ecrire(legende, a, seuil, nom, compense);"),
         "{calque}"
     );
     let surimpression = corps(&image, "function surimpression() {");
@@ -338,7 +338,7 @@ fn la_mise_en_page_garde_ses_emplacements_reserves() {
         (".recalcul--actif {", &["visibility: visible;"]),
         (
             ".image-comparee__barre {",
-            &["flex-wrap: nowrap;", "height: var(--space-12);"],
+            &["flex-wrap: nowrap;", "height: calc(var(--space-16) + var(--space-6));"],
         ),
         (
             ".image-comparee__rendu {",

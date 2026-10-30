@@ -145,6 +145,7 @@ window.ComparerImage = (() => {
     const n = ++demande;
     message = "";
     etatCalcul.etat("calcul");
+    window.VerdictImage.perime(legende, true);
     try {
       const reponse = await invoke("image_analyser", { sources, compensation: pointNoir });
       const octets = n === demande ? await lireEcarts(reponse) : null;
@@ -156,6 +157,7 @@ window.ComparerImage = (() => {
       [analyses, ecarts, message] = [null, [], t(String(cle))];
     }
     etatCalcul.etat(analyses ? "repos" : "relancer", message);
+    window.VerdictImage.perime(legende, false);
     if (rendu) rendu.textContent = t(compense ? "image.rendu.point_noir" : "image.rendu.relatif");
     choisirProfil(choisi); // calque, légende, nuage et pastilles, sur place
     dessinerChiffres();
@@ -288,7 +290,7 @@ window.ComparerImage = (() => {
     const a = analyseDe(choisi);
     canvas.setAttribute("aria-label", t("image.canvas.aria").replace("{p}", () => nombre(a ? part(a, k, 255) : null, 1))
       .replace("{s}", () => nombre(seuil, 1)).replace("{profil}", () => nom));
-    if (legende) legende.lastChild.textContent = t(compense ? "image.legende.point_noir" : "image.legende").replace("{s}", () => nombre(seuil, 1)).replace("{profil}", () => nom);
+    window.VerdictImage.ecrire(legende, a, seuil, nom, compense); // part imprimable, seuil, profil, rendu
   }
 
   // Le nuage (nuage-image.js) et les pastilles sous l'image (pastilles-image.js) suivent la surimpression.
@@ -339,11 +341,7 @@ window.ComparerImage = (() => {
     tableauChiffres = el("div", "chiffres-image");
     rendu = el("p", "why image-comparee__rendu", t(compense ? "image.rendu.point_noir" : "image.rendu.relatif"));
     resultats.append(el("span", "label", t("image.chiffres")), rendu, tableauChiffres);
-    legende = el("p", "legende-alerte");
-    const carre = el("span", "swatch");
-    carre.style.setProperty("--c", "var(--couleur-hors-gamut)");
-    carre.setAttribute("aria-hidden", "true");
-    legende.append(carre, el("span", ""));
+    legende = window.VerdictImage.creer(); // verdict et légende de la surimpression (verdict-image.js)
     canvas = el("canvas", "surimpression");
     Object.assign(canvas, { width: resume.largeur, height: resume.hauteur, tabIndex: 0 });
     canvas.setAttribute("role", "img");
