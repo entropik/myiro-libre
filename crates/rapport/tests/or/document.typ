@@ -15,8 +15,23 @@
 
 #let etiquette(t) = text(size: 5.5pt, weight: 600, tracking: 0.1em, fill: gris, upper(t))
 
-// Le cartouche d'architecte : hauteur fixe, contenu rogné, jamais sur le
-// contenu de la page.
+// Une case du cartouche : son texte se resserre (7 pt, puis 6,2, 5,5 et
+// 5 pt) pour tenir dans la hauteur de la case au lieu d'être rogné.
+#let ajuste(contenu) = layout(place => {
+  let tailles = (7pt, 6.2pt, 5.5pt, 5pt)
+  let choisie = none
+  for taille in tailles {
+    if choisie == none {
+      let h = measure(block(width: place.width, { set text(size: taille); contenu })).height
+      if h <= 31mm { choisie = taille }
+    }
+  }
+  set text(size: if choisie == none { tailles.last() } else { choisie })
+  contenu
+})
+
+// Le cartouche d'architecte : hauteur fixe, jamais sur le contenu de la
+// page ; ce qui ne tiendrait pas, même resserré, est rogné.
 #let cartouche(a, client, objet, details, numero, titre, l) = block(width: 100%, height: 36mm, clip: true, breakable: false, {
   set text(size: 7pt)
   set par(leading: 0.45em, spacing: 0.6em)
@@ -26,14 +41,14 @@
     cellules.push(align(center + horizon, image(a.logo, width: 24mm, height: 28mm, fit: "contain")))
   }
   let contacts = (a.courriel, a.telephone, a.site).filter(c => c != "")
-  cellules.push({
+  cellules.push(ajuste({
     etiquette(l.atelier)
     parbreak()
     text(size: 8pt, weight: 600, a.nom)
     if a.adresse != "" { linebreak(); multiligne(a.adresse) }
     for c in contacts { linebreak(); c }
-  })
-  cellules.push({
+  }))
+  cellules.push(ajuste({
     etiquette(l.client)
     parbreak()
     text(weight: 600, client)
@@ -41,9 +56,9 @@
     etiquette(l.objet)
     parbreak()
     objet
-  })
-  cellules.push(grid(columns: (auto, 1fr), column-gutter: 2mm, row-gutter: 1.4mm,
-    ..details.map(((k, v)) => (etiquette(k), v)).flatten()))
+  }))
+  cellules.push(ajuste(grid(columns: (auto, 1fr), column-gutter: 2mm, row-gutter: 1.4mm,
+    ..details.map(((k, v)) => (etiquette(k), v)).flatten())))
   cellules.push({
     etiquette(l.numero)
     parbreak()

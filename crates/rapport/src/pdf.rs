@@ -60,6 +60,9 @@ pub struct PagePdf {
     pub hauteur_mm: f64,
     /// Morceaux de texte de la page, un par ligne.
     pub texte: String,
+    /// Les mêmes morceaux, chacun avec la hauteur de sa ligne de base depuis
+    /// le haut de la page, en mm : un texte rogné garde sa place réelle.
+    pub lignes: Vec<(f64, String)>,
 }
 
 /// Un rapport en PDF.
@@ -126,11 +129,14 @@ fn messages(diagnostics: &[SourceDiagnostic]) -> String {
         .join(" ; ")
 }
 
-fn textes(frame: &Frame, sortie: &mut Vec<String>) {
-    for (_, item) in frame.items() {
+/// Le texte d'un cadre et de ses sous-cadres, avec la hauteur de chaque
+/// ligne de base depuis le haut de la page, en mm.
+fn textes(frame: &Frame, haut: Abs, sortie: &mut Vec<(f64, String)>) {
+    for (position, item) in frame.items() {
+        let y = haut + position.y;
         match item {
-            FrameItem::Group(groupe) => textes(&groupe.frame, sortie),
-            FrameItem::Text(t) => sortie.push(t.text.to_string()),
+            FrameItem::Group(groupe) => textes(&groupe.frame, y, sortie),
+            FrameItem::Text(t) => sortie.push((y.to_mm(), t.text.to_string())),
             _ => {}
         }
     }
@@ -165,12 +171,14 @@ pub fn pdf(d: &Document) -> Result<Pdf, ErreurRapport> {
                 .pages()
                 .iter()
                 .map(|p| {
-                    let mut morceaux = Vec::new();
-                    textes(&p.frame, &mut morceaux);
+                    let mut lignes = Vec::new();
+                    textes(&p.frame, Abs::zero(), &mut lignes);
+                    let texte: Vec<&str> = lignes.iter().map(|(_, t)| t.as_str()).collect();
                     PagePdf {
                         largeur_mm: millimetres(p.frame.size().x),
                         hauteur_mm: millimetres(p.frame.size().y),
-                        texte: morceaux.join("\n"),
+                        texte: texte.join("\n"),
+                        lignes,
                     }
                 })
                 .collect();

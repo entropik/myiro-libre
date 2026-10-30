@@ -146,11 +146,58 @@ fn ecrire_apercu() {
     let dossier = std::path::PathBuf::from(std::env::var("APERCU_RAPPORT").unwrap());
     let mut complet = document_complet();
     complet.cartouche.atelier.logo_png = Some(PNG_1X1.to_vec());
-    for (nom, d) in [("complet", complet), ("long", long(8))] {
+    for (nom, d) in [
+        ("complet", complet),
+        ("long", long(8)),
+        ("cartouche", cartouche_long()),
+    ] {
         let p = rendre(&d);
         std::fs::write(dossier.join(format!("{nom}.pdf")), &p.octets).unwrap();
         for (i, page) in p.pages.iter().enumerate() {
             println!("--- {nom} page {}\n{}", i + 1, page.texte);
         }
     }
+}
+
+/// Avec un logo et des noms longs, toutes les lignes du cartouche restent
+/// dans sa boîte de 36 mm (bas de page à 297 − 14 mm) : le texte se resserre
+/// au lieu d'être rogné, et la date reste lisible.
+#[test]
+fn le_cartouche_garde_toutes_ses_lignes_avec_des_noms_longs() {
+    let p = rendre(&cartouche_long());
+    let page = &p.pages[0];
+    let date = page
+        .lignes
+        .iter()
+        .find(|(_, t)| t.contains("30 octobre 2026"))
+        .expect("date présente");
+    let bas = page.lignes.iter().map(|(y, _)| *y).fold(0.0, f64::max);
+    assert!(
+        bas < 297.0 - 14.0,
+        "ligne la plus basse à {bas:.1} mm : {date:?}"
+    );
+}
+
+/// Un cartouche avec logo et noms longs.
+fn cartouche_long() -> Document {
+    let mut d = document(vec![]);
+    d.cartouche.atelier.logo_png = Some(PNG_1X1.to_vec());
+    d.cartouche.lignes = vec![
+        ("Date".into(), "30 octobre 2026".into()),
+        ("Seuil".into(), "2,0 ΔE00".into()),
+        (
+            "Profil".into(),
+            "Canon-PRO-4100_Hahnemuhle-Photo-Rag-Baryta-315_2400-dpi_2026-10-28.icc".into(),
+        ),
+        (
+            "Papier".into(),
+            "Canon imagePROGRAF PRO-4100 › Hahnemühle Photo Rag Baryta 315 › 2400 × 1200 ppp"
+                .into(),
+        ),
+        (
+            "Image".into(),
+            "Paysage de Bretagne au coucher du soleil version finale.tif, 8256 × 5504 px".into(),
+        ),
+    ];
+    d
 }

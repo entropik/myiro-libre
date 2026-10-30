@@ -259,7 +259,14 @@ impl BibliothequeOuverte {
                 atelier,
                 client: d.client.clone(),
                 objet: d.objet.clone(),
+                // Les lignes courtes d'abord : elles restent lisibles même si
+                // un long nom de fichier resserre la case.
                 lignes: vec![
+                    (tt("rapport.cartouche.date"), jour.texte(langue)),
+                    (
+                        tt("rapport.cartouche.seuil"),
+                        tt("pastilles.ecart").replace("{e}", &s),
+                    ),
                     (tt("rapport.cartouche.profil"), surimpression.nom.clone()),
                     (
                         tt("rapport.cartouche.papier"),
@@ -272,11 +279,6 @@ impl BibliothequeOuverte {
                             .replace("{l}", &r.largeur_origine.to_string())
                             .replace("{h}", &r.hauteur_origine.to_string()),
                     ),
-                    (
-                        tt("rapport.cartouche.seuil"),
-                        tt("pastilles.ecart").replace("{e}", &s),
-                    ),
-                    (tt("rapport.cartouche.date"), jour.texte(langue)),
                 ],
                 numero: numero.into(),
                 titre: tt("rapport.image.titre"),
