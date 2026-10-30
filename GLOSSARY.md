@@ -54,7 +54,7 @@ Géométrie de lecture du MYIRO-1 : une rangée de plages lue en un balayage.
 _Éviter_ : strip, rangée
 
 **Instrument** :
-Un spectrophotomètre précis (modèle, n° de série, micrologiciel), enregistré avec chaque mesure qu'il produit.
+Un spectrophotomètre précis (modèle, n° de série, micrologiciel), enregistré avec chaque mesure qu'il produit. À l'écran, seul son modèle est montré : aucune vue de la page (vue d'une résolution, feuille des mesures, Mesurer) ne montre son n° de série, qui reste dans la provenance des mesures et dans l'export CGATS.
 _Éviter_ : appareil, device, spectro
 
 **Étalonnage** :

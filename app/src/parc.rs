@@ -220,10 +220,13 @@ impl BibliothequeOuverte {
             let Some((i, p, r)) = trouve else {
                 return Ok(None);
             };
+            // Instrument des mesures importées : le modèle seul, jamais le
+            // numéro de série (ticket #84).
             let branche = b
                 .arborescence("")?
                 .into_iter()
-                .find(|br| br.condition.id == condition);
+                .find(|br| br.condition.id == condition)
+                .map(crate::colonne::modeles_seuls);
             let (mesures, importees) =
                 branche.map_or_else(Default::default, |br| (br.mesures, br.importees));
             let origine = match &r.profil {

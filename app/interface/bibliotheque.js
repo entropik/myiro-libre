@@ -49,8 +49,9 @@
     }).format(v); // « negative » : jamais « -0,00 »
   }
 
+  // Le modèle seul : le numéro de série ne quitte jamais Rust (ticket #84).
   function instrument(i) {
-    return `${i.modele} ${t("details.numero")} ${i.numero_serie}`;
+    return i.modele;
   }
 
   function lecture(geometrie, plages) {
@@ -307,9 +308,8 @@
       d.conditions[e].statut !== "inconnue");
     const contenus = presents.map((e) =>
       `${nommer(e)} (${t(d.spectres[e] ? "import.spectre_et_lab" : "import.lab_seul")})`);
-    const instrumentLu = qualifiee(d.instrument, (i) =>
-      d.numero_serie.statut === "inconnue" ? i : `${i} ${t("details.numero")} ${d.numero_serie.valeur}`,
-    "cartouche.inconnu");
+    // Le modèle reconnu seul (« FD-9 »), jamais la ligne INSTRUMENTATION brute.
+    const instrumentLu = qualifiee(d.instrument, (i) => i, "cartouche.inconnu");
     const cellules = [
       cellule("import.origine", t("import.importee")),
       cellule("import.date", qualifiee(d.date, (h) => date(h), "cartouche.inconnue")),

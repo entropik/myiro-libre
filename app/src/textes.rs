@@ -1825,7 +1825,6 @@ const FRANCAIS: Catalogue = &[
     ("details.condition", "Condition d’impression"),
     ("details.lecture", "Lecture"),
     ("details.instruments", "Instruments"),
-    ("details.numero", "n°"),
     ("details.a_confirmer", "à confirmer"),
     ("details.valeurs", "Valeurs Lab"),
     ("details.valeurs.libelle", "Condition de mesure des valeurs"),
@@ -4089,7 +4088,6 @@ const ANGLAIS: Catalogue = &[
     ("details.condition", "Printing condition"),
     ("details.lecture", "Reading"),
     ("details.instruments", "Instruments"),
-    ("details.numero", "No."),
     ("details.a_confirmer", "to be confirmed"),
     ("details.valeurs", "Lab values"),
     (

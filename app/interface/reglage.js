@@ -136,7 +136,8 @@ window.Reglage = (() => {
     return l;
   }
 
-  // Instrument d'un profil calculé : celui que déclare le fichier de la mesure source.
+  // Instrument d'un profil calculé : le modèle que déclare le fichier de la mesure source,
+  // déjà réduit par Rust (« FD-9 »), jamais son numéro de série (ticket #84).
   function instrumentDeclare(d) {
     const source = d.provenance && d.importees.find((m) => m.id === d.provenance.mesure);
     const info = source ? source.instrument : null;
