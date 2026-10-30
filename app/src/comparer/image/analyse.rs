@@ -51,7 +51,7 @@ impl ImageOuverte {
     /// Range les écarts d'une analyse terminée, si elle est encore la
     /// dernière sur la même image ; sinon (ou sans écarts : analyse
     /// arrêtée), elle est caduque.
-    fn terminer(&self, depart: &Depart, ecarts: Option<Vec<Option<Vec<u8>>>>) -> bool {
+    fn terminer(&self, depart: &Depart, ecarts: Option<EcartsRanges>) -> bool {
         let mut etat = self.verrou();
         if etat
             .en_cours
@@ -62,11 +62,8 @@ impl ImageOuverte {
         }
         let derniere = etat.analyses == depart.analyse;
         match (ecarts, etat.image.as_mut()) {
-            (Some(par_profil), Some(image)) if derniere && image.numero == depart.image => {
-                image.ecarts = Some(EcartsRanges {
-                    analyse: depart.analyse,
-                    par_profil,
-                });
+            (Some(ecarts), Some(image)) if derniere && image.numero == depart.image => {
+                image.ecarts = Some(ecarts);
                 true
             }
             _ => false,
@@ -154,7 +151,14 @@ impl BibliothequeOuverte {
             return Err(ANNULEE.to_string());
         };
         let (etats, ecarts): (Vec<_>, Vec<_>) = resultats.into_iter().unzip();
-        if !image.terminer(&depart, Some(ecarts)) {
+        let gardees = EcartsRanges {
+            analyse: depart.analyse,
+            par_profil: ecarts,
+            etats: etats.clone(),
+            sources: sources.to_vec(),
+            rendu,
+        };
+        if !image.terminer(&depart, Some(gardees)) {
             return Err(ANNULEE.to_string());
         }
         Ok(Analyses {

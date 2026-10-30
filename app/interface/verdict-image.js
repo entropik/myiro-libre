@@ -6,6 +6,8 @@
 // pixels à l'écart inconnu sont dits à part, jamais comptés comme bons. Elle s'écrit à 0,1 % près,
 // jamais « 100 » si un seul pixel connu dépasse le seuil, ni « 0 » si un seul est bon. Pendant une
 // analyse relancée sur place, l'ancien verdict reste, atténué. La taille du bloc ne change jamais.
+// Même règle côté Rust pour le rapport PDF (ticket #89) : `phrase_imprimable` dans
+// app/src/comparer/image/rapport/redaction.rs. Les deux doivent rester identiques.
 "use strict";
 
 window.VerdictImage = (() => {

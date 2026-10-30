@@ -650,6 +650,8 @@ pub fn lancer() {
             comparer::image::commandes::image_ecarts,
             comparer::image::commandes::image_annuler,
             comparer::image::commandes::image_pixel,
+            comparer::image::rapport::commandes::image_rapport_exporter,
+            comparer::image::rapport::commandes::rapport_ouvrir_dossier,
             atelier::commandes::atelier_lire,
             atelier::commandes::atelier_logo,
             atelier::commandes::atelier_enregistrer,
