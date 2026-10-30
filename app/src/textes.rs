@@ -2513,17 +2513,21 @@ const FRANCAIS: Catalogue = &[
     // Texte imprimé sur les pages MYIRO-1 (#79), dessiné par la police
     // `font8x8` : ni espace fine insécable (U+202F), ni apostrophe courbe,
     // qui sortiraient en « ? » ; espace insécable U+00A0 à la place.
+    // Lignes 2 et 3 : au plus 67 caractères en A4, à côté du QR code.
     (
         "mire.etiquette.detail",
-        "Mire {taille} · {n} plages · MYIRO-1 · page {page} sur {pages} · {date}",
+        "Mire {taille} · {n} plages · MYIRO-1 · page {page} sur {pages}",
+    ),
+    (
+        "mire.etiquette.detail.libre",
+        "Mire {n} plages · MYIRO-1 · page {page} sur {pages}",
     ),
     ("mire.etiquette.taille.rapide", "rapide"),
     ("mire.etiquette.taille.standard", "standard"),
     ("mire.etiquette.taille.approfondi", "approfondi"),
-    ("mire.etiquette.libre", "{n} plages"),
     (
         "mire.etiquette.consigne",
-        "Imprimer à 100\u{a0}%, sans gestion des couleurs",
+        "{date} · Imprimer à 100\u{a0}%, sans gestion des couleurs",
     ),
     // Même forme que les dates de la page : « 23 oct. 2026 ».
     ("mire.etiquette.date", "{jour} {mois} {annee}"),
@@ -4995,15 +4999,18 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "mire.etiquette.detail",
-        "Chart: {taille} · {n} patches · MYIRO-1 · page {page} of {pages} · {date}",
+        "Chart: {taille} · {n} patches · MYIRO-1 · page {page} of {pages}",
+    ),
+    (
+        "mire.etiquette.detail.libre",
+        "Chart: {n} patches · MYIRO-1 · page {page} of {pages}",
     ),
     ("mire.etiquette.taille.rapide", "quick"),
     ("mire.etiquette.taille.standard", "standard"),
     ("mire.etiquette.taille.approfondi", "thorough"),
-    ("mire.etiquette.libre", "{n} patches"),
     (
         "mire.etiquette.consigne",
-        "Print at 100%, without colour management",
+        "{date} · Print at 100%, no colour management",
     ),
     ("mire.etiquette.date", "{mois} {jour}, {annee}"),
     (

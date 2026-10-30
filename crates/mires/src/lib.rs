@@ -30,8 +30,8 @@ pub use mise_en_page::{
     estimer_lab, mettre_en_page, verifier, Defaut, MiseEnPage, Page, PlagePlacee,
 };
 pub use rendu::{
-    contenu_qr, couper_ligne, dessinable, lire_qr, rendre_page, CodeTirage, Etiquette, ImageRvb,
-    RESOLUTION_PPP,
+    caracteres_par_ligne, contenu_qr, couper_ligne, dessinable, lire_qr, rendre_page, CodeTirage,
+    Etiquette, ImageRvb, RESOLUTION_PPP,
 };
 pub use rgb2520::{
     lire_mire_fd9, lire_mire_fd9_sans_empreinte, GeometrieFd9, MireFd9, RGB2520_EMPREINTE,

@@ -6,7 +6,8 @@
 //!
 //! Le texte imprimé sur les pages suit la langue de l'application au
 //! moment de la préparation (#79) ; cette langue est rangée avec le tirage
-//! et une page redessinée la garde. La langue ne fait pas partie de
+//! et une page redessinée la garde. Une mire rangée avant #79, sans langue,
+//! garde son ancien texte, à l'identique. La langue ne fait pas partie de
 //! l'identité d'une mire : préparer de nouveau la même mire dans une autre
 //! langue la reprend telle quelle, dans sa langue d'origine, sans doublon.
 
@@ -74,10 +75,10 @@ pub(super) fn controler_myiro1(demande: &DemandeMire) -> Result<DemandeMyiro1, S
 /// ([`mires::dessinable`]).
 pub const CLES_ETIQUETTE: &[&str] = &[
     "mire.etiquette.detail",
+    "mire.etiquette.detail.libre",
     "mire.etiquette.taille.rapide",
     "mire.etiquette.taille.standard",
     "mire.etiquette.taille.approfondi",
-    "mire.etiquette.libre",
     "mire.etiquette.consigne",
     "mire.etiquette.date",
     "mire.etiquette.mois",
@@ -122,27 +123,52 @@ fn date_imprimee(horodatage: &str, langue: Langue) -> String {
 }
 
 /// Lignes du texte imprimé sur une page MYIRO-1, dans la langue donnée :
-/// imprimante, papier et résolution ; mire, plages, page et date ; rappel
-/// d'impression.
+/// imprimante, papier et résolution ; mire, plages et page ; date et rappel
+/// d'impression. Les lignes 2 et 3 tiennent en A4 sans être coupées.
 pub fn lignes_etiquette(t: &TexteEtiquette, langue: Langue) -> Vec<String> {
-    let n = t.plages.to_string();
-    let taille = match t.taille {
-        Some(TailleMire::Rapide) => texte(langue, "mire.etiquette.taille.rapide").to_string(),
-        Some(TailleMire::Standard) => texte(langue, "mire.etiquette.taille.standard").to_string(),
-        Some(TailleMire::Approfondi) => {
-            texte(langue, "mire.etiquette.taille.approfondi").to_string()
+    let detail = match t.taille {
+        Some(taille) => {
+            let cle = match taille {
+                TailleMire::Rapide => "mire.etiquette.taille.rapide",
+                TailleMire::Standard => "mire.etiquette.taille.standard",
+                TailleMire::Approfondi => "mire.etiquette.taille.approfondi",
+            };
+            texte(langue, "mire.etiquette.detail").replace("{taille}", texte(langue, cle))
         }
-        None => texte(langue, "mire.etiquette.libre").replace("{n}", &n),
+        None => texte(langue, "mire.etiquette.detail.libre").to_string(),
     };
     vec![
         format!("{} · {} · {}", t.imprimante, t.papier, t.resolution),
-        texte(langue, "mire.etiquette.detail")
-            .replace("{taille}", &taille)
-            .replace("{n}", &n)
+        detail
+            .replace("{n}", &t.plages.to_string())
             .replace("{pages}", &t.pages.to_string())
-            .replace("{page}", &t.page.to_string())
+            .replace("{page}", &t.page.to_string()),
+        texte(langue, "mire.etiquette.consigne")
             .replace("{date}", &date_imprimee(t.horodatage, langue)),
-        texte(langue, "mire.etiquette.consigne").to_string(),
+    ]
+}
+
+/// Texte imprimé sur les pages d'une mire rangée avant le ticket #79, sans
+/// langue : toujours en français, date ISO (« 2026-10-23 »), anciennes
+/// lignes. Figé ici, hors du catalogue, pour qu'une page de ces mires
+/// redessinée soit identique à l'originale.
+fn lignes_avant_79(t: &TexteEtiquette) -> Vec<String> {
+    let mire = match t.taille {
+        Some(TailleMire::Rapide) => "rapide".to_string(),
+        Some(TailleMire::Standard) => "standard".to_string(),
+        Some(TailleMire::Approfondi) => "approfondi".to_string(),
+        None => format!("{} plages", t.plages),
+    };
+    vec![
+        format!("{} · {} · {}", t.imprimante, t.papier, t.resolution),
+        format!(
+            "Mire {mire} · {} plages · MYIRO-1 · page {} sur {} · {}",
+            t.plages,
+            t.page,
+            t.pages,
+            date_de(t.horodatage)
+        ),
+        "Imprimer à 100 %, sans gestion des couleurs".to_string(),
     ]
 }
 
@@ -157,8 +183,9 @@ struct Pages<'a> {
     nombre: usize,
     /// Première préparation, en RFC 3339 : date du nom et du texte des pages.
     horodatage: &'a str,
-    /// Langue du texte imprimé, rangée avec le tirage.
-    langue: Langue,
+    /// Langue du texte imprimé, rangée avec le tirage ; rien pour une mire
+    /// rangée avant le ticket #79, qui garde son ancien texte.
+    langue: Option<Langue>,
 }
 
 impl Pages<'_> {
@@ -195,7 +222,10 @@ impl Pages<'_> {
             horodatage: self.horodatage,
         };
         let etiquette = Etiquette {
-            lignes: lignes_etiquette(&texte, self.langue),
+            lignes: match self.langue {
+                Some(langue) => lignes_etiquette(&texte, langue),
+                None => lignes_avant_79(&texte),
+            },
             code: contenu_qr(&CodeTirage {
                 tirage: tirage.0,
                 page: k,
@@ -231,13 +261,13 @@ fn memes_reglages(mire: &MireRangee, d: &DemandeMyiro1) -> bool {
         && gabarit.as_ref() == Some(&d.gabarit)
 }
 
-/// Langue du texte imprimé, rangée dans le JSON `generation` du tirage ; une
-/// mire rangée avant le ticket #79, sans langue, est en français.
-fn langue_rangee(generation: &str) -> Langue {
+/// Langue du texte imprimé, rangée dans le JSON `generation` du tirage ;
+/// rien pour une mire rangée avant le ticket #79, qui garde alors son
+/// ancien texte, en français.
+fn langue_rangee(generation: &str) -> Option<Langue> {
     serde_json::from_str::<serde_json::Value>(generation)
         .ok()
         .and_then(|g| Langue::depuis_code(g.get("langue")?.as_str()?))
-        .unwrap_or(Langue::Francais)
 }
 
 impl BibliothequeOuverte {
@@ -311,7 +341,7 @@ impl BibliothequeOuverte {
             taille: d.taille,
             nombre: d.nombre,
             horodatage: &horodatage,
-            langue,
+            langue: Some(langue),
         };
         let nouvelle = NouvelleMire {
             nom: &nom,
@@ -351,7 +381,8 @@ impl BibliothequeOuverte {
 /// effacées à la main sont redessinées à l'identique, sous le même numéro,
 /// à partir des valeurs, de la mise en page et de la langue rangées : le
 /// texte imprimé reste celui d'origine, même si l'application a changé de
-/// langue entre-temps.
+/// langue entre-temps. Une mire rangée avant le ticket #79, sans langue,
+/// garde son ancien texte (français, date ISO, anciennes lignes).
 fn reprendre(
     t: TiragePrepare,
     d: &DemandeMyiro1,
