@@ -189,9 +189,7 @@ pub fn source_typst(d: &Document) -> SourceTypst {
         None => "none".into(),
     };
     // Le gabarit peut avoir été extrait avec des fins de ligne Windows.
-    let mut s = GABARIT.replace("
-", "
-");
+    let mut s = GABARIT.replace("\r\n", "\n");
     s.push('\n');
     s.push_str(SEPARATION);
     let _ = writeln!(
