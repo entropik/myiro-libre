@@ -109,6 +109,9 @@ fn bloc(s: &mut String, b: &Bloc, fichiers: &mut Fichiers) {
         ),
         Bloc::Paragraphe(t) => writeln!(s, "#paragraphe({})", chaine_typst(t)),
         Bloc::Couples(c) => writeln!(s, "#couples({})", liste(c, couple)),
+        // Un tableau sans colonne ne se met pas en page : il est laissé de
+        // côté plutôt que d'arrêter tout le rapport.
+        Bloc::Tableau { entetes, .. } if entetes.is_empty() => Ok(()),
         Bloc::Tableau {
             entetes,
             lignes,

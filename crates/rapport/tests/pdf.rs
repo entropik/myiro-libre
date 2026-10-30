@@ -201,3 +201,21 @@ fn cartouche_long() -> Document {
     ];
     d
 }
+
+/// Un tableau sans colonne n'arrête pas le rapport : il est laissé de côté.
+#[test]
+fn un_tableau_sans_colonne_n_arrete_pas_le_rapport() {
+    let d = document(vec![Section {
+        titre: "x".into(),
+        blocs: vec![
+            Bloc::Tableau {
+                entetes: vec![],
+                lignes: vec![vec!["a".into()]],
+                nombres: vec![],
+            },
+            Bloc::Paragraphe("après le tableau".into()),
+        ],
+    }]);
+    let p = rendre(&d);
+    assert!(p.pages[0].texte.contains("après le tableau"));
+}
