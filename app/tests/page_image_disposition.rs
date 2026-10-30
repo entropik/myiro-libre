@@ -100,10 +100,10 @@ fn la_section_image_a_deux_colonnes_qui_s_empilent_si_elle_est_etroite() {
         "{cadre}"
     );
     assert!(ligne_css(&css, ".surimpression {").contains("object-fit: contain;"));
-    // Pastilles en deux ou trois colonnes dans un panneau de 320 à 380 px.
+    // Pastilles en trois colonnes dans un panneau de 320 à 380 px.
     let grille = ligne_css(&css, ".pastilles {");
     assert!(
-        grille.contains("minmax(calc(var(--space-12) * 2 + var(--rule) * 2), 1fr)"),
+        grille.contains("grid-template-columns: repeat(3, minmax(0, 1fr));"),
         "{grille}"
     );
     let kit = lire("../design-system/ui-kit.html");
@@ -176,19 +176,19 @@ fn la_compensation_du_point_noir_se_regle_et_se_rappelle() {
     assert!(image.contains("let pointNoir = true;"));
     let changer = corps(&image, "function changerPointNoir(coche) {");
     assert!(changer.contains("pointNoir = coche;"), "{changer}");
-    assert!(changer.contains("analyser();"), "{changer}");
+    assert!(changer.contains("recalculer();"), "{changer}");
     assert!(image.contains("invoke(\"image_analyser\", { sources, compensation: pointNoir })"));
     let fermer = corps(&image, "function fermer() {");
-    assert!(fermer.contains("\"les_deux\", true]"), "{fermer}");
+    assert!(fermer.contains("\"les_deux\", true, true]"), "{fermer}");
     let calque = corps(&image, "function calque() {");
     assert!(
-        calque.contains("t(pointNoir ? \"image.legende.point_noir\" : \"image.legende\")"),
+        calque.contains("t(compense ? \"image.legende.point_noir\" : \"image.legende\")"),
         "{calque}"
     );
     let surimpression = corps(&image, "function surimpression() {");
     assert!(surimpression.contains("R.pointNoir(pointNoir, changerPointNoir)"));
     assert!(surimpression
-        .contains("t(pointNoir ? \"image.rendu.point_noir\" : \"image.rendu.relatif\")"));
+        .contains("t(compense ? \"image.rendu.point_noir\" : \"image.rendu.relatif\")"));
     let dessiner = corps(&image, "function dessiner() {");
     assert!(
         dessiner.contains("document.getElementById(focus)?.focus();"),
@@ -252,4 +252,220 @@ fn les_textes_de_l_image_agrandie_et_du_point_noir_existent_en_deux_langues() {
         let visee = texte(langue, "pastilles.pipette.visee");
         assert!(visee.contains("{lab}") && visee.contains("{e}"), "{visee}");
     }
+}
+
+/// « NE JAMAIS BOUGER l'UI » (mainteneur, 30 octobre 2026) : changer la case
+/// du point noir relance l'analyse sur place (`recalculer`), sans la
+/// fonction qui reconstruit la section ; les anciennes valeurs restent,
+/// atténuées, jusqu'aux nouvelles. Le seuil, le profil et l'affichage ne
+/// font que des mises à jour ciblées. Le point cliqué redemandé garde
+/// l'ancienne paire en place jusqu'à la nouvelle.
+#[test]
+fn changer_un_reglage_met_a_jour_sur_place_sans_redessiner_la_section() {
+    let image = lire("interface/comparer-image.js");
+    let changer = corps(&image, "function changerPointNoir(coche) {");
+    assert!(changer.contains("recalculer();"), "{changer}");
+    assert!(
+        !changer.contains("dessiner(") && !changer.contains("analyser("),
+        "{changer}"
+    );
+    let recalculer = corps(&image, "async function recalculer() {");
+    for attendu in [
+        "etatCalcul.etat(\"calcul\");",
+        "choisirProfil(choisi);",
+        "dessinerChiffres();",
+        "window.PastillesImage.reprendre();",
+    ] {
+        assert!(recalculer.contains(attendu), "{attendu} :\n{recalculer}");
+    }
+    for interdit in ["dessiner();", "replaceChildren", "surimpression("] {
+        assert!(!recalculer.contains(interdit), "{interdit} :\n{recalculer}");
+    }
+    for entete in [
+        "function changerSeuil(valeur) {",
+        "function choisirProfil(rang) {",
+    ] {
+        let corps = corps(&image, entete);
+        assert!(!corps.contains("dessiner();"), "{entete} :\n{corps}");
+    }
+    assert!(image.contains("R.affichage(affichage, (v) => { affichage = v; calque(); })"));
+    let pastilles = lire("interface/pastilles-image.js");
+    let reprendre = corps(&pastilles, "function reprendre() {");
+    assert!(!reprendre.contains("pixel = null"), "{reprendre}");
+    let css = lire("../design-system/components.css");
+    assert!(css.contains(
+        ".image-comparee__panneau--recalcul .image-comparee__resultats { opacity: .45; }"
+    ));
+}
+
+/// Disposition figée : barre de la légende, état de l'analyse, point cliqué,
+/// texte de lecture, chiffres et ligne du rendu ont une hauteur fixe ; la
+/// grille des pastilles a toujours ses 12 emplacements (3 × 4, rangées de
+/// hauteur fixe), vides s'il y a moins de couleurs, la phrase « aucune » ou
+/// la raison d'un profil inconnu posée par-dessus. L'état de l'analyse
+/// s'affiche à sa place gardée (visibilité seulement), jamais inséré.
+#[test]
+fn la_mise_en_page_garde_ses_emplacements_reserves() {
+    let css = lire("../design-system/components.css");
+    let attendus: [(&str, &[&str]); 10] = [
+        (
+            ".pastilles {",
+            &[
+                "grid-template-columns: repeat(3, minmax(0, 1fr));",
+                "grid-template-rows: repeat(4, calc(var(--space-12) * 2));",
+            ],
+        ),
+        (
+            ".pastilles-pipette {",
+            &["height: calc(var(--space-24) * 2.75);", "overflow: hidden;"],
+        ),
+        (
+            ".pastilles-lecture {",
+            &["height: calc(3em * var(--leading-normal));"],
+        ),
+        (
+            ".recalcul {",
+            &["height: var(--space-12);", "visibility: hidden;"],
+        ),
+        (".recalcul--actif {", &["visibility: visible;"]),
+        (
+            ".image-comparee__barre {",
+            &["flex-wrap: nowrap;", "height: var(--space-12);"],
+        ),
+        (
+            ".image-comparee__rendu {",
+            &["height: calc(2em * var(--leading-normal));"],
+        ),
+        (".chiffres-image table {", &["table-layout: fixed;"]),
+        (
+            ".chiffres-image__cellule {",
+            &[
+                "height: calc(var(--lignes, 1) * 1em * var(--leading-normal));",
+                "overflow: hidden;",
+            ],
+        ),
+        (
+            ".pastilles__message {",
+            &["position: absolute;", "inset: 0;"],
+        ),
+    ];
+    for (selecteur, valeurs) in attendus {
+        let ligne = ligne_css(&css, selecteur);
+        for attendu in valeurs {
+            assert!(ligne.contains(attendu), "{selecteur} : {attendu} : {ligne}");
+        }
+    }
+
+    let pastilles = lire("interface/pastilles-image.js");
+    assert!(pastilles.contains("const AFFICHEES = 12;"));
+    let grille = corps(&pastilles, "function grille() {");
+    for attendu in [
+        "for (let i = 0; i < AFFICHEES; i++) {",
+        ": vide());",
+        "el(\"p\", \"pastilles__message\")",
+        "t(\"pastilles.aucune\")",
+    ] {
+        assert!(grille.contains(attendu), "{attendu} :\n{grille}");
+    }
+    let pipette = corps(&pastilles, "function pipette() {");
+    let bloc = pipette
+        .find("el(\"div\", \"pastilles-pipette\")")
+        .unwrap_or(usize::MAX);
+    let aide = pipette.find("t(\"pastilles.pipette.aide\")").unwrap_or(0);
+    assert!(
+        bloc < aide,
+        "bloc du point cliqué présent même vide :\n{pipette}"
+    );
+    let ecrire = corps(&pastilles, "function ecrire() {");
+    assert!(
+        ecrire.contains("pipette(),") && ecrire.contains("grille(),"),
+        "{ecrire}"
+    );
+    assert!(!ecrire.contains("if (analyse)"), "{ecrire}");
+
+    let image = lire("interface/comparer-image.js");
+    assert!(image.contains("const LIGNES = [3, 2, 2, 2, 3, 3, 2, 3];"));
+    let chiffres = corps(&image, "function dessinerChiffres() {");
+    for attendu in [
+        "[...Array(7)]",
+        "[...cles, \"image.chiffres.raison\"]",
+        "cellule(v, LIGNES[i])",
+    ] {
+        assert!(chiffres.contains(attendu), "{attendu} :\n{chiffres}");
+    }
+    let surimpression = corps(&image, "function surimpression() {");
+    assert!(
+        !surimpression.contains("if (analyses)"),
+        "chiffres toujours là :\n{surimpression}"
+    );
+    let dessiner = corps(&image, "function dessiner() {");
+    for attendu in [
+        "if (enCours && !avecPanneau)",
+        "if (message && !avecPanneau)",
+        "etatCalcul.etat(enCours ? \"calcul\" : relancer ? \"relancer\" : \"repos\", message);",
+    ] {
+        assert!(dessiner.contains(attendu), "{attendu} :\n{dessiner}");
+    }
+    let reglages = lire("interface/reglages-image.js");
+    let etat = corps(
+        &reglages,
+        "function etatCalcul(panneau, annuler, relancer) {",
+    );
+    for attendu in [
+        "classList.toggle(\"recalcul--actif\"",
+        "setAttribute(\"aria-busy\"",
+        "t(\"image.en_cours\")",
+    ] {
+        assert!(etat.contains(attendu), "{attendu} :\n{etat}");
+    }
+}
+
+/// Une photo en paysage remplit la largeur de sa colonne tant que sa
+/// hauteur reste sous 70 % de la fenêtre ; au-delà, la colonne de l'image se
+/// resserre à la largeur de la photo (70 % × proportions) et le panneau la
+/// suit : le reste de la largeur est après le panneau, jamais entre les deux.
+#[test]
+fn la_colonne_de_l_image_prend_la_largeur_de_la_photo() {
+    let css = lire("../design-system/components.css");
+    let colonnes = ligne_css(&css, ".image-comparee__colonnes {");
+    for attendu in [
+        "grid-template-columns: minmax(0, calc(var(--hauteur-image) * var(--ratio, 1.5))) clamp(320px, 32%, 380px);",
+        "justify-content: start;",
+    ] {
+        assert!(colonnes.contains(attendu), "{attendu} : {colonnes}");
+    }
+    assert!(
+        ligne_css(&css, ".pipette > .surimpression {").contains("aspect-ratio: var(--ratio, 1.5);")
+    );
+    let image = lire("interface/comparer-image.js");
+    let surimpression = corps(&image, "function surimpression() {");
+    assert!(
+        surimpression.contains("colonnes.style.setProperty(\"--ratio\", "),
+        "{surimpression}"
+    );
+}
+
+/// Les jetons des ascenseurs : épaisseur et longueur minimale de la poignée,
+/// communes ; piste, poignée et survol dans chacun des deux thèmes. Le
+/// système graphique les montre et les explique.
+#[test]
+fn les_jetons_d_ascenseur_existent_dans_les_deux_themes() {
+    let jetons = lire("../design-system/tokens.css");
+    let (sombre, reste) = jetons
+        .split_once(":root[data-theme=\"light\"]")
+        .expect("thème clair");
+    let clair = &reste[..reste.find('}').unwrap_or(reste.len())];
+    for bloc in [sombre, clair] {
+        for jeton in [
+            "--ascenseur-piste:",
+            "--ascenseur-poignee:",
+            "--ascenseur-poignee-survol:",
+        ] {
+            assert!(bloc.contains(jeton), "{jeton} absent d'un thème");
+        }
+    }
+    assert!(jetons.contains("--ascenseur: 14px;"));
+    assert!(jetons.contains("--ascenseur-longueur-min: 40px;"));
+    assert!(lire("../design-system/ui-kit.html").contains("--ascenseur"));
+    assert!(lire("../design-system/README.md").contains("--ascenseur"));
 }

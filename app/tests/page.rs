@@ -237,17 +237,40 @@ fn un_nom_long_de_l_arbre_se_lit_au_survol() {
     }
 }
 
-/// Toutes les barres de défilement sont fines, partout.
+/// Les ascenseurs sont larges partout (demande du mainteneur, 30 octobre
+/// 2026) : jeton `--ascenseur`, pseudo-éléments `::-webkit-scrollbar` (le
+/// moteur de la fenêtre) avec une poignée d'au moins
+/// `--ascenseur-longueur-min`, et `scrollbar-width` laissé aux autres
+/// moteurs seulement (posé, il ferait ignorer les pseudo-éléments). Plus
+/// aucun ascenseur fin.
 #[test]
-fn toutes_les_barres_de_defilement_sont_fines() {
+fn les_ascenseurs_sont_larges_partout() {
     let css = composants();
-    assert!(
-        regle(&css, "*")
-            .iter()
-            .any(|c| c.contains("scrollbar-width:thin")),
-        "pas de règle universelle"
-    );
-    assert!(css.iter().all(|(_, c)| !c.contains("scrollbar-width:auto")));
+    let barre = regle(&css, "::-webkit-scrollbar").join(";");
+    for attendu in ["width:var(--ascenseur)", "height:var(--ascenseur)"] {
+        assert!(barre.contains(attendu), "{attendu} : {barre}");
+    }
+    let poignee = regle(&css, "::-webkit-scrollbar-thumb").join(";");
+    for attendu in [
+        "background:var(--ascenseur-poignee)",
+        "min-height:var(--ascenseur-longueur-min)",
+    ] {
+        assert!(poignee.contains(attendu), "{attendu} : {poignee}");
+    }
+    assert!(regle(&css, "::-webkit-scrollbar-track")
+        .iter()
+        .any(|c| c.contains("background:var(--ascenseur-piste)")));
+    assert!(css.iter().all(|(_, c)| !c.contains("scrollbar-width:thin")));
+    let brut = lire("../design-system/components.css");
+    assert!(brut.contains("@supports not selector(::-webkit-scrollbar) {"));
+    for zone in [".zone-centre", ".defile"] {
+        assert!(
+            regle(&css, zone)
+                .iter()
+                .any(|c| c.contains("scrollbar-gutter:stable")),
+            "{zone} sans place gardée"
+        );
+    }
 }
 
 /// Un nœud de l'arbre de la bibliothèque tient sur deux lignes au plus (nom,
@@ -2426,7 +2449,7 @@ fn la_section_image_ne_garde_rien_de_perime() {
     assert!(!choisir.contains("dessiner()"), "{choisir}");
     let fermer = corps_de(&script, "function fermer() {");
     assert!(
-        fermer.contains("canvas = legende = tableauChiffres = avisInconnu = null;"),
+        fermer.contains("canvas = legende = tableauChiffres = null;"),
         "{fermer}"
     );
     let calque = corps_de(&script, "function calque() {");

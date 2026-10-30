@@ -2,7 +2,7 @@
 // profil de la surimpression, seuil d'alerte, affichage et compensation du point noir. Chaque
 // fonction rend un champ et appelle la fonction donnée quand l'opérateur change le réglage ;
 // comparer-image.js garde les valeurs. Le seuil, le profil et l'affichage ne relancent aucune
-// commande ; la compensation du point noir relance l'analyse (annulable).
+// commande ; la compensation du point noir relance l'analyse (annulable), sur place.
 "use strict";
 
 window.ReglagesImage = (() => {
@@ -76,5 +76,28 @@ window.ReglagesImage = (() => {
     return champ;
   }
 
-  return { profil, seuil, affichage, pointNoir };
+  // État de l'analyse, à une place gardée du panneau (seule sa visibilité change : la mise en page ne
+  // bouge pas). « calcul » : « Analyse en cours… » et « Annuler », les anciens résultats atténués ;
+  // « relancer » : la raison (annulée, erreur) et « Relancer l'analyse » ; « repos » : rien.
+  function etatCalcul(panneau, annuler, relancer) {
+    const bloc = el("div", "recalcul");
+    const texte = el("p", "why");
+    texte.setAttribute("role", "status");
+    const b = el("button", "btn");
+    let action = annuler;
+    b.addEventListener("click", () => action());
+    bloc.append(texte, b);
+    function etat(mode, message = "") {
+      texte.textContent = mode === "calcul" ? t("image.en_cours") : message;
+      b.textContent = t(mode === "relancer" ? "image.relancer" : "image.annuler");
+      action = mode === "relancer" ? relancer : annuler;
+      bloc.classList.toggle("recalcul--actif", mode !== "repos");
+      panneau.classList.toggle("image-comparee__panneau--recalcul", mode === "calcul");
+      panneau.setAttribute("aria-busy", String(mode === "calcul"));
+    }
+    etat("repos");
+    return { bloc, etat };
+  }
+
+  return { profil, seuil, affichage, pointNoir, etatCalcul };
 })();

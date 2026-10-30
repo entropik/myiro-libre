@@ -5,8 +5,19 @@
 /* ---- Base ---- */
 html { font-optical-sizing: auto; -webkit-text-size-adjust: 100%; }
 *, *::before, *::after { box-sizing: border-box; }
-/* Barres de défilement fines partout, jamais l'ascenseur épais du système. */
-* { scrollbar-width: thin; scrollbar-color: var(--filet) transparent; }
+/* Ascenseurs larges partout (--ascenseur), piste visible, poignée contrastée d'au moins
+   --ascenseur-longueur-min, angles droits, sans ombre. Moteur de la fenêtre (Chromium) : pseudo-
+   éléments ::-webkit-scrollbar, qu'il ignore si scrollbar-width ou scrollbar-color est posé ; les
+   autres moteurs reçoivent scrollbar-width et scrollbar-color. Les zones qui défilent gardent la
+   place de l'ascenseur (scrollbar-gutter: stable) : son apparition ne fait rien bouger. */
+::-webkit-scrollbar { width: var(--ascenseur); height: var(--ascenseur); background: var(--ascenseur-piste); }
+::-webkit-scrollbar-track { background: var(--ascenseur-piste); }
+::-webkit-scrollbar-thumb { background: var(--ascenseur-poignee); border: 3px solid var(--ascenseur-piste); min-height: var(--ascenseur-longueur-min); min-width: var(--ascenseur-longueur-min); }
+::-webkit-scrollbar-thumb:hover { background: var(--ascenseur-poignee-survol); }
+::-webkit-scrollbar-corner { background: var(--ascenseur-piste); }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: auto; scrollbar-color: var(--ascenseur-poignee) var(--ascenseur-piste); }
+}
 body {
   margin: 0; background: var(--fond); color: var(--encre);
   font-family: var(--font-body); font-size: var(--text-base); line-height: var(--leading-normal);
@@ -68,7 +79,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .pastille--en-mesure { background: transparent; border-color: var(--accent); }
 
 .zones { display: grid; grid-template-columns: 270px minmax(0, 1fr) 300px; min-height: 0; }
-.zone-gauche, .zone-centre, .zone-droite { min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; }
+.zone-gauche, .zone-centre, .zone-droite { min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
 .zone-gauche { background: var(--panneau); border-right: var(--rule) solid var(--filet); padding-bottom: var(--space-6); }
 .zone-centre { padding: var(--space-6) var(--space-8); }
 .zone-droite { background: var(--panneau); border-left: var(--rule) solid var(--filet); padding-bottom: var(--space-6); }
@@ -327,7 +338,7 @@ select.input option { background: var(--panneau); color: var(--encre); }
 .feuille__actions > .notice { margin: var(--space-3) 0 0; }
 .feuille__actions > .replie { margin-top: var(--space-3); }
 .feuille__actions > .replie p + p { margin-top: var(--space-2); }
-.defile { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--filet) transparent; }
+.defile { overflow-y: auto; scrollbar-gutter: stable; }
 .defile thead th { position: sticky; top: 0; background: var(--fond); }
 .table--compact td { padding-top: var(--space-1); padding-bottom: var(--space-1); font-size: var(--text-base); line-height: var(--leading-snug); }
 /* La feuille remplit le centre : la barre reste en haut, le tableau prend le reste. */
@@ -389,11 +400,25 @@ select.input option { background: var(--panneau); color: var(--encre); }
    L'image entière ne dépasse pas 70 % de la hauteur de la fenêtre (--hauteur-image). Quand la
    section a moins de 760 px de large, les deux colonnes s'empilent et l'image passe à 50 %. */
 .image-comparee { container-type: inline-size; }
-.image-comparee__colonnes { display: grid; grid-template-columns: minmax(0, 1fr) clamp(320px, 32%, 380px); gap: var(--space-6); align-items: start; --hauteur-image: 70vh; }
+.image-comparee__colonnes { display: grid; grid-template-columns: minmax(0, calc(var(--hauteur-image) * var(--ratio, 1.5))) clamp(320px, 32%, 380px); justify-content: start; gap: var(--space-6); align-items: start; --hauteur-image: 70vh; }
 .image-comparee__image { min-width: 0; }
-.image-comparee__barre { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-2); }
-.image-comparee__panneau { position: sticky; top: 0; min-width: 0; max-height: calc(100vh - var(--space-16) - var(--space-12)); overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--filet) transparent; }
-.image-comparee__panneau > .why { margin-top: var(--space-2); }
+.image-comparee__barre { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: var(--space-3); height: var(--space-12); margin-bottom: var(--space-2); }
+.image-comparee__barre > .legende-alerte { flex: 1; min-width: 0; }
+.image-comparee__barre > .btn { flex: none; }
+/* Deux lignes au plus, coupées : la légende ne change jamais la hauteur de la barre. */
+.legende-alerte > span:last-child { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.image-comparee__panneau { position: sticky; top: 0; min-width: 0; max-height: calc(100vh - var(--space-16) - var(--space-12)); overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
+/* Emplacements réservés du panneau : aucun changement de valeur ne change une taille. « Analyse en
+   cours… », « Annuler » ou « Relancer » à une place gardée, visible seulement quand il le faut ;
+   pendant une analyse relancée, les anciens résultats restent, atténués. */
+.recalcul { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); height: var(--space-12); margin-top: var(--space-2); visibility: hidden; }
+.recalcul--actif { visibility: visible; }
+.recalcul > p { margin: 0; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.recalcul > .btn { flex: none; }
+.image-comparee__panneau--recalcul .image-comparee__resultats { opacity: .45; }
+.image-comparee__rendu { height: calc(2em * var(--leading-normal)); overflow: hidden; }
+.chiffres-image table { table-layout: fixed; width: 100%; }
+.chiffres-image__cellule { height: calc(var(--lignes, 1) * 1em * var(--leading-normal)); overflow: hidden; }
 @container (max-width: 760px) {
   .image-comparee__colonnes { grid-template-columns: minmax(0, 1fr); --hauteur-image: 50vh; }
   .image-comparee__panneau { position: static; max-height: none; overflow: visible; }
@@ -402,25 +427,36 @@ select.input option { background: var(--panneau); color: var(--encre); }
    sous --hauteur-image. Le point cliqué est un carré à l'encre bordé du fond, lisible sur une photo
    claire comme sombre ; placé par la page en fraction de l'image (--x, --y), le filet compris. */
 .pipette { position: relative; width: min(100%, calc(var(--hauteur-image, 70vh) * var(--ratio, 1.5))); }
+.pipette > .surimpression { aspect-ratio: var(--ratio, 1.5); }
 .pipette__repere { position: absolute; left: calc(var(--rule) + (100% - 2 * var(--rule)) * var(--x, 0)); top: calc(var(--rule) + (100% - 2 * var(--rule)) * var(--y, 0)); width: var(--space-4); height: var(--space-4); transform: translate(-50%, -50%); border: var(--rule-strong) solid var(--encre); outline: var(--rule-strong) solid var(--fond); pointer-events: none; }
 /* Pastilles des couleurs hors gamut, sous l'image : couleur de l'image à gauche, couleur imprimée à
    droite, à bords francs dans un seul filet. La couleur (--c) vient de la page, contrôlée ; sans elle,
    la carte. */
 .pastilles-section { margin-top: var(--space-4); }
 .pastilles-section > * + * { margin-top: var(--space-2); }
-.pastilles { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--space-12) * 2 + var(--rule) * 2), 1fr)); gap: var(--space-3); }
-.paire { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+/* Le point cliqué a un bloc de hauteur fixe, présent même vide ; les pastilles ont toujours leurs
+   12 emplacements (3 × 4, à hauteur fixe), vides s'il y a moins de couleurs, et la phrase « aucune »
+   ou la raison d'un profil inconnu se posent par-dessus. */
+.pastilles-pipette { height: calc(var(--space-24) * 2.75); overflow: hidden; }
+.pastilles-lecture { height: calc(3em * var(--leading-normal)); overflow: hidden; }
+.pastilles { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(4, calc(var(--space-12) * 2)); gap: var(--space-3); }
+.pastilles .paire__couleurs { width: 100%; }
+.pastilles .pastille-couleur { flex: 1; width: auto; }
+.paire--vide .pastille-couleur { background: var(--carte); }
+.pastilles__message { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-4); text-align: center; background: var(--fond); }
+.pastilles__message:empty { display: none; }
+.paire { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
 .paire__couleurs { display: flex; width: fit-content; border: var(--rule) solid var(--filet); }
 .pastille-couleur { display: block; width: var(--space-12); height: var(--space-12); background: var(--c, var(--carte)); }
 .paire--pipette .pastille-couleur { width: var(--space-16); height: var(--space-16); }
 .paire__noms { display: flex; gap: var(--space-4); }
 .paire__noms > span { display: flex; flex-direction: column; }
-.paire__texte { color: var(--attenue); }
+.paire__texte { color: var(--attenue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .paire__visee { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); margin-top: var(--space-2); }
 .paire__visee .pastille-couleur { flex: none; width: var(--space-6); height: var(--space-6); border: var(--rule) solid var(--filet); }
 /* Image agrandie : fenêtre modale sur toute la fenêtre, fond plein du thème, sans ombre ; l'image
    entière y tient sous la barre « Fermer » et la paire du point cliqué. */
-.agrandie { width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: var(--space-6); border: 0; background: var(--fond); color: var(--encre); overflow: auto; }
+.agrandie { width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: var(--space-6); border: 0; background: var(--fond); color: var(--encre); overflow: auto; scrollbar-gutter: stable; }
 .agrandie[open] { display: flex; flex-direction: column; gap: var(--space-3); }
 .agrandie::backdrop { background: var(--fond); }
 .agrandie__barre { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }

@@ -27,6 +27,7 @@ window.PastillesImage = (() => {
   let seuil = 2;
   let rang = 0; // rang de ce profil parmi les profils analysés
   let nom = ""; // nom de ce profil
+  let avis = ""; // raison d'un profil inconnu, posée à la place des pastilles
   let pixel = null; // dernier point cliqué : PixelImage, avec la taille de l'image d'analyse
   let dernier = null; // { point, largeur, hauteur } du dernier clic, pour le redemander
   let demandeur = () => ({}); // sources et compensation de l'analyse affichée (comparer-image.js)
@@ -36,8 +37,8 @@ window.PastillesImage = (() => {
   let repere = null; // repère du point cliqué sur l'image affichée
 
   // L'analyse, le seuil ou le profil de la surimpression a changé (comparer-image.js).
-  function changer(nouvelle, nouveauSeuil, nouveauRang, nouveauNom) {
-    [analyse, seuil, rang, nom] = [nouvelle, nouveauSeuil, nouveauRang, nouveauNom];
+  function changer(nouvelle, nouveauSeuil, nouveauRang, nouveauNom, nouvelAvis = "") {
+    [analyse, seuil, rang, nom, avis] = [nouvelle, nouveauSeuil, nouveauRang, nouveauNom, nouvelAvis];
     ecrire();
   }
 
@@ -49,12 +50,10 @@ window.PastillesImage = (() => {
     ecrire();
   }
 
-  // Une nouvelle analyse (autres profils, compensation changée) : le point cliqué est redemandé.
+  // Une nouvelle analyse (autres profils, compensation changée) : le point cliqué est redemandé ;
+  // l'ancienne paire reste en place jusqu'à la nouvelle, pour que rien ne bouge.
   function reprendre() {
     if (!dernier) return oublier();
-    pixel = null;
-    placer();
-    ecrire();
     demanderPixel(dernier);
   }
 
@@ -143,24 +142,43 @@ window.PastillesImage = (() => {
     return connus ? (p.pixels / connus) * 100 : null;
   }
 
+  // Les 12 emplacements sont toujours là (vides s'il y a moins de couleurs) ; la phrase « aucune », ou
+  // la raison d'un profil inconnu, se pose par-dessus : la grille ne change jamais de taille.
   function grille() {
-    const choisies = (analyse.pastilles || []).filter((p) => p.code >= code(seuil)).slice(0, AFFICHEES);
-    if (!choisies.length) {
-      return [el("p", "", t("pastilles.aucune").replace("{s}", () => nombre(seuil, 1)).replace("{profil}", () => nom))];
-    }
+    const choisies = analyse ? (analyse.pastilles || []).filter((p) => p.code >= code(seuil)).slice(0, AFFICHEES) : [];
     const liste = el("div", "pastilles");
-    for (const p of choisies) {
-      liste.append(paire(p, [ecart(p), t("pastilles.part").replace("{p}", () => nombre(part(p), 1))]));
+    for (let i = 0; i < AFFICHEES; i++) {
+      const p = choisies[i];
+      liste.append(p ? paire(p, [ecart(p), t("pastilles.part").replace("{p}", () => nombre(part(p), 1))]) : vide());
     }
-    return [el("p", "", t("pastilles.lecture").replace("{profil}", () => nom)), liste];
+    const message = el("p", "pastilles__message");
+    if (analyse && !choisies.length) {
+      message.textContent = t("pastilles.aucune").replace("{s}", () => nombre(seuil, 1)).replace("{profil}", () => nom);
+    } else if (!analyse) message.textContent = avis;
+    liste.append(message);
+    return liste;
+  }
+
+  // Un emplacement vide : deux carrés à la couleur de la carte, sans texte.
+  function vide() {
+    const bloc = el("div", "paire paire--vide");
+    bloc.setAttribute("aria-hidden", "true");
+    const couleurs = el("div", "paire__couleurs");
+    couleurs.append(el("span", "pastille-couleur"), el("span", "pastille-couleur"));
+    bloc.append(couleurs);
+    return bloc;
   }
 
   // ---- Le point cliqué, pour le profil de la surimpression ----
+  // Bloc de hauteur fixe, présent même vide : « Cliquez dans l'image… » tant qu'aucun point n'est choisi.
   function pipette() {
     const etat = pixel ? pixel.profils[rang] : null;
-    if (!etat) return el("p", "why", t("pastilles.pipette.aide"));
-    const bloc = el("div", "pipette-resultat");
+    const bloc = el("div", "pastilles-pipette");
     bloc.append(el("span", "label", t("pastilles.pipette.titre")));
+    if (!etat) {
+      bloc.append(el("p", "why", t("pastilles.pipette.aide")));
+      return bloc;
+    }
     if (etat.etat !== "calcule") {
       bloc.append(el("p", "why", t("pastilles.pipette.inconnu").replace("{profil}", () => nom)
         .replace("{raison}", () => texteRefus(etat))));
@@ -202,9 +220,8 @@ window.PastillesImage = (() => {
   function ecrire() {
     if (zoneAgrandie) zoneAgrandie.replaceChildren(pipette());
     if (!racine) return;
-    const contenu = [el("span", "label", t("pastilles.titre")), pipette()];
-    if (analyse) contenu.push(...grille());
-    contenu.push(el("p", "why", t("pastilles.precaution")));
+    const contenu = [el("span", "label", t("pastilles.titre")), pipette(),
+      el("p", "pastilles-lecture", t("pastilles.lecture")), grille(), el("p", "why", t("pastilles.precaution"))];
     racine.replaceChildren(...contenu);
   }
 

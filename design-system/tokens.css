@@ -39,6 +39,11 @@
   --couleur-hors-gamut:        #39ff14;
   --couleur-hors-gamut-calque: #39ff14;
   --couleur-hors-gamut-fond:   #10141c;
+  /* Ascenseurs : piste au filet, poignée atténuée (contraste au-dessus de 3 : 1 face à la piste),
+     encre au survol. */
+  --ascenseur-piste:          var(--filet);
+  --ascenseur-poignee:        var(--attenue);
+  --ascenseur-poignee-survol: var(--encre);
   color-scheme: dark;
 }
 
@@ -67,6 +72,9 @@
   --couleur-hors-gamut:        #00a316;
   --couleur-hors-gamut-calque: #39ff14;
   --couleur-hors-gamut-fond:   #10141c;
+  --ascenseur-piste:          var(--filet);
+  --ascenseur-poignee:        var(--attenue);
+  --ascenseur-poignee-survol: var(--encre);
   color-scheme: light;
 }
 
@@ -131,4 +139,7 @@
   --pastille: 0.625rem;
 
   --measure: 65ch;
+  /* Ascenseurs larges, faciles à saisir : épaisseur et longueur minimale de la poignée. */
+  --ascenseur: 14px;
+  --ascenseur-longueur-min: 40px;
 }

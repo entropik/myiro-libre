@@ -73,11 +73,11 @@ fn les_pastilles_sont_dans_le_panneau_a_cote_de_l_image() {
     let surimpression = corps(&image, "function surimpression() {");
     for attendu in [
         "window.PastillesImage.cadre(canvas, () => ({ sources, compensation: pointNoir }))",
-        "avisInconnu, window.PastillesImage.section());",
+        "resultats.append(window.PastillesImage.section());",
         "el(\"div\", \"image-comparee__panneau\")",
         "el(\"div\", \"image-comparee__image\")",
         "colonnes.append(image, panneau);",
-        "tableauChiffres = el(\"div\");",
+        "tableauChiffres = el(\"div\", \"chiffres-image\");",
     ] {
         assert!(
             surimpression.contains(attendu),
@@ -117,7 +117,9 @@ fn les_pastilles_suivent_le_seuil_et_le_profil_sans_commande() {
     let image = lire("interface/comparer-image.js");
     let nuage = corps(&image, "function nuage() {");
     assert!(
-        nuage.contains("window.PastillesImage.changer(analyseDe(choisi), seuil, choisi, nom);"),
+        nuage.contains(
+            "window.PastillesImage.changer(analyseDe(choisi), seuil, choisi, nom, avis);"
+        ),
         "{nuage}"
     );
     for entete in [
@@ -269,7 +271,8 @@ fn les_textes_des_pastilles_existent_en_deux_langues() {
             );
         }
         assert!(texte(langue, "pastilles.aucune").contains("{s}"));
-        assert!(texte(langue, "pastilles.lecture").contains("{profil}"));
+        // Texte fixe : il ne change jamais de hauteur avec le nom du profil.
+        assert!(!texte(langue, "pastilles.lecture").contains("{profil}"));
     }
     assert!(texte(Langue::Francais, "image.canvas.aria").contains("Cliquez sur l’image"));
     assert!(texte(Langue::Anglais, "image.canvas.aria").contains("Click the image"));

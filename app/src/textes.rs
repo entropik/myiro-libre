@@ -769,7 +769,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "pastilles.lecture",
-        "À gauche la couleur de l’image, à droite la couleur imprimée avec {profil}. Les plus présentes dans l’image d’abord.",
+        "À gauche la couleur de l’image, à droite la couleur imprimée avec le profil choisi\u{202f}; dessous, l’écart et la part de l’image. Les plus présentes d’abord.",
     ),
     (
         "pastilles.aucune",
@@ -785,7 +785,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "pastilles.part",
-        "{p}\u{202f}% de l’image",
+        "{p}\u{202f}%",
     ),
     (
         "pastilles.aria.image",
@@ -3026,7 +3026,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "pastilles.lecture",
-        "Left, the image colour; right, the colour printed with {profil}. Most present in the image first.",
+        "Left, the image colour; right, the colour printed with the chosen profile; below, the difference and the share of the image. Most present first.",
     ),
     (
         "pastilles.aucune",
@@ -3042,7 +3042,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "pastilles.part",
-        "{p}% of the image",
+        "{p}%",
     ),
     (
         "pastilles.aria.image",
