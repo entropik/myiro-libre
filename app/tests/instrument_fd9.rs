@@ -176,11 +176,11 @@ fn un_fd9_du_reseau_est_detecte_et_la_barre_le_montre() {
         Some((
             PathBuf::from("pont-fd9-x86.exe"),
             sdk.join("Module").join("FD9SDK.dll"),
-            Palier::Detection
+            Palier::Connexion
         ))
     );
-    assert_eq!(PLAFOND_FD9, Palier::Detection);
-    // Jamais de connexion : le pont FD-9 n'a que deux paliers.
+    assert_eq!(PLAFOND_FD9, Palier::Connexion);
+    // Jamais de connexion à l'ouverture : le FD-9 reste libre (ticket #34).
     assert_eq!(
         simule.requetes(),
         vec![Requete::Version {}, Requete::Detecter {}]

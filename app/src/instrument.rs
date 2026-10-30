@@ -115,10 +115,15 @@ impl Delais {
     /// (`pont_myiro1::DELAI_APPUI`), plus un désarmement avant et un après
     /// (15 s au plus chacun) et les lectures ; en automatique, l'attente de
     /// l'armement (5 s) et de la fin de mesure (30 s) y tiennent aussi.
+    /// Une feuille au FD-9 attend jusqu'à 2 min la feuille, 30 s chaque
+    /// étape, 10 min la mesure (`pont_fd9::Delais`), puis la lecture des
+    /// plages (2 520 en 7 min environ à l'essai E4, lecture comprise) : 40
+    /// fois le délai de base.
     pub fn reponse(&self, requete: &Requete) -> Duration {
         match requete {
             Requete::Etalonner {} => self.base * 2,
             Requete::MesurerPonctuelle { .. } => self.base * 6,
+            Requete::MesurerFeuille { .. } | Requete::Prenumeriser { .. } => self.base * 40,
             _ => self.base,
         }
     }
@@ -161,6 +166,8 @@ impl<F: FnMut(Geste) -> Accord> Gestes for F {
 pub mod choix;
 /// Le FD-9 : son pont et ses paliers (ticket #13).
 pub mod fd9;
+/// La mesure d'une feuille au FD-9 (ticket #34).
+pub mod feuille;
 /// La règle du pare-feu de Windows pour la détection du FD-9 (ticket #47).
 pub mod parefeu;
 
@@ -471,6 +478,9 @@ pub struct Instrument<P: Pont> {
     /// refuserait d'armer de nouveau (ticket #24). Seul un nouveau pont lève
     /// ce doute.
     repos_incertain: bool,
+    /// FD-9 détecté : son pont, sa DLL et son adresse, pour la mesure d'une
+    /// feuille (`feuille`), qui relance le pont à son propre plafond.
+    fd9: Option<fd9::Fd9Detecte>,
 }
 
 impl<P: Pont> Instrument<P> {
@@ -507,6 +517,7 @@ impl<P: Pont> Instrument<P> {
                 etalonnage: None,
                 repos_incertain: false,
                 annulation: Annulation::default(),
+                fd9: None,
             },
             Err(probleme) => Self::en_echec(Some(dll), probleme),
         }
@@ -522,6 +533,7 @@ impl<P: Pont> Instrument<P> {
             etalonnage: None,
             repos_incertain: false,
             annulation: Annulation::default(),
+            fd9: None,
         }
     }
 
