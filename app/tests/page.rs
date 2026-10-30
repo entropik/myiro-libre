@@ -1184,17 +1184,25 @@ fn un_etat_de_verification_inconnu_est_montre_non_verifie() {
 
 // ---- Numéro de série jamais montré (ticket #84) ----
 
-/// La vue d'une résolution et la feuille des mesures montrent l'instrument
-/// que Rust leur donne, déjà réduit au modèle ; elles ne lisent aucun numéro
-/// de série.
+/// La vue d'une résolution, la feuille des mesures et Mesurer montrent
+/// l'instrument que Rust leur donne, déjà réduit au modèle ; aucune ne lit
+/// de numéro de série, et le catalogue n'a plus de texte pour l'écrire.
 #[test]
-fn la_resolution_et_la_feuille_ne_montrent_que_le_modele() {
+fn aucune_vue_ne_montre_le_numero_de_serie() {
     let reglage = lire("interface/reglage.js");
     let bibliotheque = lire("interface/bibliotheque.js");
-    for (nom, script) in [("reglage.js", &reglage), ("bibliotheque.js", &bibliotheque)] {
+    let mesurer = lire("interface/mesurer.js");
+    for (nom, script) in [
+        ("reglage.js", &reglage),
+        ("bibliotheque.js", &bibliotheque),
+        ("mesurer.js", &mesurer),
+    ] {
         assert!(!script.contains("numero_serie"), "{nom}");
         assert!(!script.contains("details.numero"), "{nom}");
     }
+    assert!(!app::textes::cles().any(|c| c == "details.numero"));
+    assert!(mesurer
+        .contains("cellule(t(\"cartouche.instrument\"), f.modele || t(\"cartouche.inconnu\")),"));
     assert!(bibliotheque.contains("function instrument(i) {\n    return i.modele;\n  }"));
     assert!(bibliotheque.contains(
         "const instrumentLu = qualifiee(d.instrument, (i) => i, \"cartouche.inconnu\");"

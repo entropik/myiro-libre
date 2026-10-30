@@ -1,17 +1,21 @@
 //! Le numéro de série d'un instrument ne part vers aucune vue de la page
-//! (ticket #84) : ni la vue d'une résolution, ni la feuille des mesures. Seul
-//! le modèle reconnu est montré ; le fichier d'origine rangé reste intact.
+//! (ticket #84) : ni la vue d'une résolution, ni la feuille des mesures (la
+//! fiche de Mesurer est vérifiée dans `mesurer.rs`). Seul le modèle reconnu
+//! est montré, sinon « inconnu » ; le fichier d'origine rangé reste intact.
 //! Méthodes de `BibliothequeOuverte`, sans Tauri ; numéros fictifs.
 
 use std::path::Path;
 
 use app::colonne::{emplacement, BibliothequeOuverte};
+use bibliotheque::IdCondition;
 use pont_protocole::Info;
+use tempfile::TempDir;
 
 const SERIE: &str = "12345678";
 
-/// Export fictif à la manière de FD-S2w : la ligne `INSTRUMENTATION` et
-/// `SERIAL` portent le numéro de série fictif.
+/// Export fictif à la manière de FD-S2w : la ligne `INSTRUMENTATION` donnée
+/// et `SERIAL` portent le numéro de série fictif. Trois plages, RVB sur 255,
+/// Lab, M1.
 fn export_fd_s2w(instrumentation: &str) -> String {
     format!(
         "CGATS.17\r\nORIGINATOR\t\"Fabricant fictif\"\r\nFILE_DESCRIPTOR\t\"FD-S2w\"\r\n\
@@ -25,6 +29,26 @@ fn export_fd_s2w(instrumentation: &str) -> String {
     )
 }
 
+/// Une bibliothèque vide avec une résolution : Canon PRO-4100 → HMPhoto
+/// Luster 290 → 1200 ppp.
+fn resolution() -> (TempDir, BibliothequeOuverte, IdCondition) {
+    let dossier = tempfile::tempdir().unwrap();
+    let ouverte = BibliothequeOuverte::ouvrir(&emplacement(dossier.path()));
+    let canon = ouverte.ajouter_imprimante("Canon PRO-4100").unwrap();
+    let condition = ouverte
+        .ajouter_papier(canon.id, "HMPhoto Luster 290", "1200 ppp")
+        .unwrap()
+        .id;
+    (dossier, ouverte, condition)
+}
+
+/// Écrit l'export dans le dossier, comme le fichier que l'opérateur choisit.
+fn fichier(dossier: &Path, instrumentation: &str) -> std::path::PathBuf {
+    let chemin = dossier.join("mesure00001_M1.txt");
+    std::fs::write(&chemin, export_fd_s2w(instrumentation)).unwrap();
+    chemin
+}
+
 /// Ce que la page recevrait, en JSON.
 fn json(vue: &impl serde::Serialize) -> String {
     serde_json::to_string(vue).unwrap()
@@ -33,41 +57,34 @@ fn json(vue: &impl serde::Serialize) -> String {
 fn sans_numero(vue: &str, nom: &str) {
     assert!(!vue.contains(SERIE), "{nom} : {vue}");
     assert!(!vue.contains("numero_serie"), "{nom} : {vue}");
+    assert!(!vue.contains("Serial"), "{nom} : {vue}");
 }
 
 #[test]
 fn une_mesure_importee_n_envoie_son_numero_a_aucune_vue() {
-    let dossier = tempfile::tempdir().unwrap();
-    let ouverte = BibliothequeOuverte::ouvrir(&emplacement(dossier.path()));
-    let canon = ouverte.ajouter_imprimante("Canon PRO-4100").unwrap();
-    let condition = ouverte
-        .ajouter_papier(canon.id, "HMPhoto Luster 290", "1200 ppp")
-        .unwrap()
-        .id;
-    let texte = export_fd_s2w("KONICA MINOLTA, INC. MYIRO-9 (FD-9), Serial No. 12345678");
-    let chemin = dossier.path().join("mesure00001_M1.txt");
-    std::fs::write(&chemin, &texte).unwrap();
+    let (dossier, ouverte, condition) = resolution();
+    let chemin = fichier(
+        dossier.path(),
+        "KONICA MINOLTA, INC. MYIRO-9 (FD-9), Serial No. 12345678",
+    );
+    let fd9 = Info::Confirmee("FD-9".to_string());
 
     // Aperçu de l'import (feuille des mesures).
     let apercu = ouverte.apercu_cgats(&chemin).unwrap();
-    assert_eq!(apercu.contenu.instrument, Info::Confirmee("FD-9".into()));
+    assert_eq!(apercu.contenu.instrument, fd9);
     sans_numero(&json(&apercu), "aperçu");
 
     // Mesure rangée : cartouche de la feuille, colonne de gauche, résolution.
     let id = ouverte.ranger_apercu(apercu.numero, condition).unwrap();
     let detail = ouverte.detail_importee(id).unwrap();
-    assert_eq!(detail.contenu.instrument, Info::Confirmee("FD-9".into()));
+    assert_eq!(detail.contenu.instrument, fd9);
     sans_numero(&json(&detail), "mesure importée");
     let branches = ouverte.arborescence("").unwrap();
-    assert_eq!(
-        branches[0].importees[0].instrument,
-        Info::Confirmee("FD-9".into())
-    );
+    assert_eq!(branches[0].importees[0].instrument, fd9);
     sans_numero(&json(&branches), "colonne de gauche");
-    sans_numero(
-        &json(&ouverte.detail_reglage(condition).unwrap()),
-        "résolution",
-    );
+    let reglage = ouverte.detail_reglage(condition).unwrap();
+    assert_eq!(reglage.importees[0].instrument, fd9);
+    sans_numero(&json(&reglage), "résolution");
 
     // Le fichier d'origine rangé reste celui de FD-S2w, numéro compris :
     // la recherche le retrouve encore par son numéro.
@@ -75,21 +92,27 @@ fn une_mesure_importee_n_envoie_son_numero_a_aucune_vue() {
     assert_eq!(trouvees[0].importees.len(), 1);
 }
 
+/// Sans modèle reconnu, l'instrument est inconnu : la ligne brute ne part
+/// jamais vers la page, ni dans la feuille, ni dans la résolution.
 #[test]
-fn une_ligne_sans_modele_connu_donne_un_instrument_inconnu_dans_la_feuille() {
-    let dossier = tempfile::tempdir().unwrap();
-    let ouverte = BibliothequeOuverte::ouvrir(&emplacement(dossier.path()));
-    let chemin = dossier.path().join("releve.txt");
-    std::fs::write(
-        &chemin,
-        export_fd_s2w("Spectrophotomètre fictif, Serial No. 12345678"),
-    )
-    .unwrap();
+fn une_ligne_sans_modele_connu_donne_un_instrument_inconnu() {
+    let (dossier, ouverte, condition) = resolution();
+    let chemin = fichier(
+        dossier.path(),
+        "Spectrophotomètre fictif, Serial No. 12345678",
+    );
 
     let apercu = ouverte.apercu_cgats(&chemin).unwrap();
     assert_eq!(apercu.contenu.instrument, Info::Inconnue);
     let vue = json(&apercu);
     sans_numero(&vue, "aperçu");
+    assert!(!vue.contains("Spectrophotomètre fictif"), "{vue}");
+
+    ouverte.ranger_apercu(apercu.numero, condition).unwrap();
+    let reglage = ouverte.detail_reglage(condition).unwrap();
+    assert_eq!(reglage.importees[0].instrument, Info::Inconnue);
+    let vue = json(&reglage);
+    sans_numero(&vue, "résolution");
     assert!(!vue.contains("Spectrophotomètre fictif"), "{vue}");
 }
 
@@ -98,7 +121,7 @@ fn une_ligne_sans_modele_connu_donne_un_instrument_inconnu_dans_la_feuille() {
 #[test]
 fn une_mesure_d_un_pont_n_envoie_pas_son_numero_a_la_feuille() {
     let dossier = tempfile::tempdir().unwrap();
-    let ouverte = BibliothequeOuverte::demonstration(Path::new(dossier.path()));
+    let ouverte = BibliothequeOuverte::demonstration(dossier.path());
     let branches = ouverte.arborescence("").unwrap();
     let mesure = branches[0].mesures[0].id;
     let vue = json(&branches);
