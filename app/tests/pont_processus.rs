@@ -368,6 +368,28 @@ fn l_avancement_d_une_feuille_est_suivi_jusqu_a_sa_reponse() {
     );
 }
 
+/// Une ligne d'avancement illisible (étape inconnue, champ de plus : un pont
+/// plus récent) ne fait jamais perdre la feuille : elle est écartée, et la
+/// réponse finale attendue comme avant, avec ou sans suivi.
+#[test]
+fn un_avancement_illisible_ne_fait_pas_perdre_la_feuille() {
+    let mut pont = lancer("feuille_avancement_illisible");
+    let mut vus = Vec::new();
+    let echange = pont.demander_suivi(&feuille(), &app::pont::Annulation::default(), &mut |a| {
+        vus.push(a)
+    });
+    assert_eq!(vus, vec![pont_protocole::AvancementFeuille::Lecture {}]);
+    let attendue = Ok(Reponse::Erreur {
+        erreur: pont_protocole::ErreurPont::FeuilleAbsente {},
+    });
+    assert_eq!(echange.reponse, attendue);
+    assert_eq!(pont.demander(&feuille()), attendue);
+    assert_eq!(
+        pont.demander(&Requete::Version {}),
+        Ok(Reponse::Version { parties: [1, 0, 1] })
+    );
+}
+
 /// Une demande ordinaire, ou annulable sans suivi, ne prend jamais une ligne
 /// d'avancement pour sa réponse.
 #[test]

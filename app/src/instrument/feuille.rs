@@ -76,7 +76,10 @@ pub enum EtapeFeuille {
         #[serde(serialize_with = "calage_pour_la_page")]
         calage: CalageFeuille,
     },
-    /// `mesurees` plages mesurées sur `plages`, tel que le pont le compte.
+    /// La mesure des plages est lancée, sans compte du FD-9 encore.
+    MesureLancee,
+    /// `mesurees` sur `plages`, le compte du FD-9 tel que le pont le rend
+    /// (événement 11 ; qu'il compte les plages mesurées est supposé).
     Mesure { mesurees: u32, plages: u32 },
     /// La mesure est reçue et rangée dans la résolution.
     Rangement,
@@ -88,6 +91,7 @@ impl EtapeFeuille {
             AvancementFeuille::FeuilleEngagee {} => EtapeFeuille::FeuilleEngagee,
             AvancementFeuille::Lecture {} => EtapeFeuille::Lecture,
             AvancementFeuille::CalagePret { calage } => EtapeFeuille::CalagePret { calage },
+            AvancementFeuille::MesureLancee {} => EtapeFeuille::MesureLancee,
             AvancementFeuille::Mesure { mesurees, plages } => {
                 EtapeFeuille::Mesure { mesurees, plages }
             }

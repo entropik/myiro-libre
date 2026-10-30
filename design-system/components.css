@@ -514,9 +514,13 @@ select.input option { background: var(--panneau); color: var(--encre); }
 /* ---- Feuille au FD-9 (feuille-fd9.js, feuille-vue.js) : état en clair à hauteur gardée, puis la
    feuille vue dans une toile de taille fixe. Le zoom et le déplacement changent seulement ce que la
    toile dessine : aucun ascenseur de plus, rien ne bouge autour. ---- */
-.feuille-fd9__raison { min-height: calc(2em * var(--leading-normal)); }
-.feuille-fd9__etat { min-height: calc(var(--space-24) + var(--space-8)); }
-.feuille-fd9__message { margin-top: var(--space-2); min-height: calc(2em * var(--leading-normal)); }
+/* Hauteurs fixes, jamais minimales : la raison et le message tiennent sur deux lignes (coupées
+   proprement, texte entier au survol) ; l'erreur prend toute la place de l'état et défile dedans,
+   ascenseur à gauche avec son retrait, si la cause, l'action et le détail ouvert sont plus longs. */
+.feuille-fd9__raison { height: calc(2em * var(--leading-normal)); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.feuille-fd9__etat { height: calc(var(--space-24) + var(--space-8)); }
+.feuille-fd9__message { margin-top: var(--space-2); height: calc(2em * var(--leading-normal)); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.feuille-fd9__echec { height: 100%; overflow-y: auto; scrollbar-gutter: stable; }
 .feuille-fd9__etat .notice { margin-bottom: 0; }
 .replie--serre { margin-top: var(--space-2); }
 .feuille-vue { border: var(--rule) solid var(--filet); border-top: 0; background: var(--carte); padding: var(--space-3); }

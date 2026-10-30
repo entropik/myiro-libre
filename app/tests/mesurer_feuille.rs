@@ -732,6 +732,7 @@ fn avancement_complet(calage: CalageFeuille) -> Vec<AvancementFeuille> {
         AvancementFeuille::FeuilleEngagee {},
         AvancementFeuille::Lecture {},
         AvancementFeuille::CalagePret { calage },
+        AvancementFeuille::MesureLancee {},
         AvancementFeuille::Mesure {
             mesurees: 0,
             plages: 2_520,
@@ -761,6 +762,7 @@ fn l_avancement_du_pont_est_relaye_a_l_ecran_dans_l_ordre() {
             EtapeFeuille::CalagePret {
                 calage: calage(880)
             },
+            EtapeFeuille::MesureLancee,
             EtapeFeuille::Mesure {
                 mesurees: 0,
                 plages: 2_520
@@ -802,6 +804,10 @@ fn le_calage_annonce_a_la_page_n_a_pas_les_pixels() {
         })
         .unwrap(),
         r#"{"etape":"mesure","mesurees":12,"plages":2520}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&EtapeFeuille::MesureLancee).unwrap(),
+        r#"{"etape":"mesure_lancee"}"#
     );
 }
 

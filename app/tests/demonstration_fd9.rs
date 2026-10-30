@@ -66,12 +66,20 @@ fn une_feuille_de_demonstration_suit_toutes_les_etapes_et_se_range() {
             EtapeFeuille::FeuilleEngagee => "engagee",
             EtapeFeuille::Lecture => "lecture",
             EtapeFeuille::CalagePret { .. } => "calage",
+            EtapeFeuille::MesureLancee => "lancee",
             EtapeFeuille::Mesure { .. } => "mesure",
             EtapeFeuille::Rangement => "rangement",
         })
         .collect();
-    let mut attendu = vec!["connexion", "glisser", "engagee", "lecture", "calage"];
-    attendu.extend(std::iter::repeat_n("mesure", noms.len() - 6));
+    let mut attendu = vec![
+        "connexion",
+        "glisser",
+        "engagee",
+        "lecture",
+        "calage",
+        "lancee",
+    ];
+    attendu.extend(std::iter::repeat_n("mesure", noms.len() - 7));
     attendu.push("rangement");
     assert_eq!(noms, attendu);
     assert!(matches!(

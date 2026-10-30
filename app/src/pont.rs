@@ -339,15 +339,42 @@ impl PontProcessus {
         loop {
             let reste = delai.saturating_sub(debut.elapsed());
             match self.lignes.recv_timeout(reste) {
-                Ok(reponse) => match lire(&reponse) {
-                    Ok(Reponse::Avancement { .. }) => {}
-                    lue => return lue,
+                Ok(reponse) => match lire_ligne(&reponse) {
+                    Ligne::Avancement(_) => {}
+                    Ligne::Reponse(lue) => return lue,
                 },
                 Err(RecvTimeoutError::Disconnected) => return Err(self.arret()),
                 Err(RecvTimeoutError::Timeout) => return Err(self.couper(ligne, delai)),
             }
         }
     }
+}
+
+/// Une ligne écrite par le pont : de l'avancement, ou la réponse attendue.
+enum Ligne {
+    /// Avancement d'une feuille ; `None` s'il est illisible (étape ou champ
+    /// d'un pont plus récent) : il est noté au journal et écarté, jamais
+    /// pris pour la réponse.
+    Avancement(Option<AvancementFeuille>),
+    Reponse(Result<Reponse, Panne>),
+}
+
+fn lire_ligne(texte: &str) -> Ligne {
+    match lire(texte) {
+        Ok(Reponse::Avancement { avancement }) => Ligne::Avancement(Some(avancement)),
+        Err(panne) if est_avancement(texte) => {
+            eprintln!("ligne d'avancement du pont illisible, écartée : {panne:?}");
+            Ligne::Avancement(None)
+        }
+        lue => Ligne::Reponse(lue),
+    }
+}
+
+/// La ligne se dit d'avancement (`"rep":"avancement"`), même si le reste ne
+/// se lit pas.
+fn est_avancement(texte: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(texte.trim())
+        .is_ok_and(|v| v.get("rep").and_then(|r| r.as_str()) == Some("avancement"))
 }
 
 fn lire(reponse: &str) -> Result<Reponse, Panne> {
@@ -403,9 +430,10 @@ impl Pont for PontProcessus {
             }
             let reste = delai.saturating_sub(debut.elapsed());
             match self.lignes.recv_timeout(reste.min(PAS_ATTENTE_REPONSE)) {
-                Ok(texte) => match lire(&texte) {
-                    Ok(Reponse::Avancement { avancement }) => suivi(avancement),
-                    lue => break lue,
+                Ok(texte) => match lire_ligne(&texte) {
+                    Ligne::Avancement(Some(avancement)) => suivi(avancement),
+                    Ligne::Avancement(None) => {}
+                    Ligne::Reponse(lue) => break lue,
                 },
                 Err(RecvTimeoutError::Disconnected) => break Err(self.arret()),
                 Err(RecvTimeoutError::Timeout) if reste.is_zero() => {

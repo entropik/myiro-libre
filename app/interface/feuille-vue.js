@@ -108,8 +108,11 @@ window.FeuilleVue = (() => {
   // ---- Géométrie de la vue ----
   function etendue() {
     if (onglet === "points" && photo) return { l: photo.largeur, h: photo.hauteur };
-    return mire ? { l: mire.largeur, h: mire.hauteur } : { l: 27940, h: 41660 };
+    // Sans mire ni image, rien à dessiner : l'étendue de la toile elle-même.
+    return mire ? { l: mire.largeur, h: mire.hauteur } : { l: toile.clientWidth || 1, h: toile.clientHeight || 1 };
   }
+  // Pas des plages de la mire, en 1/100 mm : il règle la taille des points et la portée du survol.
+  const pasPlage = () => (mire ? Math.min(...mire.zones.map((z) => Math.min(z.pas_x, z.pas_y))) : 0);
   function echelle() {
     const e = etendue();
     return Math.min(toile.clientWidth / e.l, toile.clientHeight / e.h) * ZOOMS[zoom];
@@ -142,7 +145,7 @@ window.FeuilleVue = (() => {
     ctx.imageSmoothingEnabled = ZOOMS[zoom] < 3;
     if (source) ctx.drawImage(source, o.x, o.y, e.l * o.s, e.h * o.s);
     if (onglet === "points" && calage) {
-      const rayon = Math.max(2, 60 * o.s);
+      const rayon = Math.max(2, (pasPlage() / 10) * o.s); // un dixième de plage, 2 px au moins
       ctx.fillStyle = jeton("--point-vise");
       ctx.strokeStyle = jeton("--point-vise-bord");
       ctx.lineWidth = 1;
@@ -268,7 +271,8 @@ window.FeuilleVue = (() => {
         const d = Math.hypot(p.x - f.x, p.y - f.y);
         if (d < distance) [meilleur, distance] = [rangDe(p.zone, p.rangee, p.colonne), d];
       }
-      return distance <= 450 ? meilleur : -1;
+      // Au plus trois quarts de plage du point le plus proche.
+      return distance <= pasPlage() * 0.75 ? meilleur : -1;
     }
     return liste.findIndex((p) => {
       const x0 = p.z.gauche + p.z.pas_x * p.colonne;
@@ -283,7 +287,9 @@ window.FeuilleVue = (() => {
     glisse = { x: e.clientX, y: e.clientY, centre: centre || { x: etendue().l / 2, y: etendue().h / 2 } };
     toile.setPointerCapture(e.pointerId);
   });
-  toile.addEventListener("pointerup", () => { glisse = null; });
+  const lacher = () => { glisse = null; };
+  toile.addEventListener("pointerup", lacher);
+  toile.addEventListener("pointercancel", lacher);
   toile.addEventListener("pointermove", (e) => {
     if (glisse) {
       const s = echelle();

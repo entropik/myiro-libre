@@ -123,6 +123,7 @@ fn chaque_etape_et_chaque_raison_a_son_texte() {
         "feuille_engagee",
         "lecture",
         "calage_pret",
+        "mesure_lancee",
         "mesure",
         "rangement",
     ] {

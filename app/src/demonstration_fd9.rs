@@ -205,7 +205,9 @@ impl PontDemonstrationFd9 {
         });
         let plages = mire.plages() as u32;
         let pas = r / 4;
-        for mesurees in (0..=plages).step_by(60) {
+        suivi(AvancementFeuille::MesureLancee {});
+        std::thread::sleep(pas);
+        for mesurees in (60..=plages).step_by(60) {
             suivi(AvancementFeuille::Mesure { mesurees, plages });
             if self.issue == IssueDemonstration::Bourrage && mesurees >= plages / 2 {
                 return erreur(ErreurPont::IncidentFeuille {

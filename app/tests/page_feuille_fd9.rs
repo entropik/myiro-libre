@@ -122,11 +122,45 @@ fn la_feuille_se_met_a_jour_sur_place_dans_des_places_gardees() {
         }
     }
     let css = lire("../design-system/components.css");
+    // Hauteurs fixes, jamais minimales : un texte long (bourrage, raison sur
+    // deux lignes) est coupé proprement ou défile dans sa place, avec retrait.
+    for selecteur in [
+        ".feuille-fd9__raison",
+        ".feuille-fd9__etat",
+        ".feuille-fd9__message",
+        ".feuille-fd9__echec",
+    ] {
+        let corps = regle(&css, selecteur);
+        assert!(!corps.contains("min-height"), "{selecteur} : {corps}");
+        assert!(
+            corps.contains(";height:")
+                || corps.starts_with("height:")
+                || corps.contains("{height:"),
+            "{selecteur} : hauteur fixe : {corps}"
+        );
+    }
+    for selecteur in [".feuille-fd9__raison", ".feuille-fd9__message"] {
+        let corps = regle(&css, selecteur);
+        for attendu in ["-webkit-line-clamp:2", "overflow:hidden"] {
+            assert!(corps.contains(attendu), "{selecteur} : {attendu} : {corps}");
+        }
+    }
+    let echec = regle(&css, ".feuille-fd9__echec");
+    for attendu in ["overflow-y:auto", "scrollbar-gutter:stable"] {
+        assert!(echec.contains(attendu), "{attendu} : {echec}");
+    }
+    // Défilement dans une zone qui défile : ascenseur à gauche, avec retrait.
+    assert!(bloc().contains("class=\"feuille-fd9__echec defile-gauche\" data-feuille-echec hidden"));
+    // Le texte coupé se lit en entier au survol.
+    let fd9 = lire("interface/feuille-fd9.js");
+    for attendu in [
+        "raison.title = raison.textContent;",
+        "message.title = message.textContent;",
+    ] {
+        assert!(fd9.contains(attendu), "{attendu}");
+    }
     for (selecteur, attendu) in [
         (".garde-place[data-vide]", "visibility:hidden"),
-        (".feuille-fd9__raison", "min-height:"),
-        (".feuille-fd9__etat", "min-height:"),
-        (".feuille-fd9__message", "min-height:"),
         (".feuille-vue__toile", "height:min(65vh"),
         (".feuille-vue__survol", "height:calc("),
         (".feuille-vue__legende", "overflow:hidden"),
@@ -155,7 +189,9 @@ fn le_bouton_et_annuler_suivent_l_etat_de_la_feuille() {
     for attendu in [
         "mesurer.disabled = enCours() || !etat || !etat.disponible || condition === null;",
         "etat.raisons.map((c) => t(c)).join(\" \")",
-        "const ANNULABLES = [\"connexion\", \"glisser_feuille\", \"feuille_engagee\", \"lecture\"];",
+        // L'attente et la lecture, calage prêt compris (montré « Lecture »).
+        "const ANNULABLES = [\"connexion\", \"glisser_feuille\", \"feuille_engagee\", \"lecture\", \"calage_pret\"];",
+        "mesure_lancee: \"mesure\"",
         "annuler.disabled = !enCours() || !ANNULABLES.includes(feuille.etape);",
         "invoke(\"annuler_feuille_fd9\")",
         "invoke(\"mesurer_feuille_fd9\", { condition: feuille.condition })",
@@ -224,8 +260,14 @@ fn deux_onglets_mire_et_points_mesures() {
         "`${p.zone + 1}${lettres(p.colonne)}${p.rangee + 1}`",
         "new ResizeObserver(() => dessiner()).observe(toile);",
         "attributeFilter: [\"data-theme\"]",
+        // Un glisser interrompu (fenêtre perdue, geste annulé) s'arrête.
+        "toile.addEventListener(\"pointercancel\", lacher);",
     ] {
         assert!(vue.contains(attendu), "{attendu}");
+    }
+    // Les mesures de la feuille viennent de la définition, jamais en dur.
+    for en_dur in ["27940", "41660", "450", "60 *"] {
+        assert!(!vue.contains(en_dur), "{en_dur} en dur dans feuille-vue.js");
     }
     let fd9 = lire("interface/feuille-fd9.js");
     let ecoute = fd9
@@ -257,6 +299,16 @@ fn le_systeme_graphique_a_les_onglets_et_la_feuille() {
     ] {
         assert!(kit.contains(attendu), "{attendu}");
     }
+    // Même ordre que la page : Mesurer, Mire et points mesurés, Annuler.
+    let exemple = &kit[kit.find("<h2>Feuille au FD-9</h2>").unwrap()..];
+    let position = |texte: &str| exemple.find(texte).unwrap();
+    assert!(
+        position(">Mesurer une feuille au FD-9</button>")
+            < position(">Mire et points mesurés</button>")
+    );
+    assert!(position(">Mire et points mesurés</button>") < position(">Annuler</button>"));
+    let page = bloc();
+    assert!(page.find("data-feuille-voir").unwrap() < page.find("data-feuille-annuler").unwrap());
     let css = lire("../design-system/components.css");
     let choisi = regle(&css, ".onglets [role=\"tab\"][aria-selected=\"true\"]");
     assert!(choisi.contains("background:var(--carte)"), "{choisi}");

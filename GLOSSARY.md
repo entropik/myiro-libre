@@ -54,7 +54,7 @@ Ce que le FD-9 a trouvé de la feuille avant de la mesurer : le point qu'il va v
 _Éviter_ : recalage (c'est ce que fait l'instrument), measured point
 
 **Avancement d'une feuille** :
-Ce que le pont du FD-9 annonce pendant une feuille, avant sa réponse : feuille engagée, lecture, calage prêt, mesure n / 2 520 (le compte rendu par le FD-9). L'écran le montre en clair au lieu de rester sur « glissez la feuille ».
+Ce que le pont du FD-9 annonce pendant une feuille, avant sa réponse : feuille engagée, lecture, calage prêt, mesure en cours, puis mesure n / 2 520. Le nombre n est celui que rend le FD-9 pendant la mesure ; qu'il compte les plages déjà mesurées est supposé (nom de la table du fabricant, pas encore vérifié à l'essai). Sans ce nombre, l'écran dit « mesure en cours », sans compte inventé. L'écran le montre en clair au lieu de rester sur « glissez la feuille ».
 
 **Bande** :
 Géométrie de lecture du MYIRO-1 : une rangée de plages lue en un balayage.

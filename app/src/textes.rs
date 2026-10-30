@@ -2494,7 +2494,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "feuille_fd9.raison.en_cours",
-        "Une feuille est en cours. Jusqu’au repérage des plages, «\u{202f}Annuler\u{202f}» l’arrête sans rien mesurer.",
+        "Une feuille est en cours. Jusqu’au début de la mesure des plages, «\u{202f}Annuler\u{202f}» l’arrête sans rien mesurer.",
     ),
     (
         "feuille_fd9.raison.mesure_en_cours",
@@ -2555,6 +2555,10 @@ const FRANCAIS: Catalogue = &[
     (
         "feuille_fd9.etape.mesure",
         "Mesure\u{202f}: {n} / {total} plages",
+    ),
+    (
+        "feuille_fd9.etape.mesure_lancee",
+        "Mesure des plages en cours…",
     ),
     (
         "feuille_fd9.etape.rangement",
@@ -5488,7 +5492,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "feuille_fd9.raison.en_cours",
-        "A sheet is in progress. Until the patches are located, “Cancel” stops it without measuring anything.",
+        "A sheet is in progress. Until the patch measurement starts, “Cancel” stops it without measuring anything.",
     ),
     (
         "feuille_fd9.raison.mesure_en_cours",
@@ -5549,6 +5553,10 @@ const ANGLAIS: Catalogue = &[
     (
         "feuille_fd9.etape.mesure",
         "Measurement: {n} / {total} patches",
+    ),
+    (
+        "feuille_fd9.etape.mesure_lancee",
+        "Measuring the patches…",
     ),
     (
         "feuille_fd9.etape.rangement",

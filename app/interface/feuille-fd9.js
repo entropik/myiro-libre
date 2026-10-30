@@ -30,10 +30,11 @@ window.FeuilleFd9 = (() => {
   // Étape annoncée → pas montré (feuille, lecture, mesure, rangement).
   const PAS = {
     connexion: "feuille", glisser_feuille: "feuille", feuille_engagee: "feuille",
-    lecture: "lecture", calage_pret: "lecture", mesure: "mesure", rangement: "rangement",
+    lecture: "lecture", calage_pret: "lecture", mesure_lancee: "mesure", mesure: "mesure", rangement: "rangement",
   };
-  // Pendant l'attente et la lecture, « Annuler » arrête la feuille sans rien mesurer.
-  const ANNULABLES = ["connexion", "glisser_feuille", "feuille_engagee", "lecture"];
+  // Pendant l'attente et la lecture (calage prêt compris, montré « Lecture »), « Annuler » arrête
+  // la feuille sans rien mesurer.
+  const ANNULABLES = ["connexion", "glisser_feuille", "feuille_engagee", "lecture", "calage_pret"];
   const ORDRE = ["feuille", "lecture", "mesure", "rangement"];
   const nombre = (v) => new Intl.NumberFormat(document.documentElement.lang).format(v);
 
@@ -63,6 +64,7 @@ window.FeuilleFd9 = (() => {
     annuler.toggleAttribute("data-vide", !enCours());
     annuler.disabled = !enCours() || !ANNULABLES.includes(feuille.etape);
     raison.textContent = texteRaison();
+    raison.title = raison.textContent; // coupée à deux lignes, lisible en entier au survol
     demonstration.textContent = etat && etat.demonstration ? t("feuille_fd9.demonstration") : "";
   }
 
@@ -77,7 +79,7 @@ window.FeuilleFd9 = (() => {
       else p.removeAttribute("aria-current");
     }
     // Barre : la part des plages mesurées ; pleine une fois la mesure finie.
-    const part = !feuille ? 0 : feuille.fini || ["rangement"].includes(feuille.etape)
+    const part = !feuille ? 0 : feuille.fini || feuille.etape === "rangement"
       ? 1 : feuille.plages ? feuille.mesurees / feuille.plages : 0;
     piste.style.setProperty("--position", `${(part * 100).toFixed(2)}%`);
     piste.setAttribute("aria-valuenow", String(Math.round(part * 100)));
@@ -88,6 +90,7 @@ window.FeuilleFd9 = (() => {
     cours.hidden = Boolean(feuille && feuille.echec);
     echecBloc.hidden = !(feuille && feuille.echec);
     message.textContent = texteMessage();
+    message.title = message.textContent;
     if (feuille && feuille.echec) ecrireEchec(feuille.echec);
   }
 
