@@ -142,4 +142,6 @@
   /* Ascenseurs larges, faciles à saisir : épaisseur et longueur minimale de la poignée. */
   --ascenseur: 14px;
   --ascenseur-longueur-min: 40px;
+  /* Retrait intérieur d'une zone qui défile, côté ascenseur et côté bord : jamais de texte collé. */
+  --gouttiere-ascenseur: var(--space-3);
 }

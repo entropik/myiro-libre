@@ -73,7 +73,7 @@ fn la_section_image_a_deux_colonnes_qui_s_empilent_si_elle_est_etroite() {
     let colonnes = ligne_css(&css, ".image-comparee__colonnes {");
     for attendu in [
         "display: grid;",
-        "clamp(320px, 32%, 380px)",
+        "minmax(320px, 1fr)",
         "--hauteur-image: 70vh;",
     ] {
         assert!(colonnes.contains(attendu), "{attendu} : {colonnes}");
@@ -100,10 +100,12 @@ fn la_section_image_a_deux_colonnes_qui_s_empilent_si_elle_est_etroite() {
         "{cadre}"
     );
     assert!(ligne_css(&css, ".surimpression {").contains("object-fit: contain;"));
-    // Pastilles en trois colonnes dans un panneau de 320 à 380 px.
+    // Pastilles : autant par rangée que la largeur du panneau en loge.
     let grille = ligne_css(&css, ".pastilles {");
     assert!(
-        grille.contains("grid-template-columns: repeat(3, minmax(0, 1fr));"),
+        grille.contains(
+            "grid-template-columns: repeat(auto-fill, minmax(calc(var(--space-16) + var(--space-4)), 1fr));"
+        ),
         "{grille}"
     );
     let kit = lire("../design-system/ui-kit.html");
@@ -311,8 +313,8 @@ fn la_mise_en_page_garde_ses_emplacements_reserves() {
         (
             ".pastilles {",
             &[
-                "grid-template-columns: repeat(3, minmax(0, 1fr));",
-                "grid-template-rows: repeat(4, calc(var(--space-12) * 2));",
+                "grid-template-columns: repeat(auto-fill, minmax(calc(var(--space-16) + var(--space-4)), 1fr));",
+                "grid-auto-rows: calc(var(--space-12) * 2);",
             ],
         ),
         (
@@ -420,20 +422,25 @@ fn la_mise_en_page_garde_ses_emplacements_reserves() {
     }
 }
 
-/// Une photo en paysage remplit la largeur de sa colonne tant que sa
-/// hauteur reste sous 70 % de la fenêtre ; au-delà, la colonne de l'image se
-/// resserre à la largeur de la photo (70 % × proportions) et le panneau la
-/// suit : le reste de la largeur est après le panneau, jamais entre les deux.
+/// Les deux colonnes occupent toute la largeur de la section : la colonne
+/// de l'image prend la largeur de la photo (au plus 70 % de la hauteur de la
+/// fenêtre × proportions), en paysage comme en portrait ; le panneau prend
+/// tout le reste, 320 px au moins, sans largeur maximale fixe.
 #[test]
 fn la_colonne_de_l_image_prend_la_largeur_de_la_photo() {
     let css = lire("../design-system/components.css");
     let colonnes = ligne_css(&css, ".image-comparee__colonnes {");
-    for attendu in [
-        "grid-template-columns: minmax(0, calc(var(--hauteur-image) * var(--ratio, 1.5))) clamp(320px, 32%, 380px);",
-        "justify-content: start;",
-    ] {
-        assert!(colonnes.contains(attendu), "{attendu} : {colonnes}");
+    assert!(
+        colonnes.contains(
+            "grid-template-columns: minmax(0, calc(var(--hauteur-image) * var(--ratio, 1.5))) minmax(320px, 1fr);"
+        ),
+        "{colonnes}"
+    );
+    for interdit in ["clamp(", "justify-content: start;", "380px"] {
+        assert!(!colonnes.contains(interdit), "{interdit} : {colonnes}");
     }
+    let panneau = ligne_css(&css, ".image-comparee__panneau {");
+    assert!(!panneau.contains("max-width"), "{panneau}");
     assert!(
         ligne_css(&css, ".pipette > .surimpression {").contains("aspect-ratio: var(--ratio, 1.5);")
     );
@@ -468,4 +475,95 @@ fn les_jetons_d_ascenseur_existent_dans_les_deux_themes() {
     assert!(jetons.contains("--ascenseur-longueur-min: 40px;"));
     assert!(lire("../design-system/ui-kit.html").contains("--ascenseur"));
     assert!(lire("../design-system/README.md").contains("--ascenseur"));
+}
+
+/// Jamais de texte collé à un ascenseur ni au bord : chaque zone qui défile
+/// garde la place de l'ascenseur et a un retrait intérieur côté ascenseur
+/// d'au moins `--gouttiere-ascenseur` (la zone du centre a déjà
+/// `--space-8`). Le jeton est commun aux deux thèmes.
+#[test]
+fn les_zones_qui_defilent_ont_leur_retrait_cote_ascenseur() {
+    let jetons = lire("../design-system/tokens.css");
+    assert!(jetons.contains("--gouttiere-ascenseur: var(--space-3);"));
+    let css = lire("../design-system/components.css");
+    for selecteur in [
+        ".zone-gauche {",
+        ".zone-droite {",
+        ".defile {",
+        ".feuille__corps:not([hidden]) {",
+        ".image-comparee__panneau {",
+    ] {
+        let ligne = ligne_css(&css, selecteur);
+        assert!(
+            ligne.contains("padding-right: var(--gouttiere-ascenseur);"),
+            "{selecteur} : {ligne}"
+        );
+    }
+    for selecteur in [
+        ".zone-gauche, .zone-centre, .zone-droite {",
+        ".defile {",
+        ".feuille__corps:not([hidden]) {",
+        ".image-comparee__panneau {",
+        ".agrandie {",
+    ] {
+        let ligne = ligne_css(&css, selecteur);
+        assert!(
+            ligne.contains("scrollbar-gutter: stable;"),
+            "{selecteur} : {ligne}"
+        );
+    }
+    assert!(ligne_css(&css, ".zone-centre {").contains("padding: var(--space-6) var(--space-8);"));
+    assert!(ligne_css(&css, ".agrandie {").contains("padding: var(--space-6);"));
+    // Toute règle qui fait défiler a sa place gardée.
+    for ligne in css
+        .lines()
+        .filter(|l| l.contains("overflow-y: auto") || l.contains("overflow: auto"))
+    {
+        assert!(ligne.contains("scrollbar-gutter: stable;"), "{ligne}");
+    }
+    let readme = lire("../design-system/README.md");
+    assert!(readme.contains("--gouttiere-ascenseur"));
+}
+
+/// « Avancé : commande et journal d'iccgamut », posé seul dans le panneau
+/// des détails de la comparaison, a le même retrait que les autres blocs du
+/// panneau ; la commande et le journal, en `<pre>`, passent à la ligne et ont
+/// leur propre retrait. Le même bloc de la provenance d'un profil calculé est
+/// déjà dans un corps de section à retrait : la règle du `<pre>` vaut pour
+/// les deux.
+#[test]
+fn le_bloc_avance_est_aligne_sur_le_panneau() {
+    let details = lire("interface/comparer-details.js");
+    let avance = corps(&details, "function avance(commande, liste) {");
+    for attendu in [
+        "el(\"div\", \"details-avance\")",
+        "bloc.append(d);",
+        "return bloc;",
+    ] {
+        assert!(avance.contains(attendu), "{attendu} :\n{avance}");
+    }
+    let css = lire("../design-system/components.css");
+    let bloc = ligne_css(&css, ".details-avance {");
+    assert!(
+        bloc.contains("padding: 0 var(--space-4) var(--space-4);"),
+        "{bloc}"
+    );
+    assert!(ligne_css(&css, ".section-repliable > summary {").contains("var(--space-4)"));
+    let pre = ligne_css(&css, ".replie pre {");
+    for attendu in [
+        "padding: var(--space-2) var(--space-3);",
+        "white-space: pre-wrap;",
+        "overflow-wrap: anywhere;",
+    ] {
+        assert!(pre.contains(attendu), "{attendu} : {pre}");
+    }
+    let calcul = lire("interface/calcul-profil.js");
+    assert!(calcul
+        .contains("el(\"span\", \"label\", t(\"profil.journal\")), el(\"pre\", \"\", p.journal)"));
+    let reglage = lire("interface/reglage.js");
+    let section = corps(&reglage, "function section(titre, lignes) {");
+    assert!(
+        section.contains("el(\"div\", \"section-repliable__corps\")"),
+        "{section}"
+    );
 }

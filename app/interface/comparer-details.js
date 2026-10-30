@@ -124,9 +124,12 @@ window.ComparerDetails = (() => {
   }
 
   // Commande d'iccgamut en lecture seule, puis le journal (ou le message d'ArgyllCMS) de chaque
-  // profil analysé, comme pour le calcul d'un profil.
+  // profil analysé, comme pour le calcul d'un profil. Posé seul dans le panneau de droite, il prend
+  // le même retrait que les autres blocs (details-avance).
   function avance(commande, liste) {
+    const bloc = el("div", "details-avance");
     const d = el("details", "replie");
+    bloc.append(d);
     d.append(el("summary", "", t("comparer.avance")), el("span", "label", t("comparer.avance.commande")),
       el("pre", "", commande || t("comparer.avance.sans_commande")));
     for (const p of liste) {
@@ -136,7 +139,7 @@ window.ComparerDetails = (() => {
       const cle = l.etat === "calculee" ? "comparer.avance.journal" : "comparer.avance.cause";
       d.append(el("span", "label", t(cle).replace("{nom}", () => p.nom)), el("pre", "", texte));
     }
-    return d;
+    return bloc;
   }
 
   return { texteRefus, texteLimite, texteFidelite, section, chiffres, methode, provenance, avance };
