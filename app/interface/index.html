@@ -30,6 +30,8 @@
 <script src="verdict-image.js" defer></script>
 <script src="comparer-image.js" defer></script>
 <script src="comparer.js" defer></script>
+<script src="feuille-vue.js" defer></script>
+<script src="feuille-fd9.js" defer></script>
 <script src="reglage.js" defer></script>
 <script src="parc.js" defer></script>
 <script src="mesurer.js" defer></script>
@@ -259,6 +261,51 @@
       <div id="verification-profil" data-verification hidden></div>
       <!-- Préparer une mire : section construite par mire.js (instrument, taille, format, avancé, fichiers, mires préparées). -->
       <div id="preparer-mire" data-mire hidden></div>
+      <!-- Mesurer une feuille au FD-9 (feuille-fd9.js, feuille-vue.js) : bouton, état de la feuille en
+           clair, « Annuler », onglets « Mire » et « Points mesurés ». Tout est mis à jour sur place,
+           chaque bloc garde sa place : rien ne bouge pendant la feuille. -->
+      <div class="section" data-feuille-fd9>
+        <div class="section__head"><span class="label label--ink" data-t="feuille_fd9.titre"></span><span class="label" data-feuille-demonstration></span></div>
+        <div class="actions">
+          <button class="btn" data-feuille-mesurer data-t="feuille_fd9.mesurer" disabled></button>
+          <button class="btn" data-feuille-voir data-t="feuille_fd9.voir" aria-expanded="false" aria-controls="feuille-fd9-vue"></button>
+          <button class="btn garde-place" data-feuille-annuler data-t="feuille_fd9.annuler" data-vide disabled></button>
+        </div>
+        <p class="why feuille-fd9__raison" role="status" data-feuille-raison data-t="feuille_fd9.raison.chargement"></p>
+        <div class="etapes" role="list" data-t-aria="feuille_fd9.etapes">
+          <div class="etape" role="listitem" data-pas="feuille"><span class="etape__num num">01</span><span data-t="feuille_fd9.pas.feuille"></span></div>
+          <div class="etape" role="listitem" data-pas="lecture"><span class="etape__num num">02</span><span data-t="feuille_fd9.pas.lecture"></span></div>
+          <div class="etape" role="listitem" data-pas="mesure"><span class="etape__num num">03</span><span data-t="feuille_fd9.pas.mesure"></span></div>
+          <div class="etape" role="listitem" data-pas="rangement"><span class="etape__num num">04</span><span data-t="feuille_fd9.pas.rangement"></span></div>
+        </div>
+        <div class="feuille-fd9__etat" role="status" aria-live="polite">
+          <div data-feuille-cours>
+            <div class="progression"><div class="progression__piste" role="progressbar" data-t-aria="feuille_fd9.avancement" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-etat="repos" data-feuille-piste><span class="progression__remplissage"></span><span class="progression__reflet"></span></div></div>
+            <p class="feuille-fd9__message" data-feuille-message data-t="feuille_fd9.repos"></p>
+          </div>
+          <div class="feuille-fd9__echec defile-gauche" data-feuille-echec hidden>
+            <div class="notice notice--bad"><p data-feuille-cause></p><p data-feuille-action></p></div>
+            <details class="replie replie--serre" data-feuille-details hidden><summary data-t="feuille_fd9.detail"></summary><pre data-feuille-details-texte></pre></details>
+          </div>
+        </div>
+        <div id="feuille-fd9-vue" data-feuille-vue hidden>
+          <div class="onglets" role="tablist" data-t-aria="feuille_fd9.onglets">
+            <button role="tab" id="feuille-onglet-mire" aria-controls="feuille-fd9-panneau" aria-selected="true" data-onglet="mire" data-t="feuille_fd9.onglet.mire"></button>
+            <button role="tab" id="feuille-onglet-points" aria-controls="feuille-fd9-panneau" aria-selected="false" tabindex="-1" data-onglet="points" data-t="feuille_fd9.onglet.points"></button>
+          </div>
+          <div class="feuille-vue" role="tabpanel" id="feuille-fd9-panneau" aria-labelledby="feuille-onglet-mire" data-feuille-panneau>
+            <div class="feuille-vue__outils" role="toolbar" data-t-aria="feuille_fd9.zoom">
+              <button class="btn" data-zoom="moins" data-t="feuille_fd9.zoom.moins"></button>
+              <span class="feuille-vue__niveau num" data-zoom-niveau></span>
+              <button class="btn" data-zoom="plus" data-t="feuille_fd9.zoom.plus"></button>
+              <button class="btn" data-zoom="ajuster" data-t="feuille_fd9.zoom.ajuster"></button>
+            </div>
+            <canvas class="feuille-vue__toile" tabindex="0" role="img" data-t-aria="feuille_fd9.mire.alt" data-feuille-toile></canvas>
+            <div class="feuille-vue__survol"><span class="swatch" data-feuille-consigne></span><span class="feuille-vue__survol-texte" data-feuille-survol-texte data-t="feuille_fd9.survol.vide"></span></div>
+            <p class="feuille-vue__legende" data-feuille-legende></p>
+          </div>
+        </div>
+      </div>
       <div class="section">
         <div class="section__head"><span class="label label--ink" data-t="parc.historique"></span></div>
         <div data-historique></div>

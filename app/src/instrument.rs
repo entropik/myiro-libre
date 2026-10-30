@@ -88,6 +88,13 @@ pub enum Issue {
 /// DLL (`pont_myiro1::DELAI_CONNEXION`), plus la lecture de l'identité.
 pub const DELAI_REPONSE: Duration = Duration::from_secs(30);
 
+/// Délai de réponse du pont FD-9 à une feuille (`mesurer_feuille`,
+/// `prenumeriser`). Le pont attend jusqu'à 2 min la feuille, 30 s chaque
+/// étape et 10 min la mesure (`pont_fd9::Delais`), puis lit les plages :
+/// 2 520 en 7 min environ à l'essai E4, lecture comprise. Au-delà, le pont
+/// est arrêté de force et dit bloqué.
+pub const DELAI_FEUILLE: Duration = Duration::from_secs(20 * 60);
+
 /// Délais du dialogue avec le pont, fixés par le module instrument et
 /// appliqués par `PontProcessus`. Bornés : passé un délai, le pont est arrêté
 /// de force et l'instrument dit dans un état incertain ; aucune demande n'est
@@ -115,10 +122,15 @@ impl Delais {
     /// (`pont_myiro1::DELAI_APPUI`), plus un désarmement avant et un après
     /// (15 s au plus chacun) et les lectures ; en automatique, l'attente de
     /// l'armement (5 s) et de la fin de mesure (30 s) y tiennent aussi.
+    /// Une feuille au FD-9 attend [`DELAI_FEUILLE`] (à proportion du délai
+    /// de base).
     pub fn reponse(&self, requete: &Requete) -> Duration {
         match requete {
             Requete::Etalonner {} => self.base * 2,
             Requete::MesurerPonctuelle { .. } => self.base * 6,
+            Requete::MesurerFeuille { .. } | Requete::Prenumeriser { .. } => {
+                self.base * (DELAI_FEUILLE.as_secs() / DELAI_REPONSE.as_secs()) as u32
+            }
             _ => self.base,
         }
     }
@@ -161,6 +173,8 @@ impl<F: FnMut(Geste) -> Accord> Gestes for F {
 pub mod choix;
 /// Le FD-9 : son pont et ses paliers (ticket #13).
 pub mod fd9;
+/// La mesure d'une feuille au FD-9 (ticket #34).
+pub mod feuille;
 /// La règle du pare-feu de Windows pour la détection du FD-9 (ticket #47).
 pub mod parefeu;
 
@@ -307,6 +321,11 @@ pub enum Probleme {
     /// Mesure automatique : l'instrument n'a pas signalé la fin de la mesure
     /// dans le délai du pont. Personne n'avait de bouton à presser.
     MesureDelaiAutomatique { detail: String },
+    /// FD-9 : le composant de lecture du QR (`zxing.dll`) manque à côté du
+    /// pont ; la feuille est refusée avant d'être lancée (erreur
+    /// `composant_qr_introuvable` du pont, ticket #87). `detail` : le chemin
+    /// où il est attendu.
+    ComposantQrIntrouvable { detail: String },
 }
 
 impl Probleme {
@@ -320,6 +339,7 @@ impl Probleme {
                 Ecran::Etalonnage
             }
             Probleme::PontIntrouvable { .. }
+            | Probleme::ComposantQrIntrouvable { .. }
             | Probleme::PontEnPanne { .. }
             | Probleme::PontBloque { .. }
             | Probleme::AucunInstrument
@@ -377,6 +397,7 @@ impl Probleme {
             Probleme::MesureDelaiAutomatique { .. } => "mesure_delai_automatique",
             Probleme::EtalonnageARefaire { .. } => "etalonnage_a_refaire",
             Probleme::DeclenchementRefuse { .. } => "declenchement_refuse",
+            Probleme::ComposantQrIntrouvable { .. } => "composant_qr_introuvable",
         }
     }
 
@@ -387,6 +408,7 @@ impl Probleme {
             Probleme::LogicielAbsent { examines: d }
             | Probleme::LogicielInutilisable { detail: d }
             | Probleme::PontIntrouvable { detail: d }
+            | Probleme::ComposantQrIntrouvable { detail: d }
             | Probleme::PontEnPanne { detail: d }
             | Probleme::PontBloque { detail: d }
             | Probleme::AucunFd9 { detail: d }
@@ -471,6 +493,9 @@ pub struct Instrument<P: Pont> {
     /// refuserait d'armer de nouveau (ticket #24). Seul un nouveau pont lève
     /// ce doute.
     repos_incertain: bool,
+    /// FD-9 détecté : son pont, sa DLL et son adresse, pour la mesure d'une
+    /// feuille (`feuille`), qui relance le pont à son propre plafond.
+    fd9: Option<fd9::Fd9Detecte>,
 }
 
 impl<P: Pont> Instrument<P> {
@@ -507,6 +532,7 @@ impl<P: Pont> Instrument<P> {
                 etalonnage: None,
                 repos_incertain: false,
                 annulation: Annulation::default(),
+                fd9: None,
             },
             Err(probleme) => Self::en_echec(Some(dll), probleme),
         }
@@ -522,6 +548,7 @@ impl<P: Pont> Instrument<P> {
             etalonnage: None,
             repos_incertain: false,
             annulation: Annulation::default(),
+            fd9: None,
         }
     }
 
@@ -564,6 +591,9 @@ impl<P: Pont> Instrument<P> {
                     | ErreurPont::Sdk { .. } => Probleme::EtalonnageEchoue { detail },
                     ErreurPont::InstrumentPerdu {} => Probleme::InstrumentPerdu { detail },
                     ErreurPont::SessionInexploitable {} => Probleme::ConnexionImpossible { detail },
+                    ErreurPont::ComposantQrIntrouvable { chemin } => {
+                        Probleme::ComposantQrIntrouvable { detail: chemin }
+                    }
                     _ => Probleme::PontEnPanne { detail },
                 }
             }
@@ -687,6 +717,7 @@ impl<P: Pont> Instrument<P> {
             Ok(Reponse::Mesure {
                 mesure,
                 remise_au_repos,
+                ..
             }) if mesure.provenance().geometrie == Geometrie::Ponctuelle {} => {
                 let acquise = MesureAcquise {
                     mesure,
@@ -738,6 +769,9 @@ impl<P: Pont> Instrument<P> {
                     ErreurPont::ReposIncertain { .. } => Probleme::ReposIncertain { detail },
                     ErreurPont::InstrumentPerdu {} => Probleme::InstrumentPerdu { detail },
                     ErreurPont::SessionInexploitable {} => Probleme::ConnexionImpossible { detail },
+                    ErreurPont::ComposantQrIntrouvable { chemin } => {
+                        Probleme::ComposantQrIntrouvable { detail: chemin }
+                    }
                     _ => Probleme::PontEnPanne { detail },
                 }
             }

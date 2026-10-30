@@ -252,6 +252,17 @@ fn traiter<S: SdkMyiro1>(session: &mut Session<S>, requete: Requete) -> (Reponse
                 false,
             )
         }
+        // Le MYIRO-1 ne lit pas de feuille : commandes du FD-9, refusées sans
+        // rien transmettre à la DLL.
+        Requete::Prenumeriser { .. } | Requete::MesurerFeuille { .. } => {
+            return (
+                Reponse::RequeteInvalide {
+                    detail: "mesure d'une feuille : commande du FD-9, inconnue du pont MYIRO-1"
+                        .into(),
+                },
+                false,
+            )
+        }
         Requete::Etalonner {} => session.etalonner().map(|etalonnage| Reponse::Etalonne {
             date: etalonnage.date,
         }),
@@ -307,6 +318,8 @@ fn identite(connexion: &Connexion) -> Identite {
             .iter()
             .map(|octet| format!("{octet:02x}"))
             .collect(),
+        // Code 1901 du FD-9 : le MYIRO-1 n'en a pas.
+        recertification_due: false,
     }
 }
 
@@ -329,6 +342,7 @@ fn reponse_mesure(
     Ok(Reponse::Mesure {
         mesure,
         remise_au_repos: Info::Confirmee(remise_au_repos),
+        calage: None,
     })
 }
 

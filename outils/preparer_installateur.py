@@ -29,6 +29,14 @@ Usage (à la racine du dépôt) :
    l'application dira la mire FD-9 introuvable ; le MYIRO-1 reste utilisable.
    Embarquée, la mire suit la même règle que `SDK/` : installateur local,
    jamais publié tel quel.
+5. Cherche `zxing.dll` (ZXing.Net 0.14.0, Apache-2.0) dans le dossier `Module`
+   de FD-S2w, puis dans `SDK/` et ses sous-dossiers ; le premier trouvé, s'il
+   a l'empreinte de celui de FD-S2w (sinon tout s'arrête), est copié dans
+   `app/binaries/zxing/` (avec `zxing.presentation.dll` s'il est
+   à côté) et installé à côté de `pont-fd9-x86.exe`, avec sa licence
+   (`outils/licences/zxing/`). La DLL du FD-9 le charge depuis le dossier du
+   pont pour lire le QR des mires (ticket #87). Sans lui, une ligne le dit et
+   le pont FD-9 refusera de lancer une feuille.
 
 ArgyllCMS est sous AGPL-3.0 : chaque publication d'un installateur qui
 l'embarque fournit les sources de la version incluse, ou leur lien précis.
@@ -65,6 +73,22 @@ ARGYLL_LICENCES = ("License.txt", "AGPLv3.txt", "License3.txt", "LICENSE.txt", "
 # Mire FD-9 RGB-2520, reprise telle quelle (crate `mires`, `rgb2520.rs`).
 MIRE_FD9_FICHIER = "RGB-2520 A3 - 1p.tif"
 MIRE_FD9_EMPREINTE = "7550f4a38725ad9260982152bb6bcbe077922289adb48dd954f0bd7d2c7fc713"
+# Composant de lecture du QR du FD-9 (ticket #87) : chargé par FD9SDK.dll
+# depuis le dossier du pont. Apache-2.0 : redistribuable avec sa licence.
+MODULE_FD_S2W = "C:/Program Files (x86)/KONICA MINOLTA/FD-S2w/Module"
+ZXING = "zxing.dll"
+ZXING_VOISINS = ("zxing.presentation.dll",)
+ZXING_LICENCES = ("LICENSE-2.0.txt", "NOTICE.txt")
+# SHA-256 des fichiers de FD-S2w 1.6.0 (Module/), ZXing.Net 0.14.0.0 d'après
+# leur ressource de version : la DLL du fabricant attend cette assembly à nom
+# fort. Un autre fichier n'est pas embarqué.
+ZXING_EMPREINTES = {
+    "zxing.dll": "6314d5da3a64d191d0cbe0e73cc53fb87c4c118306549237c13eb097e930dc03",
+    "zxing.presentation.dll": "02b7fbb8d3a68ed6bde3516b6c79d983f11617c23f0af0e2026064213028b304",
+}
+# SHA-256 du texte de l'Apache License 2.0 publié par la fondation Apache
+# (https://www.apache.org/licenses/LICENSE-2.0.txt), fins de ligne LF.
+EMPREINTE_APACHE_2_0 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
 
 
 def architecture(fichier):
@@ -189,14 +213,66 @@ def annonce_mire_fd9(embarquee):
     return "Dossier mire-fd9/ absent : mire FD-9 non embarquée, seule la mire MYIRO-1 pourra être préparée."
 
 
+def dossiers_zxing(racine=RACINE):
+    """Où chercher zxing.dll, dans l'ordre : FD-S2w, puis SDK/ et ses sous-dossiers."""
+    sdk = racine / "SDK"
+    dossiers = [pathlib.Path(MODULE_FD_S2W), sdk]
+    if sdk.is_dir():
+        dossiers += sorted(p for p in sdk.iterdir() if p.is_dir())
+    return dossiers
+
+
+def source_zxing(dossiers):
+    """Premier zxing.dll trouvé dans `dossiers`, ou None."""
+    return next((d / ZXING for d in dossiers if (d / ZXING).is_file()), None)
+
+
+def zxing_embarque(racine=RACINE, dossiers=None, empreintes=ZXING_EMPREINTES):
+    """Ressources Tauri de zxing.dll, installé à côté des ponts, et de sa licence ;
+    {} si aucun n'est trouvé. Chaque fichier doit avoir l'empreinte connue (celui
+    de FD-S2w), sinon tout s'arrête avant la moindre copie. Les fichiers sont
+    copiés dans app/binaries/zxing/ (ignoré par git)."""
+    source = source_zxing(dossiers_zxing(racine) if dossiers is None else dossiers)
+    if source is None:
+        return {}
+    presents = [nom for nom in (ZXING, *ZXING_VOISINS) if (source.parent / nom).is_file()]
+    for nom in presents:
+        trouvee = hashlib.sha256((source.parent / nom).read_bytes()).hexdigest()
+        if trouvee != empreintes[nom]:
+            sys.exit(f"{source.parent / nom} n'est pas celui de FD-S2w (ZXing.Net 0.14.0.0) : empreinte {trouvee}, "
+                     f"attendue {empreintes[nom]}. La DLL du FD-9 ne chargerait pas une autre version : "
+                     "reprenez le fichier du dossier Module de FD-S2w.")
+    copie = racine / "app" / "binaries" / "zxing"
+    copie.mkdir(parents=True, exist_ok=True)
+    ressources = {}
+    for nom in presents:
+        shutil.copy2(source.parent / nom, copie / nom)
+        ressources[f"binaries/zxing/{nom}"] = nom
+    for nom in ZXING_LICENCES:
+        ressources[f"../outils/licences/zxing/{nom}"] = f"licences/zxing/{nom}"
+    return ressources
+
+
+def annonce_zxing(source):
+    """Une ligne sur le composant de lecture du QR du FD-9. La version n'est dite que
+    pour un fichier embarqué, donc d'empreinte vérifiée par `zxing_embarque`."""
+    if source is None:
+        return (f"zxing.dll introuvable ({MODULE_FD_S2W}, SDK/) : composant de lecture du QR non embarqué, "
+                "le pont FD-9 refusera de lancer une feuille.")
+    return (f"zxing.dll (ZXing.Net 0.14.0, Apache-2.0, empreinte vérifiée) embarqué à côté de pont-fd9-x86.exe "
+            f"depuis {source}, licence jointe sous licences/zxing/.")
+
+
 def main():
     # ArgyllCMS et la mire FD-9 sont contrôlés avant la compilation des ponts, qui est longue.
     argyll = argyll_embarque()
     mire_fd9 = mire_fd9_embarquee()
+    zxing = zxing_embarque()
     compiler_ponts(hote())
     ressources = dll_embarquees()
     ressources.update(argyll)
     ressources.update(mire_fd9)
+    ressources.update(zxing)
     bundle = {
         "active": True,
         "targets": ["nsis"],
@@ -212,13 +288,14 @@ def main():
         print("ATTENTION : cet installateur embarque les DLL du fabricant (" + ", ".join(dll)
               + "). Il est STRICTEMENT LOCAL : ne jamais le publier, ni sur GitHub ni ailleurs.")
     else:
-        print("Dossier SDK/ absent : aucune DLL embarquée, l'installateur cherchera le logiciel du fabricant.")
+        print("Dossier SDK/ absent : aucune DLL du fabricant embarquée, l'installateur cherchera le logiciel du fabricant.")
     if argyll:
         print(f"ArgyllCMS {VERSION_ARGYLL} embarqué (AGPL-3.0) : toute publication de cet installateur fournit "
               f"les sources d'ArgyllCMS {VERSION_ARGYLL} ou leur lien précis.")
     else:
         print("Dossier argyll/ absent : ArgyllCMS non embarqué, l'application ne pourra pas calculer de profil.")
     print(annonce_mire_fd9(bool(mire_fd9)))
+    print(annonce_zxing(source_zxing(dossiers_zxing()) if zxing else None))
     print("Suite : cargo tauri build --config app/tauri.installateur.json")
 
 

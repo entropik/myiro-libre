@@ -95,6 +95,18 @@ La fin de l'entrée (application fermée ou perdue), ou une erreur de lecture de
 
 Côté application, après l'envoi de `annuler`, chaque réponse est attendue au plus le délai ordinaire (30 s) ; au-delà, le pont est arrêté de force et l'instrument est dit dans un état incertain.
 
+## Fermeture du FD-9 qui ne rend pas la main : `deconnexion_bloquee`
+
+À l'essai réel E2, `FD9_Disconnect` est resté bloqué dans la DLL environ 5 minutes : la requête `fermer` n'a jamais eu de réponse. Le pont FD-9 surveille donc sa fermeture par un fil à part, qui n'appelle jamais la DLL. Si la fermeture (sortie de la feuille, déconnexion, attente de la fin de session, puis désinscription du rappel, comme MYIROtools) n'a pas rendu la main en 20 s (`DELAI_FERMETURE`, plus long que les 10 s d'attente de la fin de session), ce fil répond quand même à `fermer` :
+
+```json
+{"rep": "fermeture_incertaine", "remise_au_repos": {"etat": "deconnexion_bloquee"}}
+```
+
+Puis le pont écrit une dernière ligne à son journal et s'arrête de lui-même, avec le code de sortie 4. L'état de l'instrument et de la session de la DLL n'est pas connu. Si la fermeture vient de la fin de l'entrée, aucune réponse n'est écrite ; le pont s'arrête de même, avec le code 4. L'application, qui attend la réponse à `fermer` 30 s au plus, la reçoit avant de couper le pont elle-même ; elle l'annonce comme une fermeture qui n'a pas abouti.
+
+Le journal du pont (lignes `pont-fd9 : …` sur la sortie d'erreur) est écrit au fil de l'eau : un pont arrêté, de lui-même ou de force, n'en perd rien.
+
 ## Compatibilité
 
 La commande `annuler`, la réponse `annulation` et l'erreur `mesure_annulee` (ticket #26) sont refusées par un lecteur antérieur : l'application et les ponts se mettent à jour ensemble. Aucune ligne existante ne change.
@@ -102,3 +114,5 @@ La commande `annuler`, la réponse `annulation` et l'erreur `mesure_annulee` (ti
 Le champ `declenchement` est absent des lignes manuelles : un pont antérieur au ticket #51 les lit comme avant. Mais il refuse une requête automatique (champ inconnu), et une application antérieure refuse l'erreur `declenchement_refuse` : l'application et les ponts se mettent à jour ensemble.
 
 Pour le FD-9, aucune ligne existante ne change : le MYIRO-1 écrit et lit toujours `version` et `instruments` comme avant. Mais un lecteur antérieur au ticket #13, qui refuse depuis le ticket #25 les commandes et réponses inconnues, rejettera `connecter_adresse`, `version_dll` et `instruments_fd9` : l'application et les ponts se mettent à jour ensemble.
+
+La valeur `deconnexion_bloquee` est refusée par un lecteur antérieur : l'application et le pont FD-9 se mettent à jour ensemble.

@@ -1767,6 +1767,14 @@ const FRANCAIS: Catalogue = &[
         "Réinstallez myiro-libre, puis réessayez.",
     ),
     (
+        "probleme.composant_qr_introuvable.cause",
+        "Composant de lecture du QR introuvable\u{202f}: sans lui, le FD-9 ne peut pas lire le code de la mire. La mesure de la feuille n’a pas été lancée.",
+    ),
+    (
+        "probleme.composant_qr_introuvable.action",
+        "Réinstallez myiro-libre, puis relancez la mesure de la feuille.",
+    ),
+    (
         "probleme.pont_en_panne.cause",
         "Le dialogue avec l’instrument s’est interrompu.",
     ),
@@ -1950,6 +1958,10 @@ const FRANCAIS: Catalogue = &[
     (
         "choix.detail.deconnexion_refusee",
         "L’instrument a refusé la déconnexion (code {code})\u{202f}; la liaison a été coupée quand même.",
+    ),
+    (
+        "choix.detail.deconnexion_bloquee",
+        "L’instrument n’a pas répondu à la déconnexion\u{202f}; le programme qui le pilote a été arrêté.",
     ),
     (
         "choix.detail.fermeture_refusee",
@@ -2450,6 +2462,527 @@ const FRANCAIS: Catalogue = &[
     (
         "mire.erreur.fd9_fixe",
         "La mire du FD-9 est RGB-2520, sur une page A3\u{202f}: ni taille, ni format, ni côté à choisir.",
+    ),
+    // Mesurer une feuille au FD-9 (ticket #34)
+    (
+        "feuille_fd9.titre",
+        "Mesurer une feuille au FD-9",
+    ),
+    (
+        "feuille_fd9.mesurer",
+        "Mesurer une feuille au FD-9",
+    ),
+    (
+        "feuille_fd9.annuler",
+        "Annuler",
+    ),
+    (
+        "feuille_fd9.voir",
+        "Mire et points mesurés",
+    ),
+    (
+        "feuille_fd9.raison.sans_fd9",
+        "Aucun FD-9 n’est prêt\u{202f}: choisissez le FD-9 dans la barre du haut, allumé et sur le réseau.",
+    ),
+    (
+        "feuille_fd9.raison.occupe",
+        "L’instrument est occupé par une autre opération\u{202f}; attendez qu’elle se termine.",
+    ),
+    (
+        "feuille_fd9.raison.chargement",
+        "Recherche de la mire et du FD-9…",
+    ),
+    (
+        "feuille_fd9.raison.en_cours",
+        "Une feuille est en cours. Jusqu’au début de la mesure des plages, «\u{202f}Annuler\u{202f}» l’arrête sans rien mesurer.",
+    ),
+    (
+        "feuille_fd9.raison.mesure_en_cours",
+        "Les plages sont en cours de mesure\u{202f}: la feuille va jusqu’au bout.",
+    ),
+    (
+        "feuille_fd9.raison.ailleurs",
+        "Une feuille est en cours de mesure dans une autre résolution.",
+    ),
+    (
+        "feuille_fd9.demonstration",
+        "Démonstration\u{202f}: FD-9 simulé, données fictives.",
+    ),
+    (
+        "feuille_fd9.repos",
+        "Imprimez la mire RGB-2520, cliquez sur «\u{202f}Mesurer une feuille au FD-9\u{202f}», puis glissez la feuille dans le FD-9.",
+    ),
+    (
+        "feuille_fd9.etapes",
+        "Étapes de la feuille",
+    ),
+    (
+        "feuille_fd9.pas.feuille",
+        "Feuille",
+    ),
+    (
+        "feuille_fd9.pas.lecture",
+        "Lecture",
+    ),
+    (
+        "feuille_fd9.pas.mesure",
+        "Mesure",
+    ),
+    (
+        "feuille_fd9.pas.rangement",
+        "Rangement",
+    ),
+    (
+        "feuille_fd9.etape.connexion",
+        "Connexion au FD-9…",
+    ),
+    (
+        "feuille_fd9.etape.glisser_feuille",
+        "Glissez la feuille RGB-2520 dans le FD-9.",
+    ),
+    (
+        "feuille_fd9.etape.feuille_engagee",
+        "Feuille engagée.",
+    ),
+    (
+        "feuille_fd9.etape.lecture",
+        "Lecture de la feuille\u{202f}: image, code et repérage des plages…",
+    ),
+    (
+        "feuille_fd9.etape.calage_pret",
+        "Plages repérées\u{202f}: les points visés sont dans l’onglet «\u{202f}Points mesurés\u{202f}».",
+    ),
+    (
+        "feuille_fd9.etape.mesure",
+        "Mesure\u{202f}: {n} / {total} plages",
+    ),
+    (
+        "feuille_fd9.etape.mesure_lancee",
+        "Mesure des plages en cours…",
+    ),
+    (
+        "feuille_fd9.etape.rangement",
+        "Rangement de la mesure…",
+    ),
+    (
+        "feuille_fd9.fait",
+        "Mesure rangée\u{202f}: {fichier}, {plages} plages.",
+    ),
+    (
+        "feuille_fd9.fait.incertaine",
+        "Le FD-9 n’a pas confirmé sa remise au repos\u{202f}: vérifiez-le avant la feuille suivante.",
+    ),
+    (
+        "feuille_fd9.avancement",
+        "Avancement de la mesure des plages",
+    ),
+    (
+        "feuille_fd9.detail",
+        "Détail technique",
+    ),
+    (
+        "feuille_fd9.onglets",
+        "Vues de la feuille",
+    ),
+    (
+        "feuille_fd9.onglet.mire",
+        "Mire",
+    ),
+    (
+        "feuille_fd9.onglet.points",
+        "Points mesurés",
+    ),
+    (
+        "feuille_fd9.mire.legende",
+        "Mise en page de la mire sur la feuille A3, plages dans leurs couleurs de consigne, approchées à l’écran.",
+    ),
+    (
+        "feuille_fd9.mire.absente",
+        "La mire RGB-2520 n’a pas pu être lue\u{202f}: sa mise en page ne peut pas être montrée.",
+    ),
+    (
+        "feuille_fd9.mire.alt",
+        "Mise en page de la mire RGB-2520 sur la feuille, plages en couleurs de consigne.",
+    ),
+    (
+        "feuille_fd9.points.vide",
+        "Les points apparaîtront dès que le FD-9 aura repéré les plages de la feuille.",
+    ),
+    (
+        "feuille_fd9.points.legende",
+        "Image prise par le FD-9, un point rouge au centre de chaque plage trouvée. Décalage de la feuille\u{202f}: {dx}\u{202f}mm, {dy}\u{202f}mm\u{202f}; écart restant au plus {ecart}\u{202f}mm.",
+    ),
+    (
+        "feuille_fd9.points.sans_image",
+        "Le FD-9 n’a pas rendu l’image de la feuille\u{202f}: seuls les points sont montrés.",
+    ),
+    (
+        "feuille_fd9.points.derniere",
+        "Dernière feuille mesurée dans cette résolution.",
+    ),
+    (
+        "feuille_fd9.points.alt",
+        "Image de la feuille prise par le FD-9, avec un point rouge sur chaque plage trouvée.",
+    ),
+    (
+        "feuille_fd9.survol.vide",
+        "Survolez une plage, ou utilisez les flèches du clavier, pour voir son numéro et sa couleur de consigne.",
+    ),
+    (
+        "feuille_fd9.survol",
+        "Plage {nom}\u{202f}: consigne R {r}, V {v}, B {b}",
+    ),
+    (
+        "feuille_fd9.consigne",
+        "Couleur de consigne de la plage {nom}",
+    ),
+    (
+        "feuille_fd9.zoom",
+        "Zoom",
+    ),
+    (
+        "feuille_fd9.zoom.moins",
+        "Réduire",
+    ),
+    (
+        "feuille_fd9.zoom.plus",
+        "Grossir",
+    ),
+    (
+        "feuille_fd9.zoom.ajuster",
+        "Ajuster",
+    ),
+    (
+        "feuille_fd9.zoom.niveau",
+        "{n}\u{202f}%",
+    ),
+    (
+        "feuille_fd9.sans_fd9.cause",
+        "Aucun FD-9 n’est détecté\u{202f}: la feuille n’a pas été lancée.",
+    ),
+    (
+        "feuille_fd9.sans_fd9.action",
+        "Allumez le FD-9, vérifiez qu’il est sur le réseau et que FD-S2w est fermé, puis choisissez-le dans la barre du haut.",
+    ),
+    (
+        "feuille_fd9.definition_refusee.cause",
+        "La mire RGB-2520 lue n’a pas une couleur par plage\u{202f}: elle ne peut pas être envoyée au FD-9. Rien n’a été lancé.",
+    ),
+    (
+        "feuille_fd9.definition_refusee.action",
+        "Reprenez le fichier d’origine de la mire, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.autre.cause",
+        "La feuille n’a pas pu être mesurée.",
+    ),
+    (
+        "feuille_fd9.autre.action",
+        "Recommencez. Si le problème revient, gardez le détail technique pour le signaler.",
+    ),
+    (
+        "feuille_fd9.etat_invalide.cause",
+        "Le FD-9 n’était pas prêt pour cette étape\u{202f}: rien n’a été mesuré.",
+    ),
+    (
+        "feuille_fd9.etat_invalide.action",
+        "Recommencez la mesure de la feuille.",
+    ),
+    (
+        "feuille_fd9.palier_non_autorise.cause",
+        "Cette étape n’est pas permise au FD-9 dans cette version\u{202f}: rien n’a été mesuré.",
+    ),
+    (
+        "feuille_fd9.palier_non_autorise.action",
+        "Recommencez. Si le message revient, réinstallez myiro-libre.",
+    ),
+    (
+        "feuille_fd9.instrument_inconnu.cause",
+        "Le FD-9 désigné n’a pas été retrouvé\u{202f}: rien n’a été mesuré.",
+    ),
+    (
+        "feuille_fd9.instrument_inconnu.action",
+        "Vérifiez que le FD-9 est allumé et sur le réseau, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.parametre_refuse.cause",
+        "Le FD-9 a refusé une valeur envoyée\u{202f}: rien n’a été mesuré.",
+    ),
+    (
+        "feuille_fd9.parametre_refuse.action",
+        "Recommencez. Si le message revient, gardez le détail technique pour le signaler.",
+    ),
+    (
+        "feuille_fd9.etat_incompatible.cause",
+        "Le FD-9 a refusé l’opération dans son état du moment\u{202f}: rien n’a été mesuré.",
+    ),
+    (
+        "feuille_fd9.etat_incompatible.action",
+        "Attendez qu’il ait rendu la feuille, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.etalonnage_echoue.cause",
+        "L’étalonnage de l’instrument a échoué.",
+    ),
+    (
+        "feuille_fd9.etalonnage_echoue.action",
+        "Recommencez.",
+    ),
+    (
+        "feuille_fd9.non_etalonne.cause",
+        "L’instrument n’est pas étalonné.",
+    ),
+    (
+        "feuille_fd9.non_etalonne.action",
+        "Étalonnez-le, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.etalonnage_requis.cause",
+        "Un étalonnage est demandé avant la mesure.",
+    ),
+    (
+        "feuille_fd9.etalonnage_requis.action",
+        "Étalonnez l’instrument, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.session_inexploitable.cause",
+        "L’identité du FD-9 n’a pas pu être lue\u{202f}: rien n’a été mesuré.",
+    ),
+    (
+        "feuille_fd9.session_inexploitable.action",
+        "Recommencez la mesure de la feuille.",
+    ),
+    (
+        "feuille_fd9.mesure_echouee.cause",
+        "Le FD-9 a signalé l’échec de la mesure\u{202f}: rien n’a été rangé.",
+    ),
+    (
+        "feuille_fd9.mesure_echouee.action",
+        "Recommencez avec la même feuille.",
+    ),
+    (
+        "feuille_fd9.declenchement_refuse.cause",
+        "L’instrument a refusé de lancer la mesure.",
+    ),
+    (
+        "feuille_fd9.declenchement_refuse.action",
+        "Recommencez.",
+    ),
+    (
+        "feuille_fd9.mesure_annulee.cause",
+        "Vous avez arrêté la feuille\u{202f}: rien n’a été mesuré ni rangé.",
+    ),
+    (
+        "feuille_fd9.mesure_annulee.action",
+        "Relancez la mesure quand la feuille est prête.",
+    ),
+    (
+        "feuille_fd9.reponse_inattendue.cause",
+        "Le FD-9 a rendu une réponse d’une forme imprévue\u{202f}: rien n’a été rangé.",
+    ),
+    (
+        "feuille_fd9.reponse_inattendue.action",
+        "Recommencez. Si le message revient, gardez le détail technique pour le signaler.",
+    ),
+    (
+        "feuille_fd9.delai.cause",
+        "Le FD-9 n’a pas répondu à temps pendant la feuille\u{202f}: rien n’a été rangé.",
+    ),
+    (
+        "feuille_fd9.delai.action",
+        "Vérifiez que la feuille est sortie du FD-9, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.instrument_perdu.cause",
+        "La liaison avec le FD-9 a été perdue pendant la feuille\u{202f}: rien n’a été rangé.",
+    ),
+    (
+        "feuille_fd9.instrument_perdu.action",
+        "Vérifiez le réseau et que le FD-9 est allumé, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.repos_incertain.cause",
+        "Le retour au repos de l’instrument n’est pas prouvé.",
+    ),
+    (
+        "feuille_fd9.repos_incertain.action",
+        "Vérifiez l’instrument, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.deconnexion_echouee.cause",
+        "La déconnexion du FD-9 a échoué.",
+    ),
+    (
+        "feuille_fd9.deconnexion_echouee.action",
+        "Éteignez puis rallumez le FD-9 avant la feuille suivante.",
+    ),
+    (
+        "feuille_fd9.session_fermee.cause",
+        "La liaison avec le FD-9 était déjà fermée\u{202f}: rien n’a été mesuré.",
+    ),
+    (
+        "feuille_fd9.session_fermee.action",
+        "Recommencez la mesure de la feuille.",
+    ),
+    (
+        "feuille_fd9.mire_non_reconnue.cause",
+        "Le FD-9 n’a pas retrouvé les plages de la mire sur la feuille\u{202f}: rien n’a été mesuré.",
+    ),
+    (
+        "feuille_fd9.mire_non_reconnue.action",
+        "Vérifiez que c’est bien la RGB-2520 imprimée en entier, puis glissez-la de nouveau, bien droite.",
+    ),
+    (
+        "feuille_fd9.autre_mire.cause",
+        "Le code de la feuille désigne une autre mire que la RGB-2520\u{202f}: rien n’a été mesuré.",
+    ),
+    (
+        "feuille_fd9.autre_mire.action",
+        "Glissez la feuille RGB-2520 imprimée depuis myiro-libre.",
+    ),
+    (
+        "feuille_fd9.feuille_absente.cause",
+        "Aucune feuille n’a été glissée dans le FD-9 à temps.",
+    ),
+    (
+        "feuille_fd9.feuille_absente.action",
+        "Relancez la mesure, puis glissez la feuille dans les deux minutes.",
+    ),
+    (
+        "feuille_fd9.instrument_indisponible.cause",
+        "Le FD-9 n’attendait pas de feuille\u{202f}: un autre logiciel le tient peut-être.",
+    ),
+    (
+        "feuille_fd9.instrument_indisponible.action",
+        "Fermez FD-S2w et les autres logiciels de mesure, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.cause",
+        "Le FD-9 a signalé un incident pendant la feuille\u{202f}: rien n’a été rangé.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.action",
+        "Retirez la feuille, vérifiez l’instrument, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.101.cause",
+        "Le capot du FD-9 est ouvert\u{202f}: la feuille a été arrêtée.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.101.action",
+        "Fermez le capot, retirez la feuille, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.102.cause",
+        "Bourrage\u{202f}: la feuille s’est coincée dans le FD-9.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.102.action",
+        "Ouvrez le capot, retirez la feuille sans forcer, refermez, puis recommencez avec une feuille bien plane.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.103.cause",
+        "La liaison avec le FD-9 a été perdue pendant la feuille.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.103.action",
+        "Vérifiez le réseau et que le FD-9 est allumé, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.201.cause",
+        "La préparation de la mesure a échoué dans le FD-9.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.201.action",
+        "Retirez la feuille, attendez que le FD-9 soit prêt, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.202.cause",
+        "Le FD-9 a signalé l’échec de la mesure.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.202.action",
+        "Recommencez avec la même feuille.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.203.cause",
+        "Le FD-9 a signalé une erreur de son capteur.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.203.action",
+        "Éteignez puis rallumez le FD-9, puis recommencez. Si le message revient, faites-le vérifier.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.204.cause",
+        "Le FD-9 a signalé une erreur de calcul.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.204.action",
+        "Recommencez la mesure de la feuille.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.205.cause",
+        "La feuille est trop longue pour le FD-9.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.205.action",
+        "Imprimez la mire sur une feuille A3, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.206.cause",
+        "Le FD-9 manque de mémoire pour cette feuille.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.206.action",
+        "Éteignez puis rallumez le FD-9, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.301.cause",
+        "Le FD-9 a signalé une erreur grave.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.301.action",
+        "Éteignez puis rallumez le FD-9. Si le message revient, faites-le vérifier.",
+    ),
+    (
+        "feuille_fd9.reconnaissance_douteuse.cause",
+        "Le FD-9 n’est pas sûr d’avoir trouvé toutes les plages\u{202f}: comme le logiciel du fabricant, myiro-libre ne mesure pas.",
+    ),
+    (
+        "feuille_fd9.reconnaissance_douteuse.action",
+        "Vérifiez que la feuille est propre et entière, puis glissez-la de nouveau, bien droite.",
+    ),
+    (
+        "feuille_fd9.mesure_invraisemblable.cause",
+        "Les couleurs mesurées ne suivent pas celles de la mire\u{202f}: le FD-9 a sans doute mesuré à côté des plages. Rien n’a été rangé.",
+    ),
+    (
+        "feuille_fd9.mesure_invraisemblable.action",
+        "Regardez les points mesurés, puis glissez la feuille de nouveau, bien droite.",
+    ),
+    (
+        "feuille_fd9.positions_plages.cause",
+        "Le FD-9 a rendu des plages en double ou manquantes\u{202f}: rien n’a été rangé.",
+    ),
+    (
+        "feuille_fd9.positions_plages.action",
+        "Recommencez la mesure de la feuille.",
+    ),
+    (
+        "feuille_fd9.composant_qr_introuvable.cause",
+        "Composant de lecture du QR introuvable\u{202f}: la feuille n’a pas été lancée.",
+    ),
+    (
+        "feuille_fd9.composant_qr_introuvable.action",
+        "Réinstallez myiro-libre, puis recommencez.",
+    ),
+    (
+        "feuille_fd9.sdk.cause",
+        "Le logiciel du FD-9 a rendu une erreur inattendue\u{202f}: rien n’a été rangé.",
+    ),
+    (
+        "feuille_fd9.sdk.action",
+        "Recommencez. Si le message revient, gardez le détail technique pour le signaler.",
     ),
     ("mire.ouvrir", "Préparer une mire"),
     ("mire.titre", "Préparer une mire"),
@@ -4229,6 +4762,14 @@ const ANGLAIS: Catalogue = &[
         "Reinstall myiro-libre, then try again.",
     ),
     (
+        "probleme.composant_qr_introuvable.cause",
+        "QR code reading component not found: without it, the FD-9 cannot read the chart’s code. The sheet measurement was not started.",
+    ),
+    (
+        "probleme.composant_qr_introuvable.action",
+        "Reinstall myiro-libre, then start the sheet measurement again.",
+    ),
+    (
         "probleme.pont_en_panne.cause",
         "The connection with the instrument was interrupted.",
     ),
@@ -4415,6 +4956,10 @@ const ANGLAIS: Catalogue = &[
     (
         "choix.detail.deconnexion_refusee",
         "The instrument refused to disconnect (code {code}); the connection was cut anyway.",
+    ),
+    (
+        "choix.detail.deconnexion_bloquee",
+        "The instrument did not answer the disconnection request; the program driving it was stopped.",
     ),
     (
         "choix.detail.fermeture_refusee",
@@ -4915,6 +5460,527 @@ const ANGLAIS: Catalogue = &[
     (
         "mire.erreur.fd9_fixe",
         "The FD-9 chart is RGB-2520, on one A3 page: no size, format or patch size to choose.",
+    ),
+    // Measure a sheet with the FD-9 (ticket #34)
+    (
+        "feuille_fd9.titre",
+        "Measure a sheet with the FD-9",
+    ),
+    (
+        "feuille_fd9.mesurer",
+        "Measure a sheet with the FD-9",
+    ),
+    (
+        "feuille_fd9.annuler",
+        "Cancel",
+    ),
+    (
+        "feuille_fd9.voir",
+        "Chart and measured points",
+    ),
+    (
+        "feuille_fd9.raison.sans_fd9",
+        "No FD-9 is ready: choose the FD-9 in the top bar, switched on and on the network.",
+    ),
+    (
+        "feuille_fd9.raison.occupe",
+        "The instrument is busy with another operation; wait until it ends.",
+    ),
+    (
+        "feuille_fd9.raison.chargement",
+        "Looking for the chart and the FD-9…",
+    ),
+    (
+        "feuille_fd9.raison.en_cours",
+        "A sheet is in progress. Until the patch measurement starts, “Cancel” stops it without measuring anything.",
+    ),
+    (
+        "feuille_fd9.raison.mesure_en_cours",
+        "The patches are being measured: the sheet goes through to the end.",
+    ),
+    (
+        "feuille_fd9.raison.ailleurs",
+        "A sheet is being measured in another resolution.",
+    ),
+    (
+        "feuille_fd9.demonstration",
+        "Demonstration: simulated FD-9, fictitious data.",
+    ),
+    (
+        "feuille_fd9.repos",
+        "Print the RGB-2520 chart, click “Measure a sheet with the FD-9”, then slide the sheet into the FD-9.",
+    ),
+    (
+        "feuille_fd9.etapes",
+        "Steps of the sheet",
+    ),
+    (
+        "feuille_fd9.pas.feuille",
+        "Sheet",
+    ),
+    (
+        "feuille_fd9.pas.lecture",
+        "Reading",
+    ),
+    (
+        "feuille_fd9.pas.mesure",
+        "Measurement",
+    ),
+    (
+        "feuille_fd9.pas.rangement",
+        "Filing",
+    ),
+    (
+        "feuille_fd9.etape.connexion",
+        "Connecting to the FD-9…",
+    ),
+    (
+        "feuille_fd9.etape.glisser_feuille",
+        "Slide the RGB-2520 sheet into the FD-9.",
+    ),
+    (
+        "feuille_fd9.etape.feuille_engagee",
+        "Sheet taken in.",
+    ),
+    (
+        "feuille_fd9.etape.lecture",
+        "Reading the sheet: image, code and patch location…",
+    ),
+    (
+        "feuille_fd9.etape.calage_pret",
+        "Patches located: the target points are in the “Measured points” tab.",
+    ),
+    (
+        "feuille_fd9.etape.mesure",
+        "Measurement: {n} / {total} patches",
+    ),
+    (
+        "feuille_fd9.etape.mesure_lancee",
+        "Measuring the patches…",
+    ),
+    (
+        "feuille_fd9.etape.rangement",
+        "Filing the measurement…",
+    ),
+    (
+        "feuille_fd9.fait",
+        "Measurement filed: {fichier}, {plages} patches.",
+    ),
+    (
+        "feuille_fd9.fait.incertaine",
+        "The FD-9 did not confirm it returned to rest: check it before the next sheet.",
+    ),
+    (
+        "feuille_fd9.avancement",
+        "Progress of the patch measurement",
+    ),
+    (
+        "feuille_fd9.detail",
+        "Technical detail",
+    ),
+    (
+        "feuille_fd9.onglets",
+        "Views of the sheet",
+    ),
+    (
+        "feuille_fd9.onglet.mire",
+        "Chart",
+    ),
+    (
+        "feuille_fd9.onglet.points",
+        "Measured points",
+    ),
+    (
+        "feuille_fd9.mire.legende",
+        "Chart layout on the A3 sheet, patches in their target colours, approximated on screen.",
+    ),
+    (
+        "feuille_fd9.mire.absente",
+        "The RGB-2520 chart could not be read: its layout cannot be shown.",
+    ),
+    (
+        "feuille_fd9.mire.alt",
+        "Layout of the RGB-2520 chart on the sheet, patches in their target colours.",
+    ),
+    (
+        "feuille_fd9.points.vide",
+        "The points will appear as soon as the FD-9 has located the patches of the sheet.",
+    ),
+    (
+        "feuille_fd9.points.legende",
+        "Image taken by the FD-9, a red dot at the centre of each patch found. Sheet offset: {dx} mm, {dy} mm; remaining deviation at most {ecart} mm.",
+    ),
+    (
+        "feuille_fd9.points.sans_image",
+        "The FD-9 did not return the image of the sheet: only the points are shown.",
+    ),
+    (
+        "feuille_fd9.points.derniere",
+        "Last sheet measured in this resolution.",
+    ),
+    (
+        "feuille_fd9.points.alt",
+        "Image of the sheet taken by the FD-9, with a red dot on each patch found.",
+    ),
+    (
+        "feuille_fd9.survol.vide",
+        "Hover over a patch, or use the arrow keys, to see its number and target colour.",
+    ),
+    (
+        "feuille_fd9.survol",
+        "Patch {nom}: target R {r}, G {v}, B {b}",
+    ),
+    (
+        "feuille_fd9.consigne",
+        "Target colour of patch {nom}",
+    ),
+    (
+        "feuille_fd9.zoom",
+        "Zoom",
+    ),
+    (
+        "feuille_fd9.zoom.moins",
+        "Zoom out",
+    ),
+    (
+        "feuille_fd9.zoom.plus",
+        "Zoom in",
+    ),
+    (
+        "feuille_fd9.zoom.ajuster",
+        "Fit",
+    ),
+    (
+        "feuille_fd9.zoom.niveau",
+        "{n} %",
+    ),
+    (
+        "feuille_fd9.sans_fd9.cause",
+        "No FD-9 is detected: the sheet was not started.",
+    ),
+    (
+        "feuille_fd9.sans_fd9.action",
+        "Switch the FD-9 on, check it is on the network and that FD-S2w is closed, then choose it in the top bar.",
+    ),
+    (
+        "feuille_fd9.definition_refusee.cause",
+        "The RGB-2520 chart read does not have one colour per patch: it cannot be sent to the FD-9. Nothing was started.",
+    ),
+    (
+        "feuille_fd9.definition_refusee.action",
+        "Take the original chart file again, then start over.",
+    ),
+    (
+        "feuille_fd9.autre.cause",
+        "The sheet could not be measured.",
+    ),
+    (
+        "feuille_fd9.autre.action",
+        "Start over. If the problem comes back, keep the technical detail to report it.",
+    ),
+    (
+        "feuille_fd9.etat_invalide.cause",
+        "The FD-9 was not ready for this step: nothing was measured.",
+    ),
+    (
+        "feuille_fd9.etat_invalide.action",
+        "Measure the sheet again.",
+    ),
+    (
+        "feuille_fd9.palier_non_autorise.cause",
+        "This step is not allowed for the FD-9 in this version: nothing was measured.",
+    ),
+    (
+        "feuille_fd9.palier_non_autorise.action",
+        "Start over. If the message comes back, reinstall myiro-libre.",
+    ),
+    (
+        "feuille_fd9.instrument_inconnu.cause",
+        "The FD-9 could not be found again: nothing was measured.",
+    ),
+    (
+        "feuille_fd9.instrument_inconnu.action",
+        "Check the FD-9 is on and on the network, then start over.",
+    ),
+    (
+        "feuille_fd9.parametre_refuse.cause",
+        "The FD-9 refused a value it was sent: nothing was measured.",
+    ),
+    (
+        "feuille_fd9.parametre_refuse.action",
+        "Start over. If the message comes back, keep the technical detail to report it.",
+    ),
+    (
+        "feuille_fd9.etat_incompatible.cause",
+        "The FD-9 refused the operation in its current state: nothing was measured.",
+    ),
+    (
+        "feuille_fd9.etat_incompatible.action",
+        "Wait until it has returned the sheet, then start over.",
+    ),
+    (
+        "feuille_fd9.etalonnage_echoue.cause",
+        "The instrument calibration failed.",
+    ),
+    (
+        "feuille_fd9.etalonnage_echoue.action",
+        "Start over.",
+    ),
+    (
+        "feuille_fd9.non_etalonne.cause",
+        "The instrument is not calibrated.",
+    ),
+    (
+        "feuille_fd9.non_etalonne.action",
+        "Calibrate it, then start over.",
+    ),
+    (
+        "feuille_fd9.etalonnage_requis.cause",
+        "A calibration is required before measuring.",
+    ),
+    (
+        "feuille_fd9.etalonnage_requis.action",
+        "Calibrate the instrument, then start over.",
+    ),
+    (
+        "feuille_fd9.session_inexploitable.cause",
+        "The identity of the FD-9 could not be read: nothing was measured.",
+    ),
+    (
+        "feuille_fd9.session_inexploitable.action",
+        "Measure the sheet again.",
+    ),
+    (
+        "feuille_fd9.mesure_echouee.cause",
+        "The FD-9 reported that the measurement failed: nothing was filed.",
+    ),
+    (
+        "feuille_fd9.mesure_echouee.action",
+        "Start over with the same sheet.",
+    ),
+    (
+        "feuille_fd9.declenchement_refuse.cause",
+        "The instrument refused to start the measurement.",
+    ),
+    (
+        "feuille_fd9.declenchement_refuse.action",
+        "Start over.",
+    ),
+    (
+        "feuille_fd9.mesure_annulee.cause",
+        "You stopped the sheet: nothing was measured or filed.",
+    ),
+    (
+        "feuille_fd9.mesure_annulee.action",
+        "Start the measurement again when the sheet is ready.",
+    ),
+    (
+        "feuille_fd9.reponse_inattendue.cause",
+        "The FD-9 returned an answer of an unexpected form: nothing was filed.",
+    ),
+    (
+        "feuille_fd9.reponse_inattendue.action",
+        "Start over. If the message comes back, keep the technical detail to report it.",
+    ),
+    (
+        "feuille_fd9.delai.cause",
+        "The FD-9 did not answer in time during the sheet: nothing was filed.",
+    ),
+    (
+        "feuille_fd9.delai.action",
+        "Check that the sheet came out of the FD-9, then start over.",
+    ),
+    (
+        "feuille_fd9.instrument_perdu.cause",
+        "The link with the FD-9 was lost during the sheet: nothing was filed.",
+    ),
+    (
+        "feuille_fd9.instrument_perdu.action",
+        "Check the network and that the FD-9 is on, then start over.",
+    ),
+    (
+        "feuille_fd9.repos_incertain.cause",
+        "The instrument return to rest is not proven.",
+    ),
+    (
+        "feuille_fd9.repos_incertain.action",
+        "Check the instrument, then start over.",
+    ),
+    (
+        "feuille_fd9.deconnexion_echouee.cause",
+        "Disconnecting the FD-9 failed.",
+    ),
+    (
+        "feuille_fd9.deconnexion_echouee.action",
+        "Switch the FD-9 off and on again before the next sheet.",
+    ),
+    (
+        "feuille_fd9.session_fermee.cause",
+        "The link with the FD-9 was already closed: nothing was measured.",
+    ),
+    (
+        "feuille_fd9.session_fermee.action",
+        "Measure the sheet again.",
+    ),
+    (
+        "feuille_fd9.mire_non_reconnue.cause",
+        "The FD-9 did not find the chart patches on the sheet: nothing was measured.",
+    ),
+    (
+        "feuille_fd9.mire_non_reconnue.action",
+        "Check it is the whole printed RGB-2520, then slide it in again, straight.",
+    ),
+    (
+        "feuille_fd9.autre_mire.cause",
+        "The code on the sheet names another chart than RGB-2520: nothing was measured.",
+    ),
+    (
+        "feuille_fd9.autre_mire.action",
+        "Slide in the RGB-2520 sheet printed from myiro-libre.",
+    ),
+    (
+        "feuille_fd9.feuille_absente.cause",
+        "No sheet was slid into the FD-9 in time.",
+    ),
+    (
+        "feuille_fd9.feuille_absente.action",
+        "Start the measurement again, then slide the sheet in within two minutes.",
+    ),
+    (
+        "feuille_fd9.instrument_indisponible.cause",
+        "The FD-9 was not waiting for a sheet: another program may be holding it.",
+    ),
+    (
+        "feuille_fd9.instrument_indisponible.action",
+        "Close FD-S2w and the other measuring programs, then start over.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.cause",
+        "The FD-9 reported an incident during the sheet: nothing was filed.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.action",
+        "Remove the sheet, check the instrument, then start over.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.101.cause",
+        "The FD-9 cover is open: the sheet was stopped.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.101.action",
+        "Close the cover, remove the sheet, then start over.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.102.cause",
+        "Paper jam: the sheet got stuck in the FD-9.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.102.action",
+        "Open the cover, remove the sheet without forcing, close it, then start over with a flat sheet.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.103.cause",
+        "The link with the FD-9 was lost during the sheet.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.103.action",
+        "Check the network and that the FD-9 is on, then start over.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.201.cause",
+        "The FD-9 failed to prepare the measurement.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.201.action",
+        "Remove the sheet, wait until the FD-9 is ready, then start over.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.202.cause",
+        "The FD-9 reported that the measurement failed.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.202.action",
+        "Start over with the same sheet.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.203.cause",
+        "The FD-9 reported a sensor error.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.203.action",
+        "Switch the FD-9 off and on again, then start over. If the message comes back, have it checked.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.204.cause",
+        "The FD-9 reported a calculation error.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.204.action",
+        "Measure the sheet again.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.205.cause",
+        "The sheet is too long for the FD-9.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.205.action",
+        "Print the chart on an A3 sheet, then start over.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.206.cause",
+        "The FD-9 is out of memory for this sheet.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.206.action",
+        "Switch the FD-9 off and on again, then start over.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.301.cause",
+        "The FD-9 reported a serious error.",
+    ),
+    (
+        "feuille_fd9.incident_feuille.301.action",
+        "Switch the FD-9 off and on again. If the message comes back, have it checked.",
+    ),
+    (
+        "feuille_fd9.reconnaissance_douteuse.cause",
+        "The FD-9 is not sure it found every patch: like the manufacturer software, myiro-libre does not measure.",
+    ),
+    (
+        "feuille_fd9.reconnaissance_douteuse.action",
+        "Check the sheet is clean and whole, then slide it in again, straight.",
+    ),
+    (
+        "feuille_fd9.mesure_invraisemblable.cause",
+        "The measured colours do not follow the chart: the FD-9 probably measured beside the patches. Nothing was filed.",
+    ),
+    (
+        "feuille_fd9.mesure_invraisemblable.action",
+        "Look at the measured points, then slide the sheet in again, straight.",
+    ),
+    (
+        "feuille_fd9.positions_plages.cause",
+        "The FD-9 returned duplicate or missing patches: nothing was filed.",
+    ),
+    (
+        "feuille_fd9.positions_plages.action",
+        "Measure the sheet again.",
+    ),
+    (
+        "feuille_fd9.composant_qr_introuvable.cause",
+        "QR reading component not found: the sheet was not started.",
+    ),
+    (
+        "feuille_fd9.composant_qr_introuvable.action",
+        "Reinstall myiro-libre, then start over.",
+    ),
+    (
+        "feuille_fd9.sdk.cause",
+        "The FD-9 software returned an unexpected error: nothing was filed.",
+    ),
+    (
+        "feuille_fd9.sdk.action",
+        "Start over. If the message comes back, keep the technical detail to report it.",
     ),
     ("mire.ouvrir", "Prepare a chart"),
     ("mire.titre", "Prepare a chart"),

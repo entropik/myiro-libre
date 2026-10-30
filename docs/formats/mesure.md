@@ -16,7 +16,7 @@ Chaque morceau d'une mesure est vérifié **quand on la fabrique comme quand on 
 | plage | M0, M1 et M2 de même longueur |
 | mesure | au moins une plage, une seule en mesure ponctuelle, toutes les plages de mêmes dimensions |
 | MYIRO-1 | 36 valeurs par spectre (380 à 730 nm par 10 nm) et 152 données brutes par plage. Ces chiffres ne sont pas imposés aux autres instruments |
-| provenance | modèle, version du pont, architecture et libellé du calcul non vides ; dates au format `2026-10-07T15:04:05+02:00` (fuseau obligatoire) ; empreinte de la DLL en 64 chiffres hexadécimaux minuscules |
+| provenance | modèle, version du pont, architecture et libellé du calcul non vides ; dates au format `2026-10-07T15:04:05+02:00` (fuseau obligatoire) ; empreinte de la DLL en 64 chiffres hexadécimaux minuscules ; lecture de la feuille présente pour une mesure en feuille, et seulement pour elle |
 
 Un champ que le format ne connaît pas est **refusé** : on ne devine pas ce qu'il voulait dire. Un nouveau champ demande un nouveau numéro de format.
 
@@ -71,7 +71,7 @@ Dans le protocole, la même mesure arrive dans une réponse `{"rep": "mesure", "
 
 Une valeur nue (`{"etat": "au_repos"}` sans `statut`), un `etat` inconnu ou un champ en trop sont refusés.
 
-Hors de la réponse `mesure`, la même valeur, sans `statut`, accompagne la réponse `fermeture_incertaine` et les erreurs `repos_incertain` et `deconnexion_echouee`. Elle peut alors valoir aussi `{"etat": "repos_suppose"}` : le désarmement a été refusé (-9986) sans événement alors que rien n'avait été armé. Ce refus est constaté au repos ; en déduire le repos reste une supposition, qui permet d'armer mais ne confirme pas une fermeture. Après un armement, ce cas ne se présente pas.
+Hors de la réponse `mesure`, la même valeur, sans `statut`, accompagne la réponse `fermeture_incertaine` et les erreurs `repos_incertain` et `deconnexion_echouee`. Elle peut alors valoir aussi `{"etat": "repos_suppose"}` : le désarmement a été refusé (-9986) sans événement alors que rien n'avait été armé. Ce refus est constaté au repos ; en déduire le repos reste une supposition, qui permet d'armer mais ne confirme pas une fermeture. Après un armement, ce cas ne se présente pas. Pour le FD-9, `fermeture_incertaine` peut aussi porter `{"etat": "deconnexion_bloquee"}` : la déconnexion n'a pas rendu la main à temps ([protocole.md](protocole.md#fermeture-du-fd-9-qui-ne-rend-pas-la-main--deconnexion_bloquee)).
 
 **Compatibilité.** Depuis le ticket #25, un lecteur refuse les champs et les valeurs qu'il ne connaît pas. Un lecteur antérieur au ticket #24 rejettera donc une réponse `mesure` qui porte `remise_au_repos`, la réponse `fermeture_incertaine` et les erreurs `repos_incertain`, `deconnexion_echouee` et `session_fermee` : l'application et le pont doivent être mis à jour ensemble. Autre changement visible : `fermer` juste après `connecter`, sans mesure, ne répond plus `ferme` mais `fermeture_incertaine` avec `repos_suppose`.
 
@@ -94,6 +94,10 @@ Les autres champs de la provenance (instrument, version du SDK, version et archi
 ## Géométrie
 
 `geometrie` dit comment l'instrument a lu : `{"lecture": "ponctuelle"}`, `{"lecture": "bande", "sens": 0}` ou `{"lecture": "feuille"}`. Le `sens` d'une bande est la valeur brute rendue par la DLL (2 : plages dans l'ordre inverse).
+
+Une mesure en feuille (FD-9) porte en plus, dans la provenance, `feuille` : ce que le pont a lu de la feuille avant de la mesurer. Exemple, valeurs fictives : `"feuille": {"qr": {"statut": "confirmee", "valeur": "RGB-2520 - 1P MY9*1+"}, "zones": 1, "plages": 2520, "fiabilite": 97, "ecart_max": 12}`. `qr` est le texte libre du QR (`inconnue` si le QR n'a pas été lu) ; `zones` et `plages` sont celles que l'instrument a reconnues ; `fiabilite` est le nombre brut du SDK, dont le sens n'est pas établi ; `ecart_max` est le plus grand écart d'origine ou de pas avec la définition de la mire, en 1/100 mm. Une mesure en feuille sans `feuille`, ou un `feuille` sur une autre géométrie, est refusée.
+
+**Compatibilité.** Ce champ est facultatif : les mesures écrites avant lui se relisent sans changement, et une mesure qui n'est pas en feuille ne l'écrit pas. Le format reste `myiro-libre/mesure/1`. Un lecteur antérieur refuse en revanche une mesure en feuille qui le porte : l'application et le pont se mettent à jour ensemble.
 
 ## Conditions demandées et conditions observées
 

@@ -427,6 +427,27 @@ fn une_fermeture_incertaine_est_rapportee_en_alerte() {
 }
 
 #[test]
+fn une_deconnexion_bloquee_est_rapportee_comme_une_fermeture_en_echec() {
+    // Essai E2 : la déconnexion n'a pas rendu la main, le pont a répondu
+    // quand même puis s'est arrêté. Rien ne dit que l'instrument est au repos.
+    let mut poste = Poste::deux_instruments("bloquee");
+    poste.fermeture_myiro1 = Ok(Reponse::FermetureIncertaine {
+        remise_au_repos: RemiseAuRepos::DeconnexionBloquee {},
+    });
+    let mut selection = lancer(&mut poste, None);
+    changer(&mut selection, &mut poste, Modele::Fd9).unwrap();
+    let vue = premiere_annonce(&selection);
+    assert_eq!(vue.code, "ferme_echec");
+    assert!(vue.alerte);
+    assert_eq!(vue.detail, Some("choix.detail.deconnexion_bloquee"));
+    for langue in [Langue::Francais, Langue::Anglais] {
+        sans_sortie_brute(&detail(&vue, langue));
+    }
+    assert!(detail(&vue, Langue::Francais).contains("déconnexion"));
+    assert_eq!(selection.actif(), Modele::Fd9);
+}
+
+#[test]
 fn une_deconnexion_refusee_ou_un_pont_muet_sont_rapportes_sans_bloquer_le_changement() {
     for (nom, fermeture, cle) in [
         (
@@ -703,6 +724,7 @@ fn chaque_refus_et_chaque_annonce_ont_leur_texte_en_francais_et_en_anglais() {
         "arret_refuse",
         "liaison_perdue",
         "deconnexion_refusee",
+        "deconnexion_bloquee",
         "fermeture_refusee",
         "pont_muet",
         "reponse_inattendue",

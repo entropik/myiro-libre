@@ -352,3 +352,22 @@ fn l_annulation_s_ecrit_et_se_relit_en_clair() {
     }
     assert!(lire_reponse(r#"{"rep":"annulation","effet":"peut_etre"}"#).is_err());
 }
+
+/// Essai E2 : `FD9_Disconnect` n'a pas rendu la main. Le pont répond quand
+/// même à `fermer`, sans prétendre que l'instrument est au repos, puis
+/// s'arrête.
+#[test]
+fn une_deconnexion_bloquee_s_ecrit_et_se_relit_en_clair() {
+    use pont_protocole::{ecrire_reponse, lire_reponse, RemiseAuRepos, Reponse};
+    let reponse = Reponse::FermetureIncertaine {
+        remise_au_repos: RemiseAuRepos::DeconnexionBloquee {},
+    };
+    let texte =
+        r#"{"rep":"fermeture_incertaine","remise_au_repos":{"etat":"deconnexion_bloquee"}}"#;
+    assert_eq!(ecrire_reponse(&reponse), texte);
+    assert_eq!(lire_reponse(texte), Ok(reponse));
+    assert!(lire_reponse(
+        r#"{"rep":"fermeture_incertaine","remise_au_repos":{"etat":"deconnexion_bloquee","secondes":15}}"#
+    )
+    .is_err());
+}

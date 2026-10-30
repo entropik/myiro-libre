@@ -8,10 +8,13 @@
 pub mod colonne;
 pub mod comparer;
 pub mod demonstration;
+pub mod demonstration_fd9;
+mod ecran_feuille;
 pub mod installation;
 pub mod instrument;
 pub mod lancement;
 pub mod mesurer;
+pub mod mesurer_feuille;
 pub mod mires;
 pub mod parc;
 pub mod pont;
@@ -299,6 +302,7 @@ fn ouvrir_bibliotheque(
             let ouverte = colonne::BibliothequeOuverte::demonstration(&demonstration::dossier());
             let seance = demonstration::seance(&ouverte);
             app.manage(ouverte);
+            app.manage(DossierBibliotheque(demonstration::dossier()));
             app.manage(SeanceMesures(Mutex::new(seance)));
             return Ok(());
         }
@@ -321,6 +325,7 @@ fn ouvrir_bibliotheque(
     let mut seance = Seance::default();
     let _ = seance.reprendre_reference(&ouverte, langue);
     app.manage(ouverte);
+    app.manage(DossierBibliotheque(dossier));
     app.manage(SeanceMesures(Mutex::new(seance)));
     Ok(())
 }
@@ -520,6 +525,10 @@ fn mesurer(
     Ok(EcranMesurer::de(&seance, langue, Some(selection.vue())))
 }
 
+/// Dossier de la bibliothèque ouverte : les mesures complètes du FD-9 y
+/// sont gardées (`mesures-fd9/`).
+struct DossierBibliotheque(PathBuf);
+
 /// Range à nouveau les mesures que la bibliothèque avait refusées.
 #[tauri::command]
 fn ranger_a_nouveau(
@@ -623,8 +632,17 @@ pub fn lancer() {
         .manage(comparer::image::ImageOuverte::default())
         .setup(move |app| ouvrir_bibliotheque(app, &demandee))
         .manage(GesteEnAttente::default())
+        .manage(ecran_feuille::AnnulationFeuille::default())
+        .manage(ecran_feuille::CalageAffiche::default())
+        .manage(ecran_feuille::MireFeuille::default())
+        .manage(ecran_feuille::DemonstrationFd9::au_lancement())
         .invoke_handler(tauri::generate_handler![
             mesurer,
+            ecran_feuille::mesurer_feuille_fd9,
+            ecran_feuille::annuler_feuille_fd9,
+            ecran_feuille::feuille_fd9_etat,
+            ecran_feuille::feuille_fd9_dernier_calage,
+            ecran_feuille::feuille_fd9_image,
             mode_mesure,
             choisir_mode_mesure,
             mesures_seance,

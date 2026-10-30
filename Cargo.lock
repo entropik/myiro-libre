@@ -832,6 +832,9 @@ checksum = "caf1079563223d5d59d83c85886a56e586cfd5c1a26292e971a0fa266531ac5a"
 [[package]]
 name = "fd9-sys"
 version = "0.1.0"
+dependencies = [
+ "pont-protocole",
+]
 
 [[package]]
 name = "fdeflate"
@@ -2529,6 +2532,7 @@ dependencies = [
 name = "pont-fd9"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "fd9-sys",
  "libloading 0.8.9",
  "pont-protocole",

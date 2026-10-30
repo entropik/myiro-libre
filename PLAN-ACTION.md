@@ -184,6 +184,8 @@ Même progression : détection → connexion/infos → reconnaissance d'une mire
 
 *Sortie : feuille FD-9 mesurée par l'application, écarts avec FD-S2w documentés.*
 
+**État au 30 octobre 2026** (ticket #34, plan `docs/superpowers/plans/2026-10-28-mesure-feuille-fd9.md`) : la mire de référence est la RGB-2520 de MYIROtools, pas une mire FD-S2w. Le pont FD-9 a les paliers connexion, prénumérisation et feuille (ADR 0005). **[confirmé]** sur le FD-9 du poste, essai E4 ter : la RGB-2520 imprimée est mesurée de bout en bout (2 520 plages), avec un ΔE00 moyen de 0,03 et au plus 0,26 face à une mesure FD-S2w de la même feuille. **[supposé]** : correspondance des conditions M0, M1, M2, longueurs d'onde, D50 et 2° (gardés « supposés » dans la provenance). Reste : l'essai de bout en bout dans l'application (bouton « Mesurer une feuille au FD-9 », mesure rangée, profil calculé), puis les mires FD-S2w (ECI2002, IT8.7/4) et plusieurs feuilles par tirage.
+
 ### Phase 6 — Cœur colorimétrique et densitométrique
 
 - Spectre → XYZ → Lab (D50, 2°, et autres illuminants/observateurs), M0/M1/M2 selon ce que l'instrument fournit.

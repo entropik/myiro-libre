@@ -35,7 +35,7 @@ Pourquoi `SPEC_380` et pas `SPECTRAL_380` : la description du format d'ArgyllCMS
 
 ### La provenance dans l'en-tête
 
-Un mot-clé par champ, préfixé `MYIRO_LIBRE_` : `MODELE`, `NUMERO_SERIE`, `MICROLOGICIEL`, `CODE_PRODUIT`, `VERSION_SDK` (`1.0.1`), `EMPREINTE_DLL`, `VERSION_PONT`, `ARCHITECTURE`, `HORODATAGE`, `ETALONNAGE`, `GEOMETRIE` (`ponctuelle`, `bande 2`, `feuille`), `CALCUL_LIBELLE`, puis `CALCUL_DEMANDE` et `CALCUL_OBSERVE` (`confirmee`, `supposee` ou `inconnue`), chacun suivi, s'il n'est pas inconnu, de `_CONDITIONS`, `_LONGUEURS_ONDE` (`380/10`), `_ILLUMINANT` et `_OBSERVATEUR`.
+Un mot-clé par champ, préfixé `MYIRO_LIBRE_` : `MODELE`, `NUMERO_SERIE`, `MICROLOGICIEL`, `CODE_PRODUIT`, `VERSION_SDK` (`1.0.1`), `EMPREINTE_DLL`, `VERSION_PONT`, `ARCHITECTURE`, `HORODATAGE`, `ETALONNAGE`, `GEOMETRIE` (`ponctuelle`, `bande 2`, `feuille`), `CALCUL_LIBELLE`, puis `CALCUL_DEMANDE` et `CALCUL_OBSERVE` (`confirmee`, `supposee` ou `inconnue`), chacun suivi, s'il n'est pas inconnu, de `_CONDITIONS`, `_LONGUEURS_ONDE` (`380/10`), `_ILLUMINANT` et `_OBSERVATEUR`. Une mesure en feuille (FD-9) porte en plus ce que le pont a lu de la feuille : `FEUILLE_QR` (texte du QR, qualifié : `confirmee:RGB-2520 - 1P MY9*1+` ou `inconnue`), `FEUILLE_ZONES`, `FEUILLE_PLAGES`, `FEUILLE_FIABILITE` et `FEUILLE_ECART_MAX` (1/100 mm). À la relecture, une géométrie `feuille` sans ces mots-clés, ou ces mots-clés sur une autre géométrie, font refuser le fichier, comme une mesure.
 
 Une donnée qualifiée s'écrit `inconnue`, `confirmee:<valeur>` ou `supposee:<valeur>`. Exemple fictif :
 
@@ -61,7 +61,7 @@ Chaque donnée y est qualifiée :
 
 Chaque tableau va dans un emplacement `m0`, `m1` ou `m2`, dans cet ordre de préférence :
 
-1. `MYIRO_LIBRE_SPECTRE` (fichier de myiro-libre) ;
+1. `MYIRO_LIBRE_SPECTRE` (fichier de myiro-libre). Sans `MEASUREMENT_CONDITION` dans le tableau (le pont ne l'a pas confirmée), sa condition est celle que la provenance du fichier déclare pour cet emplacement (`MYIRO_LIBRE_CALCUL_DEMANDE_CONDITIONS`), avec sa qualification : une condition **supposée** par le pont (FD-9) reste supposée, une demande inconnue la laisse inconnue ;
 2. `MEASUREMENT_CONDITION` `M0`, `M1` ou `M2` : condition confirmée ;
 3. `MEASUREMENT_SOURCE` `M0`, `M1` ou `M2` : condition confirmée, écrite en clair. C'est ce qu'écrit MYIROtools dans ses exports RVB (observé sur un export réel d'un imprimeur, 26 octobre 2026) ;
 4. `MEASUREMENT_SOURCE` `A`, `D50` ou `UVCUT` : condition **supposée** M0, M1 ou M2. C'est la convention des exports CGATS du fabricant (un fichier par condition, source `A` pour M0, `D50` pour M1, `UVCUT` pour M2), observée sur des exports réels du poste ; elle correspond à la définition des conditions dans l'ISO 13655, mais aucun document du fabricant ne l'affirme.
@@ -98,6 +98,7 @@ Les **valeurs RVB** envoyées à l'imprimante (colonnes `RGB_R`, `RGB_G`, `RGB_B
 | Fichier | Reconnu par | Échelle | Qualification |
 |---|---|---|---|
 | ArgyllCMS (`.ti3`) | première ligne `CTI3` | 0 à 100 | confirmée (description du format `.ti3`) |
+| myiro-libre (mesure d'une feuille au FD-9) | `MYIRO_LIBRE_FORMAT "myiro-libre/cgats/1"` | 0 à 100 | confirmée : c'est myiro-libre qui les écrit (`ecrire_avec_rvb`), en tête de chaque tableau après `SAMPLE_ID` |
 | Export FD-S2w | `FILE_DESCRIPTOR "FD-S2w"` | 0 à 255 | **supposée** : observée sur des exports réels du poste (7 octobre 2026), aucun document du fabricant ne l'affirme |
 | Export MYIROtools | `ORIGINATOR "MYIROtools"` | 0 à 255 | **supposée** : observée sur un export réel d'un imprimeur (26 octobre 2026 : RVB de 0.00 à 255.00 sur 2520 plages, colonnes XYZ et Lab), aucun document du fabricant ne l'affirme |
 | Tout autre fichier | | non établie | inconnue : les RVB restent inconnus |
@@ -129,7 +130,7 @@ Comparé à l'export MYIROtools d'une couleur, archivé sur le poste (non versio
 | `MEASUREMENT_SOURCE`, `WEIGHTING_FUNCTION` toujours écrits | Écrits seulement si confirmés ; ajout de `MEASUREMENT_CONDITION` | Un mot-clé standard ne porte rien de supposé |
 | Lab arrondis à deux décimales | Tous les chiffres utiles | La relecture rend exactement la mesure |
 | Spectre `nmNNN` de 0 à 1 | `SPEC_NNN` en pourcentage, bandes dans l'en-tête | Lisible tel quel par ArgyllCMS |
-| Colonnes de valeurs d'origine (CMJN, RVB), densités, `SAMPLE_LOC` | Absentes | Une mesure ponctuelle ou une bande n'a pas encore de mire ; la densité sera calculée à partir du spectre |
+| Colonnes de valeurs d'origine (CMJN, RVB), densités, `SAMPLE_LOC` | `RGB_R RGB_G RGB_B` (0 à 100) pour une feuille mesurée au FD-9 ; sinon absentes | Une mesure ponctuelle ou une bande n'a pas encore de mire ; une feuille, si (RGB-2520). La densité sera calculée à partir du spectre |
 | Pas de provenance | Provenance complète en mots-clés `MYIRO_LIBRE_*` déclarés | Aucune mesure sans provenance (ADR 0005) |
 
 ## Sauvegarde complète de la bibliothèque

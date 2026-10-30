@@ -3,8 +3,14 @@
 //! Une ligne JSON par message, dans chaque sens. Ce crate ne dépend ni de
 //! Windows ni d'une DLL de fabricant.
 
+mod avancement;
+mod calage;
+mod feuille;
 mod mesure;
 
+pub use avancement::*;
+pub use calage::*;
+pub use feuille::*;
 pub use mesure::*;
 use mesure::{est_mesure_initiale, mesure_initiale};
 
@@ -54,6 +60,18 @@ pub enum Requete {
     /// acquise, ou l'erreur `mesure_annulee`), puis `annuler` reçoit
     /// `annulation`.
     Annuler {},
+    /// FD-9 : attend la feuille, la capture, lit son QR et reconnaît ses
+    /// plages selon `mire`, puis la rend sans la mesurer. Un pont sans
+    /// mesure en feuille répond `requete_invalide`.
+    Prenumeriser {
+        mire: DefinitionFeuille,
+    },
+    /// FD-9 : mêmes étapes que `prenumeriser`, puis mesure de toutes les
+    /// plages ; répond `mesure` (géométrie feuille, lecture dans la
+    /// provenance).
+    MesurerFeuille {
+        mire: DefinitionFeuille,
+    },
 }
 
 /// Ce qu'une demande `annuler` a produit sur la requête qui la précède.
@@ -134,6 +152,11 @@ pub enum Reponse {
         /// une donnée de la mesure conservée (format `myiro-libre/mesure/1`).
         #[serde(default = "Info::inconnue")]
         remise_au_repos: Info<RemiseAuRepos>,
+        /// FD-9 : points visés et image de la feuille mesurée. Absent des
+        /// autres mesures et des réponses écrites avant le ticket #34 ; ce
+        /// n'est pas une donnée de la mesure conservée.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        calage: Option<CalageFeuille>,
     },
     /// Fermeture confirmée : désarmement prouvé puis déconnexion faite. Le pont
     /// s'arrête.
@@ -149,6 +172,20 @@ pub enum Reponse {
     /// Réponse à `annuler`, écrite après celle de la mesure visée.
     Annulation {
         effet: EffetAnnulation,
+    },
+    /// Feuille capturée et reconnue, sans mesure (`prenumeriser`).
+    Prenumerisee {
+        lecture: LectureFeuille,
+        /// Points visés et image de la feuille ; absent si le pont ne les a
+        /// pas lus (réponse écrite avant le ticket #34 comprise).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        calage: Option<CalageFeuille>,
+    },
+    /// FD-9 : étape de la feuille en cours, écrite avant la réponse finale
+    /// de `prenumeriser` ou `mesurer_feuille` (ticket #34). Ce n'est pas la
+    /// réponse de la requête : la suivante l'est.
+    Avancement {
+        avancement: AvancementFeuille,
     },
     /// La ligne reçue n'est pas une requête valable ; rien n'a été fait.
     RequeteInvalide {
@@ -170,6 +207,7 @@ pub fn lire_reponse(ligne: &str) -> Result<Reponse, String> {
             .map(|mesure| Reponse::Mesure {
                 mesure,
                 remise_au_repos: Info::Inconnue,
+                calage: None,
             })
             .map_err(|erreur| erreur.to_string());
     }
@@ -266,8 +304,19 @@ pub struct Identite {
     /// AAAAMMJJ ; absente si l'instrument porte encore la date d'usine.
     pub date_initiale: Option<u32>,
     pub anomalie_date_initiale: bool,
-    /// Les 40 octets bruts, en hexadécimal, pour réinterprétation ultérieure.
+    /// Les octets bruts de l'identité, en hexadécimal, pour réinterprétation
+    /// ultérieure (40 pour le MYIRO-1, 100 pour le FD-9).
     pub brute_hex: String,
+    /// FD-9 : connexion faite avec le code 1901, instrument à faire
+    /// recertifier (fiche `docs/abi/FD9_Connect.md`). Ce n'est pas un
+    /// étalonnage demandé à l'opérateur. Absent des identités écrites avant
+    /// ce champ : relu faux.
+    #[serde(default, skip_serializing_if = "est_faux")]
+    pub recertification_due: bool,
+}
+
+fn est_faux(valeur: &bool) -> bool {
+    !*valeur
 }
 
 /// Remise au repos : résultat d'un désarmement (`FDX_StopMeasurement`) et de
@@ -294,6 +343,10 @@ pub enum RemiseAuRepos {
     ArretRefuse { code: i32 },
     /// Liaison perdue (événement 6) avant la preuve du repos.
     LiaisonPerdue {},
+    /// FD-9 : la déconnexion n'a pas rendu la main dans le délai du pont. Il
+    /// répond quand même à `fermer`, puis s'arrête ; l'état de l'instrument
+    /// et de la session de la DLL n'est pas connu.
+    DeconnexionBloquee {},
 }
 
 /// Étapes de la progression imposée sur instrument réel, dans l'ordre.
@@ -307,6 +360,11 @@ pub enum Palier {
     Etalonnage,
     MesurePonctuelle,
     Bande,
+    /// FD-9 : feuille capturée et reconnue, sans mesure. Après `Bande` :
+    /// l'ordre sert aux plafonds.
+    Prenumerisation,
+    /// FD-9 : feuille mesurée plage par plage.
+    Feuille,
 }
 
 /// Erreurs qu'un pont peut renvoyer.
@@ -374,6 +432,74 @@ pub enum ErreurPont {
     /// Une fermeture a été demandée : plus rien n'est transmis à la DLL, sauf
     /// une nouvelle demande `fermer` si la déconnexion a échoué.
     SessionFermee {},
+    /// Feuille reconnue, mais ses zones, ses plages, son origine ou son pas
+    /// s'écartent de la définition (`ecart_max` en 1/100 mm) : rien n'a été
+    /// mesuré.
+    MireNonReconnue {
+        zones: u32,
+        plages: u32,
+        ecart_max: u32,
+    },
+    /// Le QR de la feuille désigne une autre mire (texte lu) : rien n'a été
+    /// mesuré.
+    AutreMire { texte: String },
+    /// Aucune feuille glissée dans le délai d'attente.
+    FeuilleAbsente {},
+    /// FD-9 : l'instrument n'attend pas de feuille au début de la requête
+    /// (état brut du SDK lu par `FD9_GetStatus` ; 0 : main pas encore
+    /// obtenue, un autre logiciel tient peut-être l'instrument). Rien n'a été
+    /// lancé.
+    InstrumentIndisponible { etat: u32 },
+    /// L'instrument a signalé un incident pendant la feuille (état brut du
+    /// rappel : 101–103, 201–206, 301) ; `premesure` : code de
+    /// `FD9_GetPremeasurementError` quand il a été lu.
+    IncidentFeuille { etat: u32, premesure: Option<i32> },
+    /// FD-9 : la reconnaissance a rendu des drapeaux d'alerte (`fiabilite`,
+    /// brute, non nulle) : comme FD-S2w, le pont ne mesure pas une feuille
+    /// dont la reconnaissance est douteuse. Rien n'a été mesuré.
+    ReconnaissanceDouteuse { fiabilite: u32 },
+    /// FD-9 : la feuille a été mesurée, mais les L* mesurés ne suivent pas
+    /// la clarté des couleurs imprimées (corrélation en millièmes, sous le
+    /// seuil du pont) : mesure à côté des plages. Rien n'est rendu.
+    MesureInvraisemblable { correlation_milliemes: i32 },
+    /// FD-9 : les positions (zone, rangée, colonne) rendues par la DLL pour
+    /// les plages lues ne couvrent pas la mire une fois chacune (`defaut`) :
+    /// rien n'est rendu. La feuille est close.
+    PositionsPlages { defaut: DefautPositions },
+    /// FD-9 : le composant de lecture du QR (`zxing.dll`, assembly .NET
+    /// chargée par la DLL du fabricant depuis le dossier du pont) manque à
+    /// `chemin`. Sans lui, la DLL arrête le pont à la lecture du QR (essai
+    /// E3, ticket #87) : la feuille n'est pas lancée, la DLL n'est pas
+    /// appelée.
+    ComposantQrIntrouvable { chemin: String },
     /// Autre code d'erreur de la DLL, conservé brut.
     Sdk { code: i32 },
+}
+
+/// Ce qui empêche de ranger les plages lues d'une feuille dans l'ordre de la
+/// mire. `lue` : rang de lecture, compté depuis 1 ; zone, rangée et colonne
+/// comptées depuis 0, telles que la DLL les rend.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "defaut", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DefautPositions {
+    /// Cette position a déjà été rendue pour une plage lue avant.
+    Doublon {
+        lue: u32,
+        zone: u32,
+        rangee: i32,
+        colonne: i32,
+    },
+    /// Cette position n'existe pas dans la mire.
+    HorsMire {
+        lue: u32,
+        zone: u32,
+        rangee: i32,
+        colonne: i32,
+    },
+    /// Aucune plage lue n'a cette position de la mire.
+    Manquante {
+        zone: u32,
+        rangee: i32,
+        colonne: i32,
+    },
 }

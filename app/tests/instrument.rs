@@ -576,6 +576,7 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
         Probleme::ReposIncertain { detail: d() },
         Probleme::DeclenchementRefuse { detail: d() },
         Probleme::MesureDelaiAutomatique { detail: d() },
+        Probleme::ComposantQrIntrouvable { detail: d() },
     ];
     // Garde : ajouter une variante à `Probleme` casse la compilation ici ;
     // on lui donne alors un numéro, et l'assertion exige qu'elle soit listée.
@@ -600,13 +601,14 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
             Probleme::ReposIncertain { .. } => 16,
             Probleme::DeclenchementRefuse { .. } => 17,
             Probleme::MesureDelaiAutomatique { .. } => 18,
+            Probleme::ComposantQrIntrouvable { .. } => 19,
         }
     }
     let mut numeros: Vec<usize> = tous.iter().map(numero).collect();
     numeros.sort();
     assert_eq!(
         numeros,
-        (0..19).collect::<Vec<_>>(),
+        (0..20).collect::<Vec<_>>(),
         "chaque problème est listé une fois"
     );
     for probleme in tous {
@@ -617,6 +619,31 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
             }
         }
     }
+}
+
+/// Ticket #87 : sans `zxing.dll` à côté du pont FD-9, la feuille est refusée
+/// avant d'être lancée, et l'écran le dit en clair, avec une action.
+#[test]
+fn le_composant_de_lecture_du_qr_introuvable_se_dit_en_clair() {
+    let probleme = Probleme::ComposantQrIntrouvable {
+        detail: "C:/myiro-libre/zxing.dll".into(),
+    };
+    assert_eq!(probleme.code(), "composant_qr_introuvable");
+    assert_eq!(probleme.detail(), Some("C:/myiro-libre/zxing.dll"));
+    assert!(!probleme.guide_cablage());
+    let cause = texte(Langue::Francais, "probleme.composant_qr_introuvable.cause");
+    assert!(
+        cause.starts_with("Composant de lecture du QR introuvable"),
+        "{cause}"
+    );
+    assert!(
+        texte(Langue::Francais, "probleme.composant_qr_introuvable.action").contains("Réinstallez")
+    );
+    let cause = texte(Langue::Anglais, "probleme.composant_qr_introuvable.cause");
+    assert!(
+        cause.contains("QR code reading component not found"),
+        "{cause}"
+    );
 }
 
 #[test]
@@ -1013,6 +1040,29 @@ fn mesurer_avec(nom: &str, resultat: Result<Reponse, Panne>) -> Instrument<PontS
     instrument
 }
 
+/// `composant_qr_introuvable` rendu par un pont à l'étalonnage ou à la
+/// mesure : l'installation est incomplète, et c'est ce que l'écran dit (le
+/// problème et ses textes), jamais « pont en panne ».
+#[test]
+fn un_composant_qr_introuvable_est_dit_tel_quel() {
+    let chemin = r"C:\Program Files\myiro-libre\zxing.dll";
+    let refus = || {
+        erreur(ErreurPont::ComposantQrIntrouvable {
+            chemin: chemin.into(),
+        })
+    };
+    let etalonne = etalonner_avec("composant-qr-etalonnage", refus());
+    let mesure = mesurer_avec("composant-qr-mesure", refus());
+    for instrument in [etalonne, mesure] {
+        assert_eq!(
+            instrument.probleme(),
+            Some(&Probleme::ComposantQrIntrouvable {
+                detail: chemin.into()
+            })
+        );
+    }
+}
+
 /// Échec signalé par l'instrument, ou lecture inexploitable : l'instrument
 /// reste étalonné, l'avis s'affiche sur la feuille Mesurer et une nouvelle
 /// mesure est possible.
@@ -1241,5 +1291,37 @@ fn une_panne_du_pont_pendant_la_mesure_est_signalee() {
         assert_eq!(instrument.etat(), &Etat::NonDetecte);
         assert_eq!(instrument.probleme().unwrap().code(), code);
         assert!(!instrument.vue().mesurable);
+    }
+}
+
+#[test]
+fn le_pont_simule_refuse_la_mesure_d_une_feuille_comme_pont_myiro1() {
+    use app::pont::{Pont, PontSimule};
+    use pont_protocole::{DefinitionFeuille, Reponse, Requete, ZoneFeuille};
+    let mire = DefinitionFeuille {
+        nom: "RGB-2520 - 1P MY9".into(),
+        largeur: 27_940,
+        hauteur: 41_660,
+        zones: vec![ZoneFeuille {
+            gauche: 1_349,
+            haut: 2_300,
+            largeur_plage: 601,
+            hauteur_plage: 601,
+            pas_x: 601,
+            pas_y: 601,
+            rangees: 60,
+            colonnes: 42,
+        }],
+        couleurs: None,
+    };
+    let mut simule = PontSimule::avec_instruments(&[12345678]);
+    for requete in [
+        Requete::Prenumeriser { mire: mire.clone() },
+        Requete::MesurerFeuille { mire },
+    ] {
+        assert!(matches!(
+            simule.demander(&requete),
+            Ok(Reponse::RequeteInvalide { .. })
+        ));
     }
 }

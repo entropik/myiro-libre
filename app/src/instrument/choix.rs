@@ -292,25 +292,28 @@ impl<P: Pont> Instrument<P> {
     /// Ferme le pont : `fermer`, puis fin du pont. `None` si aucun pont
     /// n'était ouvert. L'instrument n'est plus connecté ensuite.
     pub fn fermer(&mut self) -> Option<Fermeture> {
-        let mut pont = self.pont.take()?;
+        let pont = self.pont.take()?;
         self.etat = Etat::NonDetecte;
         self.probleme = None;
         self.etalonnage = None;
-        let fermeture = match pont.demander(&Requete::Fermer {}) {
-            Ok(Reponse::Ferme {}) => Fermeture::Confirmee,
-            Ok(Reponse::FermetureIncertaine { remise_au_repos }) => {
-                Fermeture::Incertaine(remise_au_repos)
-            }
-            Ok(Reponse::Erreur {
-                erreur: ErreurPont::DeconnexionEchouee { code, .. },
-            }) => Fermeture::Echec(EchecFermeture::DeconnexionRefusee { code }),
-            Ok(Reponse::Erreur { .. }) => Fermeture::Echec(EchecFermeture::FermetureRefusee),
-            Ok(_) => Fermeture::Echec(EchecFermeture::ReponseInattendue),
-            Err(_) => Fermeture::Echec(EchecFermeture::PontMuet),
-        };
-        // Le pont est rendu ici : `PontProcessus` attend sa fin, ou l'arrête.
-        drop(pont);
-        Some(fermeture)
+        Some(fermer_pont(pont))
+    }
+}
+
+/// `fermer`, puis fin du pont, rendu ici : `PontProcessus` attend sa fin,
+/// ou l'arrête.
+pub(crate) fn fermer_pont(mut pont: impl Pont) -> Fermeture {
+    match pont.demander(&Requete::Fermer {}) {
+        Ok(Reponse::Ferme {}) => Fermeture::Confirmee,
+        Ok(Reponse::FermetureIncertaine { remise_au_repos }) => {
+            Fermeture::Incertaine(remise_au_repos)
+        }
+        Ok(Reponse::Erreur {
+            erreur: ErreurPont::DeconnexionEchouee { code, .. },
+        }) => Fermeture::Echec(EchecFermeture::DeconnexionRefusee { code }),
+        Ok(Reponse::Erreur { .. }) => Fermeture::Echec(EchecFermeture::FermetureRefusee),
+        Ok(_) => Fermeture::Echec(EchecFermeture::ReponseInattendue),
+        Err(_) => Fermeture::Echec(EchecFermeture::PontMuet),
     }
 }
 
@@ -600,6 +603,13 @@ fn vue_annonce(annonce: &Annonce) -> VueAnnonce {
             Fermeture::Incertaine(RemiseAuRepos::ReposSuppose {}) => VueAnnonce {
                 detail: Some("choix.detail.repos_suppose"),
                 ..simple("ferme_repos_suppose", *modele, None)
+            },
+            // Le pont a répondu sans pouvoir déconnecter, puis s'est arrêté :
+            // c'est un échec de la fermeture, pas un simple repos non prouvé.
+            Fermeture::Incertaine(RemiseAuRepos::DeconnexionBloquee {}) => VueAnnonce {
+                alerte: true,
+                detail: Some("choix.detail.deconnexion_bloquee"),
+                ..simple("ferme_echec", *modele, None)
             },
             Fermeture::Incertaine(repos) => {
                 let (detail, code) = match repos {

@@ -2,24 +2,60 @@
 //!
 //! La session impose l'ordre des paliers et le plafond fixé au lancement,
 //! avant tout appel à la DLL (ADR 0005, fiches `docs/abi/FD9_*`). Le pont FD-9
-//! déclare ses propres paliers : pour l'instant Version et Détection
-//! seulement. Tout palier au-delà est refusé sans appel à la DLL.
+//! déclare ses propres paliers : Version, Détection, Connexion,
+//! Prénumérisation et Feuille. Il n'a ni étalonnage par l'utilisateur ni
+//! mesure ponctuelle. Tout palier au-delà est refusé sans appel à la DLL.
+//!
+//! La session n'avance que sur un code de retour lu ou un événement reçu du
+//! rappel ; elle n'invente aucun état.
 
+mod apercu;
+mod arret;
+mod attente;
+pub mod calage;
+pub mod composants;
+mod connexion;
 pub mod dll;
+pub mod evenements;
+mod feuille;
+mod fichier;
+mod plages;
+pub mod plantage;
 pub mod serveur;
+pub mod trace;
 
-use fd9_sys::Appareil;
-use pont_protocole::{ErreurPont, Palier};
+pub use apercu::HAUTEUR_APERCU;
+pub use arret::ATTENTE_APRES_ARRET_REFUSE;
+pub use attente::{Annulation, Delais, ATTENTE_APRES_DECONNEXION};
+pub use feuille::{ECART_ADMIS, TAILLE_IMAGE_MAX};
+
+pub use plages::{CONDITIONS, LONGUEUR_SPECTRE};
+
+use composants::DossierDuPont;
+use fd9_sys::{
+    Appareil, CleOption, CoordonneesMire, CouleursMire, DonneesQr, EtatSdk, ModeReconnaissance,
+    NomApplication, PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES,
+};
+use pont_protocole::{
+    AvancementFeuille, CalageFeuille, ErreurPont, Identite, Palier, RemiseAuRepos,
+};
+use std::collections::VecDeque;
+use std::path::PathBuf;
+use std::sync::mpsc::Sender;
+use std::time::Duration;
 
 /// Dernier palier que ce pont sait franchir, quel que soit le plafond demandé.
-pub const PALIER_MAX: Palier = Palier::Detection;
+pub const PALIER_MAX: Palier = Palier::Feuille;
 
 /// Entrées passées à `FD9_GetDeviceList` : comme FD-S2w (la DLL admet 1 à 100).
 pub const CAPACITE_DETECTION: usize = 10;
 
-/// Les appels autorisés de `FD9SDK.dll` pour les paliers de ce pont. Le type ne
-/// permet aucun autre appel : ni `JIG_*`, ni `FD9_Set*`, ni connexion tant que
-/// le palier Connexion n'est pas déclaré.
+/// Nom sous lequel le pont se présente à l'instrument (`FD9_Connect`).
+pub const NOM_APPLICATION: &str = "myiro-libre";
+
+/// Les appels autorisés de `FD9SDK.dll`, une méthode par export de la liste
+/// blanche. Le type ne permet aucun autre appel : ni `JIG_*`, ni écriture
+/// dans l'instrument.
 pub trait SdkFd9 {
     /// `FD9_GetLastError` : code interne de la dernière erreur. Ne parle pas à
     /// l'instrument ; au palier Version, un retour prouve que la DLL répond.
@@ -31,6 +67,92 @@ pub trait SdkFd9 {
     fn version_fichier(&self) -> Option<[u32; 4]>;
     /// SHA-256 du fichier DLL chargé, en hexadécimal minuscule.
     fn empreinte(&self) -> Option<String>;
+    /// `FD9_RegisterDeviceEventHandler` : le rappel du pont si `actif`,
+    /// sinon le pointeur nul (désinscription). Refusé pendant une connexion.
+    fn inscrire_rappel(&mut self, actif: bool) -> i32;
+    /// `FD9_Connect` : 0 ou 1901 = connecté (`connexion_etablie`).
+    fn connecter(&mut self, appareil: &Appareil, nom: &NomApplication) -> i32;
+    /// `FD9_GetSystemInfo`, dans un tampon mis à zéro par l'appelant.
+    fn infos(&mut self, tampon: &mut TamponInfosSysteme) -> i32;
+    /// `FD9_GetStatus` : 8 nombres, l'état du SDK en n° 4 (+0x10).
+    fn statut(&mut self, tampon: &mut [u32; 8]) -> i32;
+    /// `FD9_Disconnect`.
+    fn deconnecter(&mut self) -> i32;
+    /// Événements reçus par le rappel depuis le dernier appel, dans l'ordre.
+    /// S'il n'y en a aucun, attend au plus `attente` le suivant. Ne parle pas
+    /// à la DLL.
+    fn evenements(&mut self, attente: Duration) -> Vec<Evenement>;
+    /// Rappels reçus sans session pour les lire (avant l'inscription ou
+    /// après la désinscription).
+    fn rappels_orphelins(&self) -> u64;
+    /// `FD9_StartCapture` : admis à l'état 3 seulement.
+    fn capturer(&mut self) -> i32;
+    /// `FD9_GetCaptureResult` : sans `image`, rend la taille de l'image dans
+    /// `taille` ; avec, la remplit (tampon d'au moins `taille` octets).
+    fn resultat_capture(
+        &mut self,
+        qr_resultat: &mut u32,
+        qr: &mut DonneesQr,
+        taille: &mut u32,
+        image: Option<&mut [u8]>,
+    ) -> i32;
+    /// `FD9_StartPatchRecognition`, rangées et colonnes à 0 (le type
+    /// n'admet pas le mode matrice), avec les couleurs des plages s'il y en
+    /// a (pointeur nul sinon).
+    fn reconnaitre(
+        &mut self,
+        mode: ModeReconnaissance,
+        coordonnees: &CoordonneesMire,
+        couleurs: Option<&CouleursMire>,
+    ) -> i32;
+    /// `FD9_GetPatchRecognitionResult2`, sans disposition.
+    fn resultat_reconnaissance(
+        &mut self,
+        fiabilite: &mut u32,
+        coordonnees: &mut CoordonneesMire,
+    ) -> i32;
+    /// `FD9_StopMeasurement` : admis aux états 1 à 8.
+    fn arreter(&mut self, feuille_suivante: bool) -> i32;
+    /// `FD9_ExitMeasurement(0, NULL)` : admis aux états 9, 10 et d'erreur.
+    /// Le type n'envoie jamais d'image à l'instrument.
+    fn sortir(&mut self) -> i32;
+    /// `FD9_GetPremeasurementError` (`__cdecl`), sans texte : rend la cause.
+    fn erreur_premesure(&mut self, erreur_systeme: &mut i32) -> i32;
+    /// `FD9_GetMeasurePoint`, un point de 20 octets par plage reconnue.
+    fn points_mesure(&mut self, points: &mut [PointMesure]) -> i32;
+    /// `FD9_GetChartImage`, sans points : l'image de la feuille, gris sur
+    /// 8 bits. À l'entrée, `largeur × hauteur` est la place offerte (au plus
+    /// `gris.len()` octets) ; la DLL y écrit l'image et rend sa taille dans
+    /// `largeur` et `hauteur`. Lecture seule, refusée aux états 1 à 6.
+    fn image_feuille(&mut self, largeur: &mut u32, hauteur: &mut u32, gris: &mut [u8]) -> i32;
+    /// `FD9_StartMeasurement2(1, 1)`, comme MYIROtools : le type n'admet pas
+    /// d'autre mode.
+    fn mesurer(&mut self) -> i32;
+    /// `FD9_SetOption` : un réglage de calcul rangé dans la DLL, sans
+    /// échange avec l'instrument.
+    fn regler(&mut self, cle: CleOption, valeur: u32) -> i32;
+    /// `FD9_GetData` : les 152 données brutes de la plage `demandee`, et la
+    /// position que la DLL en déduit.
+    fn donnees(
+        &mut self,
+        rendue: &mut PositionPlage,
+        donnees: &mut [f32; DONNEES_BRUTES],
+        demandee: &PositionPlage,
+    ) -> i32;
+    /// `FD9_CalculateData` depuis 152 données brutes, selon les réglages ;
+    /// la longueur de sortie est celle du tableau.
+    fn calculer(&mut self, sortie: &mut [f32], brutes: &[f32; DONNEES_BRUTES]) -> i32;
+}
+
+/// Un appel du rappel d'événements : les quatre nombres de la DLL, l'état
+/// nommé.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Evenement {
+    pub etat: EtatSdk,
+    pub travail: u32,
+    pub page: u32,
+    /// Plages déjà mesurées (état 11).
+    pub compte: u32,
 }
 
 /// Ce que le palier Version établit, sans parler à l'instrument (fiche
@@ -43,12 +165,74 @@ pub struct VersionFd9 {
     pub code_interne: i32,
 }
 
+/// Résultat d'une fermeture. Une fois faite, elle n'est pas refaite.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Fermeture {
+    /// Déconnecté, rappel désinscrit (ou rien n'était ouvert).
+    Confirmee,
+    /// `FD9_Disconnect` a été refusé (code brut) : la session de la DLL reste
+    /// peut-être ouverte. Le pont s'arrête sans nouvel essai.
+    Incertaine { remise_au_repos: RemiseAuRepos },
+}
+
+/// Destinataire de chaque ligne du journal.
+type Echo = Box<dyn FnMut(&str)>;
+
+/// Journal de la session : chaque ligne est gardée en mémoire et, si un écho
+/// est branché, lui est donnée au moment où elle est écrite. Un pont arrêté de
+/// force ne perd ainsi rien de ce qu'il a déjà noté.
+#[derive(Default)]
+struct Journal {
+    lignes: Vec<String>,
+    echo: Option<Echo>,
+}
+
+impl Journal {
+    fn push(&mut self, ligne: String) {
+        if let Some(echo) = &mut self.echo {
+            echo(&ligne);
+        }
+        self.lignes.push(ligne);
+    }
+}
+
 pub struct Session<S: SdkFd9> {
     sdk: S,
     plafond: Palier,
     progression: Option<Palier>,
-    journal: Vec<String>,
+    journal: Journal,
     fermee: bool,
+    fermeture: Option<Fermeture>,
+    /// Instruments de la dernière détection.
+    detectes: Vec<Appareil>,
+    /// Rappel inscrit dans la DLL, session de la DLL ouverte.
+    inscrit: bool,
+    connecte: bool,
+    /// Identité et version du SDK lues à la connexion, pour la provenance.
+    identite: Option<Identite>,
+    version_sdk: [u32; 3],
+    /// Liaison perdue (état 103) : plus rien ne part vers l'instrument.
+    perdu: bool,
+    delais: Delais,
+    annulation: Annulation,
+    /// Événements reçus et pas encore traités par la requête en cours.
+    recus: VecDeque<Evenement>,
+    /// Dernier état connu du SDK : dernier événement traité (hors avis de
+    /// plages), ou état lu au début d'une feuille.
+    dernier_etat: Option<EtatSdk>,
+    /// Dossier du pont, où la DLL cherche le composant de lecture du QR
+    /// (`composants`).
+    dossier_du_pont: DossierDuPont,
+    /// Points visés et image de la dernière feuille reconnue, pas encore
+    /// rendus (`prendre_calage`).
+    calage: Option<CalageFeuille>,
+    /// Destinataire de l'avancement de la feuille en cours (`suivre`).
+    avancement: Option<Sender<AvancementFeuille>>,
+    /// La feuille en cours a déjà été annoncée engagée.
+    engagee_annoncee: bool,
+    /// Plages de la feuille en cours de mesure, et dernier compte annoncé.
+    plages_feuille: u32,
+    dernier_compte: Option<u32>,
 }
 
 const APPAREIL_VIDE: Appareil = Appareil {
@@ -64,23 +248,118 @@ impl<S: SdkFd9> Session<S> {
             sdk,
             plafond: plafond.min(PALIER_MAX),
             progression: None,
-            journal: Vec::new(),
+            journal: Journal::default(),
             fermee: false,
+            fermeture: None,
+            detectes: Vec::new(),
+            inscrit: false,
+            connecte: false,
+            identite: None,
+            version_sdk: [0; 3],
+            perdu: false,
+            delais: Delais::default(),
+            annulation: Annulation::default(),
+            recus: VecDeque::new(),
+            dernier_etat: None,
+            dossier_du_pont: DossierDuPont::NonVerifie,
+            calage: None,
+            avancement: None,
+            engagee_annoncee: false,
+            plages_feuille: 0,
+            dernier_compte: None,
         }
+    }
+
+    /// Envoie à `envoi`, pendant chaque feuille, son avancement (ticket
+    /// #34) : feuille engagée, lecture, calage prêt, mesure en cours. Un
+    /// destinataire parti n'arrête rien.
+    pub fn suivre(&mut self, envoi: Sender<AvancementFeuille>) {
+        self.avancement = Some(envoi);
+    }
+
+    /// Plus d'avancement envoyé.
+    pub fn ne_plus_suivre(&mut self) {
+        self.avancement = None;
+    }
+
+    pub(crate) fn avancer(&mut self, avancement: AvancementFeuille) {
+        if let Some(envoi) = &self.avancement {
+            let _ = envoi.send(avancement);
+        }
+    }
+
+    /// La feuille est prise par l'instrument : annoncé une fois par feuille.
+    pub(crate) fn annoncer_engagement(&mut self) {
+        if !std::mem::replace(&mut self.engagee_annoncee, true) {
+            self.avancer(AvancementFeuille::FeuilleEngagee {});
+        }
+    }
+
+    /// Plages déjà mesurées, telles que le rappel les compte ; un compte
+    /// répété n'est pas réannoncé.
+    pub(crate) fn annoncer_compte(&mut self, mesurees: u32) {
+        if self.dernier_compte.replace(mesurees) != Some(mesurees) {
+            let plages = self.plages_feuille;
+            self.avancer(AvancementFeuille::Mesure { mesurees, plages });
+        }
+    }
+
+    /// Vérifie, avant chaque feuille, que le composant de lecture du QR est
+    /// dans `dossier` (celui de l'exécutable du pont) : sans lui, la DLL
+    /// arrêterait le pont à la lecture du QR (ticket #87).
+    pub fn avec_dossier_du_pont(mut self, dossier: PathBuf) -> Self {
+        self.dossier_du_pont = DossierDuPont::Connu(dossier);
+        self
+    }
+
+    /// Le dossier de l'exécutable n'a pas pu être lu : toute feuille est
+    /// refusée (`composant_qr_introuvable`), sans chercher ailleurs.
+    pub fn avec_dossier_du_pont_illisible(mut self) -> Self {
+        self.dossier_du_pont = DossierDuPont::Illisible;
+        self
+    }
+
+    /// Délais d'attente de la feuille et de chaque étape.
+    pub fn avec_delais(mut self, delais: Delais) -> Self {
+        self.delais = delais;
+        self
+    }
+
+    /// Donne chaque ligne du journal à `echo` dès qu'elle est écrite
+    /// (l'exécutable l'écrit sur la sortie d'erreur).
+    pub fn avec_echo_journal(mut self, echo: impl FnMut(&str) + 'static) -> Self {
+        self.journal.echo = Some(Box::new(echo));
+        self
+    }
+
+    /// Poignée d'annulation de la requête en cours, à donner au fil qui lit
+    /// les requêtes.
+    pub fn annulation(&self) -> Annulation {
+        self.annulation.clone()
     }
 
     pub fn sdk(&self) -> &S {
         &self.sdk
     }
 
-    /// Appels à la DLL et codes rendus, dans l'ordre.
+    /// Pour les tests : agir sur l'instrument simulé pendant la session.
+    pub fn sdk_mut(&mut self) -> &mut S {
+        &mut self.sdk
+    }
+
+    /// Appels à la DLL, codes rendus et événements reçus, dans l'ordre.
     pub fn journal(&self) -> &[String] {
-        &self.journal
+        &self.journal.lignes
     }
 
     /// Plus haut palier franchi avec succès depuis le lancement.
     pub fn palier_atteint(&self) -> Option<Palier> {
         self.progression
+    }
+
+    /// Rappels de la DLL arrivés sans session pour les lire.
+    pub fn rappels_orphelins(&self) -> u64 {
+        self.sdk.rappels_orphelins()
     }
 
     pub fn version(&mut self) -> Result<VersionFd9, ErreurPont> {
@@ -125,12 +404,13 @@ impl<S: SdkFd9> Session<S> {
                     .push(format!("FD9_GetDeviceList : liaison inconnue {code}"));
             }
         }
+        self.detectes = tableau[..trouves].to_vec();
         self.franchir(Palier::Detection);
-        Ok(tableau[..trouves].to_vec())
+        Ok(self.detectes.clone())
     }
 
     /// Réponse à une demande d'un palier que ce pont ne déclare pas
-    /// (connexion, étalonnage, mesures) : refusée sans appel à la DLL.
+    /// (étalonnage, mesures) : refusée sans appel à la DLL.
     pub fn hors_paliers(&self, palier: Palier) -> ErreurPont {
         if self.fermee {
             ErreurPont::SessionFermee {}
@@ -140,12 +420,6 @@ impl<S: SdkFd9> Session<S> {
                 plafond: self.plafond,
             }
         }
-    }
-
-    /// Aucune session n'est jamais ouverte avec l'instrument : rien à
-    /// désarmer ni à déconnecter. Ensuite, plus rien n'atteint la DLL.
-    pub fn fermer(&mut self) {
-        self.fermee = true;
     }
 
     fn franchir(&mut self, palier: Palier) {
