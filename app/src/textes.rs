@@ -2060,6 +2060,114 @@ const FRANCAIS: Catalogue = &[
         "probleme.repos_incertain.action",
         "Pour mesurer de nouveau, cliquez sur «\u{202f}Réessayer\u{202f}»\u{202f}: l’instrument sera reconnecté, puis à étalonner.",
     ),
+    // Préparer une mire (ticket #33)
+    (
+        "mire.erreur.cote",
+        "Côté de plage refusé\u{202f}: le MYIRO-1 lit des plages de 7\u{202f}mm au moins, et la bande doit tenir sur la page. Choisissez un autre côté.",
+    ),
+    (
+        "mire.erreur.nombre_libre",
+        "Nombre de plages refusé\u{202f}: choisissez de 24 à 3\u{202f}000 plages.",
+    ),
+    (
+        "mire.erreur.ti1",
+        "Les plages choisies par ArgyllCMS sont illisibles. Rien n’a été préparé. Relancez la préparation.",
+    ),
+    (
+        "mire.erreur.nombre",
+        "ArgyllCMS n’a pas rendu le nombre de plages demandé. Rien n’a été préparé. Relancez la préparation.",
+    ),
+    (
+        "mire.erreur.generation",
+        "ArgyllCMS n’a pas pu choisir les plages de la mire. Rien n’a été préparé.",
+    ),
+    (
+        "mire.erreur.contraste",
+        "Plages trop proches pour être lues\u{202f}: certaines ne se distinguent pas assez de leur voisine ou du blanc du papier. Rien n’a été préparé. Choisissez un plus grand nombre de plages.",
+    ),
+    (
+        "mire.erreur.ecriture",
+        "Les pages de la mire n’ont pas pu être écrites dans le dossier Documents\\myiro-libre\\Mires. Vérifiez qu’il reste de la place et que le dossier n’est pas protégé, puis recommencez.",
+    ),
+    (
+        "mire.erreur.fichier_existant",
+        "Un fichier du même nom existe déjà dans le dossier Documents\\myiro-libre\\Mires\u{202f}: il n’a pas été remplacé, et rien n’a été préparé. Déplacez ou renommez l’ancien fichier, puis recommencez.",
+    ),
+    (
+        "mire.erreur.fd9_introuvable",
+        "Mire RGB-2520 introuvable. Placez le fichier «\u{202f}RGB-2520 A3 - 1p.tif\u{202f}» dans le dossier mire-fd9 à côté de l’application. Le MYIRO-1 reste utilisable.",
+    ),
+    (
+        "mire.erreur.fd9_autre",
+        "Ce fichier n’est pas la mire RGB-2520 retenue\u{202f}: il a été modifié ou remplacé. Rien n’a été préparé. Reprenez le fichier d’origine, sans l’ouvrir ni l’enregistrer dans un autre logiciel.",
+    ),
+    (
+        "mire.erreur.fd9_illisible",
+        "La mire RGB-2520 est illisible ou n’a pas la forme attendue. Rien n’a été préparé. Reprenez le fichier d’origine.",
+    ),
+    (
+        "mire.erreur.fd9_fixe",
+        "La mire du FD-9 est RGB-2520, sur une page A3\u{202f}: ni taille, ni format, ni côté à choisir.",
+    ),
+    ("mire.ouvrir", "Préparer une mire"),
+    ("mire.titre", "Préparer une mire"),
+    ("mire.instrument", "Instrument"),
+    ("mire.instrument.fd9", "FD-9"),
+    ("mire.instrument.myiro1", "MYIRO-1"),
+    ("mire.fd9.carte", "Mire RGB-2520 · 2\u{202f}520 plages · 1 page A3"),
+    (
+        "mire.myiro1.carte",
+        "Pages en bandes, taille et format au choix",
+    ),
+    ("mire.fd9.attendu", "Fichier attendu\u{202f}: {chemin}"),
+    ("mire.taille", "Taille"),
+    ("mire.taille.nom.rapide", "Rapide"),
+    ("mire.taille.nom.standard", "Standard"),
+    ("mire.taille.nom.approfondi", "Approfondi"),
+    ("mire.plages", "{n} plages"),
+    ("mire.pages.une", "1 page"),
+    ("mire.pages.plusieurs", "{n} pages"),
+    ("mire.format", "Format"),
+    ("mire.format.a4", "A4"),
+    ("mire.format.a3", "A3"),
+    ("mire.avance", "Avancé"),
+    ("mire.avance.resume", "{cote}\u{202f}mm, {plages} plages"),
+    ("mire.cote", "Côté des plages, en millimètres"),
+    (
+        "mire.cote.limites",
+        "{min}\u{202f}mm au moins (manuel du MYIRO-1), et la bande doit tenir sur la page.",
+    ),
+    (
+        "mire.nombre",
+        "Nombre de plages (vide pour garder la taille choisie)",
+    ),
+    ("mire.nombre.limites", "De 24 à 3\u{202f}000 plages."),
+    (
+        "mire.saisie.nombre",
+        "Saisie refusée\u{202f}: écrivez un nombre, par exemple 8 ou 8,5. Rien n’est lancé.",
+    ),
+    (
+        "mire.saisie.entier",
+        "Saisie refusée\u{202f}: écrivez un nombre entier de plages, par exemple 500. Rien n’est lancé.",
+    ),
+    ("mire.commande", "Commande équivalente"),
+    ("mire.preparer", "Préparer la mire"),
+    ("mire.fait", "Mire préparée et rangée avec cette résolution."),
+    (
+        "mire.deja_preparee",
+        "Mire déjà préparée le {date}, pas encore mesurée\u{202f}: ses fichiers sont repris, sans doublon.",
+    ),
+    ("mire.fichiers", "Fichiers à imprimer"),
+    ("mire.ouvrir_dossier", "Ouvrir le dossier"),
+    (
+        "mire.rappel",
+        "Imprimez à 100\u{202f}%, sans gestion des couleurs (dans le pilote et dans le logiciel d’impression).",
+    ),
+    ("mire.preparees", "Mires préparées"),
+    (
+        "mire.preparees.vide",
+        "Aucune mire préparée pour cette résolution.",
+    ),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -4074,6 +4182,111 @@ const ANGLAIS: Catalogue = &[
     (
         "probleme.repos_incertain.action",
         "To measure again, click “Try again”: the instrument will be reconnected, then needs calibrating.",
+    ),
+    // Prepare a chart (ticket #33)
+    (
+        "mire.erreur.cote",
+        "Patch size refused: the MYIRO-1 reads patches of at least 7 mm, and the strip must fit on the page. Choose another size.",
+    ),
+    (
+        "mire.erreur.nombre_libre",
+        "Number of patches refused: choose from 24 to 3,000 patches.",
+    ),
+    (
+        "mire.erreur.ti1",
+        "The patches chosen by ArgyllCMS cannot be read. Nothing was prepared. Prepare the chart again.",
+    ),
+    (
+        "mire.erreur.nombre",
+        "ArgyllCMS did not return the number of patches requested. Nothing was prepared. Prepare the chart again.",
+    ),
+    (
+        "mire.erreur.generation",
+        "ArgyllCMS could not choose the patches of the chart. Nothing was prepared.",
+    ),
+    (
+        "mire.erreur.contraste",
+        "Patches too close to be read: some do not stand out enough from their neighbour or from the paper white. Nothing was prepared. Choose a larger number of patches.",
+    ),
+    (
+        "mire.erreur.ecriture",
+        "The chart pages could not be written to the Documents\\myiro-libre\\Mires folder. Check that there is space left and that the folder is not protected, then try again.",
+    ),
+    (
+        "mire.erreur.fichier_existant",
+        "A file with the same name already exists in the Documents\\myiro-libre\\Mires folder: it was not replaced, and nothing was prepared. Move or rename the old file, then try again.",
+    ),
+    (
+        "mire.erreur.fd9_introuvable",
+        "RGB-2520 chart not found. Place the file “RGB-2520 A3 - 1p.tif” in the mire-fd9 folder next to the application. The MYIRO-1 can still be used.",
+    ),
+    (
+        "mire.erreur.fd9_autre",
+        "This file is not the selected RGB-2520 chart: it has been modified or replaced. Nothing was prepared. Use the original file, without opening or saving it in another program.",
+    ),
+    (
+        "mire.erreur.fd9_illisible",
+        "The RGB-2520 chart cannot be read or does not have the expected layout. Nothing was prepared. Use the original file.",
+    ),
+    (
+        "mire.erreur.fd9_fixe",
+        "The FD-9 chart is RGB-2520, on one A3 page: no size, format or patch size to choose.",
+    ),
+    ("mire.ouvrir", "Prepare a chart"),
+    ("mire.titre", "Prepare a chart"),
+    ("mire.instrument", "Instrument"),
+    ("mire.instrument.fd9", "FD-9"),
+    ("mire.instrument.myiro1", "MYIRO-1"),
+    ("mire.fd9.carte", "RGB-2520 chart · 2,520 patches · 1 A3 page"),
+    ("mire.myiro1.carte", "Pages in strips, size and format to choose"),
+    ("mire.fd9.attendu", "Expected file: {chemin}"),
+    ("mire.taille", "Size"),
+    ("mire.taille.nom.rapide", "Quick"),
+    ("mire.taille.nom.standard", "Standard"),
+    ("mire.taille.nom.approfondi", "Thorough"),
+    ("mire.plages", "{n} patches"),
+    ("mire.pages.une", "1 page"),
+    ("mire.pages.plusieurs", "{n} pages"),
+    ("mire.format", "Format"),
+    ("mire.format.a4", "A4"),
+    ("mire.format.a3", "A3"),
+    ("mire.avance", "Advanced"),
+    ("mire.avance.resume", "{cote} mm, {plages} patches"),
+    ("mire.cote", "Patch size, in millimetres"),
+    (
+        "mire.cote.limites",
+        "At least {min} mm (MYIRO-1 manual), and the strip must fit on the page.",
+    ),
+    (
+        "mire.nombre",
+        "Number of patches (empty to keep the chosen size)",
+    ),
+    ("mire.nombre.limites", "From 24 to 3,000 patches."),
+    (
+        "mire.saisie.nombre",
+        "Entry refused: write a number, for example 8 or 8.5. Nothing is started.",
+    ),
+    (
+        "mire.saisie.entier",
+        "Entry refused: write a whole number of patches, for example 500. Nothing is started.",
+    ),
+    ("mire.commande", "Equivalent command"),
+    ("mire.preparer", "Prepare the chart"),
+    ("mire.fait", "Chart prepared and stored with this resolution."),
+    (
+        "mire.deja_preparee",
+        "Chart already prepared on {date}, not yet measured: its files are reused, no duplicate.",
+    ),
+    ("mire.fichiers", "Files to print"),
+    ("mire.ouvrir_dossier", "Open the folder"),
+    (
+        "mire.rappel",
+        "Print at 100%, without colour management (in the driver and in the printing software).",
+    ),
+    ("mire.preparees", "Prepared charts"),
+    (
+        "mire.preparees.vide",
+        "No chart prepared for this resolution.",
     ),
 ];
 

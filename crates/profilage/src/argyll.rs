@@ -20,6 +20,11 @@ use crate::moteur::{
     MoteurProfil, Precision, ProfilCalcule, Recette, VERSION_ARGYLL,
 };
 
+mod targen;
+
+pub use targen::arguments_targen;
+pub(crate) use targen::ligne_targen;
+
 /// Noms des fichiers dans le dossier de travail.
 const SRGB: &str = "sRGB.icm";
 const PROFIL: &str = "profil.icc";
@@ -298,6 +303,14 @@ impl MoteurProfil for ArgyllCms {
             journal,
             precision,
         })
+    }
+
+    fn commande_plages(&self, nombre: usize) -> String {
+        ligne_targen(nombre)
+    }
+
+    fn generer_plages(&self, nombre: usize) -> Result<crate::moteur::PlagesGenerees, ErreurMoteur> {
+        self.lancer_targen(nombre)
     }
 }
 

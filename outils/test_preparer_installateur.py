@@ -34,11 +34,12 @@ class ArgyllEmbarque(unittest.TestCase):
     def test_sans_dossier_argyll_rien_n_est_embarque(self):
         self.assertEqual({}, pi.argyll_embarque(self.racine, aide=lambda colprof: self.fail("colprof lancé")))
 
-    def test_argyll_complet_donne_ses_cinq_fichiers(self):
+    def test_argyll_complet_donne_ses_six_fichiers(self):
         self.poser(*pi.ARGYLL_FICHIERS, "License.txt")
         self.assertEqual({
             "../argyll/bin/colprof.exe": "argyll/bin/colprof.exe",
             "../argyll/bin/profcheck.exe": "argyll/bin/profcheck.exe",
+            "../argyll/bin/targen.exe": "argyll/bin/targen.exe",
             "../argyll/bin/iccgamut.exe": "argyll/bin/iccgamut.exe",
             "../argyll/ref/sRGB.icm": "argyll/ref/sRGB.icm",
             "../argyll/License.txt": "argyll/License.txt",
@@ -53,7 +54,7 @@ class ArgyllEmbarque(unittest.TestCase):
         ressources = self.embarquer()
         for nom in ("License.txt", "AGPLv3.txt", "COPYING"):
             self.assertEqual(f"argyll/{nom}", ressources[f"../argyll/{nom}"])
-        self.assertEqual(7, len(ressources))
+        self.assertEqual(8, len(ressources))
 
     def test_une_licence_garde_son_nom_reel(self):
         # Sous Windows, « LICENSE.TXT » répond aussi à « License.txt » : il n'est
@@ -91,6 +92,58 @@ class ArgyllEmbarque(unittest.TestCase):
         self.poser(*pi.ARGYLL_FICHIERS, "License.txt")
         with self.assertRaises(SystemExit):
             self.embarquer(aide="colprof: Error - usage\n")
+
+
+class MireFd9Embarquee(unittest.TestCase):
+    """Mire FD-9 RGB-2520 : embarquée telle quelle, seulement avec son empreinte."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.racine = Path(self.tmp.name)
+
+    def poser(self, octets):
+        chemin = self.racine / "mire-fd9" / pi.MIRE_FD9_FICHIER
+        chemin.parent.mkdir(parents=True, exist_ok=True)
+        chemin.write_bytes(octets)
+
+    def test_sans_dossier_mire_fd9_rien_n_est_embarque(self):
+        self.assertEqual({}, pi.mire_fd9_embarquee(self.racine))
+
+    def test_la_mire_d_origine_est_embarquee_sous_mire_fd9(self):
+        self.poser(b"mire factice")
+        empreinte = pi.hashlib.sha256(b"mire factice").hexdigest()
+        self.assertEqual(
+            {"../mire-fd9/RGB-2520 A3 - 1p.tif": "mire-fd9/RGB-2520 A3 - 1p.tif"},
+            pi.mire_fd9_embarquee(self.racine, empreinte=empreinte))
+
+    def test_une_autre_empreinte_arrete(self):
+        self.poser(b"mire modifiee")
+        with self.assertRaises(SystemExit) as arret:
+            pi.mire_fd9_embarquee(self.racine)
+        self.assertIn("empreinte", str(arret.exception.code))
+
+    def test_un_dossier_sans_la_mire_arrete(self):
+        (self.racine / "mire-fd9").mkdir()
+        with self.assertRaises(SystemExit) as arret:
+            pi.mire_fd9_embarquee(self.racine)
+        self.assertIn(pi.MIRE_FD9_FICHIER, str(arret.exception.code))
+
+    def test_l_annonce_dit_la_regle_de_sdk(self):
+        # Embarquée, la mire suit la même règle que SDK/ : installateur local, jamais publié tel quel.
+        annonce = pi.annonce_mire_fd9(True)
+        self.assertNotIn("\n", annonce)
+        self.assertIn("SDK/", annonce)
+        self.assertIn("jamais publié", annonce)
+        # Sans mire-fd9/, une ligne aussi, et le script continue.
+        absente = pi.annonce_mire_fd9(False)
+        self.assertNotIn("\n", absente)
+        self.assertIn("mire-fd9/ absent", absente)
+
+    def test_l_empreinte_est_celle_de_la_crate_mires(self):
+        rgb2520 = (pi.RACINE / "crates" / "mires" / "src" / "rgb2520.rs").read_text(encoding="utf-8")
+        self.assertIn(pi.MIRE_FD9_EMPREINTE, rgb2520)
+        self.assertIn(pi.MIRE_FD9_FICHIER, rgb2520)
 
 
 class AideColprof(unittest.TestCase):

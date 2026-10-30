@@ -211,3 +211,23 @@ fn targen_ecrit_irgb_pour_une_imprimante_rvb() {
     println!("{ligne}");
     assert_eq!(ligne.trim(), "COLOR_REP \"iRGB\"");
 }
+
+/// `targen -f` compte les plages blanches et noires qu'il ajoute : 232
+/// demandées, 232 plages dans le premier tableau du `.ti1` (relevé le 28
+/// octobre 2026 avec 3.5.0, en moins d'une seconde).
+#[test]
+#[ignore = "demande ArgyllCMS 3.5.0"]
+fn targen_rend_le_nombre_de_plages_demande() {
+    let moteur = ArgyllCms::new(racine_argyll());
+    let debut = std::time::Instant::now();
+    let plages = moteur.generer_plages(232).unwrap();
+    println!("targen : {:?}", debut.elapsed());
+    assert_eq!(plages.version, VERSION_ARGYLL);
+    assert_eq!(plages.commande, "targen -v -d2 -G -f232 mire");
+    assert!(plages
+        .journal
+        .starts_with("$ targen -v -d2 -G -f232 mire\n"));
+    let valeurs = mires::lire_ti1(&plages.ti1, 232).unwrap();
+    assert!(valeurs.contains(&[100.0, 100.0, 100.0]));
+    assert!(valeurs.contains(&[0.0, 0.0, 0.0]));
+}

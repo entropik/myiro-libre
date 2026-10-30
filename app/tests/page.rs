@@ -1198,6 +1198,97 @@ fn la_section_du_calcul_est_construite_par_calcul_profil_js() {
     assert!(commentaire.contains("calcul-profil.js"), "{commentaire}");
 }
 
+// ---- Préparer une mire depuis la vue d'une résolution (ticket #33) ----
+
+/// La section « Préparer une mire » vit dans mire.js, chargé avant
+/// reglage.js, qui s'en sert ; elle appelle les trois commandes du module
+/// `mires`, et la demande garde les noms de champs du module Rust.
+#[test]
+fn la_vue_d_une_resolution_prepare_une_mire() {
+    let page = lire("interface/index.html");
+    let position = |nom: &str| page.find(&format!("<script src=\"{nom}\" defer>"));
+    let (mire, reglage) = (position("mire.js"), position("reglage.js"));
+    assert!(mire.is_some() && mire < reglage, "ordre des scripts");
+    assert!(lire("interface/reglage.js").contains("window.PreparerMire"));
+    let script = lire("interface/mire.js");
+    for attendu in [
+        "invoke(\"mire_preparer\"",
+        "invoke(\"mire_apercu\"",
+        "invoke(\"mire_ouvrir_dossier\"",
+        "cote_mm:",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+    let vue = element(&page, "data-vue-reglage");
+    let ouvrir = vue
+        .split('<')
+        .find(|b| b.contains("data-mire-ouvrir"))
+        .and_then(|b| b.split('>').next())
+        .expect("bouton « Préparer une mire »");
+    // Ouvrir la section n'est pas le bouton principal de la vue.
+    assert!(ouvrir.starts_with("button class=\"btn\""), "{ouvrir}");
+    assert!(ouvrir.contains("aria-expanded=\"false\""), "{ouvrir}");
+    assert!(vue.contains("data-mire hidden"), "section absente");
+}
+
+/// Une seule section ouverte à la fois : le bouton principal de la vue reste
+/// unique (« Installer », « Calculer le profil » ou « Préparer la mire »).
+#[test]
+fn la_section_mire_garde_un_seul_bouton_principal() {
+    let script = lire("interface/mire.js");
+    assert!(script.contains("installer.classList.toggle(\"btn--primary\""));
+    assert!(script.contains("[data-calcul-ouvrir]"));
+    let reglage = lire("interface/reglage.js");
+    assert!(
+        reglage.contains("[data-mire-ouvrir]"),
+        "bouton occupé pendant une action"
+    );
+}
+
+/// Chaque clé `mire.…` lue par la page existe en français et en anglais ;
+/// les clés complétées à l'écran existent pour chaque valeur.
+#[test]
+fn toutes_les_cles_mire_de_la_page_existent_en_deux_langues() {
+    use app::textes::{texte, Langue};
+    let script = lire("interface/mire.js") + &lire("interface/index.html");
+    let mut demandees: Vec<String> = script
+        .match_indices("\"mire.")
+        .filter_map(|(i, _)| script[i + 1..].split('"').next())
+        .filter(|c| *c != "mire.js")
+        .map(String::from)
+        .collect();
+    assert!(demandees.len() > 15, "clés lues : {demandees:?}");
+    let completees: [(&str, &[&str]); 3] = [
+        ("mire.taille.nom.", &["rapide", "standard", "approfondi"]),
+        ("mire.instrument.", &["fd9", "myiro1"]),
+        ("mire.format.", &["a4", "a3"]),
+    ];
+    for (prefixe, valeurs) in completees {
+        assert!(demandees.iter().any(|c| c == prefixe), "{prefixe}");
+        demandees.extend(valeurs.iter().map(|v| format!("{prefixe}{v}")));
+    }
+    demandees.retain(|c| !c.ends_with('.'));
+    let absentes: Vec<_> = demandees
+        .iter()
+        .filter(|c| {
+            [Langue::Francais, Langue::Anglais]
+                .iter()
+                .any(|l| texte(*l, c) == c.as_str())
+        })
+        .collect();
+    assert!(absentes.is_empty(), "clés absentes : {absentes:?}");
+}
+
+/// Le bouton « Préparer la mire » inactif dit pourquoi, juste dessous, et
+/// une erreur arrive en clé du catalogue.
+#[test]
+fn le_bouton_preparer_inactif_dit_pourquoi() {
+    let script = lire("interface/mire.js");
+    assert!(script.contains("preparer.dataset.inactif = \"\""));
+    assert!(script.contains("raison = el(\"p\", \"why\")"));
+    assert!(script.contains("texteErreur(erreur)"));
+}
+
 // ---- Comparer des profils : couleurs de série, vue 3D et graphiques (ticket #71) ----
 
 /// Les quatre couleurs de série (bleu, orange, violet, gris : ni vert ni
@@ -2333,4 +2424,31 @@ fn la_section_image_ne_garde_rien_de_perime() {
     let calque = corps_de(&script, "function calque() {");
     assert!(calque.contains("imageCalque"), "{calque}");
     assert!(calque.contains("const d = imageCalque.data;"), "{calque}");
+}
+
+/// Une saisie illisible de l'avancé (« abc ») est refusée sur place, avec sa
+/// raison sous le champ : rien n'est demandé au module `mires`, et elle ne
+/// revient jamais en silence à la valeur par défaut.
+#[test]
+fn une_saisie_illisible_de_la_mire_est_refusee_sur_place() {
+    let script = lire("interface/mire.js");
+    for attendu in [
+        "\"mire.saisie.nombre\"",
+        "\"mire.saisie.entier\"",
+        "if (saisieRefusee()) return;",
+        "input--error",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+    // Le côté minimal vient du module Rust, jamais d'un nombre écrit dans la page.
+    assert!(!script.contains("apercu.limites_cote[0] : 7"));
+}
+
+/// Une mire déjà préparée et pas encore mesurée est reprise : la page dit sa
+/// date au lieu d'annoncer une nouvelle préparation.
+#[test]
+fn une_mire_deja_preparee_dit_sa_date() {
+    let script = lire("interface/mire.js");
+    assert!(script.contains("r.deja_preparee"));
+    assert!(script.contains("t(\"mire.deja_preparee\").replace(\"{date}\""));
 }
