@@ -508,12 +508,9 @@ fn une_feuille_suivie_reste_annulable() {
     use pont_protocole::AvancementFeuille as A;
     let mut pont = lancer("feuille_suivie_annulable").avec_delai(Duration::from_millis(300));
     let mut vus = Vec::new();
+    let (annulation, _) = annuler_apres(Duration::from_millis(50));
 
-    let echange = pont.demander_suivi(
-        &feuille(),
-        &annuler_apres(Duration::from_millis(50)),
-        &mut |a| vus.push(a),
-    );
+    let echange = pont.demander_suivi(&feuille(), &annulation, &mut |a| vus.push(a));
 
     assert_eq!(vus, vec![A::FeuilleEngagee {}, A::Lecture {}]);
     assert!(matches!(
