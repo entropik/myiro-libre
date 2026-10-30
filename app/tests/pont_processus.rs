@@ -31,6 +31,30 @@ fn lancer(scenario: &str) -> PontProcessus {
     PontProcessus::lancer(&pont_factice(), Path::new(scenario), PLAFOND).expect("lancement")
 }
 
+/// Lance le pont et attend qu'il ait répondu à une première demande, avec le
+/// délai ordinaire (30 s), avant de fixer le délai court du test. Le démarrage
+/// du processus (chargement, antivirus, poste chargé) n'est ainsi jamais compté
+/// dans le délai que le test met à l'épreuve (ticket #82).
+fn pret(mut pont: PontProcessus, delai: Duration) -> Result<PontProcessus, Panne> {
+    match pont.demander(&Requete::Version {})? {
+        Reponse::Version { .. } => Ok(pont.avec_delai(delai)),
+        autre => panic!("le pont factice répond d'abord à la version : {autre:?}"),
+    }
+}
+
+/// [`lancer`], puis [`pret`].
+fn lancer_pret(scenario: &str, delai: Duration) -> PontProcessus {
+    pret(lancer(scenario), delai).expect("premier échange")
+}
+
+/// Texte de la panne `SansReponse` : il nomme le délai qui a expiré.
+fn sans_reponse(resultat: &Result<Reponse, Panne>) -> &str {
+    match resultat {
+        Err(Panne::SansReponse { detail }) => detail,
+        autre => panic!("panne sans réponse attendue : {autre:?}"),
+    }
+}
+
 #[test]
 fn le_dialogue_suit_une_ligne_json_par_message() {
     let mut pont = lancer("normal");
@@ -91,10 +115,8 @@ fn sans_reponse_dans_le_delai_le_pont_est_arrete_de_force() {
     let mut pont = lancer("bloque").avec_delai(Duration::from_millis(300));
     let debut = Instant::now();
 
-    assert!(matches!(
-        pont.demander(&Requete::Version {}),
-        Err(Panne::SansReponse { .. })
-    ));
+    let detail = sans_reponse(&pont.demander(&Requete::Version {})).to_string();
+    assert!(detail.contains("en 300 ms"), "{detail}");
     // Le processus a été arrêté : la demande suivante échoue aussitôt.
     assert!(pont.demander(&Requete::Detecter {}).is_err());
     assert!(
@@ -125,9 +147,15 @@ fn une_sortie_fermee_sans_fin_du_pont_est_bornee() {
 /// L'étalonnage attend jusqu'à 30 s dans le pont, en plus de l'appel à la DLL :
 /// l'application lui laisse deux fois le délai d'une autre demande, pour ne
 /// pas couper un pont qui allait répondre.
+///
+/// Le pont factice répond 1,1 s après avoir lu la demande, donc toujours plus
+/// tard que le délai ordinaire (1 s) après son envoi : une réponse acceptée
+/// prouve que l'étalonnage attend plus longtemps qu'une autre demande. Il
+/// reste 0,9 s avant le délai doublé pour les aléas d'un poste chargé ; le
+/// délai doublé lui-même est prouvé par le test suivant.
 #[test]
 fn l_etalonnage_a_deux_fois_le_delai_d_une_autre_demande() {
-    let mut pont = lancer("etalonnage_lent").avec_delai(Duration::from_millis(300));
+    let mut pont = lancer_pret("etalonnage_lent", Duration::from_secs(1));
 
     assert!(matches!(
         pont.demander(&Requete::Etalonner {}),
@@ -142,10 +170,9 @@ fn un_etalonnage_qui_depasse_le_delai_double_arrete_le_pont() {
     let mut pont = lancer("etalonnage_trop_lent").avec_delai(Duration::from_millis(300));
     let debut = Instant::now();
 
-    assert!(matches!(
-        pont.demander(&Requete::Etalonner {}),
-        Err(Panne::SansReponse { .. })
-    ));
+    let detail = sans_reponse(&pont.demander(&Requete::Etalonner {})).to_string();
+    // Le délai qui a expiré est le double du délai ordinaire.
+    assert!(detail.contains("en 600 ms"), "{detail}");
     assert!(
         debut.elapsed() < Duration::from_secs(5),
         "{:?}",
@@ -157,10 +184,14 @@ fn un_etalonnage_qui_depasse_le_delai_double_arrete_le_pont() {
 /// Le pont attend jusqu'à 2 min l'appui sur le bouton de l'instrument, plus
 /// deux désarmements de 15 s au plus : l'application laisse à la mesure
 /// ponctuelle six fois le délai d'une autre demande (3 min).
+///
+/// Le pont factice répond 1 s après avoir lu la demande, plus de trois fois le
+/// délai ordinaire (300 ms) après son envoi : une réponse acceptée prouve que la
+/// mesure attend plus que l'étalonnage. Il reste 0,8 s avant six fois le délai.
 #[test]
 fn la_mesure_ponctuelle_a_six_fois_le_delai_d_une_autre_demande() {
     assert_eq!(app::instrument::DELAI_REPONSE * 6, Duration::from_secs(180));
-    let mut pont = lancer("mesure_lente").avec_delai(Duration::from_millis(200));
+    let mut pont = lancer_pret("mesure_lente", Duration::from_millis(300));
 
     assert!(matches!(
         pont.demander(&Requete::MesurerPonctuelle {
@@ -173,6 +204,9 @@ fn la_mesure_ponctuelle_a_six_fois_le_delai_d_une_autre_demande() {
 /// Une mesure qui ne répond jamais : passé six fois le délai, le pont est
 /// arrêté de force et l'instrument est dit dans un état incertain, sans
 /// mesure ni nouvelle tentative possible (ticket #7, relecture).
+///
+/// Le délai court ne vaut qu'une fois le pont démarré (ticket #82) : chaque
+/// demande de l'ouverture et de l'étalonnage a 300 ms pour un aller-retour.
 #[test]
 fn une_mesure_sans_reponse_laisse_l_instrument_dans_un_etat_incertain() {
     let programme = pont_factice();
@@ -181,8 +215,10 @@ fn une_mesure_sans_reponse_laisse_l_instrument_dans_un_etat_incertain() {
     faux_programme(&dossier.join("FDXSDK.dll"), arch);
     let mut instrument =
         Instrument::ouvrir(&[dossier], &[(arch, programme)], |prog, _dll, plafond| {
-            PontProcessus::lancer(prog, Path::new("mesure_muette"), plafond)
-                .map(|p| p.avec_delai(Duration::from_millis(100)))
+            pret(
+                PontProcessus::lancer(prog, Path::new("mesure_muette"), plafond)?,
+                Duration::from_millis(300),
+            )
         });
     instrument.etalonner(&mut |_: app::instrument::Geste| app::instrument::Accord::Fait);
     assert!(instrument.vue().mesurable, "{:?}", instrument.probleme());
@@ -198,6 +234,11 @@ fn une_mesure_sans_reponse_laisse_l_instrument_dans_un_etat_incertain() {
         debut.elapsed()
     );
     assert_eq!(instrument.probleme().unwrap().code(), "pont_bloque");
+    // Le délai qui a expiré est celui de la mesure : six fois 300 ms.
+    match instrument.probleme() {
+        Some(Probleme::PontBloque { detail }) => assert!(detail.contains("en 1800 ms"), "{detail}"),
+        autre => panic!("problème inattendu : {autre:?}"),
+    }
     assert_eq!(instrument.etat(), &Etat::NonDetecte);
     assert!(!instrument.vue().mesurable);
 }
@@ -207,6 +248,11 @@ fn une_mesure_sans_reponse_laisse_l_instrument_dans_un_etat_incertain() {
 const MESURER: Requete = Requete::MesurerPonctuelle {
     declenchement: pont_protocole::Declenchement::Manuel,
 };
+
+/// Délai ordinaire des tests où le pont répond à l'annulation : la mesure a
+/// six fois ce délai (6 s) pour voir arriver l'annulation de l'opérateur, même
+/// sur un poste chargé. Un test qui réussit n'attend jamais ce délai.
+const DELAI_ANNULABLE: Duration = Duration::from_secs(1);
 
 /// L'opérateur annule `apres` le début de la demande.
 fn annuler_apres(apres: Duration) -> app::pont::Annulation {
@@ -223,9 +269,14 @@ fn annuler_apres(apres: Duration) -> app::pont::Annulation {
 /// `annuler` part pendant que le pont attend, sans attendre sa réponse ; les
 /// deux réponses arrivent dans l'ordre, et la demande suivante reçoit la
 /// sienne.
+///
+/// Le pont factice ne répond à la mesure qu'après avoir lu `annuler` : une
+/// réponse `mesure_annulee` prouve à elle seule que `annuler` est parti pendant
+/// l'attente, sans dépendre de l'horloge.
 #[test]
 fn l_annulation_part_pendant_l_attente_et_les_reponses_restent_dans_l_ordre() {
-    let mut pont = lancer("annulable").avec_delai(Duration::from_millis(300));
+    let delais = app::instrument::Delais::new(DELAI_ANNULABLE);
+    let mut pont = lancer_pret("annulable", delais.base);
     let debut = Instant::now();
 
     let echange = pont.demander_annulable(&MESURER, &annuler_apres(Duration::from_millis(50)));
@@ -243,7 +294,7 @@ fn l_annulation_part_pendant_l_attente_et_les_reponses_restent_dans_l_ordre() {
         Some(Ok(pont_protocole::EffetAnnulation::Appliquee))
     );
     assert!(
-        debut.elapsed() < Duration::from_secs(1),
+        debut.elapsed() < delais.reponse(&MESURER),
         "{:?}",
         debut.elapsed()
     );
@@ -257,7 +308,7 @@ fn l_annulation_part_pendant_l_attente_et_les_reponses_restent_dans_l_ordre() {
 /// celle de sa mesure, et ne devient jamais celle de la demande suivante.
 #[test]
 fn un_resultat_tardif_reste_celui_de_sa_mesure() {
-    let mut pont = lancer("resultat_tardif").avec_delai(Duration::from_millis(300));
+    let mut pont = lancer_pret("resultat_tardif", DELAI_ANNULABLE);
 
     let echange = pont.demander_annulable(&MESURER, &annuler_apres(Duration::from_millis(50)));
 
@@ -282,7 +333,7 @@ fn un_resultat_tardif_reste_celui_de_sa_mesure() {
 /// demande.
 #[test]
 fn une_reponse_illisible_apres_l_annulation_arrete_le_pont() {
-    let mut pont = lancer("annulation_illisible").avec_delai(Duration::from_millis(300));
+    let mut pont = lancer_pret("annulation_illisible", DELAI_ANNULABLE);
 
     let echange = pont.demander_annulable(&MESURER, &annuler_apres(Duration::from_millis(50)));
 
@@ -319,24 +370,41 @@ fn la_perte_du_pont_pendant_la_mesure_est_vue() {
 /// Un pont qui ne répond ni à la mesure ni à l'annulation : après l'envoi de
 /// `annuler`, il n'a plus que le délai de l'annulation, puis il est arrêté de
 /// force (état incertain), bien avant le délai de la mesure.
+///
+/// Le délai qui a expiré se lit dans la panne : celui de l'annulation (500 ms),
+/// pas celui de la mesure (3 s). La durée est comptée depuis la demande
+/// d'annulation, pas depuis l'envoi de la mesure : sur un poste chargé, le fil
+/// de l'opérateur peut se réveiller tard (ticket #82). Elle doit rester sous
+/// 2,5 s : un pont encore tenu par le délai de la mesure serait arrêté vers
+/// 3 s ; l'arrêt forcé du processus tient dans l'écart.
 #[test]
 fn un_pont_qui_ignore_l_annulation_est_arrete_dans_le_delai_de_l_annulation() {
-    let delais = app::instrument::Delais::new(Duration::from_millis(300));
-    assert!(delais.reponse(&MESURER) >= Duration::from_millis(1800));
+    let delais = app::instrument::Delais::new(Duration::from_millis(500));
+    assert_eq!(delais.reponse(&MESURER), Duration::from_secs(3));
+    assert_eq!(delais.apres_annulation(), Duration::from_millis(500));
     let mut pont = lancer("bloque").avec_delai(delais.base);
-    let debut = Instant::now();
+    let annulation = app::pont::Annulation::default();
+    annulation.commencer();
+    let copie = annulation.clone();
+    let operateur = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(50));
+        let annulee_a = Instant::now();
+        copie.annuler();
+        annulee_a
+    });
 
-    let echange = pont.demander_annulable(&MESURER, &annuler_apres(Duration::from_millis(50)));
+    let echange = pont.demander_annulable(&MESURER, &annulation);
+    let duree = operateur.join().unwrap().elapsed();
 
-    assert!(matches!(echange.reponse, Err(Panne::SansReponse { .. })));
+    let detail = sans_reponse(&echange.reponse).to_string();
+    assert!(detail.contains("en 500 ms"), "{detail}");
     assert!(matches!(
         echange.annulation,
         Some(Err(Panne::SansReponse { .. }))
     ));
     assert!(
-        debut.elapsed() < Duration::from_millis(1200),
-        "{:?}",
-        debut.elapsed()
+        duree < delais.reponse(&MESURER) - delais.apres_annulation(),
+        "{duree:?}"
     );
     assert!(pont.demander(&Requete::Version {}).is_err());
 }
