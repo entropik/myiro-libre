@@ -49,7 +49,7 @@ impl ArgyllCms {
             && self.racine.join("ref").join(SRGB).is_file()
     }
 
-    fn outil(&self, nom: &str) -> PathBuf {
+    pub(crate) fn outil(&self, nom: &str) -> PathBuf {
         self.racine
             .join("bin")
             .join(format!("{nom}{}", std::env::consts::EXE_SUFFIX))
@@ -81,7 +81,7 @@ impl ArgyllCms {
 
     /// Lance un outil d'ArgyllCMS dans le dossier de travail (voir
     /// [`executer`]).
-    fn lancer(
+    pub(crate) fn lancer(
         &self,
         nom: &str,
         arguments: &[OsString],
@@ -315,7 +315,7 @@ impl MoteurProfil for ArgyllCms {
 }
 
 /// Commande sans fenêtre de console sous Windows.
-fn commande(programme: &Path) -> Command {
+pub(crate) fn commande(programme: &Path) -> Command {
     #[allow(unused_mut)]
     let mut commande = Command::new(programme);
     #[cfg(windows)]
@@ -432,7 +432,7 @@ pub fn lignes_commandes(recette: Recette, description: &str) -> Vec<String> {
 
 /// Ligne de commande lisible : un argument avec espace ou guillemet est mis
 /// entre guillemets, ses guillemets précédés de `\`.
-fn ligne(outil: &str, arguments: &[OsString]) -> String {
+pub(crate) fn ligne(outil: &str, arguments: &[OsString]) -> String {
     let mut ligne = outil.to_string();
     for a in arguments {
         let a = a.to_string_lossy();
@@ -530,10 +530,10 @@ fn derniere_ligne(texte: &str) -> String {
 
 /// Dossier de travail unique sous le dossier temporaire du système, effacé
 /// quand la garde sort de portée (calcul réussi ou non).
-struct DossierTravail(PathBuf);
+pub(crate) struct DossierTravail(PathBuf);
 
 impl DossierTravail {
-    fn creer() -> Result<Self, ErreurMoteur> {
+    pub(crate) fn creer() -> Result<Self, ErreurMoteur> {
         static RANG: AtomicU64 = AtomicU64::new(0);
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -549,7 +549,7 @@ impl DossierTravail {
         Ok(DossierTravail(chemin))
     }
 
-    fn chemin(&self) -> &Path {
+    pub(crate) fn chemin(&self) -> &Path {
         &self.0
     }
 }

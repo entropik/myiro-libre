@@ -59,6 +59,7 @@ jobs:
         -p colorimetrie
         -p bibliotheque
         -p cgats
+        -p gamut
         -p profilage
         -p mires
     steps:

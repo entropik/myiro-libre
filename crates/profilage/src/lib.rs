@@ -9,12 +9,15 @@
 //! - [`MoteurProfil`] calcule le profil à partir du `.ti3` : [`ArgyllCms`]
 //!   en vrai, version figée [`VERSION_ARGYLL`], [`MoteurSimule`] pour les
 //!   tests.
+//! - [`MoteurGamut`] calcule la limite du gamut d'un profil (`iccgamut`) :
+//!   [`ArgyllCms`] en vrai, [`MoteurGamutSimule`] pour les tests.
 //! - [`controler_coherence`] vérifie, avant tout calcul, que les mesures
 //!   correspondent aux plages (ticket #1) : il refuse ou laisse passer, sans
 //!   jamais corriger.
 
 mod argyll;
 mod coherence;
+mod limite;
 mod moteur;
 mod plages;
 mod suivi;
@@ -28,6 +31,9 @@ pub use coherence::{
     controler_coherence, ControleCoherence, Critere, PlageSuspecte, DECALAGE_MAX,
     ECART_BLANC_MAX_L, ECART_DOUBLONS_MAX_DE00, ECART_NOIR_MAX_L, ECART_VOISINES_MAX_DE00,
     RETOUR_GRIS_MAX_L, VOISINES,
+};
+pub use limite::{
+    arguments_iccgamut, lire_volume_iccgamut, LimiteCalculee, MoteurGamut, MoteurGamutSimule,
 };
 pub use moteur::PlagesGenerees;
 pub use moteur::{

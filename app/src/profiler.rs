@@ -18,8 +18,8 @@ use pont_protocole::ConditionMesure;
 use profilage::{
     chercher_argyll, conditions_utilisables, controler_coherence, ecrire_ti3, lignes_commandes,
     preparer_plages, ArgyllCms, Avancement, ControleCoherence, Critere, DemandeProfil,
-    ErreurMoteur, EtapeCalcul, EtatAvancement, MoteurProfil, PlagesProfil, Recette, RefusPlages,
-    SuiviAvancement,
+    ErreurMoteur, EtapeCalcul, EtatAvancement, MoteurGamut, MoteurProfil, PlagesProfil, Recette,
+    RefusPlages, SuiviAvancement,
 };
 use serde::{Deserialize, Serialize};
 
@@ -135,6 +135,7 @@ impl ErreurProfil {
                 e.cause = Some(cause.clone());
             }
             ErreurMoteur::VersionNonValidee { trouvee } => e.version = Some(trouvee.clone()),
+            ErreurMoteur::OutilManquant { outil } => e.cause = Some(outil.clone()),
             ErreurMoteur::Introuvable
             | ErreurMoteur::RecetteEnReglage
             | ErreurMoteur::Interrompu { .. } => {}
@@ -382,6 +383,12 @@ impl Moteur {
             .as_ref()
             .map(|a| a as &dyn MoteurProfil)
             .ok_or_else(|| ErreurProfil::du_moteur(&ErreurMoteur::Introuvable))
+    }
+
+    /// Le moteur de la limite du gamut (comparaison des profils) : le même
+    /// ArgyllCMS ; rien s'il est introuvable.
+    pub fn gamut(&self) -> Option<&dyn MoteurGamut> {
+        self.0.as_ref().map(|a| a as &dyn MoteurGamut)
     }
 
     /// Pourquoi le calcul sera refusé avant même d'être lancé ; rien si

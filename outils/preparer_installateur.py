@@ -16,8 +16,9 @@ Usage (à la racine du dépôt) :
    `sdk/x64/` ou `sdk/x86/` selon l'architecture de la DLL.
 3. Si le dossier `argyll/` du dépôt existe (ignoré par git), vérifie qu'il
    contient ArgyllCMS 3.5.0 (ADR 0002 : version figée) et embarque `colprof`,
-   `profcheck`, `targen`, `ref/sRGB.icm` et tous les textes de licence présents
-   sous `argyll/`.
+   `profcheck`, `iccgamut` (limite du gamut, comparaison des profils), `targen`,
+   `ref/sRGB.icm` et tous les textes de licence présents sous
+   `argyll/`.
    Sans `argyll/`, l'installateur se construit sans ArgyllCMS : l'application
    dira qu'il est introuvable au moment de calculer un profil ou de préparer
    une mire MYIRO-1.
@@ -48,7 +49,13 @@ APP = RACINE / "app"
 CIBLE_32 = "i686-pc-windows-msvc"
 PONTS = ("pont-myiro1", "pont-fd9")
 VERSION_ARGYLL = "3.5.0"
-ARGYLL_FICHIERS = ("bin/colprof.exe", "bin/profcheck.exe", "bin/targen.exe", "ref/sRGB.icm")
+ARGYLL_FICHIERS = (
+    "bin/colprof.exe",
+    "bin/profcheck.exe",
+    "bin/targen.exe",
+    "bin/iccgamut.exe",
+    "ref/sRGB.icm",
+)
 # Noms possibles des textes de licence à la racine de la distribution (non
 # confirmés pour la 3.5.0) : tous ceux qui sont présents sont embarqués, sous
 # leur nom réel, sans tenir compte de la casse.

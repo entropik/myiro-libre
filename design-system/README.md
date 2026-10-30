@@ -22,6 +22,7 @@ Ouvrir `index.html` dans un navigateur (double-clic, sans compilation).
 - Cadre : barre du haut, puis trois zones (bibliothèque, centre, détails). Seules les zones défilent, jamais la fenêtre ni en largeur.
 - Un seul bouton principal par écran ; tout bouton inactif dit pourquoi, juste à côté. Un verdict est toujours une couleur, une icône et un mot : la couleur n'est jamais seule. Le rouge est réservé au danger et au hors tolérance.
 - Aucune ombre, aucun dégradé, aucun emoji ; des angles droits, sauf la pastille de l'instrument (un cercle).
+- Les profils d'une comparaison prennent, dans l'ordre, les couleurs de série `--serie-1` à `--serie-4` (bleu, orange, violet, gris) : jamais le vert ni le rouge des verdicts, et toujours avec le nom du profil dans la légende.
 - Seule la barre de calcul peut porter un dégradé : une lumière spectrale animée, signe que le calcul travaille. Partout ailleurs, pas de dégradé. Ses couleurs sont les jetons `--spectre-1` à `--spectre-6` ; son mélange et sa force (`--lumiere-melange`, `--lumiere-force`) suivent le thème.
 - Une seule animation : la barre d'avancement d'un calcul (remplissage qui glisse en 300 ms, lumière spectrale qui traverse la piste en 2,6 s). Rien ne bouge et la lumière est cachée si l'utilisateur réduit les animations (`prefers-reduced-motion`).
 - Icônes des tâches : tracés SVG propres au projet, aucune icône reprise d'un autre logiciel.

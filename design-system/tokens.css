@@ -26,6 +26,12 @@
   /* Lumière spectrale de la barre de calcul : mélange et force selon le thème. */
   --lumiere-melange: screen;
   --lumiere-force: .9;
+  /* Séries d'une comparaison de profils (graphiques, vue 3D) : ni vert ni rouge, réservés aux
+     verdicts. Contraste au-dessus de 4,3 : 1 face à --carte. */
+  --serie-1:   #4c9aff;
+  --serie-2:   #f0773a;
+  --serie-3:   #b48cff;
+  --serie-4:   #c9d1dd;
   color-scheme: dark;
 }
 
@@ -45,6 +51,10 @@
   --hors:      #cc1f29;
   --lumiere-melange: normal;
   --lumiere-force: .55;
+  --serie-1:   #1f6fe5;
+  --serie-2:   #c4501a;
+  --serie-3:   #7c4dd6;
+  --serie-4:   #2f3642;
   color-scheme: light;
 }
 

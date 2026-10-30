@@ -25,6 +25,7 @@ bibliotheque = { path = "../crates/bibliotheque" }
 cgats = { path = "../crates/cgats" }
 mires = { path = "../crates/mires" }
 colorimetrie = { path = "../crates/colorimetrie" }
+gamut = { path = "../crates/gamut" }
 profilage = { path = "../crates/profilage" }
 pont-protocole = { path = "../crates/pont-protocole" }
 serde = { version = "1", features = ["derive"] }

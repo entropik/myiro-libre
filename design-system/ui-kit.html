@@ -159,6 +159,31 @@
 <section class="ds-block"><span class="label">Composant</span><h2>Tableau</h2><p>Chiffres tabulaires, alignés à droite.</p>
 <div class="ds-demo"><table><thead><tr><th>Plage</th><th class="r lc">L*</th><th class="r lc">a*</th><th class="r lc">b*</th></tr></thead><tbody><tr><td class="id num">1</td><td class="r num">95,12</td><td class="r num">0,84</td><td class="r num">−3,21</td></tr><tr class="on"><td class="id num">2</td><td class="r num">48,30</td><td class="r num">68,02</td><td class="r num">47,90</td></tr></tbody></table></div>
 <pre class="ds-code">&lt;table&gt;&lt;thead&gt;…&lt;/thead&gt;&lt;tbody&gt;&lt;tr class="on"&gt;…&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;</pre></section>
+<section class="ds-block"><span class="label">Composant</span><h2>Graphique d’une comparaison</h2><p>En SVG, dessiné par <code>graphiques.js</code>&#8239;: axes et unités, grille au filet, légende avec le nom de chaque profil. Chaque profil prend une couleur de série (<code>--serie-1</code> à <code>--serie-4</code>, par <code>data-serie</code>) et un trait propre&#8239;: plein, tirets, points, mixte. Les plages mesurées sont des points carrés. Un <code>aria-label</code> résume le graphique, et ses valeurs se lisent dans un tableau replié «&#8239;Valeurs&#8239;». Une valeur inconnue coupe la courbe et s’écrit «&#8239;inconnu&#8239;».</p>
+<div class="ds-demo"><svg class="graphique" viewBox="0 0 640 220" role="img" aria-label="Exemple&#8239;: chroma par teinte de deux profils">
+<line class="graphique__grille" x1="52" x2="624" y1="56" y2="56"/><line class="graphique__grille" x1="52" x2="624" y1="106" y2="106"/><line class="graphique__grille" x1="52" x2="624" y1="156" y2="156"/>
+<line class="graphique__axe" x1="52" x2="624" y1="156" y2="156"/><line class="graphique__axe" x1="52" x2="52" y1="16" y2="156"/>
+<text class="graphique__texte" x="52" y="170" text-anchor="middle">0</text><text class="graphique__texte" x="338" y="170" text-anchor="middle">180</text><text class="graphique__texte" x="624" y="170" text-anchor="middle">360</text>
+<text class="graphique__titre" x="338" y="188" text-anchor="middle">Teinte h (°)</text>
+<path class="graphique__trace" data-serie="1" d="M52,90 L150,40 L250,70 L338,110 L450,60 L624,90"/>
+<path class="graphique__trace" data-serie="2" d="M52,96 L150,52 L250,74 L338,104 M450,70 L624,96"/>
+<rect class="graphique__point" data-serie="1" x="247" y="67" width="6" height="6"/>
+<line class="graphique__trace" data-serie="1" x1="52" x2="74" y1="207" y2="207"/><text class="graphique__legende" x="82" y="210">Profil de référence</text>
+<line class="graphique__trace" data-serie="2" x1="338" x2="360" y1="207" y2="207"/><text class="graphique__legende" x="368" y="210">Profil comparé</text>
+</svg></div>
+<pre class="ds-code">&lt;svg class="graphique"&gt;&lt;path class="graphique__trace" data-serie="2" d="…"/&gt;&lt;/svg&gt;</pre></section>
+
+<section class="ds-block"><span class="label">Composant</span><h2>Vue 3D des gamuts</h2><p>Un canvas dessiné par <code>vue3d.js</code>&#8239;: triangles triés par profondeur, ombrage plat, opaque par défaut. Il prend le focus (filet d’accent)&#8239;: flèches pour tourner, + et − pour zoomer, 0 pour revenir. Il porte <code>role="img"</code> et un <code>aria-label</code> qui nomme les profils et leurs volumes.</p>
+<div class="ds-demo"><canvas class="vue3d" tabindex="0" role="img" aria-label="Exemple&#8239;: vue 3D vide"></canvas></div>
+<pre class="ds-code">&lt;canvas class="vue3d"&gt;&lt;/canvas&gt;  Vue3d.creer(canvas, { couleur: "serie", rendu: "opaque" })</pre></section>
+
+<section class="ds-block"><span class="label">Composant</span><h2>Profils comparés</h2><p>Une ligne par profil d’une comparaison&#8239;: le carré de sa couleur de série (<code>.swatch</code>, <code>--c</code> = le jeton de la série), son nom, puis «&#8239;Retirer&#8239;». Le premier est la référence. Un profil refusé garde sa ligne, avec la raison à côté.</p>
+<div class="ds-demo"><ul class="profils-compares"><li><span class="swatch" style="--c: var(--serie-1)"></span><span>HFA Matt 200, profil calculé</span><span class="label">référence</span><button class="btn">Retirer</button></li><li><span class="swatch" style="--c: var(--serie-2)"></span><span>ecran.icc</span><button class="btn">Retirer</button><p class="why">Ce profil n’a pas de table colorimétrique (A2B1)&#8239;: c’est peut-être un profil d’écran. Il n’est pas comparé.</p></li></ul></div>
+<pre class="ds-code">&lt;ul class="profils-compares"&gt;&lt;li&gt;&lt;span class="swatch" style="--c: var(--serie-1)"&gt;&lt;/span&gt;…&lt;/li&gt;&lt;/ul&gt;</pre></section>
+
+<section class="ds-block"><span class="label">Composant</span><h2>Curseur</h2><p>Une valeur dans un intervalle (clarté L* d’une coupe), à l’accent. La valeur choisie est écrite à côté du libellé.</p>
+<div class="ds-demo"><div class="field"><label class="label" for="ds-curseur">Clarté L* 50</label><input class="curseur" id="ds-curseur" type="range" min="5" max="95" value="50"></div></div>
+<pre class="ds-code">&lt;input class="curseur" type="range" min="5" max="95"&gt;</pre></section>
 </main>
 <script>
 for (const b of document.querySelectorAll("[data-theme-choix]")) b.addEventListener("click", () => {

@@ -13,6 +13,11 @@
 <script src="arbre.js" defer></script>
 <script src="calcul-profil.js" defer></script>
 <script src="mire.js" defer></script>
+<script src="vue3d.js" defer></script>
+<script src="graphiques.js" defer></script>
+<script src="comparer-ecarts.js" defer></script>
+<script src="comparer-details.js" defer></script>
+<script src="comparer.js" defer></script>
 <script src="reglage.js" defer></script>
 <script src="parc.js" defer></script>
 <script src="mesurer.js" defer></script>
@@ -231,6 +236,7 @@
         <button class="btn" data-ranger-profil data-t="parc.ranger"></button>
         <button class="btn" data-calcul-ouvrir data-t="profil.titre" aria-expanded="false" aria-controls="calcul-profil"></button>
         <button class="btn" data-mire-ouvrir data-t="mire.ouvrir" aria-expanded="false" aria-controls="preparer-mire"></button>
+        <button class="btn" data-comparer-ouvrir data-t="comparer.ouvrir"></button>
       </div>
       <p class="why" role="status" data-reglage-occupe data-t="parc.en_cours" hidden></p>
       <!-- Calcul d’un profil : section construite par calcul-profil.js (mesure, condition, recette, commande équivalente). -->
@@ -245,6 +251,26 @@
         <div class="section__head"><span class="label label--ink" data-t="bibliotheque.mesures"></span></div>
         <div data-reglage-mesures></div>
       </div>
+    </div>
+    <!-- Vue « Comparer » (comparer.js) : de un à quatre profils, rangés ou ouverts depuis un fichier ;
+         le premier sert de référence aux écarts. Elle prend la place de la vue d'une résolution. -->
+    <div data-vue-comparer hidden>
+      <h1 class="titre" data-t="comparer.titre"></h1>
+      <p class="prose" data-t="comparer.aide"></p>
+      <div class="section section--serree">
+        <div class="section__head"><span class="label label--ink" data-t="comparer.profils"></span></div>
+        <ul class="profils-compares" data-comparer-puces></ul>
+        <div class="actions"><button class="btn btn--primary" data-comparer-ajouter data-t="comparer.ajouter" aria-expanded="false" aria-controls="comparer-choix" disabled></button></div>
+        <!-- Raison du bouton inactif, juste à côté ; comparer.js la remplace dès la liste lue. -->
+        <p class="why" data-comparer-ajouter-raison data-t="comparer.ajouter.chargement"></p>
+        <!-- Liste des profils de la bibliothèque et ouverture d'un fichier, construite par comparer.js. -->
+        <div id="comparer-choix" data-comparer-choix hidden></div>
+        <div class="actions"><button class="btn" data-comparer-fermer data-t="comparer.fermer"></button></div>
+        <p class="why" role="status" data-comparer-message hidden></p>
+        <p class="why" role="status" data-comparer-en-cours data-t="comparer.en_cours" hidden></p>
+      </div>
+      <!-- Chiffres, volume, teintes, coupe, chemin, couleurs de base, écarts et méthode (comparer.js). -->
+      <div data-comparer-corps></div>
     </div>
     <!-- Feuille des mesures (bibliotheque.js) : barre d'actions toujours en vue (import,
          un seul export, sauvegarde, restauration ; ticket #9), puis la mesure choisie,
@@ -292,6 +318,8 @@
     <div data-details-tache="autres">
     <!-- Détails d’une résolution (reglage.js) : provenance du profil, fiche d’impression, Windows. -->
     <div data-details-reglage hidden></div>
+    <!-- Détails de la comparaison (comparer.js) : provenance de chaque profil, commande d’iccgamut. -->
+    <div data-details-comparer hidden></div>
     <div class="details-corps" data-details-choix hidden></div>
     <div class="details-corps" data-details-vide><div class="cartouche">
       <div class="cartouche__title"><span class="label" data-t="cartouche.libelle"></span><strong data-t="cartouche.titre"></strong></div>
