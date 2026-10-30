@@ -200,15 +200,29 @@ pub fn rendre_page(
     Ok(image)
 }
 
+/// Motif 8 × 8 d'un caractère (ligne par ligne, bit 0 à gauche), s'il est
+/// dans la police : ASCII, table latine (accents, « · », espace insécable
+/// U+00A0) et « … ».
+fn motif_police(c: char) -> Option<[u8; 8]> {
+    match c as u32 {
+        n @ 0..=0x7F => Some(BASIC_LEGACY[n as usize]),
+        n @ 0xA0..=0xFF => Some(LATIN_LEGACY[(n - 0xA0) as usize]),
+        0x2026 => Some(POINTS_DE_SUITE),
+        _ => None,
+    }
+}
+
+/// Le caractère est dessiné sur les pages tel quel ; sinon il sort en « ? ».
+/// Une espace fine insécable (U+202F) ou une apostrophe courbe, par
+/// exemple, ne le sont pas.
+pub fn dessinable(c: char) -> bool {
+    !c.is_control() && motif_police(c).is_some_and(|m| m != [0; 8] || c == ' ' || c == '\u{a0}')
+}
+
 /// Motif 8 × 8 d'un caractère (ligne par ligne, bit 0 à gauche) ; « ? » pour
 /// un caractère que la police n'a pas.
 fn motif(c: char) -> [u8; 8] {
-    match c as u32 {
-        n @ 0..=0x7F => BASIC_LEGACY[n as usize],
-        n @ 0xA0..=0xFF => LATIN_LEGACY[(n - 0xA0) as usize],
-        0x2026 => POINTS_DE_SUITE,
-        _ => BASIC_LEGACY['?' as usize],
-    }
+    motif_police(c).unwrap_or(BASIC_LEGACY['?' as usize])
 }
 
 fn dessiner_caractere(image: &mut ImageRvb, c: char, (x, y): (u32, u32)) {

@@ -31,6 +31,9 @@ mod myiro1;
 
 use depot::{completer, ecrire_fichier};
 use myiro1::controler_myiro1;
+pub use myiro1::{lignes_etiquette, TexteEtiquette, CLES_ETIQUETTE};
+
+use crate::textes::Langue;
 
 /// Bornes du nombre libre de plages MYIRO-1 (section « Avancé ») : des
 /// bornes de saisie, pas un avis sur la qualité.
@@ -181,6 +184,9 @@ impl BibliothequeOuverte {
     /// pages dans `dossier`. Rien n'est rangé si la mire ne peut pas être
     /// préparée, ni si une page ne peut pas être écrite : un tirage
     /// n'apparaît jamais sans ses fichiers (voir `ranger_et_deposer`).
+    /// `langue` est celle du texte imprimé sur les pages MYIRO-1 ; la mire
+    /// FD-9 est copiée telle quelle, quelle que soit la langue.
+    #[allow(clippy::too_many_arguments)]
     pub fn preparer_mire(
         &self,
         condition: IdCondition,
@@ -189,6 +195,7 @@ impl BibliothequeOuverte {
         mire_fd9: Option<&Path>,
         dossier: &Path,
         maintenant: SystemTime,
+        langue: Langue,
     ) -> Result<MirePreparee, String> {
         match demande.instrument {
             Instrument::Fd9 => {
@@ -211,7 +218,7 @@ impl BibliothequeOuverte {
                 self.preparer_mire_fd9(condition, mire, dossier, maintenant)
             }
             Instrument::Myiro1 => {
-                self.preparer_myiro1(condition, demande, moteur, dossier, maintenant)
+                self.preparer_myiro1(condition, demande, moteur, dossier, maintenant, langue)
             }
         }
     }

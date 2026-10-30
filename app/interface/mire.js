@@ -285,7 +285,9 @@ window.PreparerMire = (() => {
     erreurPreparation = "";
     if (saisieRefusee()) return;
     try {
-      const r = await invoke("mire_preparer", { condition: d.condition.id, demande: demande() });
+      // Le texte imprimé sur les pages suit la langue de la page (#79).
+      const langue = document.documentElement.lang || "fr";
+      const r = await invoke("mire_preparer", { condition: d.condition.id, demande: demande(), langue });
       if (ici()) preparee = r;
       await parc.recharger();
       // La même mire, pas encore mesurée, est reprise sans doublon : sa date est dite.

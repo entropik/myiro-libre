@@ -2510,6 +2510,27 @@ const FRANCAIS: Catalogue = &[
         "mire.preparees.vide",
         "Aucune mire préparée pour cette résolution.",
     ),
+    // Texte imprimé sur les pages MYIRO-1 (#79), dessiné par la police
+    // `font8x8` : ni espace fine insécable (U+202F), ni apostrophe courbe,
+    // qui sortiraient en « ? » ; espace insécable U+00A0 à la place.
+    (
+        "mire.etiquette.detail",
+        "Mire {taille} · {n} plages · MYIRO-1 · page {page} sur {pages} · {date}",
+    ),
+    ("mire.etiquette.taille.rapide", "rapide"),
+    ("mire.etiquette.taille.standard", "standard"),
+    ("mire.etiquette.taille.approfondi", "approfondi"),
+    ("mire.etiquette.libre", "{n} plages"),
+    (
+        "mire.etiquette.consigne",
+        "Imprimer à 100\u{a0}%, sans gestion des couleurs",
+    ),
+    // Même forme que les dates de la page : « 23 oct. 2026 ».
+    ("mire.etiquette.date", "{jour} {mois} {annee}"),
+    (
+        "mire.etiquette.mois",
+        "janv. févr. mars avr. mai juin juil. août sept. oct. nov. déc.",
+    ),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -4971,6 +4992,23 @@ const ANGLAIS: Catalogue = &[
     (
         "mire.preparees.vide",
         "No chart prepared for this resolution.",
+    ),
+    (
+        "mire.etiquette.detail",
+        "Chart: {taille} · {n} patches · MYIRO-1 · page {page} of {pages} · {date}",
+    ),
+    ("mire.etiquette.taille.rapide", "quick"),
+    ("mire.etiquette.taille.standard", "standard"),
+    ("mire.etiquette.taille.approfondi", "thorough"),
+    ("mire.etiquette.libre", "{n} patches"),
+    (
+        "mire.etiquette.consigne",
+        "Print at 100%, without colour management",
+    ),
+    ("mire.etiquette.date", "{mois} {jour}, {annee}"),
+    (
+        "mire.etiquette.mois",
+        "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",
     ),
 ];
 

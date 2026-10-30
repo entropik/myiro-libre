@@ -1267,6 +1267,8 @@ fn la_vue_d_une_resolution_prepare_une_mire() {
         "invoke(\"mire_apercu\"",
         "invoke(\"mire_ouvrir_dossier\"",
         "cote_mm:",
+        // Texte imprimé dans la langue de la page (#79).
+        "demande: demande(), langue }",
     ] {
         assert!(script.contains(attendu), "{attendu}");
     }

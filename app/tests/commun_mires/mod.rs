@@ -9,6 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use app::colonne::{emplacement, BibliothequeOuverte};
 use app::mires::DemandeMire;
+use app::textes::Langue;
 use bibliotheque::IdCondition;
 use mires::{
     ecrire_tiff, lire_mire_fd9_sans_empreinte, Format, GeometrieFd9, ImageRvb, Instrument, MireFd9,
@@ -100,8 +101,20 @@ impl Banc {
             .len()
     }
 
+    /// Prépare la mire, texte imprimé en français.
     pub fn preparer(
         &self,
+        demande: &DemandeMire,
+        moteur: &MoteurSimule,
+        mire_fd9: Option<&Path>,
+    ) -> Result<app::mires::MirePreparee, String> {
+        self.preparer_dans(Langue::Francais, demande, moteur, mire_fd9)
+    }
+
+    /// Prépare la mire, texte imprimé dans `langue`.
+    pub fn preparer_dans(
+        &self,
+        langue: Langue,
         demande: &DemandeMire,
         moteur: &MoteurSimule,
         mire_fd9: Option<&Path>,
@@ -113,6 +126,7 @@ impl Banc {
             mire_fd9,
             &self.mires(),
             maintenant(),
+            langue,
         )
     }
 }

@@ -3,6 +3,12 @@
 //! pages dessinées et écrites en TIFF. Une mire aux mêmes réglages, déjà
 //! préparée et pas encore mesurée dans la résolution, est reprise sans
 //! doublon.
+//!
+//! Le texte imprimé sur les pages suit la langue de l'application au
+//! moment de la préparation (#79) ; cette langue est rangée avec le tirage
+//! et une page redessinée la garde. La langue ne fait pas partie de
+//! l'identité d'une mire : préparer de nouveau la même mire dans une autre
+//! langue la reprend telle quelle, dans sa langue d'origine, sans doublon.
 
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -19,14 +25,27 @@ use super::{
 };
 use crate::colonne::BibliothequeOuverte;
 use crate::parc::{instant_utc, DetailReglage};
+use crate::textes::{texte, Langue};
 
 /// Demande MYIRO-1 contrôlée : gabarit et nombre de plages, avant tout
 /// lancement.
 pub(super) struct DemandeMyiro1 {
     pub(super) gabarit: Gabarit,
     pub(super) nombre: usize,
-    /// Taille ou « libre », pour le nom et le texte de la page.
-    taille: &'static str,
+    /// Taille ; rien pour un nombre libre de plages.
+    taille: Option<TailleMire>,
+}
+
+impl DemandeMyiro1 {
+    /// Taille ou « libre », rangée avec la mire et dans son nom.
+    fn nom_taille(&self) -> &'static str {
+        match self.taille {
+            Some(TailleMire::Rapide) => "rapide",
+            Some(TailleMire::Standard) => "standard",
+            Some(TailleMire::Approfondi) => "approfondi",
+            None => "libre",
+        }
+    }
 }
 
 pub(super) fn controler_myiro1(demande: &DemandeMire) -> Result<DemandeMyiro1, String> {
@@ -36,11 +55,11 @@ pub(super) fn controler_myiro1(demande: &DemandeMire) -> Result<DemandeMyiro1, S
         None => Gabarit::par_defaut(format),
     };
     let (nombre, taille) = match (demande.nombre, demande.taille) {
-        (Some(n), _) if (NOMBRE_LIBRE.0..=NOMBRE_LIBRE.1).contains(&n) => (n, "libre"),
+        (Some(n), _) if (NOMBRE_LIBRE.0..=NOMBRE_LIBRE.1).contains(&n) => (n, None),
         (Some(_), _) => return Err("mire.erreur.nombre_libre".to_string()),
         (None, taille) => {
             let taille = taille.unwrap_or(TailleMire::Rapide);
-            (nombre_plages_myiro1(taille), nom_taille(taille))
+            (nombre_plages_myiro1(taille), Some(taille))
         }
     };
     Ok(DemandeMyiro1 {
@@ -50,12 +69,81 @@ pub(super) fn controler_myiro1(demande: &DemandeMire) -> Result<DemandeMyiro1, S
     })
 }
 
-fn nom_taille(taille: TailleMire) -> &'static str {
-    match taille {
-        TailleMire::Rapide => "rapide",
-        TailleMire::Standard => "standard",
-        TailleMire::Approfondi => "approfondi",
+/// Clés du catalogue qui composent le texte imprimé sur les pages. Leurs
+/// caractères doivent tous être dans la police des pages
+/// ([`mires::dessinable`]).
+pub const CLES_ETIQUETTE: &[&str] = &[
+    "mire.etiquette.detail",
+    "mire.etiquette.taille.rapide",
+    "mire.etiquette.taille.standard",
+    "mire.etiquette.taille.approfondi",
+    "mire.etiquette.libre",
+    "mire.etiquette.consigne",
+    "mire.etiquette.date",
+    "mire.etiquette.mois",
+];
+
+/// Ce que dit le texte imprimé d'une page MYIRO-1, hors langue.
+#[derive(Clone, Debug)]
+pub struct TexteEtiquette<'a> {
+    pub imprimante: &'a str,
+    pub papier: &'a str,
+    pub resolution: &'a str,
+    /// Taille ; rien pour un nombre libre de plages.
+    pub taille: Option<TailleMire>,
+    pub plages: usize,
+    /// Numéro de la page, à partir de 1.
+    pub page: usize,
+    pub pages: usize,
+    /// Première préparation, en RFC 3339 : la date imprimée.
+    pub horodatage: &'a str,
+}
+
+/// Date d'un horodatage RFC 3339 dans la langue, de la même forme que les
+/// dates de la page (« 23 oct. 2026 », « Oct 23, 2026 ») ; telle quelle si
+/// elle n'a pas cette forme.
+fn date_imprimee(horodatage: &str, langue: Langue) -> String {
+    let nombre = |a: usize, b: usize| horodatage.get(a..b)?.parse::<usize>().ok();
+    let nom_mois = |m: usize| {
+        texte(langue, "mire.etiquette.mois")
+            .split(' ')
+            .nth(m.checked_sub(1)?)
+    };
+    match (nombre(0, 4), nombre(5, 7), nombre(8, 10)) {
+        (Some(annee), Some(m), Some(jour)) => match nom_mois(m) {
+            Some(mois) => texte(langue, "mire.etiquette.date")
+                .replace("{jour}", &jour.to_string())
+                .replace("{mois}", mois)
+                .replace("{annee}", &annee.to_string()),
+            None => horodatage.to_string(),
+        },
+        _ => horodatage.to_string(),
     }
+}
+
+/// Lignes du texte imprimé sur une page MYIRO-1, dans la langue donnée :
+/// imprimante, papier et résolution ; mire, plages, page et date ; rappel
+/// d'impression.
+pub fn lignes_etiquette(t: &TexteEtiquette, langue: Langue) -> Vec<String> {
+    let n = t.plages.to_string();
+    let taille = match t.taille {
+        Some(TailleMire::Rapide) => texte(langue, "mire.etiquette.taille.rapide").to_string(),
+        Some(TailleMire::Standard) => texte(langue, "mire.etiquette.taille.standard").to_string(),
+        Some(TailleMire::Approfondi) => {
+            texte(langue, "mire.etiquette.taille.approfondi").to_string()
+        }
+        None => texte(langue, "mire.etiquette.libre").replace("{n}", &n),
+    };
+    vec![
+        format!("{} · {} · {}", t.imprimante, t.papier, t.resolution),
+        texte(langue, "mire.etiquette.detail")
+            .replace("{taille}", &taille)
+            .replace("{n}", &n)
+            .replace("{pages}", &t.pages.to_string())
+            .replace("{page}", &t.page.to_string())
+            .replace("{date}", &date_imprimee(t.horodatage, langue)),
+        texte(langue, "mire.etiquette.consigne").to_string(),
+    ]
 }
 
 /// Ce qu'il faut pour dessiner les pages d'un tirage MYIRO-1 et les nommer.
@@ -64,11 +152,13 @@ struct Pages<'a> {
     mise: &'a MiseEnPage,
     valeurs: &'a [[f64; 3]],
     empreinte: &'a str,
-    /// Taille ou « libre ».
-    taille: &'a str,
+    /// Taille ; rien pour un nombre libre de plages.
+    taille: Option<TailleMire>,
     nombre: usize,
-    /// Date de la première préparation, pour le nom et le texte des pages.
-    date: &'a str,
+    /// Première préparation, en RFC 3339 : date du nom et du texte des pages.
+    horodatage: &'a str,
+    /// Langue du texte imprimé, rangée avec le tirage.
+    langue: Langue,
 }
 
 impl Pages<'_> {
@@ -84,7 +174,7 @@ impl Pages<'_> {
             &d.imprimante,
             &d.papier,
             &d.resolution,
-            self.date,
+            date_de(self.horodatage),
             tirage.0,
             k,
             pages,
@@ -93,21 +183,19 @@ impl Pages<'_> {
 
     /// Dessine la page `k` du tirage et l'écrit dans `travail` ; rend son nom.
     fn ecrire(&self, tirage: IdTirage, k: usize, travail: &Path) -> Result<String, ErreurMire> {
-        let (d, pages, date) = (self.detail, self.nombre_pages(), self.date);
-        let mire = if self.taille == "libre" {
-            format!("{} plages", self.nombre)
-        } else {
-            self.taille.to_string()
+        let (d, pages) = (self.detail, self.nombre_pages());
+        let texte = TexteEtiquette {
+            imprimante: &d.imprimante,
+            papier: &d.papier,
+            resolution: &d.resolution,
+            taille: self.taille,
+            plages: self.nombre,
+            page: k,
+            pages,
+            horodatage: self.horodatage,
         };
         let etiquette = Etiquette {
-            lignes: vec![
-                format!("{} · {} · {}", d.imprimante, d.papier, d.resolution),
-                format!(
-                    "Mire {mire} · {} plages · MYIRO-1 · page {k} sur {pages} · {date}",
-                    self.nombre
-                ),
-                "Imprimer à 100 %, sans gestion des couleurs".to_string(),
-            ],
+            lignes: lignes_etiquette(&texte, self.langue),
             code: contenu_qr(&CodeTirage {
                 tirage: tirage.0,
                 page: k,
@@ -127,7 +215,9 @@ impl Pages<'_> {
 /// le gabarit actuel, même version comprise (`VERSION_GABARIT`) : une mire
 /// d'une version plus ancienne (page en paysage, avant le 28 octobre 2026)
 /// n'est pas reprise. Son empreinte
-/// ne sert pas : la graine de la mise en page vient de l'heure.
+/// ne sert pas : la graine de la mise en page vient de l'heure. La langue du
+/// texte imprimé ne compte pas non plus : la mire est reprise dans sa langue
+/// d'origine, sans doublon pour une autre langue (#79).
 fn memes_reglages(mire: &MireRangee, d: &DemandeMyiro1) -> bool {
     let taille = serde_json::from_str::<serde_json::Value>(&mire.generation)
         .ok()
@@ -137,11 +227,23 @@ fn memes_reglages(mire: &MireRangee, d: &DemandeMyiro1) -> bool {
         .filter(MiseEnPage::suit_le_gabarit_actuel)
         .map(|m| m.gabarit);
     mire.plages == d.nombre
-        && taille.as_deref() == Some(d.taille)
+        && taille.as_deref() == Some(d.nom_taille())
         && gabarit.as_ref() == Some(&d.gabarit)
 }
 
+/// Langue du texte imprimé, rangée dans le JSON `generation` du tirage ; une
+/// mire rangée avant le ticket #79, sans langue, est en français.
+fn langue_rangee(generation: &str) -> Langue {
+    serde_json::from_str::<serde_json::Value>(generation)
+        .ok()
+        .and_then(|g| Langue::depuis_code(g.get("langue")?.as_str()?))
+        .unwrap_or(Langue::Francais)
+}
+
 impl BibliothequeOuverte {
+    /// Prépare une mire MYIRO-1 dont le texte imprimé est dans `langue`, ou
+    /// reprend celle déjà préparée aux mêmes réglages, dans sa langue
+    /// d'origine.
     pub(super) fn preparer_myiro1(
         &self,
         condition: IdCondition,
@@ -149,6 +251,7 @@ impl BibliothequeOuverte {
         moteur: &dyn MoteurProfil,
         dossier: &Path,
         maintenant: SystemTime,
+        langue: Langue,
     ) -> Result<MirePreparee, String> {
         let d = controler_myiro1(demande)?;
         let detail = self.detail_reglage(condition)?;
@@ -192,13 +295,14 @@ impl BibliothequeOuverte {
             "commande": plages.commande,
             "version": plages.version,
             "journal": plages.journal,
-            "taille": d.taille,
+            "taille": d.nom_taille(),
+            "langue": langue.code(),
         })))?;
         let valeurs_json = json(serde_json::to_string(&valeurs))?;
         let mise_json = json(serde_json::to_string(&mise))?;
         let empreinte = mise.empreinte();
         let horodatage = instant_utc(maintenant);
-        let nom = format!("MYIRO-1 {}", d.taille);
+        let nom = format!("MYIRO-1 {}", d.nom_taille());
         let pages = Pages {
             detail: &detail,
             mise: &mise,
@@ -206,7 +310,8 @@ impl BibliothequeOuverte {
             empreinte: &empreinte,
             taille: d.taille,
             nombre: d.nombre,
-            date: date_de(&horodatage),
+            horodatage: &horodatage,
+            langue,
         };
         let nouvelle = NouvelleMire {
             nom: &nom,
@@ -244,7 +349,9 @@ impl BibliothequeOuverte {
 
 /// Reprend un tirage pas encore mesuré aux mêmes réglages : ses pages
 /// effacées à la main sont redessinées à l'identique, sous le même numéro,
-/// à partir des valeurs et de la mise en page rangées.
+/// à partir des valeurs, de la mise en page et de la langue rangées : le
+/// texte imprimé reste celui d'origine, même si l'application a changé de
+/// langue entre-temps.
 fn reprendre(
     t: TiragePrepare,
     d: &DemandeMyiro1,
@@ -268,7 +375,8 @@ fn reprendre(
         empreinte: &t.mire.empreinte,
         taille: d.taille,
         nombre: d.nombre,
-        date: date_de(&t.horodatage),
+        horodatage: &t.horodatage,
+        langue: langue_rangee(&t.mire.generation),
     };
     let noms: Vec<String> = (1..=pages.nombre_pages())
         .map(|k| pages.nom(t.id, k))
