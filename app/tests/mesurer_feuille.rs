@@ -15,7 +15,9 @@ use app::instrument::feuille::{
 };
 use app::instrument::parefeu::{AutorisationPareFeu, PareFeuSimule};
 use app::instrument::{Etat, Instrument, DELAI_FEUILLE};
-use app::mesurer_feuille::{lire_calage, lire_rgb2520, DOSSIER_MESURES_FD9};
+use app::mesurer_feuille::{
+    etat_feuille_fd9, lire_calage, lire_rgb2520, DOSSIER_MESURES_FD9, RAISON_SANS_FD9,
+};
 use app::pont::{Architecture, Panne, Pont};
 use bibliotheque::IdCondition;
 use mires::{MireFd9, RGB2520_GEOMETRIE, RGB2520_NOM};
@@ -659,6 +661,14 @@ fn une_feuille_refusee_par_le_pont_ne_range_rien_et_revient_au_plafond_connexion
                 etat: 102,
                 premesure: None,
             },
+            "feuille_fd9.incident_feuille.102",
+        ),
+        // Un état d'incident hors de la table du SDK garde la clé générale.
+        (
+            ErreurPont::IncidentFeuille {
+                etat: 150,
+                premesure: None,
+            },
             "feuille_fd9.incident_feuille",
         ),
         (
@@ -896,4 +906,58 @@ fn une_feuille_refusee_apres_le_calage_ne_garde_rien() {
         .iter()
         .any(|e| matches!(e, EtapeFeuille::CalagePret { .. })));
     assert!(!b.bibliotheque().join(DOSSIER_MESURES_FD9).exists());
+}
+
+// ---- Bouton « Mesurer une feuille au FD-9 » (tâche 9) ----
+
+/// Actif quand le FD-9 est prêt et la mire trouvée ; sinon chaque raison
+/// est une clé du catalogue. La mire part à l'onglet « Mire » dès qu'elle
+/// est lue, même sans FD-9.
+#[test]
+fn le_bouton_dit_pourquoi_il_est_inactif() {
+    let pret = etat_feuille_fd9(None, Ok(mire()), false);
+    assert!(pret.disponible);
+    assert!(pret.raisons.is_empty());
+    assert_eq!(pret.mire.as_ref().map(|m| m.plages()), Some(2_520));
+
+    let sans_fd9 = etat_feuille_fd9(Some(RAISON_SANS_FD9), Ok(mire()), false);
+    assert!(!sans_fd9.disponible);
+    assert_eq!(sans_fd9.raisons, vec![RAISON_SANS_FD9.to_string()]);
+    assert!(sans_fd9.mire.is_some(), "la mire se voit sans FD-9");
+
+    let sans_rien = etat_feuille_fd9(Some(RAISON_SANS_FD9), lire_rgb2520(None), false);
+    assert!(!sans_rien.disponible);
+    assert_eq!(
+        sans_rien.raisons,
+        vec![
+            RAISON_SANS_FD9.to_string(),
+            "mire.erreur.fd9_introuvable".to_string()
+        ]
+    );
+    assert_eq!(sans_rien.mire, None);
+
+    let mut courte = mire();
+    courte.valeurs.pop();
+    let refusee = etat_feuille_fd9(None, Ok(courte), false);
+    assert!(!refusee.disponible);
+    assert_eq!(
+        refusee.raisons,
+        vec!["feuille_fd9.definition_refusee.cause".to_string()]
+    );
+
+    for cle in pret
+        .raisons
+        .iter()
+        .chain(&sans_rien.raisons)
+        .chain(&refusee.raisons)
+    {
+        assert!(app::textes::cles().any(|c| c == cle), "{cle}");
+    }
+    assert!(etat_feuille_fd9(None, Ok(mire()), true).demonstration);
+}
+
+#[test]
+fn le_fd9_detecte_permet_la_feuille() {
+    let b = banc();
+    assert!(b.instrument.feuille_possible());
 }

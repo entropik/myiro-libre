@@ -41,6 +41,8 @@ window.Reglage = (() => {
   const { texteErreur } = calcul;
   // Préparer une mire : section et préparation (mire.js).
   const mire = window.PreparerMire;
+  // Mesurer une feuille au FD-9 : bouton, état de la feuille, mire et points mesurés (feuille-fd9.js).
+  const feuilleFd9 = window.FeuilleFd9;
 
   // Comparaison de profils (comparer.js) : elle prend la place de cette vue.
   const comparer = window.Comparer;
@@ -87,6 +89,7 @@ window.Reglage = (() => {
     vue.querySelector("[data-comparer-ouvrir]").hidden = !actif;
     calcul.dessiner(d);
     mire.dessiner(d);
+    feuilleFd9.dessiner(d);
     dessinerOccupation(!actif);
 
     const historique = vue.querySelector("[data-historique]");
@@ -219,6 +222,12 @@ window.Reglage = (() => {
     agir,
     texteErreur,
     occupation: () => dessinerOccupation(!(parc.reglage() || {}).actif),
+  });
+
+  // La feuille agit sur la résolution affichée ; elle ne bloque pas les autres boutons de la vue.
+  feuilleFd9.brancher({
+    reglage: () => parc.reglage(),
+    recharger: () => parc.recharger(),
   });
 
   return {

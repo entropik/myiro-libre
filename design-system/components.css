@@ -498,3 +498,32 @@ select.input option { background: var(--panneau); color: var(--encre); }
 .agrandie__lecture { flex: none; }
 /* Curseur d'une valeur dans un intervalle (clarté d'une coupe). */
 .curseur { width: 100%; max-width: var(--measure); accent-color: var(--accent); }
+
+/* ---- Place gardée : un bouton qui n'a rien à faire reste à sa place, invisible ---- */
+.garde-place[data-vide] { visibility: hidden; }
+
+/* ---- Onglets : vues d'un même objet. Un bouton par vue (role="tab"), flèches, Début et Fin au
+   clavier ; l'onglet choisi est relié au panneau dessous, sans ombre ni arrondi. ---- */
+.onglets { display: flex; flex-wrap: wrap; border-bottom: var(--rule) solid var(--filet); }
+.onglets [role="tab"] { margin-bottom: calc(var(--rule) * -1); padding: var(--space-2) var(--space-4); border: var(--rule) solid transparent; color: var(--attenue); font-weight: 500; white-space: nowrap; }
+.onglets [role="tab"]:hover { color: var(--encre); }
+.onglets [role="tab"][aria-selected="true"] { border-color: var(--filet); border-bottom-color: var(--carte); background: var(--carte); color: var(--encre); font-weight: 600; }
+.onglets [role="tab"]:focus-visible { outline: var(--rule-strong) solid var(--accent); outline-offset: calc(var(--rule-strong) * -1); }
+
+/* ---- Feuille au FD-9 (feuille-fd9.js, feuille-vue.js) : état en clair à hauteur gardée, puis la
+   feuille vue dans une toile de taille fixe. Le zoom et le déplacement changent seulement ce que la
+   toile dessine : aucun ascenseur de plus, rien ne bouge autour. ---- */
+.feuille-fd9__raison { min-height: calc(2em * var(--leading-normal)); }
+.feuille-fd9__etat { min-height: calc(var(--space-24) + var(--space-8)); }
+.feuille-fd9__message { margin-top: var(--space-2); min-height: calc(2em * var(--leading-normal)); }
+.feuille-fd9__etat .notice { margin-bottom: 0; }
+.replie--serre { margin-top: var(--space-2); }
+.feuille-vue { border: var(--rule) solid var(--filet); border-top: 0; background: var(--carte); padding: var(--space-3); }
+.feuille-vue__outils { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.feuille-vue__niveau { min-width: calc(var(--space-12) + var(--space-2)); text-align: center; font-size: var(--text-sm); }
+.feuille-vue__toile { display: block; width: 100%; height: min(65vh, calc(var(--space-24) * 8)); background: var(--fond); border: var(--rule) solid var(--filet); touch-action: none; cursor: crosshair; }
+.feuille-vue__toile:focus-visible { outline: var(--rule-strong) solid var(--accent); outline-offset: var(--rule); }
+.feuille-vue__survol { display: flex; align-items: center; gap: var(--space-2); height: calc(var(--icone) + var(--space-2)); margin-top: var(--space-2); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.feuille-vue__survol .swatch { flex: none; width: var(--icone); height: var(--icone); }
+.feuille-vue__survol-texte { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.feuille-vue__legende { height: calc(2 * var(--text-xs) * var(--leading-normal)); overflow: hidden; font-size: var(--text-xs); color: var(--attenue); }

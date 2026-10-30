@@ -165,13 +165,20 @@ impl ErreurFeuille {
     /// Clé du catalogue : `probleme.<code>` pour un problème de l'instrument
     /// (textes `.cause` et `.action` existants), `feuille_fd9.<type>` pour
     /// un refus du pont, du nom de son type dans le protocole
-    /// (`feuille_fd9.feuille_absente`…), `feuille_fd9.sans_fd9` sans FD-9
-    /// détecté, `feuille_fd9.definition_refusee` pour une définition refusée.
+    /// (`feuille_fd9.feuille_absente`…), suivi de l'état pour un incident
+    /// de la table du SDK (`feuille_fd9.incident_feuille.102`),
+    /// `feuille_fd9.sans_fd9` sans FD-9 détecté,
+    /// `feuille_fd9.definition_refusee` pour une définition refusée.
     pub fn cle(&self) -> String {
         match self {
             ErreurFeuille::SansFd9 => "feuille_fd9.sans_fd9".into(),
             ErreurFeuille::Definition(_) => "feuille_fd9.definition_refusee".into(),
             ErreurFeuille::Instrument(probleme) => format!("probleme.{}", probleme.code()),
+            ErreurFeuille::Feuille(ErreurPont::IncidentFeuille { etat, .. })
+                if ETATS_INCIDENT.contains(etat) =>
+            {
+                format!("feuille_fd9.incident_feuille.{etat}")
+            }
             ErreurFeuille::Feuille(erreur) => format!("feuille_fd9.{}", type_erreur(erreur)),
         }
     }
@@ -187,9 +194,13 @@ impl ErreurFeuille {
     }
 }
 
+/// États d'incident d'une feuille nommés par la table du SDK (fiche
+/// `docs/abi/FD9_RegisterDeviceEventHandler.md`) : chacun a son texte.
+pub const ETATS_INCIDENT: [u32; 10] = [101, 102, 103, 201, 202, 203, 204, 205, 206, 301];
+
 /// Nom du type de l'erreur dans le protocole (`"type"` du JSON), sans
 /// joker : une erreur ajoutée au protocole doit recevoir sa clé ici.
-fn type_erreur(erreur: &ErreurPont) -> &'static str {
+pub fn type_erreur(erreur: &ErreurPont) -> &'static str {
     match erreur {
         ErreurPont::EtatInvalide { .. } => "etat_invalide",
         ErreurPont::PalierNonAutorise { .. } => "palier_non_autorise",
@@ -223,6 +234,15 @@ fn type_erreur(erreur: &ErreurPont) -> &'static str {
 }
 
 impl<P: Pont> Instrument<P> {
+    /// Un FD-9 est détecté et son pont ouvert : une feuille peut être
+    /// mesurée.
+    pub fn feuille_possible(&self) -> bool {
+        matches!(
+            (&self.etat, &self.pont, &self.fd9),
+            (Etat::Detecte { .. }, Some(_), Some(_))
+        )
+    }
+
     /// Mesure une feuille au FD-9 détecté. Le pont ordinaire est fermé (un
     /// seul logiciel à la fois tient l'instrument) ; un pont est lancé au
     /// plafond Feuille pour cette mesure seulement, se connecte à l'adresse

@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use bibliotheque::{IdCondition, IdMesure};
 use mires::{lire_mire_fd9, ErreurMire, MireFd9};
-use pont_protocole::{ecrire_mesure, CalageFeuille, Mesure, Palier};
+use pont_protocole::{ecrire_mesure, CalageFeuille, DefinitionFeuille, Mesure, Palier};
 use serde::Serialize;
 
 use crate::colonne::BibliothequeOuverte;
@@ -41,6 +41,58 @@ pub fn lire_rgb2520(fichier: Option<&Path>) -> Result<MireFd9, String> {
         eprintln!("{} : {e}", fichier.display());
         e.cle().to_string()
     })
+}
+
+/// Raison du bouton inactif quand aucun FD-9 n'est prêt.
+pub const RAISON_SANS_FD9: &str = "feuille_fd9.raison.sans_fd9";
+
+/// Raison du bouton inactif quand l'instrument est occupé (recherche,
+/// étalonnage, mesure en cours).
+pub const RAISON_OCCUPE: &str = "feuille_fd9.raison.occupe";
+
+/// Ce que la vue d'une résolution reçoit pour le bouton « Mesurer une
+/// feuille au FD-9 » et l'onglet « Mire ».
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct EtatFeuille {
+    /// Le bouton est actif.
+    pub disponible: bool,
+    /// Clés du catalogue qui disent pourquoi il ne l'est pas, dans l'ordre.
+    pub raisons: Vec<String>,
+    /// La mire telle qu'elle sera envoyée au FD-9 (mise en page et couleurs
+    /// de consigne) ; absente si elle n'a pas pu être lue.
+    pub mire: Option<DefinitionFeuille>,
+    /// FD-9 simulé, données fictives (`--demo`).
+    pub demonstration: bool,
+}
+
+/// État du bouton : `fd9` est la raison qui empêche l'instrument de mesurer
+/// une feuille (`None` s'il est prêt), `mire` la mire lue. La mire est
+/// rendue dès qu'elle est lue, même sans FD-9.
+pub fn etat_feuille_fd9(
+    fd9: Option<&str>,
+    mire: Result<impl std::borrow::Borrow<MireFd9>, String>,
+    demonstration: bool,
+) -> EtatFeuille {
+    let mut raisons: Vec<String> = fd9.map(String::from).into_iter().collect();
+    let definition = mire.and_then(|mire| {
+        definition_rgb2520(mire.borrow()).map_err(|e| {
+            eprintln!("définition de la RGB-2520 : {e}");
+            format!("{}.cause", ErreurFeuille::Definition(e).cle())
+        })
+    });
+    let mire = match definition {
+        Ok(definition) => Some(definition),
+        Err(cle) => {
+            raisons.push(cle);
+            None
+        }
+    };
+    EtatFeuille {
+        disponible: raisons.is_empty(),
+        raisons,
+        mire,
+        demonstration,
+    }
 }
 
 /// Ce que la page reçoit d'une feuille mesurée et rangée.

@@ -91,6 +91,29 @@ impl<P: Pont> Instrument<P> {
         }
     }
 
+    /// FD-9 simulé (démonstration, `--demo`) : `pont` est interrogé comme à
+    /// l'ouverture (version, détection), sans DLL, sans pare-feu. Une
+    /// feuille relance ensuite un pont par le lanceur qu'on lui donne ; les
+    /// chemins du programme et de la DLL sont fictifs.
+    pub fn ouvrir_fd9_simule(mut pont: P) -> Self {
+        let vu = lire_version(&mut pont).and_then(|()| detecter(&mut pont));
+        match vu {
+            Ok(Some(fd9)) => Self::detecte(
+                pont,
+                PathBuf::from("pont-fd9 (simulé)"),
+                PathBuf::from("FD9SDK.dll (simulée)"),
+                fd9,
+            ),
+            Ok(None) => Self::en_echec(
+                None,
+                Probleme::AucunFd9 {
+                    detail: DETAIL_AUCUN_FD9.into(),
+                },
+            ),
+            Err(probleme) => Self::en_echec(None, probleme),
+        }
+    }
+
     /// Relance le pont du FD-9 déjà choisi au plafond ordinaire, puis la
     /// version et la détection, sans pare-feu : après une feuille, le FD-9
     /// revient détecté comme à l'ouverture.

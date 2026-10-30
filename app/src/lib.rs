@@ -8,6 +8,8 @@
 pub mod colonne;
 pub mod comparer;
 pub mod demonstration;
+pub mod demonstration_fd9;
+mod ecran_feuille;
 pub mod installation;
 pub mod instrument;
 pub mod mesurer;
@@ -498,88 +500,6 @@ fn mesurer(
 /// sont gardées (`mesures-fd9/`).
 struct DossierBibliotheque(PathBuf);
 
-/// Annulation de la feuille en cours, utilisable pendant qu'elle tient
-/// l'instrument.
-#[derive(Default)]
-struct AnnulationFeuille(Mutex<Option<pont::Annulation>>);
-
-/// Ce que la page reçoit d'une mesure de feuille : la feuille rangée, ou
-/// pourquoi elle ne l'est pas, et l'état de l'instrument.
-#[derive(serde::Serialize)]
-struct EcranFeuille {
-    rangee: Option<mesurer_feuille::FeuilleRangee>,
-    echec: Option<mesurer_feuille::EchecFeuille>,
-    instrument: VueSelection,
-}
-
-/// Mesure la RGB-2520 au FD-9 et la range dans la résolution `condition`
-/// (ticket #34). Les étapes sont annoncées à la page par l'événement
-/// `feuille_fd9`. Refusé (clé du catalogue) pendant une autre opération.
-#[tauri::command(async)]
-fn mesurer_feuille_fd9(
-    app: AppHandle,
-    instruments: State<'_, Instruments>,
-    bibliotheque: State<'_, colonne::BibliothequeOuverte>,
-    dossier: State<'_, DossierBibliotheque>,
-    annulation: State<'_, AnnulationFeuille>,
-    condition: i64,
-) -> Result<EcranFeuille, String> {
-    let _jeton = instruments
-        .occupation
-        .commencer(Operation::Mesure)
-        .map_err(|refus| refus.cle())?;
-    let mut courant = instruments
-        .selection
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let selection = courant
-        .as_mut()
-        .ok_or_else(|| "refus.occupe.recherche".to_string())?;
-    let dossier_exe = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(PathBuf::from))
-        .unwrap_or_default();
-    let mire = mesurer_feuille::lire_rgb2520(mires::chercher_mire_fd9(&dossier_exe).as_deref());
-    *annulation.0.lock().unwrap_or_else(|e| e.into_inner()) =
-        Some(selection.instrument().annulation());
-    let resultat = bibliotheque.mesurer_feuille_fd9(
-        bibliotheque::IdCondition(condition),
-        selection.instrument_mut(),
-        mire,
-        &dossier.0,
-        &mut (PontProcessus::lancer as Lanceur),
-        &mut |etape| {
-            let _ = app.emit("feuille_fd9", etape);
-        },
-    );
-    annulation
-        .0
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .take();
-    let (rangee, echec) = match resultat {
-        Ok(rangee) => (Some(rangee), None),
-        Err(echec) => (None, Some(echec)),
-    };
-    Ok(EcranFeuille {
-        rangee,
-        echec,
-        instrument: selection.vue(),
-    })
-}
-
-/// Bouton « Annuler » pendant l'attente et la lecture de la feuille ; sans
-/// feuille en cours, rien ne se passe.
-#[tauri::command]
-fn annuler_feuille_fd9(annulation: State<'_, AnnulationFeuille>) -> bool {
-    annulation
-        .0
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_ref()
-        .is_some_and(pont::Annulation::annuler)
-}
-
 /// Range à nouveau les mesures que la bibliothèque avait refusées.
 #[tauri::command]
 fn ranger_a_nouveau(
@@ -674,11 +594,17 @@ pub fn lancer() {
         .manage(comparer::image::ImageOuverte::default())
         .setup(ouvrir_bibliotheque)
         .manage(GesteEnAttente::default())
-        .manage(AnnulationFeuille::default())
+        .manage(ecran_feuille::AnnulationFeuille::default())
+        .manage(ecran_feuille::CalageAffiche::default())
+        .manage(ecran_feuille::MireFeuille::default())
+        .manage(ecran_feuille::DemonstrationFd9::au_lancement())
         .invoke_handler(tauri::generate_handler![
             mesurer,
-            mesurer_feuille_fd9,
-            annuler_feuille_fd9,
+            ecran_feuille::mesurer_feuille_fd9,
+            ecran_feuille::annuler_feuille_fd9,
+            ecran_feuille::feuille_fd9_etat,
+            ecran_feuille::feuille_fd9_dernier_calage,
+            ecran_feuille::feuille_fd9_image,
             mode_mesure,
             choisir_mode_mesure,
             mesures_seance,
