@@ -1142,7 +1142,7 @@ fn pendant_une_action_sur_le_profil_les_boutons_disent_pourquoi() {
     let script = lire("interface/reglage.js");
     assert!(
         script.contains(
-            "const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-comparer-ouvrir], [data-comparer-actuel], [data-calcul-profil] button, [data-calcul-profil] input\";"
+            "const BOUTONS = \"[data-installer], [data-exporter-profil], [data-ranger-profil], [data-calcul-ouvrir], [data-comparer-ouvrir], [data-comparer-actuel], [data-calcul-profil] button, [data-calcul-profil] input, [data-verif-ouvrir], [data-verification] button, [data-verification] input\";"
         ),
         "les boutons de la vue"
     );
@@ -2513,4 +2513,271 @@ fn une_mire_deja_preparee_dit_sa_date() {
     let script = lire("interface/mire.js");
     assert!(script.contains("r.deja_preparee"));
     assert!(script.contains("t(\"mire.deja_preparee\").replace(\"{date}\""));
+}
+
+// ---- Vérification d'un profil sur une seconde mire (ticket #41) ----
+
+#[test]
+fn la_vue_d_une_resolution_appelle_la_verification() {
+    let script = lire("interface/verification.js") + &lire("interface/tolerances.js");
+    for attendu in [
+        "invoke(\"verifier_lancer\"",
+        "invoke(\"verifier_sources\"",
+        "invoke(\"verifier_commandes\"",
+        "invoke(\"verifier_fiche\"",
+        "invoke(\"verifier_recalculer\"",
+        "invoke(\"verifier_historique\"",
+        "invoke(\"tolerances_lister\"",
+        "invoke(\"tolerances_enregistrer\"",
+        "\"verifier_exporter_rapport\"",
+        "\"verifier_exporter_profil\"",
+        "invoke(\"verifier_mire_fd9\"",
+        // La demande est une structure : ses champs restent en snake_case.
+        "mesure_condition:",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+    let page = lire("interface/index.html");
+    let vue = element(&page, "data-vue-reglage");
+    let ouvrir = vue
+        .split('<')
+        .find(|b| b.contains("data-verif-ouvrir"))
+        .and_then(|b| b.split('>').next())
+        .expect("bouton « Vérifier le profil »");
+    assert!(ouvrir.starts_with("button class=\"btn\""), "{ouvrir}");
+    assert!(ouvrir.contains("data-t=\"verif.titre\""), "{ouvrir}");
+    assert!(vue.contains("data-verification"), "section absente");
+    // Inactif sans profil RVB actif : il dit pourquoi, juste à côté.
+    assert!(vue.contains("data-verif-raison data-t=\"verif.indisponible.sans_profil\""));
+    assert!(lire("interface/reglage.js").contains("[data-verification] button"));
+}
+
+#[test]
+fn verification_js_est_charge_avant_reglage_js() {
+    let page = lire("interface/index.html");
+    let position = |nom: &str| page.find(&format!("<script src=\"{nom}\" defer>"));
+    let ordre = [
+        position("arbre.js"),
+        position("tolerances.js"),
+        position("resultat-verification.js"),
+        position("verification.js"),
+        position("reglage.js"),
+    ];
+    assert!(ordre.iter().all(Option::is_some), "{ordre:?}");
+    assert!(ordre.windows(2).all(|p| p[0] < p[1]), "ordre des scripts");
+    assert!(lire("interface/reglage.js").contains("window.Verification"));
+}
+
+/// Chaque clé lue par la vérification existe en français et en anglais ;
+/// les clés complétées à l'écran existent pour chaque suite.
+#[test]
+fn toutes_les_cles_verif_de_la_page_existent_en_deux_langues() {
+    use app::textes::{texte, Langue};
+    let script = lire("interface/verification.js")
+        + &lire("interface/tolerances.js")
+        + &lire("interface/resultat-verification.js")
+        + &lire("interface/index.html");
+    let suites: &[(&str, &[&str])] = &[
+        (
+            "verif.etat.",
+            &["accepte", "hors_tolerance", "incomplet", "non_verifie"],
+        ),
+        (
+            "verif.fiche.",
+            &[
+                "logiciel",
+                "support_pilote",
+                "qualite",
+                "encres",
+                "remarques",
+            ],
+        ),
+        (
+            "verif.fiche.impression.",
+            &["a_travers_le_profil", "sans_gestion"],
+        ),
+        ("verif.critere.", &["moyenne", "p95", "max"]),
+        ("verif.", &["fidelite", "prediction"]),
+    ];
+    let mut demandees: Vec<String> = Vec::new();
+    for prefixe in ["\"verif.", "\"rapport.", "\"parc.", "\"export."] {
+        for (i, _) in script.match_indices(prefixe) {
+            // `"parc.js"` est un nom de script, pas une clé.
+            if let Some(cle) = script[i + 1..]
+                .split('"')
+                .next()
+                .filter(|c| !c.ends_with(".js"))
+            {
+                demandees.push(cle.to_string());
+            }
+        }
+    }
+    assert!(demandees.len() > 30, "clés lues : {demandees:?}");
+    let mut completes = Vec::new();
+    for cle in &demandees {
+        if cle.ends_with('.') {
+            let (_, fins) = suites
+                .iter()
+                .find(|(p, _)| p == cle)
+                .unwrap_or_else(|| panic!("suite inconnue : {cle}"));
+            completes.extend(fins.iter().map(|f| format!("{cle}{f}")));
+        } else {
+            completes.push(cle.clone());
+        }
+    }
+    let absentes: Vec<_> = completes
+        .iter()
+        .filter(|c| {
+            [Langue::Francais, Langue::Anglais]
+                .iter()
+                .any(|l| texte(*l, c) == c.as_str())
+        })
+        .collect();
+    assert!(absentes.is_empty(), "clés absentes : {absentes:?}");
+}
+
+#[test]
+fn verification_js_n_a_pas_de_couleur_en_dur() {
+    for fichier in [
+        "interface/verification.js",
+        "interface/tolerances.js",
+        "interface/resultat-verification.js",
+    ] {
+        let script = lire(fichier);
+        assert!(!script.contains("rgb("), "{fichier}");
+        let hexa = script.match_indices('#').any(|(i, _)| {
+            let n = script[i + 1..]
+                .chars()
+                .take_while(char::is_ascii_hexdigit)
+                .count();
+            n == 3 || n == 6
+        });
+        assert!(!hexa, "{fichier} : couleur en dur");
+    }
+}
+
+/// Le rouge est réservé au hors tolérance : une vérification incomplète est
+/// dite comme « à la limite », jamais en rouge, et toujours avec son mot.
+#[test]
+fn seul_le_hors_tolerance_est_en_rouge() {
+    let script = lire("interface/resultat-verification.js");
+    assert!(script.contains("hors_tolerance: \"hors\""));
+    assert!(script.contains("incomplet: \"limite\""));
+    assert!(script.contains("verdict__mot"));
+}
+
+#[test]
+fn les_fichiers_de_la_verification_restent_courts() {
+    for fichier in [
+        "interface/verification.js",
+        "interface/tolerances.js",
+        "interface/resultat-verification.js",
+    ] {
+        let lignes = lire(fichier).lines().count();
+        assert!(lignes < 400, "{fichier} : {lignes} lignes");
+    }
+}
+
+/// Les pires plages hors gamut se voient aussi dans la page, avec leur
+/// écart au gamut, pas seulement dans le rapport.
+#[test]
+fn les_pires_plages_hors_gamut_se_voient_dans_la_page() {
+    let script = lire("interface/resultat-verification.js");
+    assert!(script.contains("[r.fidelite, r.hors_gamut, r.prediction]"));
+    assert!(script.contains("\"rapport.ecart_gamut\""));
+    assert!(script.contains("calcul.rvb_supposes"));
+}
+
+/// Aucun texte en dur dans les scripts de la vérification : ni nom de jeu
+/// proposé, ni préfixe de version.
+#[test]
+fn la_verification_ne_porte_aucun_texte_en_dur() {
+    for fichier in [
+        "interface/verification.js",
+        "interface/tolerances.js",
+        "interface/resultat-verification.js",
+    ] {
+        let script = lire(fichier);
+        assert!(!script.contains("\"Atelier\""), "{fichier}");
+        assert!(!script.contains(" v${"), "{fichier}");
+    }
+}
+
+/// Essai d'écran du 30 octobre 2026 : cinq profils du même jour avaient le
+/// même libellé dans « Profil à vérifier ». Chacun dit maintenant sa date et
+/// son heure, sa recette s'il a été calculé, son état, et « actuel » pour
+/// l'actif ; l'historique dit les mêmes repères, puis « actuel » ou
+/// « remplacé », l'état restant à droite. Le texte reste à sa place : rien
+/// d'autre ne bouge.
+#[test]
+fn les_profils_a_verifier_se_distinguent() {
+    use app::textes::{texte, Langue};
+    let arbre = lire("interface/arbre.js");
+    for attendu in [
+        "const dateHeure = (h) => formater(h, { day: \"numeric\", month: \"short\", year: \"numeric\", hour: \"2-digit\", minute: \"2-digit\" });",
+        "const reperes = [dateHeure(p.horodatage)];",
+        "if (p.recette) reperes.push(t(\"profil.recette.nom.\" + p.recette));",
+        "return { el, date, dateHeure, reperesProfil,",
+    ] {
+        assert!(arbre.contains(attendu), "{attendu}");
+    }
+    let script = lire("interface/verification.js");
+    for attendu in [
+        "const morceaux = reperesProfil(p);",
+        "morceaux.push(t(p.libelle));",
+        "if (p.actif) morceaux.push(t(\"parc.historique.actuel\"));",
+        "return morceaux.join(\" · \");",
+        "valeur: p.id, libelle: libelleProfil(p),",
+    ] {
+        assert!(script.contains(attendu), "{attendu}");
+    }
+    let reglage = lire("interface/reglage.js");
+    assert!(reglage.contains(
+        "const quand = el(\"span\", \"\", [...reperesProfil(p), t(p.actif ? \"parc.historique.actuel\" : \"parc.historique.remplace\")].join(\" · \"));"
+    ));
+    for recette in ["rapide", "standard", "approfondi"] {
+        for langue in [Langue::Francais, Langue::Anglais] {
+            let cle = format!("profil.recette.nom.{recette}");
+            assert_ne!(texte(langue, &cle), cle);
+        }
+    }
+    assert_eq!(texte(Langue::Francais, "parc.historique.actuel"), "actuel");
+    assert_eq!(
+        texte(Langue::Francais, "parc.historique.remplace"),
+        "remplacé"
+    );
+}
+
+/// Essai d'écran du 30 octobre 2026 : la pastille choisie d'une liste de
+/// choix passait en gras et s'élargissait, poussant ses voisines. Le choix
+/// se marque par la couleur de la bordure et le fond, aux jetons d'accent :
+/// ni graisse, ni marge, ni épaisseur de bordure ne changent.
+#[test]
+fn la_pastille_choisie_garde_sa_largeur() {
+    let css = composants();
+    let choisie = regle(&css, ".choix-liste__rang:has(input:checked)");
+    assert_eq!(
+        choisie,
+        ["border-color:var(--accent);background:var(--selection);"]
+    );
+    for (selecteur, corps) in &css {
+        if selecteur.contains("choix-liste") {
+            for interdit in [
+                "font-weight",
+                "padding",
+                "border-width",
+                "letter-spacing",
+                "font-size",
+            ] {
+                assert!(
+                    !(corps.contains(interdit) && selecteur.contains(":checked")),
+                    "{selecteur} change {interdit}"
+                );
+            }
+            assert!(
+                !corps.contains("font-weight"),
+                "{selecteur} change la graisse"
+            );
+        }
+    }
 }

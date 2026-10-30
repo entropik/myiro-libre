@@ -16,7 +16,9 @@ pub mod mires;
 pub mod parc;
 pub mod pont;
 pub mod profiler;
+pub mod rapport_verification;
 pub mod textes;
+pub mod verifier;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -659,6 +661,17 @@ pub fn lancer() {
             parc::parc_installer_profil,
             profiler::profiler_commandes,
             profiler::profiler_calculer,
+            verifier::commandes::verifier_sources,
+            verifier::commandes::verifier_commandes,
+            verifier::commandes::verifier_fiche,
+            verifier::commandes::verifier_lancer,
+            verifier::commandes::verifier_recalculer,
+            verifier::commandes::verifier_historique,
+            verifier::commandes::tolerances_lister,
+            verifier::commandes::tolerances_enregistrer,
+            verifier::commandes::verifier_exporter_rapport,
+            verifier::commandes::verifier_exporter_profil,
+            verifier::commandes::verifier_mire_fd9,
             mires::commandes::mire_apercu,
             mires::commandes::mire_preparer,
             mires::commandes::mire_ouvrir_dossier,

@@ -134,6 +134,12 @@ fn un_profil_calcule_devient_actif_et_non_verifie() {
         detail.historique[0].libelle,
         "parc.verdict.calcule_a_verifier"
     );
+    // Sa recette est dite, pour le distinguer d'un autre calcul du même jour.
+    assert_eq!(detail.historique[0].recette, Some(Recette::Standard));
+    assert_eq!(
+        serde_json::to_value(&detail.historique[0]).unwrap()["recette"],
+        "standard"
+    );
     assert_eq!(
         (resultat.precision_moyenne, resultat.precision_max),
         (0.5, 2.0)

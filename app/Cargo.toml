@@ -29,8 +29,11 @@ gamut = { path = "../crates/gamut" }
 photo = { path = "../crates/photo" }
 profilage = { path = "../crates/profilage" }
 pont-protocole = { path = "../crates/pont-protocole" }
+verification = { path = "../crates/verification" }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# Nombres relus à l'identique : un calcul de vérification rangé en JSON
+# redonne le même rapport à l'octet.
+serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [dev-dependencies]
 # Images d'essai construites en mémoire par les tests (aucune n'est écrite).
