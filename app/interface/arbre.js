@@ -26,6 +26,14 @@ window.Arbre = (() => {
   const dateCourte = (h) => formater(h, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const dateHeure = (h) => formater(h, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
+  // Ce qui distingue un profil d'un autre du même jour (liste « Profil à vérifier » et
+  // historique) : date et heure, puis sa recette s'il a été calculé.
+  function reperesProfil(p) {
+    const reperes = [dateHeure(p.horodatage)];
+    if (p.recette) reperes.push(t("profil.recette.nom." + p.recette));
+    return reperes;
+  }
+
   function lecture(geometrie, plages) {
     const nom = t("lecture." + geometrie.lecture);
     if (geometrie.lecture === "ponctuelle") return nom;
@@ -93,5 +101,5 @@ window.Arbre = (() => {
     return lignes;
   }
 
-  return { el, date, dateHeure, noeud, repliable, age, lignesMesures };
+  return { el, date, dateHeure, reperesProfil, noeud, repliable, age, lignesMesures };
 })();

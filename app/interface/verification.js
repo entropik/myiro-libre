@@ -10,7 +10,7 @@
 window.Verification = (() => {
   const { invoke } = window.__TAURI__.core;
   const t = (cle) => textes[cle] || cle;
-  const { el, date, dateHeure } = window.Arbre;
+  const { el, date, reperesProfil } = window.Arbre;
 
   const vue = document.querySelector("[data-vue-reglage]");
   const installer = vue.querySelector("[data-installer]");
@@ -42,8 +42,7 @@ window.Verification = (() => {
   // Un profil à vérifier : date et heure, recette s'il a été calculé, état, et « actuel » pour
   // l'actif. Plusieurs profils calculés le même jour se distinguent ainsi.
   function libelleProfil(p) {
-    const morceaux = [dateHeure(p.horodatage)];
-    if (p.recette) morceaux.push(t("profil.recette.nom." + p.recette));
+    const morceaux = reperesProfil(p);
     morceaux.push(t(p.libelle));
     if (p.actif) morceaux.push(t("parc.historique.actuel"));
     return morceaux.join(" · ");

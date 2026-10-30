@@ -15,7 +15,7 @@ window.Reglage = (() => {
   // Ce que parc.js prête à la vue : la résolution affichée et de quoi recharger.
   let parc = { reglage: () => null, rafraichir: async () => {}, recharger: async () => {} };
 
-  const { el, date } = window.Arbre;
+  const { el, date, reperesProfil } = window.Arbre;
 
   // Verdict : couleur, icône et mot, jamais la couleur seule.
   const TRACES = {
@@ -95,7 +95,9 @@ window.Reglage = (() => {
     const historique = vue.querySelector("[data-historique]");
     historique.replaceChildren(...d.historique.map((p) => {
       const ligne = el("div", "cle-valeur mute");
-      const quand = el("span", "", `${date(p.horodatage)} · ${t(p.actif ? "parc.historique.actuel" : "parc.historique.remplace")}`);
+      // Même repères que la liste « Profil à vérifier » : date et heure, recette, puis actuel ou
+      // remplacé ; l'état reste à droite.
+      const quand = el("span", "", [...reperesProfil(p), t(p.actif ? "parc.historique.actuel" : "parc.historique.remplace")].join(" · "));
       quand.title = p.nom;
       const etat = textes[p.libelle] ? p.libelle : "parc.etat.non_verifie";
       const droite = el("span", "", t(etat));
