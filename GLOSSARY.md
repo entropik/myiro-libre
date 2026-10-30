@@ -304,6 +304,11 @@ Sous la photo comparée, deux carrés côte à côte : à gauche une couleur de 
 Dans le code : `Pastille`, `Paire`.
 _Éviter_ : échantillon, swatch, vignette
 
+**Compensation du point noir** :
+Réglage d'impression qui ramène le noir de la photo sur le noir le plus profond que le papier peut rendre, en éclaircissant un peu toutes les ombres, sans toucher au blanc. Sans elle, un papier dont le noir est moins profond que celui de la photo « boucherait » les ombres, et la comparaison signalerait à tort toutes les ombres hors gamut. Elle est cochée par défaut, comme dans un pilote d'impression en colorimétrique relatif. La couleur obtenue est la couleur visée : c'est elle que l'imprimante doit rendre.
+Dans le code : `Rendu::PointNoir`, `PointNoir`.
+_Éviter_ : BPC, compensation du noir
+
 **Pipette** :
 Un clic sur la photo comparée montre la couleur du point touché et sa couleur imprimée, en pastilles, avec leurs L\*a\*b\*, l'écart et s'il dépasse le seuil d'alerte. Le point est marqué sur la photo. Calcul fait à la demande sur l'image d'analyse.
 Dans le code : `paire_couleur`, commande `image_pixel`.
