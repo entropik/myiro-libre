@@ -249,9 +249,10 @@ pub struct FicheMesure {
     /// Clé du catalogue si la mesure n'est pas rangée dans la bibliothèque.
     pub erreur_rangement: Option<&'static str>,
     /// Modèle et micrologiciel ; `None` si le pont les a rendus vides : le
-    /// cartouche écrit alors « inconnu », jamais une case vide.
+    /// cartouche écrit alors « inconnu », jamais une case vide. Le numéro de
+    /// série reste dans la provenance de la mesure : il ne part jamais vers la
+    /// page (ticket #84).
     pub modele: Option<String>,
-    pub numero_serie: u32,
     pub micrologiciel: Option<String>,
     pub etalonnage: Info<Horodatage>,
     /// Les trois spectres de la plage, dans l'ordre où le pont les a rendus.
@@ -788,7 +789,6 @@ fn fiche(
         condition_impression: m.condition.nom.clone(),
         erreur_rangement: m.rangee.is_none().then_some(ERREUR_RANGEMENT),
         modele: renseigne(&p.instrument.modele),
-        numero_serie: p.instrument.numero_serie,
         micrologiciel: renseigne(&p.instrument.micrologiciel),
         etalonnage: p.etalonnage.clone(),
         spectres,

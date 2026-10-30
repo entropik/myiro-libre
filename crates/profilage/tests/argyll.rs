@@ -11,8 +11,9 @@ use std::process::Command;
 use bibliotheque::{espace_icc, EspaceProfil};
 use pont_protocole::ConditionMesure;
 use profilage::{
-    chercher_argyll, ecrire_ti3, ArgyllCms, Avancement, DemandeProfil, EtapeCalcul, MoteurProfil,
-    PlageProfil, PlagesProfil, Recette, VERSION_ARGYLL,
+    chercher_argyll, ecrire_ti3, ArgyllCms, Avancement, DemandeEvaluation, DemandeProfil,
+    EtapeCalcul, Impression, MoteurProfil, MoteurVerification, PlageProfil, PlagesProfil, Recette,
+    VERSION_ARGYLL,
 };
 
 fn racine_argyll() -> PathBuf {
@@ -80,6 +81,103 @@ fn calculer_avec_avancement(
     println!("commandes : {:#?}", profil.commandes);
     println!("précision : {:?}", profil.precision);
     (profil, annonces)
+}
+
+/// Vingt RVB (de 0 à 1) d'une seconde mire : blanc, noir, primaires,
+/// secondaires, gris et quelques couleurs entre deux.
+fn seconde_mire() -> Vec<[f64; 3]> {
+    let mut rvb = vec![
+        [1.0, 1.0, 1.0],
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 1.0, 1.0],
+        [1.0, 0.0, 1.0],
+        [1.0, 1.0, 0.0],
+    ];
+    for i in 1..=6 {
+        let g = f64::from(i) / 7.0;
+        rvb.push([g, g, g]);
+    }
+    rvb.extend([
+        [0.8, 0.6, 0.5],
+        [0.3, 0.5, 0.2],
+        [0.15, 0.3, 0.6],
+        [0.9, 0.4, 0.1],
+        [0.55, 0.2, 0.45],
+        [0.33, 0.66, 0.9],
+    ]);
+    rvb
+}
+
+/// Le profil de la mire synthétique, interrogé par xicclu comme pour une
+/// seconde mire imprimée à travers lui (sRVB, colorimétrique relatif).
+#[test]
+#[ignore = "demande ArgyllCMS 3.5.0"]
+fn xicclu_evalue_un_profil_calcule() {
+    let profil = calculer("Essai verification 2026-10-28", Recette::Rapide);
+    let rvb = seconde_mire();
+    let moteur = ArgyllCms::new(racine_argyll());
+    for impression in [Impression::ATraversLeProfil, Impression::SansGestion] {
+        let e = moteur
+            .evaluer(&DemandeEvaluation {
+                icc: &profil.icc,
+                rvb: &rvb,
+                impression,
+            })
+            .unwrap_or_else(|err| panic!("{err}"));
+        println!("{impression:?}\n{}", e.journal);
+        println!("demande : {:?}", e.demande.as_ref().map(|d| &d[..3]));
+        println!("appareil : {:?}", &e.appareil[..3]);
+        println!("prédiction relative : {:?}", &e.prediction_rel[..3]);
+        println!("prédiction absolue : {:?}", &e.prediction_abs[..3]);
+        println!("blanc du support : {:?}", e.blanc_support);
+        assert_eq!(e.version, VERSION_ARGYLL);
+        assert_eq!(e.appareil.len(), rvb.len());
+        assert_eq!(e.prediction_rel.len(), rvb.len());
+        assert_eq!(e.prediction_abs.len(), rvb.len());
+        assert_eq!(
+            e.demande.is_some(),
+            impression == Impression::ATraversLeProfil
+        );
+        assert!(e.blanc_support[0] > 90.0, "{:?}", e.blanc_support);
+        assert!(e
+            .appareil
+            .iter()
+            .flatten()
+            .all(|v| (-1e-6..=1.0 + 1e-6).contains(v)));
+        assert_eq!(e.commandes, moteur.commandes_verification(impression));
+    }
+}
+
+/// Notre passage d'une prédiction absolue en relatif (règle ICC, rapport au
+/// blanc du support en XYZ) concorde avec celui d'ArgyllCMS (`-ir`).
+#[test]
+#[ignore = "demande ArgyllCMS 3.5.0"]
+fn notre_passage_en_relatif_concorde_avec_argyll() {
+    let profil = calculer("Essai relatif 2026-10-28", Recette::Rapide);
+    let rvb = seconde_mire();
+    let e = ArgyllCms::new(racine_argyll())
+        .evaluer(&DemandeEvaluation {
+            icc: &profil.icc,
+            rvb: &rvb,
+            impression: Impression::SansGestion,
+        })
+        .unwrap_or_else(|err| panic!("{err}"));
+    let lab = |[l, a, b]: [f64; 3]| colorimetrie::Lab { l, a, b };
+    let blanc = lab(e.blanc_support);
+    let mut pire = 0.0f64;
+    for (abs, rel) in e.prediction_abs.iter().zip(&e.prediction_rel) {
+        let notre = verification::vers_relatif(lab(*abs), blanc).unwrap();
+        let ecart = colorimetrie::delta_e00(notre, lab(*rel)).unwrap();
+        pire = pire.max(ecart);
+        assert!(
+            ecart <= 0.2,
+            "{abs:?} → {notre:?}, ArgyllCMS {rel:?} : {ecart}"
+        );
+    }
+    println!("plus grand écart entre les deux passages en relatif : {pire:.4} ΔE00");
 }
 
 /// colprof embarque les plages du `.ti3` reçu dans la balise `targ`, réécrites

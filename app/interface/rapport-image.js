@@ -214,7 +214,7 @@ window.RapportImage = (() => {
     const dialogue = el("dialog", "fenetre-rapport");
     dialogue.setAttribute("aria-labelledby", "fenetre-rapport-titre");
     ouverte = { dialogue, logo: null };
-    const titre = el("h2", "titre", t("rapport.titre"));
+    const titre = el("h2", "titre", t("rapport.fenetre.titre"));
     titre.id = "fenetre-rapport-titre";
 
     const atelier = el("div", "fenetre-rapport__atelier");

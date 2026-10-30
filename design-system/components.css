@@ -349,7 +349,8 @@ select.input option { background: var(--panneau); color: var(--encre); }
 .choix-liste { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .choix-liste__rang { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: var(--rule) solid var(--filet); font-size: var(--text-sm); cursor: pointer; }
 .choix-liste__rang input { width: var(--space-4); height: var(--space-4); margin: 0; accent-color: var(--accent); }
-.choix-liste__rang:has(input:checked) { border-color: var(--accent); background: var(--selection); font-weight: 600; }
+/* Le choix se marque par la couleur de la bordure et le fond, jamais par la graisse : la pastille garde sa largeur, rien ne bouge. */
+.choix-liste__rang:has(input:checked) { border-color: var(--accent); background: var(--selection); }
 .feuille__actions { padding-bottom: var(--space-3); margin-bottom: var(--space-4); border-bottom: var(--rule) solid var(--filet); }
 .feuille__actions > .why { margin-top: var(--space-2); }
 .feuille__actions > .notice { margin: var(--space-3) 0 0; }

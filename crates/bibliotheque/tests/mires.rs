@@ -143,7 +143,7 @@ fn un_tirage_inconnu_est_dit_inconnu() {
 }
 
 #[test]
-fn une_base_en_organisation_5_passe_en_6_sans_rien_perdre() {
+fn une_base_en_organisation_5_passe_en_7_sans_rien_perdre() {
     let (dossier, b, condition) = condition_rangee();
     let mut icc = vec![0u8; 132];
     icc[0..4].copy_from_slice(&132u32.to_be_bytes());
@@ -183,15 +183,19 @@ fn une_base_en_organisation_5_passe_en_6_sans_rien_perdre() {
     let parc_avant = b.parc("", std::time::SystemTime::UNIX_EPOCH).unwrap();
     drop(b);
 
-    // Retour à l'organisation 5 : sans les tables des mires.
+    // Retour à l'organisation 5 : sans les tables des mires (6) ni celles
+    // des vérifications (7, ticket #41).
     let chemin = std::fs::read_dir(dossier.path())
         .unwrap()
         .map(|e| e.unwrap().path())
         .find(|p| p.extension().is_some_and(|e| e == "sqlite"))
         .unwrap();
     let base = rusqlite::Connection::open(&chemin).unwrap();
-    base.execute_batch("DROP TABLE tirages; DROP TABLE mires; PRAGMA user_version = 5;")
-        .unwrap();
+    base.execute_batch(
+        "DROP TABLE verifications; DROP TABLE tolerances;
+         DROP TABLE tirages; DROP TABLE mires; PRAGMA user_version = 5;",
+    )
+    .unwrap();
     drop(base);
 
     let b = Bibliotheque::ouvrir(dossier.path()).unwrap();
@@ -215,7 +219,7 @@ fn une_base_en_organisation_5_passe_en_6_sans_rien_perdre() {
     let version: i32 = base
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 6);
+    assert_eq!(version, 7);
 }
 
 /// Le tirage n'est rangé qu'après l'écriture de ses fichiers : une écriture

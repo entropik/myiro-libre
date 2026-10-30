@@ -1,0 +1,14 @@
+[package]
+name = "verification"
+version = "0.1.0"
+description = "Vérification d'un profil ICC sur une seconde mire : écarts ΔE00, statistiques, tolérances et conclusion (ADR 0004)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+colorimetrie = { path = "../colorimetrie" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }

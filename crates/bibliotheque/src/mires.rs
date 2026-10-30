@@ -18,7 +18,7 @@ pub struct IdMire(pub i64);
 pub struct IdTirage(pub i64);
 
 /// Instruments dont la bibliothèque range les mires.
-const INSTRUMENTS_MIRE: [&str; 2] = ["fd9", "myiro1"];
+pub(crate) const INSTRUMENTS_MIRE: [&str; 2] = ["fd9", "myiro1"];
 
 /// Une mire à ranger avec son premier tirage.
 #[derive(Clone, Copy, Debug)]
@@ -130,15 +130,19 @@ impl Bibliotheque {
         let entier =
             |n: usize| i64::try_from(n).map_err(|e| ErreurBibliotheque::Base(e.to_string()));
         let transaction = self.base.unchecked_transaction()?;
-        let existante: Option<i64> = transaction
+        let existante: Option<(i64, String)> = transaction
             .query_row(
-                "SELECT id FROM mires WHERE empreinte = ?1",
+                "SELECT id, usage FROM mires WHERE empreinte = ?1",
                 params![mire.empreinte],
-                |l| l.get(0),
+                |l| Ok((l.get(0)?, l.get(1)?)),
             )
             .optional()?;
         let id_mire = match existante {
-            Some(id) => id,
+            // Une mire de vérification (organisation 7) n'a pas de tirage.
+            Some((_, usage)) if usage != "profilage" => {
+                return invalide("cette empreinte est celle d'une mire de vérification");
+            }
+            Some((id, _)) => id,
             None => {
                 transaction.execute(
                     "INSERT INTO mires

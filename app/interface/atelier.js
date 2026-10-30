@@ -40,10 +40,10 @@ window.Atelier = (() => {
     }
     const contacts = [valeurs.courriel, valeurs.telephone, valeurs.site].filter(Boolean);
     cartouche.append(
-      cellule(etiquette("rapport.atelier"), el("b", "", valeurs.nom || t("rapport.atelier_vide")),
+      cellule(etiquette("cartouche_rapport.atelier"), el("b", "", valeurs.nom || t("rapport.atelier_vide")),
         ...valeurs.adresse.split("\n").filter(Boolean).map((l) => el("span", "", l)), ...contacts.map((c) => el("span", "", c))),
-      cellule(etiquette("rapport.client"), el("span", "", "—"), etiquette("rapport.objet"), el("span", "", "—")),
-      cellule(etiquette("rapport.numero"), el("b", "", t("atelier.apercu.numero"))));
+      cellule(etiquette("cartouche_rapport.client"), el("span", "", "—"), etiquette("cartouche_rapport.objet"), el("span", "", "—")),
+      cellule(etiquette("cartouche_rapport.numero"), el("b", "", t("atelier.apercu.numero"))));
     zone.replaceChildren(cartouche);
   }
 

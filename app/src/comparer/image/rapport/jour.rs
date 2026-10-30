@@ -39,7 +39,7 @@ impl Jour {
     }
 
     pub fn texte(self, langue: Langue) -> String {
-        t(langue, "rapport.date")
+        t(langue, "rapport.date_longue")
             .replace("{j}", &self.jour.to_string())
             .replace(
                 "{mois}",

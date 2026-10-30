@@ -285,11 +285,11 @@ impl BibliothequeOuverte {
             },
             sections,
             libelles: Libelles {
-                page: tt("rapport.page"),
-                atelier: tt("rapport.atelier"),
-                client: tt("rapport.client"),
-                objet: tt("rapport.objet"),
-                numero: tt("rapport.numero"),
+                page: tt("cartouche_rapport.page"),
+                atelier: tt("cartouche_rapport.atelier"),
+                client: tt("cartouche_rapport.client"),
+                objet: tt("cartouche_rapport.objet"),
+                numero: tt("cartouche_rapport.numero"),
             },
         })
     }

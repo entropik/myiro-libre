@@ -16,7 +16,8 @@ Usage (à la racine du dépôt) :
    `sdk/x64/` ou `sdk/x86/` selon l'architecture de la DLL.
 3. Si le dossier `argyll/` du dépôt existe (ignoré par git), vérifie qu'il
    contient ArgyllCMS 3.5.0 (ADR 0002 : version figée) et embarque `colprof`,
-   `profcheck`, `iccgamut` (limite du gamut, comparaison des profils), `targen`,
+   `profcheck`, `xicclu` (vérification d'un profil), `iccgamut` (limite du
+   gamut, comparaison des profils), `targen`,
    `ref/sRGB.icm` et tous les textes de licence présents sous
    `argyll/`.
    Sans `argyll/`, l'installateur se construit sans ArgyllCMS : l'application
@@ -52,6 +53,7 @@ VERSION_ARGYLL = "3.5.0"
 ARGYLL_FICHIERS = (
     "bin/colprof.exe",
     "bin/profcheck.exe",
+    "bin/xicclu.exe",
     "bin/targen.exe",
     "bin/iccgamut.exe",
     "ref/sRGB.icm",

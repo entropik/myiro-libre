@@ -74,6 +74,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tempfile",
+ "verification",
 ]
 
 [[package]]
@@ -3612,6 +3613,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "verification",
 ]
 
 [[package]]
@@ -5929,6 +5931,15 @@ dependencies = [
  "hashbrown 0.17.1",
  "png 0.18.1",
  "vello_common 0.0.8",
+]
+
+[[package]]
+name = "verification"
+version = "0.1.0"
+dependencies = [
+ "colorimetrie",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
