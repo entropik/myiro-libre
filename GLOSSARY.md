@@ -299,6 +299,16 @@ _Éviter_ : profil d'entrée
 Les couleurs d'une photo placées dans l'espace L\*a\*b\*, regroupées par petits cubes de 4 unités : au plus 4 000 points, les plus peuplés d'abord. Chaque point est placé sur le blanc du papier du profil choisi et garde le plus grand écart de ses pixels.
 _Éviter_ : nuage de points, histogramme 3D
 
+**Pastille hors gamut** :
+Sous la photo comparée, deux carrés côte à côte : à gauche une couleur de la photo (couleur demandée), à droite la couleur que l'imprimante en rendra (couleur reproduite) avec le profil choisi, puis leur écart en ΔE00 et la part de la photo. Chaque pastille représente un petit cube du nuage par sa couleur la plus fréquente ; l'écran en montre au plus 12, celles au-delà du seuil d'alerte, les plus présentes d'abord. Couleurs approchées à l'écran.
+Dans le code : `Pastille`, `Paire`.
+_Éviter_ : échantillon, swatch, vignette
+
+**Pipette** :
+Un clic sur la photo comparée montre la couleur du point touché et sa couleur imprimée, en pastilles, avec leurs L\*a\*b\*, l'écart et s'il dépasse le seuil d'alerte. Le point est marqué sur la photo. Calcul fait à la demande sur l'image d'analyse.
+Dans le code : `paire_couleur`, commande `image_pixel`.
+_Éviter_ : compte-gouttes, sélecteur de couleur
+
 **Image d'analyse** :
 La photo ramenée à 2 048 pixels de côté au plus, en prenant un pixel sur N dans chaque sens, sans mélanger les voisins : c'est sur elle que se calculent les écarts, et l'écran dit « 1 pixel sur N » quand elle est réduite. Elle n'existe qu'en mémoire, le temps de la séance ; la photo n'est jamais rangée ni copiée.
 _Éviter_ : vignette, aperçu, image réduite

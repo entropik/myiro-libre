@@ -70,4 +70,14 @@ Ajout seulement : rien ne change dans l'interface existante ni dans les chiffres
 - **Supposé** : au PCS Lab, la courbe `kTRC` d'un profil gris donne L\* (de 0 à 1 pour 0 à 100). C'est notre lecture de l'annexe F.2 de la norme ICC, de mémoire, non vérifiée sur un profil gris réel.
 - Changer le seuil de lecture, les cases, les familles, la cellule du nuage ou l'interpolation de la table inverse change les chiffres affichés : rupture du contrat, à décider dans un ADR.
 
+### Complément du 30 octobre 2026 : pastilles hors gamut et pipette (ticket #80)
+
+Ajout seulement : les chiffres déjà affichés ne changent pas.
+
+- **Ajouts à l'interface publique** : `AnalyseImage::pastilles` (`Pastille`, `Paire`, `PASTILLES` = 48, `SEUIL_PASTILLES` = 0,5) et `paire_couleur`.
+- **Pastilles** : les cellules du nuage (4 unités Lab de la couleur demandée) sont représentées chacune par sa couleur RVB la plus fréquente (à égalité, la plus petite valeur 0xRRVVBB). Une cellule a sa pastille si le code d'écart de ce représentant atteint `SEUIL_PASTILLES`, le plus petit seuil du curseur, par la règle des pixels. Au plus 48, les plus peuplées d'abord (pixels de toute la cellule). Une pastille porte la valeur RVB du représentant, les pixels de la cellule et sa paire.
+- **Paire** : couleur demandée et couleur reproduite en L\*a\*b\* absolus sur le blanc du papier du profil de sortie (la base du nuage), leurs couleurs écran `#rrggbb` par la même conversion que le nuage, et l'écart ΔE00 avec son code. L'écart est calculé en Lab relatif, comme celui des pixels : il ne se recalcule pas sur les valeurs absolues.
+- **Pipette** : `paire_couleur(rvb, source, sortie)` fait le même calcul pour une seule couleur ; `Ok(None)` si l'écart n'est pas calculable, la raison du profil sans table inverse sinon.
+- **Supposé** : à l'écran, les deux pastilles sont approchées (conversion sRVB, écran non calibré) ; la page le dit. Changer la règle du représentant, le seuil minimal ou le plafond change ce qui est montré : rupture du contrat, à décider dans un ADR.
+
 La crate `photo` (ouvrir une photo, ticket #80) rejoint aussi la liste `CRATES` du poste Linux de la CI : elle ne dépend que de `image` 0.25 (JPEG, PNG, TIFF), sans Windows ni Tauri. **Confirmé** par ses tests : le profil d'un TIFF se lit dans la balise 34675 ; il est lu **avant** de poser les limites de mémoire du décodeur, qui bornent ensuite la lecture des balises à la taille de l'image décodée, et une petite image perdrait un grand profil.
