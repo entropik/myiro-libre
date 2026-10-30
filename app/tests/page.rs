@@ -2706,19 +2706,24 @@ fn la_verification_ne_porte_aucun_texte_en_dur() {
 /// Essai d'écran du 30 octobre 2026 : cinq profils du même jour avaient le
 /// même libellé dans « Profil à vérifier ». Chacun dit maintenant sa date et
 /// son heure, sa recette s'il a été calculé, son état, et « actuel » pour
-/// l'actif. Le libellé reste dans la même pastille : rien d'autre ne bouge.
+/// l'actif ; l'historique dit les mêmes repères, puis « actuel » ou
+/// « remplacé », l'état restant à droite. Le texte reste à sa place : rien
+/// d'autre ne bouge.
 #[test]
 fn les_profils_a_verifier_se_distinguent() {
     use app::textes::{texte, Langue};
     let arbre = lire("interface/arbre.js");
-    assert!(arbre.contains(
-        "const dateHeure = (h) => formater(h, { day: \"numeric\", month: \"short\", year: \"numeric\", hour: \"2-digit\", minute: \"2-digit\" });"
-    ));
-    assert!(arbre.contains("return { el, date, dateHeure,"));
+    for attendu in [
+        "const dateHeure = (h) => formater(h, { day: \"numeric\", month: \"short\", year: \"numeric\", hour: \"2-digit\", minute: \"2-digit\" });",
+        "const reperes = [dateHeure(p.horodatage)];",
+        "if (p.recette) reperes.push(t(\"profil.recette.nom.\" + p.recette));",
+        "return { el, date, dateHeure, reperesProfil,",
+    ] {
+        assert!(arbre.contains(attendu), "{attendu}");
+    }
     let script = lire("interface/verification.js");
     for attendu in [
-        "const morceaux = [dateHeure(p.horodatage)];",
-        "if (p.recette) morceaux.push(t(\"profil.recette.nom.\" + p.recette));",
+        "const morceaux = reperesProfil(p);",
         "morceaux.push(t(p.libelle));",
         "if (p.actif) morceaux.push(t(\"parc.historique.actuel\"));",
         "return morceaux.join(\" · \");",
@@ -2726,6 +2731,10 @@ fn les_profils_a_verifier_se_distinguent() {
     ] {
         assert!(script.contains(attendu), "{attendu}");
     }
+    let reglage = lire("interface/reglage.js");
+    assert!(reglage.contains(
+        "const quand = el(\"span\", \"\", [...reperesProfil(p), t(p.actif ? \"parc.historique.actuel\" : \"parc.historique.remplace\")].join(\" · \"));"
+    ));
     for recette in ["rapide", "standard", "approfondi"] {
         for langue in [Langue::Francais, Langue::Anglais] {
             let cle = format!("profil.recette.nom.{recette}");
@@ -2733,4 +2742,42 @@ fn les_profils_a_verifier_se_distinguent() {
         }
     }
     assert_eq!(texte(Langue::Francais, "parc.historique.actuel"), "actuel");
+    assert_eq!(
+        texte(Langue::Francais, "parc.historique.remplace"),
+        "remplacé"
+    );
+}
+
+/// Essai d'écran du 30 octobre 2026 : la pastille choisie d'une liste de
+/// choix passait en gras et s'élargissait, poussant ses voisines. Le choix
+/// se marque par la couleur de la bordure et le fond, aux jetons d'accent :
+/// ni graisse, ni marge, ni épaisseur de bordure ne changent.
+#[test]
+fn la_pastille_choisie_garde_sa_largeur() {
+    let css = composants();
+    let choisie = regle(&css, ".choix-liste__rang:has(input:checked)");
+    assert_eq!(
+        choisie,
+        ["border-color:var(--accent);background:var(--selection);"]
+    );
+    for (selecteur, corps) in &css {
+        if selecteur.contains("choix-liste") {
+            for interdit in [
+                "font-weight",
+                "padding",
+                "border-width",
+                "letter-spacing",
+                "font-size",
+            ] {
+                assert!(
+                    !(corps.contains(interdit) && selecteur.contains(":checked")),
+                    "{selecteur} change {interdit}"
+                );
+            }
+            assert!(
+                !corps.contains("font-weight"),
+                "{selecteur} change la graisse"
+            );
+        }
+    }
 }
