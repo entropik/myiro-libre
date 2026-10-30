@@ -17,10 +17,12 @@ use fd9_sys::{
     SPECTRE_TYPE,
 };
 use pont_protocole::{
-    Calcul, ConditionMesure, ConditionsCalcul, DefinitionFeuille, DonneesBrutes, Echantillonnage,
-    Empreinte, ErreurPont, Geometrie, Horodatage, Illuminant, Info, InstrumentMesurant, Lab,
-    LectureFeuille, Mesure, Observateur, Palier, Plage, Provenance, Spectre, MODELE_FD9,
+    Calcul, ConditionMesure, ConditionsCalcul, DefautPositions, DefinitionFeuille, DonneesBrutes,
+    Echantillonnage, Empreinte, ErreurPont, Geometrie, Horodatage, Illuminant, Info,
+    InstrumentMesurant, Lab, LectureFeuille, Mesure, Observateur, Palier, Plage, Provenance,
+    Spectre, MODELE_FD9,
 };
+use std::collections::HashMap;
 
 /// Valeur de la clé 0 de `FD9_SetOption` pour chaque condition de mesure,
 /// relevée dans FD-S2w (supposé, à comparer à l'essai E4).
@@ -53,8 +55,8 @@ type Brutes = [f32; DONNEES_BRUTES];
 
 impl<S: SdkFd9> Session<S> {
     /// Mêmes étapes que la prénumérisation, puis mesure de toutes les plages.
-    /// La plage n° i de la mesure est la plage n° i de `mire` : vérifié par
-    /// la position que rend la DLL, plage par plage.
+    /// La plage n° i de la mesure est la plage n° i de `mire` : rangée par la
+    /// position que rend la DLL avec ses données.
     pub fn mesurer_feuille(&mut self, mire: &DefinitionFeuille) -> Result<Mesure, ErreurPont> {
         let resultat = self.mesurer_toute_la_feuille(mire);
         // Une annulation ne vise que la feuille qui vient de finir.
@@ -84,16 +86,20 @@ impl<S: SdkFd9> Session<S> {
         Ok(mesure)
     }
 
-    /// Les 152 données brutes de chaque plage, demandée par son numéro ; la
-    /// position rendue doit être celle de la mire, sinon tout est refusé.
+    /// Les 152 données brutes de chaque plage, demandée par son numéro, puis
+    /// rangées dans l'ordre de la mire d'après la position que la DLL rend
+    /// avec elles. L'instrument rend ses plages dans son ordre de mesure (en
+    /// serpentin à l'essai E4) : aucun ordre n'est supposé. Chaque position
+    /// de la mire doit être rendue une fois et une seule, sinon tout est
+    /// refusé (`PositionsPlages`).
     fn lire_plages(&mut self, mire: &DefinitionFeuille) -> Result<Vec<Brutes>, ErreurPont> {
         let attendues = positions(mire);
-        let mut toutes = Vec::with_capacity(attendues.len());
-        for (i, attendue) in attendues.iter().enumerate() {
+        let mut lues = Vec::with_capacity(attendues.len());
+        for i in 0..attendues.len() {
             self.regler(CleOption::TypeDonnees, DONNEES_BRUTES_TYPE)?;
             let mut brutes = [0f32; DONNEES_BRUTES];
             // Valeur impossible : une position que la DLL n'écrit pas ne
-            // peut pas passer pour la bonne.
+            // peut pas passer pour une position de la mire.
             let mut rendue = POSITION_IMPOSSIBLE;
             // Bornée par PLAGES_MAX : le numéro tient dans un u32.
             let demandee = PositionPlage::numero(i as u32);
@@ -101,29 +107,25 @@ impl<S: SdkFd9> Session<S> {
             if code != 0 {
                 // Après un GetData, GetLastError ne dit rien de lui (fiche).
                 self.journal
-                    .push(format!("FD9_GetData plage n° {} : code {code}", i + 1));
+                    .push(format!("FD9_GetData plage lue n° {} : code {code}", i + 1));
                 return Err(erreur_sdk(code));
             }
-            if rendue != *attendue {
-                return Err(inattendue(format!(
-                    "plage n° {} : position (zone {}, rangée {}, colonne {}) au lieu de \
-                     (zone {}, rangée {}, colonne {})",
-                    i + 1,
-                    rendue.zone_ou_index,
-                    rendue.rangee,
-                    rendue.colonne,
-                    attendue.zone_ou_index,
-                    attendue.rangee,
-                    attendue.colonne
-                )));
-            }
-            toutes.push(brutes);
+            lues.push((rendue, brutes));
         }
+        let desordre = lues
+            .iter()
+            .zip(&attendues)
+            .filter(|((rendue, _), attendue)| rendue != *attendue)
+            .count();
+        let rangees = ranger(&attendues, lues).inspect_err(|e| {
+            self.journal
+                .push(format!("plages lues impossibles à ranger : {e:?}"));
+        })?;
         self.journal.push(format!(
-            "{} plage(s) lue(s), dans l'ordre de la mire",
-            toutes.len()
+            "{} plage(s) lue(s), rangées par leur position dans l'ordre de la mire              ({desordre} hors de l'ordre de la mire à la lecture)",
+            rangees.len()
         ));
-        Ok(toutes)
+        Ok(rangees)
     }
 
     /// Spectres et Lab M0, M1, M2 de chaque plage, réglages reposés avant
@@ -234,8 +236,55 @@ impl<S: SdkFd9> Session<S> {
     }
 }
 
-/// Position de chaque plage de la mire, dans l'ordre de lecture : zones dans
-/// l'ordre, puis rangées de haut en bas, puis colonnes de gauche à droite.
+/// Range les plages lues (position rendue, données) dans l'ordre de
+/// `attendues`. Une position rendue deux fois, absente de la mire, ou jamais
+/// rendue refuse tout ; `lue` compte depuis 1, dans l'ordre de lecture.
+fn ranger(
+    attendues: &[PositionPlage],
+    lues: Vec<(PositionPlage, Brutes)>,
+) -> Result<Vec<Brutes>, ErreurPont> {
+    let rang: HashMap<PositionPlage, usize> =
+        attendues.iter().enumerate().map(|(i, p)| (*p, i)).collect();
+    let mut rangees: Vec<Option<Brutes>> = vec![None; attendues.len()];
+    for (i, (rendue, brutes)) in lues.into_iter().enumerate() {
+        // Bornée par PLAGES_MAX : le rang tient dans un u32.
+        let lue = i as u32 + 1;
+        let (zone, rangee, colonne) = (rendue.zone_ou_index, rendue.rangee, rendue.colonne);
+        let Some(&n) = rang.get(&rendue) else {
+            return Err(positions_plages(DefautPositions::HorsMire {
+                lue,
+                zone,
+                rangee,
+                colonne,
+            }));
+        };
+        if rangees[n].replace(brutes).is_some() {
+            return Err(positions_plages(DefautPositions::Doublon {
+                lue,
+                zone,
+                rangee,
+                colonne,
+            }));
+        }
+    }
+    if let Some(n) = rangees.iter().position(Option::is_none) {
+        let p = attendues[n];
+        return Err(positions_plages(DefautPositions::Manquante {
+            zone: p.zone_ou_index,
+            rangee: p.rangee,
+            colonne: p.colonne,
+        }));
+    }
+    Ok(rangees.into_iter().flatten().collect())
+}
+
+fn positions_plages(defaut: DefautPositions) -> ErreurPont {
+    ErreurPont::PositionsPlages { defaut }
+}
+
+/// Position de chaque plage de la mire, dans l'ordre de la définition (celui
+/// des SAMPLE_ID) : zones dans l'ordre, puis rangées de haut en bas, puis
+/// colonnes de gauche à droite.
 fn positions(mire: &DefinitionFeuille) -> Vec<PositionPlage> {
     mire.zones
         .iter()

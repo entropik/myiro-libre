@@ -73,7 +73,7 @@ Référence : **MYIROtools**, le logiciel du fabricant qui imprime la mire RGB-2
 5. Événement 7 : [FD9_GetPatchRecognitionResult2](FD9_GetPatchRecognitionResult2.md), puis **comparaison à la définition** (zones et plages, comme MYIROtools ; origine et pas, en plus pour le pont). Au palier Prénumérisation, la feuille s'arrête là : [FD9_StopMeasurement](FD9_StopMeasurement.md)`(faux)`, puis attente de l'événement 10.
 6. Palier Feuille : [FD9_GetMeasurePoint](FD9_GetMeasurePoint.md), puis [FD9_StartMeasurement2](FD9_StartMeasurement2.md)`(1, 1)`.
 7. Événements 11 : nombre de plages mesurées. Événement 9 : mesure finie.
-8. Lecture de chaque plage : [FD9_SetOption](FD9_SetOption.md)`(3, 0x0c)` et [FD9_GetData](FD9_GetData.md) (152 données brutes), puis M0, M1, M2 par [FD9_CalculateData](FD9_CalculateData.md).
+8. Lecture de chaque plage : [FD9_SetOption](FD9_SetOption.md)`(3, 0x0c)` et [FD9_GetData](FD9_GetData.md) (152 données brutes), **dans l'ordre de mesure de l'instrument** (serpentin à l'essai E4), puis rangement par la position rendue dans l'ordre de la mire (chaque position une fois), puis M0, M1, M2 par [FD9_CalculateData](FD9_CalculateData.md).
 9. [FD9_ExitMeasurement](FD9_ExitMeasurement.md)`(0, NULL)`. À la fermeture de la session : [FD9_Disconnect](FD9_Disconnect.md), puis désinscription du rappel.
 
 ### États admis par chaque fonction (confirmé)

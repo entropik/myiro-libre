@@ -216,10 +216,11 @@ impl ResultatQr {
 }
 
 /// `tFD9_PatchPosition` : 12 octets. En entrée de `FD9_GetData`,
-/// `(index, -1, -1)` désigne la plage n° index ; en sortie, la DLL rend
-/// `(zone, rangée, colonne)`.
+/// `(index, -1, -1)` désigne la plage lue n° index, dans l'ordre de mesure
+/// de l'instrument (serpentin à l'essai E4) ; en sortie, la DLL rend la
+/// `(zone, rangée, colonne)` gardée avec ses données.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct PositionPlage {
     pub zone_ou_index: u32,
     pub rangee: i32,

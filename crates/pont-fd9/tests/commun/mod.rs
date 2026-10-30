@@ -68,8 +68,13 @@ pub struct Fd9Simule {
     pub points: u32,
     /// Réglages de `FD9_SetOption`, par clé (rangés dans la DLL).
     pub options: [u32; 4],
-    /// Plage dont `FD9_GetData` rend une autre position.
-    pub position_fausse: Option<u32>,
+    /// Ordre de lecture : n° de la plage de la mire (ordre de la définition,
+    /// depuis 0) rendue par chaque `FD9_GetData(index)`. `None` : serpentin,
+    /// comme le FD-9 à l'essai E4 (rangées paires de gauche à droite,
+    /// rangées impaires de droite à gauche, zone par zone).
+    pub ordre: Option<Vec<u32>>,
+    /// Position rendue à la place de la vraie, par index lu.
+    pub positions_forcees: HashMap<u32, PositionPlage>,
     /// `FD9_GetData` rend 0 sans écrire la position.
     pub position_non_ecrite: bool,
     /// État que l'instrument atteint juste avant le prochain
@@ -186,6 +191,68 @@ impl Fd9Simule {
         } else {
             self.orphelins += 1;
         }
+    }
+
+    /// La plage rendue par `FD9_GetData(index)` : son n° dans la mire et sa
+    /// position (zone, rangée, colonne), selon les zones reçues par la
+    /// reconnaissance.
+    fn plage_lue(&self, index: u32) -> Option<(u32, PositionPlage)> {
+        let c = self.coordonnees_recues.as_ref()?;
+        let zones = &c.compte_zones[..c.zones as usize];
+        let total: u32 = zones.iter().map(|z| z.rangees * z.colonnes).sum();
+        // Serpentin : l'ordre de mesure du FD-9 (essai E4).
+        let serpentin = |n: u32| {
+            let mut reste = n;
+            for (zone, z) in zones.iter().enumerate() {
+                let compte = z.rangees * z.colonnes;
+                if reste < compte {
+                    let (rangee, k) = (reste / z.colonnes, reste % z.colonnes);
+                    let colonne = if rangee % 2 == 0 {
+                        k
+                    } else {
+                        z.colonnes - 1 - k
+                    };
+                    return (zone as u32, rangee, colonne);
+                }
+                reste -= compte;
+            }
+            unreachable!()
+        };
+        let numero_de = |zone: u32, rangee: u32, colonne: u32| {
+            let avant: u32 = zones[..zone as usize]
+                .iter()
+                .map(|z| z.rangees * z.colonnes)
+                .sum();
+            avant + rangee * zones[zone as usize].colonnes + colonne
+        };
+        if index >= total {
+            return None;
+        }
+        let (zone, rangee, colonne) = match &self.ordre {
+            None => serpentin(index),
+            Some(ordre) => {
+                // n° dans la mire → position, dans l'ordre de la définition.
+                let mut reste = *ordre.get(index as usize)?;
+                let mut trouve = None;
+                for (zone, z) in zones.iter().enumerate() {
+                    let compte = z.rangees * z.colonnes;
+                    if reste < compte {
+                        trouve = Some((zone as u32, reste / z.colonnes, reste % z.colonnes));
+                        break;
+                    }
+                    reste -= compte;
+                }
+                trouve?
+            }
+        };
+        Some((
+            numero_de(zone, rangee, colonne),
+            PositionPlage {
+                zone_ou_index: zone,
+                rangee: rangee as i32,
+                colonne: colonne as i32,
+            },
+        ))
     }
 
     fn appel(&mut self, nom: &'static str, detail: String) -> i32 {
@@ -509,21 +576,17 @@ impl SdkFd9 for Fd9Simule {
             // Le simulé ne calcule pas dans GetData.
             return 1001;
         }
-        let colonnes = self
-            .coordonnees_recues
-            .as_ref()
-            .map_or(1, |c| c.compte_zones[0].colonnes.max(1));
-        let decalage = i32::from(self.position_fausse == Some(i));
         if self.position_non_ecrite {
             return 0;
         }
-        *rendue = PositionPlage {
-            zone_ou_index: 0,
-            rangee: (i / colonnes) as i32,
-            colonne: (i % colonnes) as i32 + decalage,
+        let Some((numero, position)) = self.plage_lue(i) else {
+            // Au-delà des plages mesurées (code interne 0x1775, supposé 1999).
+            return 1999;
         };
+        *rendue = self.positions_forcees.get(&i).copied().unwrap_or(position);
+        // Données fictives : 1 000 + n° de la plage dans la mire, puis + k.
         for (k, valeur) in donnees.iter_mut().enumerate() {
-            *valeur = 1_000.0 + i as f32 + k as f32;
+            *valeur = 1_000.0 + numero as f32 + k as f32;
         }
         0
     }

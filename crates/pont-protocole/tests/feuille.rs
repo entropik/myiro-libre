@@ -145,9 +145,9 @@ fn un_champ_inconnu_dans_la_definition_est_refuse() {
 // --- Mesure en feuille : la lecture de la feuille dans la provenance ---
 
 use pont_protocole::{
-    ecrire_mesure, ecrire_reponse, lire_mesure, lire_reponse, Calcul, DonneesBrutes, ErreurPont,
-    Geometrie, Horodatage, Info, InstrumentMesurant, Lab, LectureFeuille, Mesure, Plage,
-    Provenance, Reponse, Spectre, MODELE_FD9,
+    ecrire_mesure, ecrire_reponse, lire_mesure, lire_reponse, Calcul, DefautPositions,
+    DonneesBrutes, ErreurPont, Geometrie, Horodatage, Info, InstrumentMesurant, Lab,
+    LectureFeuille, Mesure, Plage, Provenance, Reponse, Spectre, MODELE_FD9,
 };
 
 fn lecture() -> LectureFeuille {
@@ -251,6 +251,24 @@ fn une_ancienne_mesure_bande_se_relit_sans_feuille() {
 }
 
 #[test]
+fn un_doublon_de_position_s_ecrit_en_clair() {
+    let texte = ecrire_reponse(&Reponse::Erreur {
+        erreur: ErreurPont::PositionsPlages {
+            defaut: DefautPositions::Doublon {
+                lue: 43,
+                zone: 0,
+                rangee: 1,
+                colonne: 41,
+            },
+        },
+    });
+    assert_eq!(
+        texte,
+        r#"{"rep":"erreur","erreur":{"type":"positions_plages","defaut":{"defaut":"doublon","lue":43,"zone":0,"rangee":1,"colonne":41}}}"#
+    );
+}
+
+#[test]
 fn la_prenumerisation_et_les_erreurs_de_feuille_traversent_le_protocole() {
     for reponse in [
         Reponse::Prenumerisee { lecture: lecture() },
@@ -282,6 +300,35 @@ fn la_prenumerisation_et_les_erreurs_de_feuille_traversent_le_protocole() {
             erreur: ErreurPont::IncidentFeuille {
                 etat: 201,
                 premesure: Some(3),
+            },
+        },
+        Reponse::Erreur {
+            erreur: ErreurPont::PositionsPlages {
+                defaut: DefautPositions::Doublon {
+                    lue: 43,
+                    zone: 0,
+                    rangee: 1,
+                    colonne: 41,
+                },
+            },
+        },
+        Reponse::Erreur {
+            erreur: ErreurPont::PositionsPlages {
+                defaut: DefautPositions::HorsMire {
+                    lue: 1,
+                    zone: 0,
+                    rangee: 60,
+                    colonne: 0,
+                },
+            },
+        },
+        Reponse::Erreur {
+            erreur: ErreurPont::PositionsPlages {
+                defaut: DefautPositions::Manquante {
+                    zone: 0,
+                    rangee: 0,
+                    colonne: 0,
+                },
             },
         },
     ] {

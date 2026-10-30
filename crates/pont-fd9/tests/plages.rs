@@ -7,10 +7,11 @@
 mod commun;
 
 use commun::Fd9Simule;
+use fd9_sys::PositionPlage;
 use pont_fd9::{Delais, Session};
 use pont_protocole::{
-    AdresseReseau, ConditionMesure, DefinitionFeuille, Echantillonnage, ErreurPont, Geometrie,
-    Illuminant, Info, Mesure, Observateur, Palier, ZoneFeuille, MODELE_FD9,
+    AdresseReseau, ConditionMesure, DefautPositions, DefinitionFeuille, Echantillonnage,
+    ErreurPont, Geometrie, Illuminant, Info, Mesure, Observateur, Palier, ZoneFeuille, MODELE_FD9,
 };
 use std::time::Duration;
 
@@ -82,6 +83,11 @@ fn une_feuille_rgb2520_rend_2520_plages_dans_l_ordre() {
     assert_eq!(lectures.len(), 2_520);
     assert_eq!(lectures[0], "FD9_GetData 0");
     assert_eq!(lectures[2_519], "FD9_GetData 2519");
+    // Serpentin sur 42 colonnes : les 30 rangées impaires sont à l'envers.
+    assert!(session
+        .journal()
+        .iter()
+        .any(|l| l.contains("2520 plage(s) lue(s)") && l.contains("1260 hors de l'ordre")));
 }
 
 #[test]
@@ -180,21 +186,132 @@ fn le_nombre_de_plages_mesurees_est_journalise() {
 }
 
 #[test]
-fn une_position_inattendue_refuse_la_mesure() {
-    let mut sdk = Fd9Simule::avec_une_rgb2520();
-    sdk.position_fausse = Some(3);
-    let (mut session, depuis) = connectee(sdk, Palier::Feuille);
+fn les_plages_lues_en_serpentin_sont_rangees_dans_l_ordre_de_la_mire() {
+    // Essai E4 : le FD-9 rend la rangée 1 de droite à gauche. La plage lue
+    // n° 4 est en (rangée 1, colonne 2) : elle est rangée 6ᵉ. Seule la
+    // colonne du milieu de la rangée 1 tombe à sa place.
+    let (mesure, session, _) = mesuree(&six_plages());
 
-    let Err(ErreurPont::ReponseInattendue { detail }) = session.mesurer_feuille(&six_plages())
-    else {
-        panic!("{:?}", session.journal())
-    };
-    assert!(detail.contains("plage n° 4"), "{detail}");
-    // Rien n'est calculé ; la feuille est close sans arrêt (état 9).
-    let appels = &session.sdk().appels_dll()[depuis..];
+    let premieres: Vec<f32> = mesure.plages().iter().map(|p| p.brutes()[0]).collect();
+    assert_eq!(
+        premieres,
+        [1_000.0, 1_001.0, 1_002.0, 1_003.0, 1_004.0, 1_005.0]
+    );
+    assert!(session
+        .journal()
+        .iter()
+        .any(|l| l.contains("6 plage(s) lue(s)") && l.contains("2 hors de l'ordre de la mire")));
+}
+
+#[test]
+fn un_ordre_quelconque_est_range_par_la_position_rendue() {
+    // Le pont ne suppose pas le serpentin : seule la position rendue compte.
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.ordre = Some(vec![5, 0, 3, 1, 4, 2]);
+    let (mut session, _) = connectee(sdk, Palier::Feuille);
+
+    let mesure = session.mesurer_feuille(&six_plages()).unwrap();
+
+    let premieres: Vec<f32> = mesure.plages().iter().map(|p| p.brutes()[0]).collect();
+    assert_eq!(
+        premieres,
+        [1_000.0, 1_001.0, 1_002.0, 1_003.0, 1_004.0, 1_005.0]
+    );
+}
+
+#[test]
+fn deux_zones_sont_rangees_zone_par_zone() {
+    // Zone 0 : 2 × 3 ; zone 1 : 1 × 2, plus bas sur la feuille.
+    let mut mire = six_plages();
+    let mut seconde = mire.zones[0].clone();
+    seconde.haut = 20_000;
+    seconde.rangees = 1;
+    seconde.colonnes = 2;
+    mire.zones.push(seconde);
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.ordre = Some(vec![7, 6, 0, 1, 2, 5, 4, 3]);
+    let (mut session, _) = connectee(sdk, Palier::Feuille);
+
+    let mesure = session.mesurer_feuille(&mire).unwrap();
+
+    let premieres: Vec<f32> = mesure.plages().iter().map(|p| p.brutes()[0]).collect();
+    assert_eq!(
+        premieres,
+        (0..8).map(|n| 1_000.0 + n as f32).collect::<Vec<_>>()
+    );
+}
+
+/// Feuille de six plages dont la plage lue d'index `index` rend `position`.
+fn position_forcee(index: u32, position: (u32, i32, i32)) -> Session<Fd9Simule> {
+    let mut sdk = Fd9Simule::avec_une_rgb2520();
+    sdk.positions_forcees.insert(
+        index,
+        PositionPlage {
+            zone_ou_index: position.0,
+            rangee: position.1,
+            colonne: position.2,
+        },
+    );
+    connectee(sdk, Palier::Feuille).0
+}
+
+/// Toutes les plages sont lues, puis la feuille est close, sans calcul.
+fn lue_puis_close_sans_calcul(session: &Session<Fd9Simule>) {
+    let appels = session.sdk().appels_dll();
+    assert_eq!(
+        appels
+            .iter()
+            .filter(|a| a.starts_with("FD9_GetData"))
+            .count(),
+        6
+    );
     assert_eq!(appels.last(), Some(&"FD9_ExitMeasurement 0 nul"));
     assert!(!appels.iter().any(|a| a.starts_with("FD9_CalculateData")));
-    assert!(!appels.contains(&"FD9_GetData 4"));
+}
+
+#[test]
+fn une_position_rendue_deux_fois_refuse_la_mesure() {
+    // La plage lue n° 3 rend la position de la première.
+    let mut session = position_forcee(2, (0, 0, 0));
+
+    assert_eq!(
+        session.mesurer_feuille(&six_plages()),
+        Err(ErreurPont::PositionsPlages {
+            defaut: DefautPositions::Doublon {
+                lue: 3,
+                zone: 0,
+                rangee: 0,
+                colonne: 0
+            }
+        })
+    );
+    lue_puis_close_sans_calcul(&session);
+}
+
+#[test]
+fn une_position_hors_de_la_mire_refuse_la_mesure() {
+    for (position, lue) in [
+        ((0, 2, 0), 5),
+        ((0, 0, 3), 5),
+        ((1, 0, 0), 5),
+        ((0, -1, 0), 5),
+    ] {
+        let mut session = position_forcee(4, position);
+
+        assert_eq!(
+            session.mesurer_feuille(&six_plages()),
+            Err(ErreurPont::PositionsPlages {
+                defaut: DefautPositions::HorsMire {
+                    lue,
+                    zone: position.0,
+                    rangee: position.1,
+                    colonne: position.2
+                }
+            }),
+            "{position:?}"
+        );
+        lue_puis_close_sans_calcul(&session);
+    }
 }
 
 #[test]
@@ -330,7 +447,8 @@ fn sans_fin_de_mesure_le_delai_arrete_la_feuille() {
 #[test]
 fn une_position_non_ecrite_refuse_la_mesure() {
     // Une seule plage : sa position attendue est (0, 0, 0), celle d'une
-    // structure à zéro. La DLL rend 0 sans rien écrire.
+    // structure à zéro. La DLL rend 0 sans rien écrire : la position de
+    // départ du pont, impossible, reste.
     let mut mire = six_plages();
     mire.zones[0].rangees = 1;
     mire.zones[0].colonnes = 1;
@@ -338,8 +456,10 @@ fn une_position_non_ecrite_refuse_la_mesure() {
     sdk.position_non_ecrite = true;
     let (mut session, _) = connectee(sdk, Palier::Feuille);
 
-    let Err(ErreurPont::ReponseInattendue { detail }) = session.mesurer_feuille(&mire) else {
+    let Err(ErreurPont::PositionsPlages {
+        defaut: DefautPositions::HorsMire { lue: 1, .. },
+    }) = session.mesurer_feuille(&mire)
+    else {
         panic!("{:?}", session.journal())
     };
-    assert!(detail.contains("plage n° 1"), "{detail}");
 }

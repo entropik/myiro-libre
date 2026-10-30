@@ -434,6 +434,38 @@ pub enum ErreurPont {
     /// rappel : 101–103, 201–206, 301) ; `premesure` : code de
     /// `FD9_GetPremeasurementError` quand il a été lu.
     IncidentFeuille { etat: u32, premesure: Option<i32> },
+    /// FD-9 : les positions (zone, rangée, colonne) rendues par la DLL pour
+    /// les plages lues ne couvrent pas la mire une fois chacune (`defaut`) :
+    /// rien n'est rendu. La feuille est close.
+    PositionsPlages { defaut: DefautPositions },
     /// Autre code d'erreur de la DLL, conservé brut.
     Sdk { code: i32 },
+}
+
+/// Ce qui empêche de ranger les plages lues d'une feuille dans l'ordre de la
+/// mire. `lue` : rang de lecture, compté depuis 1 ; zone, rangée et colonne
+/// comptées depuis 0, telles que la DLL les rend.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "defaut", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DefautPositions {
+    /// Cette position a déjà été rendue pour une plage lue avant.
+    Doublon {
+        lue: u32,
+        zone: u32,
+        rangee: i32,
+        colonne: i32,
+    },
+    /// Cette position n'existe pas dans la mire.
+    HorsMire {
+        lue: u32,
+        zone: u32,
+        rangee: i32,
+        colonne: i32,
+    },
+    /// Aucune plage lue n'a cette position de la mire.
+    Manquante {
+        zone: u32,
+        rangee: i32,
+        colonne: i32,
+    },
 }

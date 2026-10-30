@@ -273,12 +273,20 @@ impl<S: SdkFd9> SdkFd9 for SdkTrace<S> {
             "plage {}, {} valeurs",
             demandee.zone_ou_index, DONNEES_BRUTES
         );
-        self.appel(
+        let c = self.appel(
             "FD9_GetData",
             &arguments,
             |s| s.donnees(rendue, donnees, demandee),
             code,
-        )
+        );
+        self.ecrire(
+            "·",
+            &format!(
+                "FD9_GetData : position (zone {}, rangée {}, colonne {})",
+                rendue.zone_ou_index, rendue.rangee, rendue.colonne
+            ),
+        );
+        c
     }
 
     fn calculer(&mut self, sortie: &mut [f32], brutes: &[f32; DONNEES_BRUTES]) -> i32 {
