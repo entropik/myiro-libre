@@ -392,7 +392,7 @@ Copie complète de la bibliothèque en un seul fichier, à garder en lieu sûr o
 _Éviter_ : backup, archive (réservé à `Archivage/`), export (réservé à CGATS)
 
 **Bibliothèque d'essai** :
-Copie de la bibliothèque, ouverte au lancement par `--bibliotheque <dossier>` à la place de celle du poste, pour essayer une version de l'application sans toucher à la vraie ; le titre de la fenêtre le dit. Sans dossier, l'application ne démarre pas. `--demo` l'emporte sur elle.
+Copie de la bibliothèque, ouverte au lancement par `--bibliotheque <dossier>` à la place de celle du poste, pour essayer une version de l'application sans toucher à la vraie ; le titre de la fenêtre le dit. Sans dossier, avec l'option répétée ou mal écrite, ou avec le dossier de la vraie bibliothèque, l'application ne démarre pas. `--demo` l'emporte sur elle. Les réglages du poste et le dossier des mires restent les vrais.
 _Éviter_ : bibliothèque de test, bac à sable, bibliothèque de démonstration (réservé à `--demo` et ses données fictives)
 
 **État vide** :

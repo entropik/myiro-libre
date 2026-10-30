@@ -134,7 +134,10 @@ Si la branche ajoute ou change une organisation de la bibliothèque (constante
 `ORGANISATION_n` de `crates/bibliotheque`), l'essai d'écran se fait sur une
 bibliothèque d'essai, jamais sur la vraie : application fermée, copier le dossier
 `bibliotheque` du poste (`%APPDATA%\org.myiro-libre.app\bibliotheque`) dans un
-dossier de travail, puis lancer avec `--bibliotheque <copie>`.
+dossier de travail, puis lancer avec `--bibliotheque <copie>`. On peut aussi faire
+« Sauvegarder… » dans la vraie, puis « Restaurer… » dans la bibliothèque d'essai.
+Pendant l'essai, les réglages du poste (SDK retenu, instrument choisi, mode de
+mesure, durées de calcul) et le dossier `Documents\myiro-libre\Mires` restent les vrais.
 
 Consigner les résultats sans identifiants matériels réels et les rattacher au
 SHA testé. Un changement du comportement testé demande une nouvelle validation.

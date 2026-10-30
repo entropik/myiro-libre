@@ -301,6 +301,11 @@ fn ouvrir_bibliotheque(
             return Ok(());
         }
         BibliothequeDemandee::Essai(dossier) => {
+            let poste = colonne::emplacement(&app.path().app_data_dir()?);
+            if let Err(refus) = lancement::refuser_bibliotheque_du_poste(dossier, &poste) {
+                eprintln!("{refus}");
+                std::process::exit(2);
+            }
             eprintln!("bibliothèque d'essai : {}", dossier.display());
             for fenetre in app.webview_windows().values() {
                 fenetre.set_title(textes::texte(langue, "fenetre.titre.essai"))?;

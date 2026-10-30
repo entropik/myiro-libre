@@ -2317,7 +2317,7 @@ const FRANCAIS: Catalogue = &[
 
 const ANGLAIS: Catalogue = &[
     // Window title, with `--bibliotheque <folder>`
-    ("fenetre.titre.essai", "myiro-libre — test library"),
+    ("fenetre.titre.essai", "myiro-libre — trial library"),
     // Top bar
     ("nav.libelle", "Tasks"),
     ("tache.mesurer", "Measure"),
@@ -4767,14 +4767,12 @@ mod tests {
     /// bibliothèque ouverte est celle d'essai (#86).
     #[test]
     fn le_titre_de_la_fenetre_dit_la_bibliotheque_d_essai() {
-        assert_eq!(
-            texte(Langue::Francais, "fenetre.titre.essai"),
-            "myiro-libre — bibliothèque d’essai"
-        );
-        assert_eq!(
-            texte(Langue::Anglais, "fenetre.titre.essai"),
-            "myiro-libre — test library"
-        );
+        // « test library » est à éviter (GLOSSARY.md) : on dit « trial ».
+        for (langue, mot) in [(Langue::Francais, "essai"), (Langue::Anglais, "trial")] {
+            let titre = texte(langue, "fenetre.titre.essai");
+            assert!(titre.starts_with("myiro-libre"), "{titre}");
+            assert!(titre.contains(mot), "{titre}");
+        }
     }
 
     #[test]

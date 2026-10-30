@@ -6,7 +6,9 @@
 use std::path::PathBuf;
 
 use app::colonne::BibliothequeOuverte;
-use app::lancement::{bibliotheque_demandee, BibliothequeDemandee, RefusLancement};
+use app::lancement::{
+    bibliotheque_demandee, refuser_bibliotheque_du_poste, BibliothequeDemandee, RefusLancement,
+};
 
 fn args(liste: &[&str]) -> Vec<String> {
     std::iter::once("myiro-libre")
@@ -64,6 +66,101 @@ fn l_option_sans_dossier_est_refusee() {
             Err(RefusLancement::BibliothequeSansDossier),
             "{liste:?}"
         );
+    }
+}
+
+/// Une option proche de `--bibliotheque` mais mal écrite n'ouvre jamais la
+/// vraie bibliothèque à la place.
+#[test]
+fn une_option_mal_ecrite_est_refusee() {
+    for option in [
+        "--Bibliotheque",
+        "--bibliothèque",
+        "-bibliotheque",
+        "--bibliotheques",
+    ] {
+        assert_eq!(
+            bibliotheque_demandee(&args(&[option, "copie"])),
+            Err(RefusLancement::OptionMalEcrite(option.to_string())),
+            "{option}"
+        );
+    }
+    assert_eq!(
+        bibliotheque_demandee(&args(&["--BIBLIOTHÈQUE=copie"])),
+        Err(RefusLancement::OptionMalEcrite(
+            "--BIBLIOTHÈQUE=copie".into()
+        ))
+    );
+}
+
+/// Le dossier qui suit l'option peut s'appeler « bibliotheque ».
+#[test]
+fn un_dossier_nomme_bibliotheque_est_accepte() {
+    assert_eq!(
+        bibliotheque_demandee(&args(&["--bibliotheque", "bibliotheque"])),
+        Ok(BibliothequeDemandee::Essai(PathBuf::from("bibliotheque")))
+    );
+}
+
+#[test]
+fn l_option_repetee_est_refusee() {
+    assert_eq!(
+        bibliotheque_demandee(&args(&["--bibliotheque", "a", "--bibliotheque", "b"])),
+        Err(RefusLancement::BibliothequeRepetee)
+    );
+    assert_eq!(
+        bibliotheque_demandee(&args(&["--bibliotheque=a", "--bibliotheque", "a"])),
+        Err(RefusLancement::BibliothequeRepetee)
+    );
+}
+
+/// La bibliothèque d'essai ne peut pas être celle du poste, même écrite
+/// autrement.
+#[test]
+fn la_bibliotheque_du_poste_ne_sert_pas_d_essai() {
+    let temporaire = tempfile::tempdir().unwrap();
+    let poste = temporaire.path().join("bibliotheque");
+    std::fs::create_dir_all(&poste).unwrap();
+    let autrement = temporaire
+        .path()
+        .join("autre")
+        .join("..")
+        .join("bibliotheque");
+    std::fs::create_dir_all(temporaire.path().join("autre")).unwrap();
+
+    assert_eq!(
+        refuser_bibliotheque_du_poste(&autrement, &poste),
+        Err(RefusLancement::BibliothequeDuPoste(autrement.clone()))
+    );
+    assert!(refuser_bibliotheque_du_poste(&poste, &poste).is_err());
+}
+
+#[test]
+fn une_autre_bibliotheque_sert_d_essai() {
+    let temporaire = tempfile::tempdir().unwrap();
+    let poste = temporaire.path().join("bibliotheque");
+    let copie = temporaire.path().join("copie");
+    std::fs::create_dir_all(&poste).unwrap();
+    std::fs::create_dir_all(&copie).unwrap();
+
+    assert_eq!(refuser_bibliotheque_du_poste(&copie, &poste), Ok(()));
+    // Un dossier encore absent sera créé : ce n'est pas celui du poste.
+    let neuve = temporaire.path().join("neuve");
+    assert_eq!(refuser_bibliotheque_du_poste(&neuve, &poste), Ok(()));
+    // Sans bibliothèque du poste, rien à protéger.
+    let absente = temporaire.path().join("absente");
+    assert_eq!(refuser_bibliotheque_du_poste(&copie, &absente), Ok(()));
+}
+
+#[test]
+fn chaque_refus_dit_quoi_faire() {
+    for refus in [
+        RefusLancement::OptionMalEcrite("--bibliothèque".into()),
+        RefusLancement::BibliothequeRepetee,
+        RefusLancement::BibliothequeDuPoste(PathBuf::from("bibliotheque")),
+    ] {
+        let message = refus.to_string();
+        assert!(message.contains("--bibliotheque <dossier>"), "{message}");
     }
 }
 
