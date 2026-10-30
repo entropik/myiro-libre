@@ -48,9 +48,10 @@ impl<P: Pont> Instrument<P> {
     /// plafond Détection, puis demande la version et la détection. Un FD-9
     /// vu devient `Etat::Detecte` : ce pont ne connecte pas encore.
     ///
-    /// À la première détection vide, si la règle du pare-feu manque, elle est
-    /// demandée à Windows pour le pont lancé, puis la détection est relancée
-    /// une fois (ticket #47). `autorisation` garde la trace de la demande
+    /// À la première détection vide, si la règle du pare-feu manque ou est à
+    /// refaire, elle est demandée à Windows, puis la détection est relancée
+    /// une fois (ticket #47). L'installateur la pose déjà (ticket #85) : cette
+    /// demande est le secours. `autorisation` garde la trace de la demande
     /// d'une ouverture à l'autre : elle n'est jamais faite deux fois d'elle-même.
     pub fn ouvrir_fd9<F: PareFeu>(
         emplacements: &[PathBuf],
@@ -70,7 +71,7 @@ impl<P: Pont> Instrument<P> {
             .and_then(|()| detecter(&mut pont))
             .and_then(|vu| match vu {
                 Some(identifiant) => Ok(identifiant),
-                None => ouvrir_pare_feu(&mut pont, &programme, autorisation),
+                None => ouvrir_pare_feu(&mut pont, autorisation),
             });
         match vu {
             Ok(identifiant) => Instrument {
@@ -94,8 +95,8 @@ impl<P: Pont> Instrument<P> {
 /// du pare-feu est en place : le FD-9 est éteint, sur un autre réseau, ou
 /// FD-S2w occupe le port.
 const DETAIL_AUCUN_FD9: &str = "détection du FD-9 : liste vide, sans erreur. \
-La règle du pare-feu de Windows pour le programme pont-fd9 (UDP, port local \
-49152, réseau local) est en place : le FD-9 n'a pas répondu. Il est peut-être \
+La règle du pare-feu de Windows de myiro-libre (UDP, port local 49152, \
+réseau local) est en place : le FD-9 n'a pas répondu. Il est peut-être \
 éteint ou sur un autre réseau ; FD-S2w, s'il est ouvert, occupe le port 49152.";
 
 /// La liste est vide. Sans règle du pare-feu, la réponse du FD-9 a été
@@ -104,40 +105,35 @@ La règle du pare-feu de Windows pour le programme pont-fd9 (UDP, port local \
 /// relancée une fois.
 fn ouvrir_pare_feu<F: PareFeu>(
     pont: &mut impl Pont,
-    programme: &Path,
     autorisation: &mut AutorisationPareFeu<F>,
 ) -> Result<Info<String>, Probleme> {
     let aucun = || Probleme::AucunFd9 {
         detail: DETAIL_AUCUN_FD9.into(),
     };
-    let regle = RegleFd9 {
-        programme: programme.to_path_buf(),
-    };
-    // Une règle de ce nom pour un autre programme ne sert à rien : elle est
-    // remplacée comme si elle manquait.
-    let etat = autorisation.pare_feu_mut().lire(&regle);
+    // Une ancienne règle de ce nom (liée à un programme, autre port, autre
+    // étendue) peut ne rien laisser passer : elle est remplacée comme si
+    // elle manquait.
+    let etat = autorisation.pare_feu_mut().lire();
     if etat == EtatRegle::Presente {
         return Err(aucun());
     }
-    match autorisation.demander(&regle) {
+    match autorisation.demander() {
         Some(Ok(())) => detecter(pont)?.ok_or_else(aucun),
         Some(Err(EchecPareFeu::Refuse)) => Err(pare_feu_ferme(
-            &regle,
             "la fenêtre de contrôle de compte de Windows a été refusée",
         )),
-        Some(Err(EchecPareFeu::Echec { detail })) => Err(pare_feu_ferme(&regle, &detail)),
-        None if etat == EtatRegle::AutreProgramme => Err(pare_feu_ferme(
-            &regle,
-            "la règle de ce nom vise un autre programme ; elle a déjà été demandée",
+        Some(Err(EchecPareFeu::Echec { detail })) => Err(pare_feu_ferme(&detail)),
+        None if etat == EtatRegle::ARefaire => Err(pare_feu_ferme(
+            "la règle de ce nom est à refaire (ancienne règle liée à un programme, \
+             ou autre port, ou autre étendue) ; elle a déjà été demandée",
         )),
         None => Err(pare_feu_ferme(
-            &regle,
             "la règle manque toujours ; elle a déjà été demandée",
         )),
     }
 }
 
-fn pare_feu_ferme(regle: &RegleFd9, raison: &str) -> Probleme {
+fn pare_feu_ferme(raison: &str) -> Probleme {
     Probleme::PareFeuFerme {
         detail: format!(
             "pare-feu de Windows : {raison}.\n\
@@ -147,7 +143,7 @@ fn pare_feu_ferme(regle: &RegleFd9, raison: &str) -> Probleme {
              {}\n\
              Pour retirer la règle :\n\
              {}",
-            regle.commande_ajout(),
+            RegleFd9::commande_ajout(),
             RegleFd9::commande_retrait()
         ),
     }

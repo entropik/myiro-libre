@@ -13,7 +13,7 @@ use app::instrument::choix::{
     lire_choix, retenir_choix, Modele, Occupation, Operation, Ouverture, Recherche, Refus,
     Selection, VueAnnonce,
 };
-use app::instrument::parefeu::{AutorisationPareFeu, PareFeuSimule};
+use app::instrument::parefeu::{AutorisationPareFeu, EtatRegle, PareFeuSimule};
 use app::instrument::{Accord, Etat, Geste};
 use app::pont::{Architecture, Panne, Pont, PontSimule};
 use app::textes::{cles, texte, Langue};
@@ -141,7 +141,7 @@ impl Poste {
             }),
             journal: Rc::default(),
             pare_feu: AutorisationPareFeu::new(PareFeuSimule {
-                regle: Some(PathBuf::from("pont-fd9-x86.exe")),
+                regle: EtatRegle::Presente,
                 ..Default::default()
             }),
         }

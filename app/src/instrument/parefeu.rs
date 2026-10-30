@@ -1,9 +1,14 @@
-//! Le pare-feu de Windows et la détection du FD-9 (ticket #47).
+//! Le pare-feu de Windows et la détection du FD-9 (tickets #47 et #85).
 //!
 //! La DLL du FD-9 lit la réponse à sa diffusion sur le port UDP 49152, depuis
-//! une autre socket que celle qui envoie : sans règle entrante pour le pont,
-//! Windows bloque cette réponse et la liste revient vide, sans erreur (cause
+//! une autre socket que celle qui envoie : sans règle entrante, Windows
+//! bloque cette réponse et la liste revient vide, sans erreur (cause
 //! confirmée le 9 octobre 2026, fiche `docs/abi/FD9_GetDeviceList.md`).
+//!
+//! Depuis le ticket #85, la règle est permanente : par port, sans programme,
+//! posée par l'installateur (`app/installateur/pare-feu.nsh`) et retirée par
+//! le désinstallateur. L'application la vérifie et, si elle manque ou est
+//! d'un ancien modèle, la redemande en secours.
 //!
 //! Le module `instrument` décide quand demander la règle ; ce fichier la
 //! décrit, et le trait [`PareFeu`] la vérifie et l'ajoute. Deux adapters :
@@ -11,57 +16,60 @@
 //! de contrôle de compte de Windows) et [`PareFeuSimule`] pour les tests, qui
 //! ne touche jamais au vrai pare-feu.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(windows)]
+use std::path::PathBuf;
 
 /// Nom fixe de la seule règle que myiro-libre crée. Sans accent : il passe
-/// tel quel dans `netsh` et dans le désinstallateur.
+/// tel quel dans `netsh`, l'installateur et le désinstallateur.
 pub const NOM_REGLE: &str = "myiro-libre - FD-9 - detection (UDP 49152)";
 
 /// Port local où la DLL du FD-9 attend les réponses à sa diffusion.
 pub const PORT_DETECTION: u16 = 49152;
 
+/// Étendue de la règle, telle que `netsh` l'écrit (dans toutes les langues) :
+/// le réseau local de l'ordinateur, rien au-delà.
+const ETENDUE: &str = "LocalSubnet";
+
 /// La règle entrante qui laisse passer la réponse du FD-9 : UDP, port local
-/// 49152, réseau local seulement, tous profils, limitée au programme pont.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RegleFd9 {
-    /// Le programme `pont-fd9` que l'application lance : le pont installé à
-    /// côté d'elle, ou celui de développement (chemin réel calculé).
-    pub programme: PathBuf,
-}
+/// 49152, réseau local seulement, tous profils, sans programme. Elle vaut
+/// quel que soit l'emplacement du pont lancé (installé, de développement,
+/// exécutable de test).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RegleFd9;
 
 impl RegleFd9 {
     /// Arguments de `netsh` qui ajoutent la règle (droits d'administrateur).
-    pub fn arguments_ajout(&self) -> String {
+    /// L'installateur passe les mêmes (test du crochet `pare-feu.nsh`).
+    pub fn arguments_ajout() -> String {
         format!(
             "advfirewall firewall add rule name=\"{NOM_REGLE}\" dir=in action=allow \
-             protocol=UDP localport={PORT_DETECTION} remoteip=localsubnet profile=any \
-             program=\"{}\"",
-            self.programme.display()
+             protocol=UDP localport={PORT_DETECTION} remoteip=localsubnet profile=any"
         )
     }
 
     /// Commande équivalente, telle qu'on la tape dans une invite de commandes
     /// ouverte en administrateur.
-    pub fn commande_ajout(&self) -> String {
-        format!("netsh {}", self.arguments_ajout())
+    pub fn commande_ajout() -> String {
+        format!("netsh {}", Self::arguments_ajout())
     }
 
     /// Arguments de `cmd.exe` qui posent la règle en une seule élévation :
-    /// retrait de toute règle de ce nom (une ancienne qui visait un autre
-    /// programme), puis ajout d'une seule. Le code de sortie est celui de
-    /// l'ajout. `netsh` : chemin du programme `netsh.exe`.
-    pub fn arguments_pose(&self, netsh: &Path) -> String {
+    /// retrait de toute règle de ce nom (une ancienne, liée à un programme),
+    /// puis ajout d'une seule. Le code de sortie est celui de l'ajout.
+    /// `netsh` : chemin du programme `netsh.exe`.
+    pub fn arguments_pose(netsh: &Path) -> String {
         let netsh = netsh.display();
         format!(
             "/d /s /c \"\"{netsh}\" advfirewall firewall delete rule name=\"{NOM_REGLE}\" & \
              \"{netsh}\" {}\"",
-            self.arguments_ajout()
+            Self::arguments_ajout()
         )
     }
 
-    /// Arguments de `netsh` qui lisent la règle et son programme, sans rien
+    /// Arguments de `netsh` qui lisent la règle en détail, sans rien
     /// modifier et sans droits particuliers. `netsh` sort avec le code 0 si
-    /// elle existe.
+    /// elle existe ; [`etat_selon_netsh`] lit sa sortie.
     pub fn arguments_lecture() -> String {
         format!("advfirewall firewall show rule name=\"{NOM_REGLE}\" verbose")
     }
@@ -73,15 +81,67 @@ impl RegleFd9 {
 }
 
 /// Ce que la lecture du pare-feu dit de la règle [`NOM_REGLE`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum EtatRegle {
+    #[default]
     Absente,
-    /// Une règle de ce nom existe, mais pour un autre programme (par exemple
-    /// créée en développement, puis l'application installée) : elle ne laisse
-    /// pas passer la réponse au pont lancé.
-    AutreProgramme,
-    /// La règle existe pour le pont lancé.
+    /// Une règle de ce nom existe, mais pas telle qu'on la pose : ancienne
+    /// règle liée à un programme (avant le ticket #85), autre port, autre
+    /// protocole ou autre étendue. Elle est remplacée comme si elle manquait.
+    ARefaire,
+    /// La règle existe, conforme.
     Presente,
+}
+
+/// Lit la sortie de `netsh advfirewall firewall show rule name=… verbose`
+/// ([`RegleFd9::arguments_lecture`]), en français ou en anglais. Chaque règle
+/// de ce nom doit être conforme : port local 49152, UDP, étendue
+/// `LocalSubnet`, sans programme (pas de ligne `Program`, ou `Any`/`Tout`).
+///
+/// Supposé, à confirmer à l'essai sur le poste (relevé dans les ressources de
+/// langue de `netsh`, sans le lancer) : les libellés `LocalPort`, `RemoteIP`
+/// et `Program` restent en anglais dans le Windows français ; `Protocol` y
+/// devient `Protocole`. L'espace
+/// insécable avant « : » du français arrive parfois illisible (`\u{fffd}`).
+pub fn etat_selon_netsh(sortie: &str) -> EtatRegle {
+    // Chaque règle commence par son nom, souligné d'une ligne de tirets :
+    // ce qui suit une ligne de tirets est une règle.
+    let mut regles: Vec<Vec<(String, &str)>> = Vec::new();
+    for ligne in sortie.lines() {
+        let ligne = ligne.trim();
+        if ligne.len() >= 10 && ligne.chars().all(|c| c == '-') {
+            regles.push(Vec::new());
+        } else if let (Some(regle), Some((libelle, valeur))) =
+            (regles.last_mut(), ligne.split_once(':'))
+        {
+            let libelle = libelle
+                .trim_matches(|c: char| c.is_whitespace() || c == '\u{fffd}')
+                .to_ascii_lowercase();
+            regle.push((libelle, valeur.trim()));
+        }
+    }
+    if regles.is_empty() {
+        return EtatRegle::Absente;
+    }
+    let conforme = |regle: &Vec<(String, &str)>| {
+        let valeur = |noms: &[&str]| {
+            regle
+                .iter()
+                .find(|(libelle, _)| noms.contains(&libelle.as_str()))
+                .map(|(_, valeur)| *valeur)
+        };
+        let port = PORT_DETECTION.to_string();
+        valeur(&["localport"]) == Some(port.as_str())
+            && valeur(&["protocol", "protocole"]).is_some_and(|v| v.eq_ignore_ascii_case("UDP"))
+            && valeur(&["remoteip"]).is_some_and(|v| v.eq_ignore_ascii_case(ETENDUE))
+            && valeur(&["program", "programme"])
+                .is_none_or(|v| v.eq_ignore_ascii_case("Any") || v.eq_ignore_ascii_case("Tout"))
+    };
+    if regles.iter().all(conforme) {
+        EtatRegle::Presente
+    } else {
+        EtatRegle::ARefaire
+    }
 }
 
 /// Pourquoi la règle n'a pas été posée.
@@ -95,12 +155,12 @@ pub enum EchecPareFeu {
 
 /// L'action sur le pare-feu, injectée dans le module `instrument`.
 pub trait PareFeu {
-    /// État de la règle [`NOM_REGLE`] pour ce programme. Lecture seule, sans
-    /// élévation.
-    fn lire(&mut self, regle: &RegleFd9) -> EtatRegle;
+    /// État de la règle [`NOM_REGLE`]. Lecture seule, sans élévation.
+    fn lire(&mut self) -> EtatRegle;
     /// Pose la règle : toute règle de ce nom est remplacée par une seule,
-    /// pour ce programme. C'est le seul endroit qui demande l'élévation.
-    fn poser(&mut self, regle: &RegleFd9) -> Result<(), EchecPareFeu>;
+    /// conforme. C'est le seul endroit de l'application qui demande
+    /// l'élévation.
+    fn poser(&mut self) -> Result<(), EchecPareFeu>;
 }
 
 /// Mémoire de la demande pendant une utilisation de l'application : la règle
@@ -135,43 +195,38 @@ impl<F: PareFeu> AutorisationPareFeu<F> {
 
     /// Demande la règle si elle n'a pas déjà été demandée. `None` si elle
     /// l'a déjà été : rien n'est redemandé.
-    pub(crate) fn demander(&mut self, regle: &RegleFd9) -> Option<Result<(), EchecPareFeu>> {
+    pub(crate) fn demander(&mut self) -> Option<Result<(), EchecPareFeu>> {
         if self.demandee {
             return None;
         }
         self.demandee = true;
-        Some(self.pare_feu.poser(regle))
+        Some(self.pare_feu.poser())
     }
 }
 
-/// Pare-feu simulé : ne touche à rien, enregistre les demandes. Il garde au
-/// plus une règle de ce nom, comme la pose réelle ; elle vise le programme
-/// de la dernière pose réussie.
+/// Pare-feu simulé : ne touche à rien, compte les poses. Une pose réussie
+/// rend la règle conforme, comme la pose réelle.
 #[derive(Clone, Debug, Default)]
 pub struct PareFeuSimule {
-    /// Programme visé par la règle de myiro-libre, si elle existe.
-    pub regle: Option<PathBuf>,
+    /// État de la règle de myiro-libre.
+    pub regle: EtatRegle,
     /// Réponse imposée à la pose (refus, échec) ; `None` : la pose réussit.
     pub echec: Option<EchecPareFeu>,
-    /// Règles dont la pose a été demandée, dans l'ordre.
-    pub demandes: Vec<RegleFd9>,
+    /// Nombre de poses demandées.
+    pub poses: usize,
 }
 
 impl PareFeu for PareFeuSimule {
-    fn lire(&mut self, regle: &RegleFd9) -> EtatRegle {
-        match &self.regle {
-            None => EtatRegle::Absente,
-            Some(programme) if *programme == regle.programme => EtatRegle::Presente,
-            Some(_) => EtatRegle::AutreProgramme,
-        }
+    fn lire(&mut self) -> EtatRegle {
+        self.regle
     }
 
-    fn poser(&mut self, regle: &RegleFd9) -> Result<(), EchecPareFeu> {
-        self.demandes.push(regle.clone());
+    fn poser(&mut self) -> Result<(), EchecPareFeu> {
+        self.poses += 1;
         match &self.echec {
             Some(echec) => Err(echec.clone()),
             None => {
-                self.regle = Some(regle.programme.clone());
+                self.regle = EtatRegle::Presente;
                 Ok(())
             }
         }
@@ -188,25 +243,6 @@ pub struct PareFeuWindows {
     pub fenetre: isize,
 }
 
-/// La sortie de `netsh … show rule … verbose` cite-t-elle ce programme ?
-/// Comparaison sans casse ; le pare-feu peut écrire le dossier de
-/// l'utilisateur `%USERPROFILE%` (`profil`).
-pub fn sortie_cite_le_programme(sortie: &str, programme: &Path, profil: Option<&Path>) -> bool {
-    let sortie = sortie.to_lowercase();
-    let chemin = programme.display().to_string();
-    let mut formes = vec![chemin.to_lowercase()];
-    if let Some(profil) = profil {
-        let profil = profil.display().to_string();
-        let suite = chemin.get(profil.len()..).filter(|_| {
-            !profil.is_empty() && chemin.to_lowercase().starts_with(&profil.to_lowercase())
-        });
-        if let Some(suite) = suite {
-            formes.push(format!("%userprofile%{suite}").to_lowercase());
-        }
-    }
-    formes.iter().any(|forme| sortie.contains(forme.as_str()))
-}
-
 /// Attente maximale de `netsh` une fois l'élévation acceptée.
 #[cfg(windows)]
 const DELAI_NETSH_MS: u32 = 60_000;
@@ -219,7 +255,7 @@ fn system32(programme: &str) -> PathBuf {
 
 #[cfg(windows)]
 impl PareFeu for PareFeuWindows {
-    fn lire(&mut self, regle: &RegleFd9) -> EtatRegle {
+    fn lire(&mut self) -> EtatRegle {
         use std::os::windows::process::CommandExt;
         use std::process::{Command, Stdio};
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -235,20 +271,19 @@ impl PareFeu for PareFeuWindows {
         if !sortie.status.success() {
             return EtatRegle::Absente;
         }
-        let profil = std::env::var_os("USERPROFILE").map(PathBuf::from);
-        let texte = String::from_utf8_lossy(&sortie.stdout);
-        if sortie_cite_le_programme(&texte, &regle.programme, profil.as_deref()) {
-            EtatRegle::Presente
-        } else {
-            EtatRegle::AutreProgramme
+        match etat_selon_netsh(&String::from_utf8_lossy(&sortie.stdout)) {
+            // `netsh` dit qu'elle existe, mais rien n'en est lisible (langue
+            // inconnue) : elle est refaite plutôt que crue conforme.
+            EtatRegle::Absente => EtatRegle::ARefaire,
+            etat => etat,
         }
     }
 
-    fn poser(&mut self, regle: &RegleFd9) -> Result<(), EchecPareFeu> {
+    fn poser(&mut self) -> Result<(), EchecPareFeu> {
         elevation::lancer_en_administrateur(
             self.fenetre,
             &system32("cmd.exe"),
-            &regle.arguments_pose(&system32("netsh.exe")),
+            &RegleFd9::arguments_pose(&system32("netsh.exe")),
             DELAI_NETSH_MS,
         )
     }
@@ -256,11 +291,11 @@ impl PareFeu for PareFeuWindows {
 
 #[cfg(not(windows))]
 impl PareFeu for PareFeuWindows {
-    fn lire(&mut self, _: &RegleFd9) -> EtatRegle {
+    fn lire(&mut self) -> EtatRegle {
         EtatRegle::Absente
     }
 
-    fn poser(&mut self, _: &RegleFd9) -> Result<(), EchecPareFeu> {
+    fn poser(&mut self) -> Result<(), EchecPareFeu> {
         Err(EchecPareFeu::Echec {
             detail: "pare-feu de Windows : pas sous Windows".into(),
         })
@@ -409,39 +444,183 @@ mod elevation {
 mod tests {
     use std::path::Path;
 
-    use super::{sortie_cite_le_programme, NOM_REGLE};
+    use super::{etat_selon_netsh, EtatRegle, RegleFd9, NOM_REGLE};
 
-    /// Lecture de la règle : le programme est reconnu sans casse, et sous la
-    /// forme `%USERPROFILE%` ; un autre programme ne l'est pas. Chemins fictifs.
-    #[test]
-    fn la_lecture_reconnait_le_programme_de_la_regle() {
-        let installe = Path::new(r"C:\Users\exemple\AppData\Local\myiro-libre\pont-fd9-x86.exe");
-        let profil = Path::new(r"C:\Users\exemple");
-        let sortie =
-            |programme: &str| format!("Rule Name: {NOM_REGLE}\r\nProgram: {programme}\r\n");
-        assert!(sortie_cite_le_programme(
-            &sortie(r"c:\users\exemple\appdata\local\myiro-libre\pont-fd9-x86.exe"),
-            installe,
-            Some(profil)
-        ));
-        assert!(sortie_cite_le_programme(
-            &sortie(r"%USERPROFILE%\AppData\Local\myiro-libre\pont-fd9-x86.exe"),
-            installe,
-            Some(profil)
-        ));
-        assert!(!sortie_cite_le_programme(
-            &sortie(r"C:\depot\target\i686-pc-windows-msvc\debug\pont-fd9.exe"),
-            installe,
-            Some(profil)
-        ));
+    /// Sortie de `netsh advfirewall firewall show rule … verbose` sur un
+    /// Windows en anglais, pour la règle conforme (aucune adresse réelle).
+    const SORTIE_ANGLAISE: &str = "\r\n\
+Rule Name:                            myiro-libre - FD-9 - detection (UDP 49152)\r\n\
+----------------------------------------------------------------------\r\n\
+Enabled:                              Yes\r\n\
+Direction:                            In\r\n\
+Profiles:                             Domain,Private,Public\r\n\
+Grouping:                             \r\n\
+LocalIP:                              Any\r\n\
+RemoteIP:                             LocalSubnet\r\n\
+Protocol:                             UDP\r\n\
+LocalPort:                            49152\r\n\
+RemotePort:                           Any\r\n\
+Edge traversal:                       No\r\n\
+InterfaceTypes:                       Any\r\n\
+Security:                             NotRequired\r\n\
+Rule source:                          Local Setting\r\n\
+Action:                               Allow\r\n\
+Ok.\r\n\r\n";
+
+    /// La même sur un Windows en français, telle que l'application la lit :
+    /// l'espace insécable avant « : » et les lettres accentuées arrivent
+    /// illisibles (page de code de la console), d'où les `\u{fffd}`.
+    const SORTIE_FRANCAISE: &str = "\r\n\
+Nom de la r\u{fffd}gle\u{fffd}:                     myiro-libre - FD-9 - detection (UDP 49152)\r\n\
+----------------------------------------------------------------------\r\n\
+Activ\u{fffd}\u{fffd}:                              Oui\r\n\
+Direction\u{fffd}:                           Actif\r\n\
+Profiles :                            Domaine,Priv\u{fffd},Public\r\n\
+Groupement\u{fffd}:                          \r\n\
+LocalIP\u{fffd}:                             Tout\r\n\
+RemoteIP\u{fffd}:                            LocalSubnet\r\n\
+Protocole\u{fffd}:                           UDP\r\n\
+LocalPort\u{fffd}:                           49152\r\n\
+RemotePort\u{fffd}:                          Tout\r\n\
+Travers\u{fffd}e de bordure\u{fffd}:                Non\r\n\
+InterfaceTypes\u{fffd}:                      Tout\r\n\
+Security\u{fffd}:                            NotRequired\r\n\
+Source de la r\u{fffd}gle\u{fffd}:                  Param\u{fffd}tre local\r\n\
+Action\u{fffd}:                              Autoriser\r\n\
+Ok.\r\n\r\n";
+
+    /// Ajoute la ligne du programme d'une ancienne règle (avant le ticket
+    /// #85), juste avant `InterfaceTypes`. Chemins fictifs.
+    fn avec_programme(sortie: &str, ligne: &str) -> String {
+        sortie.replacen("InterfaceTypes", &format!("{ligne}\r\nInterfaceTypes"), 1)
     }
 
-    /// Le désinstallateur retire la règle sous le même nom.
     #[test]
-    fn le_desinstallateur_retire_la_meme_regle() {
+    fn la_regle_conforme_est_reconnue_en_anglais_et_en_francais() {
+        assert_eq!(etat_selon_netsh(SORTIE_ANGLAISE), EtatRegle::Presente);
+        assert_eq!(etat_selon_netsh(SORTIE_FRANCAISE), EtatRegle::Presente);
+        // Une ligne « Program » qui dit « tout » ne lie la règle à rien.
+        assert_eq!(
+            etat_selon_netsh(&avec_programme(
+                SORTIE_ANGLAISE,
+                "Program:                              Any"
+            )),
+            EtatRegle::Presente
+        );
+        assert_eq!(
+            etat_selon_netsh(&avec_programme(
+                SORTIE_FRANCAISE,
+                "Program\u{fffd}:                             Tout"
+            )),
+            EtatRegle::Presente
+        );
+    }
+
+    #[test]
+    fn une_ancienne_regle_liee_a_un_programme_est_a_refaire() {
+        assert_eq!(
+            etat_selon_netsh(&avec_programme(
+                SORTIE_ANGLAISE,
+                r"Program:                              C:\Program Files\myiro-libre\pont-fd9-x86.exe"
+            )),
+            EtatRegle::ARefaire
+        );
+        assert_eq!(
+            etat_selon_netsh(&avec_programme(
+                SORTIE_FRANCAISE,
+                "Program\u{fffd}:                             \
+                 %USERPROFILE%\\AppData\\Local\\myiro-libre\\pont-fd9-x86.exe"
+            )),
+            EtatRegle::ARefaire
+        );
+    }
+
+    #[test]
+    fn une_regle_d_un_autre_port_protocole_ou_etendue_est_a_refaire() {
+        for (sortie, tout) in [(SORTIE_ANGLAISE, "Any"), (SORTIE_FRANCAISE, "Tout")] {
+            let autre_port = sortie.replace("49152\r\n", "5000\r\n");
+            let plage = sortie.replace("49152\r\n", "49152-49153\r\n");
+            let adresse = sortie.replace("LocalSubnet", "192.0.2.40/255.255.255.255");
+            // Ouverte à toutes les adresses, au-delà du réseau local.
+            let partout = sortie.replace("LocalSubnet", tout);
+            let tcp = sortie.replace("UDP\r\n", "TCP\r\n");
+            for mauvaise in [autre_port, plage, adresse, partout, tcp] {
+                assert_eq!(
+                    etat_selon_netsh(&mauvaise),
+                    EtatRegle::ARefaire,
+                    "{mauvaise}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn deux_regles_du_meme_nom_dont_une_ancienne_sont_a_refaire() {
+        let ancienne = avec_programme(
+            SORTIE_ANGLAISE,
+            r"Program:                              C:\depot\target\debug\pont-fd9.exe",
+        );
+        let deux = format!(
+            "{}{}",
+            SORTIE_ANGLAISE.trim_end_matches("Ok.\r\n\r\n"),
+            ancienne
+        );
+        assert_eq!(etat_selon_netsh(&deux), EtatRegle::ARefaire);
+    }
+
+    #[test]
+    fn sans_regle_de_ce_nom_elle_est_absente() {
+        for sortie in [
+            "\r\nNo rules match the specified criteria.\r\n\r\n",
+            "\r\nAucune r\u{fffd}gle ne correspond aux crit\u{fffd}res sp\u{fffd}cifi\u{fffd}s.\r\n\r\n",
+            "",
+        ] {
+            assert_eq!(etat_selon_netsh(sortie), EtatRegle::Absente, "{sortie}");
+        }
+    }
+
+    /// L'installateur pose la règle, le désinstallateur la retire : même nom,
+    /// mêmes arguments que l'application.
+    #[test]
+    fn l_installateur_pose_et_le_desinstallateur_retire_la_meme_regle() {
         let crochets = include_str!("../../installateur/pare-feu.nsh");
-        assert!(crochets.contains(&format!("\"{NOM_REGLE}\"")), "{crochets}");
-        // Une mise à jour garde la règle.
+        let dans_nsis = |texte: String| texte.replace(NOM_REGLE, "${MYIRO_REGLE_FD9}");
+        assert!(
+            crochets.contains(&format!("!define MYIRO_REGLE_FD9 \"{NOM_REGLE}\"")),
+            "{crochets}"
+        );
+        // Lecture sans droits, puis pose en une seule demande de droits :
+        // retrait de toute règle de ce nom, ajout d'une seule.
+        assert!(
+            crochets.contains("!macro NSIS_HOOK_POSTINSTALL"),
+            "{crochets}"
+        );
+        assert!(
+            crochets.contains(&dans_nsis(format!(
+                "\"$SYSDIR\\netsh.exe\" {}",
+                RegleFd9::arguments_lecture()
+            ))),
+            "{crochets}"
+        );
+        assert!(
+            crochets.contains(&format!(
+                "ExecShellWait \"runas\" \"$SYSDIR\\cmd.exe\" '{}' SW_HIDE",
+                dans_nsis(RegleFd9::arguments_pose(Path::new(r"$SYSDIR\netsh.exe")))
+            )),
+            "{crochets}"
+        );
+        assert!(!crochets.contains("program="), "{crochets}");
+        // Le désinstallateur la retire ; une mise à jour la garde.
+        assert!(
+            crochets.contains("!macro NSIS_HOOK_POSTUNINSTALL"),
+            "{crochets}"
+        );
+        assert!(
+            crochets.contains(&dans_nsis(format!(
+                "'advfirewall firewall delete rule name=\"{NOM_REGLE}\"'"
+            ))),
+            "{crochets}"
+        );
         assert!(crochets.contains("${If} $UpdateMode <> 1"), "{crochets}");
         let config = include_str!("../../tauri.conf.json");
         assert!(config.contains("installateur/pare-feu.nsh"), "{config}");
