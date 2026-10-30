@@ -1,0 +1,9 @@
+[package]
+name = "rapport"
+version = "0.1.0"
+description = "Moteur de rapport : un document (cartouche d'architecte, sections, blocs) écrit en source Typst puis compilé en PDF, sans Windows ni Tauri (ticket #89, ADR 0008)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
