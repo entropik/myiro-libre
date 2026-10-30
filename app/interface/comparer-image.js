@@ -99,8 +99,8 @@ window.ComparerImage = (() => {
   async function analyser() {
     message = ""; // un ancien « annulée » ou une ancienne erreur ne reste pas au-dessus de chiffres justes
     const n = ++demande;
-    analyses = null;
-    ecarts = [];
+    [analyses, ecarts] = [null, []];
+    window.PastillesImage.oublier(); // le point cliqué de la pipette ne survit pas à l'analyse
     if (!resume || resume.profil.etat === "refuse" || !sources.length) {
       enCours = false;
       dessiner();
@@ -237,16 +237,19 @@ window.ComparerImage = (() => {
       d[4 * i + 3] = 255;
     }
     ctx.putImageData(imageCalque, 0, 0);
-    const p = profils.find((x) => x.rang === choisi);
-    const nom = p ? p.nom : "";
+    const nom = (profils.find((x) => x.rang === choisi) || {}).nom || "";
     const a = analyseDe(choisi);
     canvas.setAttribute("aria-label", t("image.canvas.aria").replace("{p}", () => nombre(a ? part(a, k, 255) : null, 1))
       .replace("{s}", () => nombre(seuil, 1)).replace("{profil}", () => nom));
     if (legende) legende.lastChild.textContent = t("image.legende").replace("{s}", () => nombre(seuil, 1)).replace("{profil}", () => nom);
   }
 
-  // Le nuage du profil de la surimpression suit dans la vue 3D et la coupe (nuage-image.js).
-  const nuage = () => window.NuageImage.changer(analyseDe(choisi), seuil, (profils.find((x) => x.rang === choisi) || {}).nom || "");
+  // Le nuage (nuage-image.js) et les pastilles sous l'image (pastilles-image.js) suivent la surimpression.
+  function nuage() {
+    const nom = (profils.find((x) => x.rang === choisi) || {}).nom || "";
+    window.NuageImage.changer(analyseDe(choisi), seuil, nom);
+    window.PastillesImage.changer(analyseDe(choisi), seuil, choisi, nom);
+  }
 
   function changerSeuil(valeur) {
     seuil = valeur;
@@ -268,8 +271,7 @@ window.ComparerImage = (() => {
     }
     // Seuls le calque et son avis changent : le choix garde le focus du clavier.
     s.addEventListener("change", () => choisirProfil(Number(s.value)));
-    const l = el("label", "label", t("image.surimpression.profil"));
-    l.htmlFor = s.id;
+    const l = Object.assign(el("label", "label", t("image.surimpression.profil")), { htmlFor: s.id });
     champ.append(l, s);
     return champ;
   }
@@ -289,9 +291,8 @@ window.ComparerImage = (() => {
     const champ = el("div", "field");
     const curseur = el("input", "curseur");
     Object.assign(curseur, { type: "range", min: 0.5, max: 10, step: 0.5, value: seuil, id: "image-seuil" });
-    const libelle = el("label", "label");
+    const libelle = Object.assign(el("label", "label"), { htmlFor: curseur.id });
     const ecrire = () => { libelle.textContent = t("image.seuil.valeur").replace("{s}", () => nombre(seuil, 1)); };
-    libelle.htmlFor = curseur.id;
     ecrire();
     curseur.addEventListener("input", () => { changerSeuil(Number(curseur.value)); ecrire(); });
     champ.append(libelle, curseur);
@@ -358,7 +359,7 @@ window.ComparerImage = (() => {
     canvas = el("canvas", "surimpression");
     Object.assign(canvas, { width: resume.largeur, height: resume.hauteur, tabIndex: 0 });
     canvas.setAttribute("role", "img");
-    bloc.append(legende, canvas);
+    bloc.append(legende, window.PastillesImage.cadre(canvas, () => sources), window.PastillesImage.section());
     return bloc;
   }
 

@@ -381,8 +381,25 @@ select.input option { background: var(--panneau); color: var(--encre); }
 .profils-compares li > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .profils-compares li > .why { flex-basis: 100%; margin-top: 0; }
 /* Image comparée à un profil : pixels posés par putImageData, à la largeur de la colonne. */
-.surimpression { display: block; width: 100%; height: auto; background: var(--carte); border: var(--rule) solid var(--filet); }
+.surimpression { display: block; width: 100%; height: auto; background: var(--carte); border: var(--rule) solid var(--filet); cursor: crosshair; }
 .surimpression:focus-visible { outline: var(--rule-strong) solid var(--accent); outline-offset: var(--rule-strong); }
 .legende-alerte { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+/* Pipette : le point cliqué sur l'image, carré à l'encre bordé du fond, lisible sur une photo claire
+   comme sombre ; placé par la page en fraction de l'image (--x, --y), le filet du canvas compris. */
+.pipette { position: relative; }
+.pipette__repere { position: absolute; left: calc(var(--rule) + (100% - 2 * var(--rule)) * var(--x, 0)); top: calc(var(--rule) + (100% - 2 * var(--rule)) * var(--y, 0)); width: var(--space-4); height: var(--space-4); transform: translate(-50%, -50%); border: var(--rule-strong) solid var(--encre); outline: var(--rule-strong) solid var(--fond); pointer-events: none; }
+/* Pastilles des couleurs hors gamut, sous l'image : couleur de l'image à gauche, couleur imprimée à
+   droite, à bords francs dans un seul filet. La couleur (--c) vient de la page, contrôlée ; sans elle,
+   la carte. */
+.pastilles-section { margin-top: var(--space-4); }
+.pastilles-section > * + * { margin-top: var(--space-2); }
+.pastilles { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--space-16) * 2), 1fr)); gap: var(--space-3); }
+.paire { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.paire__couleurs { display: flex; width: fit-content; border: var(--rule) solid var(--filet); }
+.pastille-couleur { display: block; width: var(--space-12); height: var(--space-12); background: var(--c, var(--carte)); }
+.paire--pipette .pastille-couleur { width: var(--space-16); height: var(--space-16); }
+.paire__noms { display: flex; gap: var(--space-4); }
+.paire__noms > span { display: flex; flex-direction: column; }
+.paire__texte { color: var(--attenue); }
 /* Curseur d'une valeur dans un intervalle (clarté d'une coupe). */
 .curseur { width: 100%; max-width: var(--measure); accent-color: var(--accent); }
