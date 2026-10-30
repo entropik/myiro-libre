@@ -576,6 +576,7 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
         Probleme::ReposIncertain { detail: d() },
         Probleme::DeclenchementRefuse { detail: d() },
         Probleme::MesureDelaiAutomatique { detail: d() },
+        Probleme::ComposantQrIntrouvable { detail: d() },
     ];
     // Garde : ajouter une variante à `Probleme` casse la compilation ici ;
     // on lui donne alors un numéro, et l'assertion exige qu'elle soit listée.
@@ -600,13 +601,14 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
             Probleme::ReposIncertain { .. } => 16,
             Probleme::DeclenchementRefuse { .. } => 17,
             Probleme::MesureDelaiAutomatique { .. } => 18,
+            Probleme::ComposantQrIntrouvable { .. } => 19,
         }
     }
     let mut numeros: Vec<usize> = tous.iter().map(numero).collect();
     numeros.sort();
     assert_eq!(
         numeros,
-        (0..19).collect::<Vec<_>>(),
+        (0..20).collect::<Vec<_>>(),
         "chaque problème est listé une fois"
     );
     for probleme in tous {
@@ -617,6 +619,31 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
             }
         }
     }
+}
+
+/// Ticket #87 : sans `zxing.dll` à côté du pont FD-9, la feuille est refusée
+/// avant d'être lancée, et l'écran le dit en clair, avec une action.
+#[test]
+fn le_composant_de_lecture_du_qr_introuvable_se_dit_en_clair() {
+    let probleme = Probleme::ComposantQrIntrouvable {
+        detail: "C:/myiro-libre/zxing.dll".into(),
+    };
+    assert_eq!(probleme.code(), "composant_qr_introuvable");
+    assert_eq!(probleme.detail(), Some("C:/myiro-libre/zxing.dll"));
+    assert!(!probleme.guide_cablage());
+    let cause = texte(Langue::Francais, "probleme.composant_qr_introuvable.cause");
+    assert!(
+        cause.starts_with("Composant de lecture du QR introuvable"),
+        "{cause}"
+    );
+    assert!(
+        texte(Langue::Francais, "probleme.composant_qr_introuvable.action").contains("Réinstallez")
+    );
+    let cause = texte(Langue::Anglais, "probleme.composant_qr_introuvable.cause");
+    assert!(
+        cause.contains("QR code reading component not found"),
+        "{cause}"
+    );
 }
 
 #[test]

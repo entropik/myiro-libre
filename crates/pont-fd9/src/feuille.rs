@@ -13,6 +13,7 @@
 use crate::arret::EchecArret;
 use crate::attente::{Attente, Fin};
 use crate::calage::{caler, DECALAGE_ADMIS};
+use crate::composants::composant_qr;
 use crate::connexion::inattendue;
 use crate::{SdkFd9, Session};
 use fd9_sys::{
@@ -80,8 +81,11 @@ impl<S: SdkFd9> Session<S> {
         palier: Palier,
         mire: &DefinitionFeuille,
     ) -> Result<MireConvertie, ErreurPont> {
+        // Le calage d'une feuille précédente ne passe jamais pour celui-ci.
+        self.calage = None;
         self.autoriser(palier, Some(Palier::Connexion))?;
         self.exiger_connexion()?;
+        self.exiger_composant_qr()?;
         let coordonnees = CoordonneesMire::depuis_definition(mire).map_err(|e| {
             self.journal
                 .push(format!("définition de feuille refusée : {e:?}"));
@@ -101,6 +105,21 @@ impl<S: SdkFd9> Session<S> {
         Ok(MireConvertie {
             coordonnees,
             couleurs,
+        })
+    }
+
+    /// Le composant de lecture du QR à côté du pont, sans quoi la DLL
+    /// arrêterait le pont à la lecture du QR, feuille engagée (ticket #87).
+    fn exiger_composant_qr(&mut self) -> Result<(), ErreurPont> {
+        let Some(dossier) = self.dossier_du_pont.clone() else {
+            return Ok(());
+        };
+        composant_qr(&dossier).map(drop).map_err(|chemin| {
+            let chemin = chemin.display().to_string();
+            self.journal.push(format!(
+                "composant de lecture du QR introuvable : {chemin} (la DLL le charge depuis le dossier du pont) ; feuille non lancée"
+            ));
+            ErreurPont::ComposantQrIntrouvable { chemin }
         })
     }
 
@@ -129,7 +148,7 @@ impl<S: SdkFd9> Session<S> {
         let code = self.sdk.capturer();
         self.verifier("FD9_StartCapture", code)?;
         self.attendre_ou_conclure(EtatSdk::CaptureFinie, Attente::Etape)?;
-        let qr = self.lire_capture()?;
+        let (qr, taille_capture) = self.lire_capture()?;
         if let Info::Confirmee(texte) = &qr {
             if !texte.starts_with(&mire.nom) {
                 let raison = ErreurPont::AutreMire {
@@ -188,6 +207,9 @@ impl<S: SdkFd9> Session<S> {
         if calage.ecart_max > ECART_ADMIS {
             return Err(self.abandonner(non_reconnue(calage.ecart_max)));
         }
+        // État 7, avant l'arrêt ou la mesure : l'image de la feuille pour
+        // l'application, avec les points visés.
+        self.retenir_calage(&calage, &points, taille_capture);
         Ok(LectureFeuille {
             qr,
             zones: lue.zones,
@@ -231,8 +253,9 @@ impl<S: SdkFd9> Session<S> {
     }
 
     /// QR et image, en deux appels : la taille, puis l'image dans un tampon
-    /// de cette taille. L'image n'est gardée que le temps de l'appel.
-    fn lire_capture(&mut self) -> Result<Info<String>, ErreurPont> {
+    /// de cette taille. L'image n'est gardée que le temps de l'appel ; sa
+    /// taille est rendue avec le QR.
+    fn lire_capture(&mut self) -> Result<(Info<String>, u32), ErreurPont> {
         let mut qr = DonneesQr::vide();
         let (mut resultat, mut taille) = (0u32, 0u32);
         let code = self
@@ -256,11 +279,12 @@ impl<S: SdkFd9> Session<S> {
             qr.appareil(),
             if lu { "" } else { ", QR non lu" }
         ));
-        Ok(if lu {
+        let qr = if lu {
             Info::Confirmee(qr.texte())
         } else {
             Info::Inconnue
-        })
+        };
+        Ok((qr, taille))
     }
 
     /// Un code non nul arrête la feuille et rend l'erreur du SDK.

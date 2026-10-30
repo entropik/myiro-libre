@@ -107,6 +107,15 @@ pub struct Fd9Simule {
     /// Après `FD9_Disconnect`, la DLL rend encore cet état avec le code 0, au
     /// lieu de 1102 (hors connexion).
     pub etat_apres_deconnexion: Option<u32>,
+    /// Image de la feuille rendue par `FD9_GetChartImage` (largeur, hauteur
+    /// à 300 ppp) ; `None` : aucune (refus 1999).
+    pub image_feuille: Option<(u32, u32)>,
+    /// Gris de chaque pixel (x, y) de cette image ; sans motif,
+    /// `(x + y) % 256`. Toujours synthétique.
+    pub motif_image: Option<fn(u32, u32) -> u8>,
+    /// Dimensions écrites par `FD9_GetChartImage` avec le code 0, sans rien
+    /// écrire d'autre : une DLL qui dirait plus que le tampon.
+    pub dimensions_forcees: Option<(u32, u32)>,
 }
 
 /// Motif répété 32 fois : empreinte SHA-256 fictive de la DLL simulée.
@@ -173,6 +182,7 @@ impl Fd9Simule {
             qr_appareil: *b"FD-9",
             qr_texte: "RGB-2520 - 1P MY9*1+".into(),
             taille_image: 1_000,
+            image_feuille: Some((40, 25)),
             fiabilite: 0,
             spectre_longueur: 36,
             reactions: [
@@ -584,6 +594,36 @@ impl SdkFd9 for Fd9Simule {
                 }
             }
         }
+        0
+    }
+
+    fn image_feuille(&mut self, largeur: &mut u32, hauteur: &mut u32, gris: &mut [u8]) -> i32 {
+        let detail = format!("{} × {}, 8 bits", *largeur, *hauteur);
+        // Comme la DLL : refusée aux états 1 à 6 (fiche FD9_GetChartImage).
+        let code = self.appel_admis("FD9_GetChartImage", detail, |e| !(1..=6).contains(&e));
+        if code != 0 {
+            return code;
+        }
+        if let Some((l, h)) = self.dimensions_forcees {
+            *largeur = l;
+            *hauteur = h;
+            return 0;
+        }
+        let Some((l, h)) = self.image_feuille else {
+            return 1999;
+        };
+        // Tampon trop court pour l'image : 1005, rien d'écrit.
+        if u64::from(*largeur) * u64::from(*hauteur) < u64::from(l) * u64::from(h) {
+            return 1005;
+        }
+        let motif = self.motif_image.unwrap_or(|x, y| ((x + y) % 256) as u8);
+        for y in 0..h {
+            for x in 0..l {
+                gris[(y * l + x) as usize] = motif(x, y);
+            }
+        }
+        *largeur = l;
+        *hauteur = h;
         0
     }
 

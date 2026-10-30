@@ -87,6 +87,7 @@ fn une_rgb2520_est_reconnue_sans_mesurer() {
             "FD9_StartPatchRecognition mode 4, couleurs RVB 2520, rangées 0, colonnes 0",
             "FD9_GetPatchRecognitionResult2",
             "FD9_GetMeasurePoint 2520",
+            "FD9_GetChartImage 3638 × 1, 8 bits",
             ARRET[0],
             ARRET[1],
         ]

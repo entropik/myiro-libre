@@ -163,6 +163,7 @@ fn la_fin_lit_les_plages_puis_sort_sans_arreter() {
             "FD9_StartPatchRecognition mode 4, couleurs RVB 6, rangées 0, colonnes 0",
             "FD9_GetPatchRecognitionResult2",
             "FD9_GetMeasurePoint 6",
+            "FD9_GetChartImage 3638 × 1, 8 bits",
             "FD9_StartMeasurement2 1 1",
             "FD9_GetData 0",
             "FD9_GetData 1",

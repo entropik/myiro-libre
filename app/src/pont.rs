@@ -688,6 +688,7 @@ impl Pont for PontSimule {
                 (Some(serie), Some(date)) => Reponse::Mesure {
                     mesure: mesure_simulee(serie, Some(date.clone())),
                     remise_au_repos: self.remise_au_repos.clone(),
+                    calage: None,
                 },
                 _ => Reponse::Erreur {
                     erreur: ErreurPont::EtalonnageRequis {},
@@ -736,6 +737,7 @@ impl Pont for PontSimule {
             (Some(serie), Some(date)) => Reponse::Mesure {
                 mesure: mesure_simulee(serie, Some(date.clone())),
                 remise_au_repos: self.remise_au_repos.clone(),
+                calage: None,
             },
             _ => Reponse::Erreur {
                 erreur: ErreurPont::EtalonnageRequis {},

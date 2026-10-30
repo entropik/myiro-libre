@@ -309,12 +309,16 @@ fn un_doublon_de_position_s_ecrit_en_clair() {
 #[test]
 fn la_prenumerisation_et_les_erreurs_de_feuille_traversent_le_protocole() {
     for reponse in [
-        Reponse::Prenumerisee { lecture: lecture() },
+        Reponse::Prenumerisee {
+            lecture: lecture(),
+            calage: None,
+        },
         Reponse::Prenumerisee {
             lecture: LectureFeuille {
                 qr: Info::Inconnue,
                 ..lecture()
             },
+            calage: None,
         },
         Reponse::Erreur {
             erreur: ErreurPont::MireNonReconnue {

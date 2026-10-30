@@ -1,0 +1,13 @@
+zxing.dll et zxing.presentation.dll : ZXing.Net 0.14.0
+(« port of the java based barcode scanning library for .net »).
+
+Copyright (C) 2012-2014 ZXing.Net Development ; d'après ZXing,
+Copyright (C) ZXing authors.
+
+Licence : Apache License, Version 2.0 (texte complet dans LICENSE-2.0.txt,
+à côté de ce fichier, ou https://www.apache.org/licenses/LICENSE-2.0).
+Sources : https://github.com/micjahn/ZXing.Net
+
+Ces fichiers ne sont pas modifiés. myiro-libre les pose à côté de son pont
+FD-9 (pont-fd9-x86.exe) : la bibliothèque du FD-9 les charge depuis ce
+dossier pour lire le code QR des mires.

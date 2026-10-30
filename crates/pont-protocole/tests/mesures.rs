@@ -158,6 +158,7 @@ fn une_mesure_traverse_le_protocole_sans_perte() {
     let reponse = Reponse::Mesure {
         mesure: mesure_ponctuelle(),
         remise_au_repos: Info::Confirmee(RemiseAuRepos::ArretRefuse { code: -9987 }),
+        calage: None,
     };
     let texte = ecrire_reponse(&reponse);
     assert!(texte.starts_with(r#"{"rep":"mesure","mesure":{"format":"myiro-libre/mesure/1","#));
@@ -173,6 +174,7 @@ fn une_reponse_mesure_sans_remise_au_repos_se_relit_avec_un_repos_inconnu() {
     let texte = ecrire_reponse(&Reponse::Mesure {
         mesure: mesure_ponctuelle(),
         remise_au_repos: Info::Inconnue,
+        calage: None,
     });
     let ancienne = texte.replace(r#","remise_au_repos":{"statut":"inconnue"}"#, "");
     assert_ne!(ancienne, texte);
@@ -190,6 +192,7 @@ fn une_remise_au_repos_nue_ou_avec_un_champ_inconnu_est_refusee() {
     let texte = ecrire_reponse(&Reponse::Mesure {
         mesure: mesure_ponctuelle(),
         remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
+        calage: None,
     });
     let qualifie = r#""remise_au_repos":{"statut":"confirmee","valeur":{"etat":"au_repos"}}"#;
     assert!(texte.contains(qualifie), "{texte}");
@@ -208,6 +211,7 @@ fn une_reponse_du_protocole_avec_un_champ_inconnu_est_refusee() {
     let texte = ecrire_reponse(&Reponse::Mesure {
         mesure: mesure_ponctuelle(),
         remise_au_repos: Info::Inconnue,
+        calage: None,
     });
     let abime = texte.replacen(r#"{"rep":"mesure","#, r#"{"rep":"mesure","note":"x","#, 1);
     assert_ne!(abime, texte);
@@ -490,6 +494,7 @@ fn le_format_initial_se_lit_aussi_comme_reponse_du_protocole() {
     let Ok(Reponse::Mesure {
         mesure,
         remise_au_repos,
+        calage: None,
     }) = lire_reponse(&ligne)
     else {
         panic!("{:?}", lire_reponse(&ligne))

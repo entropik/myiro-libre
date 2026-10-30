@@ -262,6 +262,16 @@ impl<S: SdkFd9> SdkFd9 for SdkTrace<S> {
         )
     }
 
+    fn image_feuille(&mut self, largeur: &mut u32, hauteur: &mut u32, gris: &mut [u8]) -> i32 {
+        let arguments = format!("{} × {}, 8 bits, sans points", *largeur, *hauteur);
+        self.appel(
+            "FD9_GetChartImage",
+            &arguments,
+            |s| s.image_feuille(largeur, hauteur, gris),
+            code,
+        )
+    }
+
     fn mesurer(&mut self) -> i32 {
         self.appel("FD9_StartMeasurement2", "1, 1", |s| s.mesurer(), code)
     }

@@ -146,6 +146,89 @@ class MireFd9Embarquee(unittest.TestCase):
         self.assertIn(pi.MIRE_FD9_FICHIER, rgb2520)
 
 
+def pe_factice(machine=0x014C):
+    """En-tête PE minimal (aucun code) : assez pour lire l'architecture."""
+    octets = bytearray(0x100)
+    octets[:2] = b"MZ"
+    octets[0x3C:0x40] = (0x40).to_bytes(4, "little")
+    octets[0x40:0x44] = b"PE\0\0"
+    octets[0x44:0x46] = machine.to_bytes(2, "little")
+    return bytes(octets)
+
+
+class ZxingEmbarque(unittest.TestCase):
+    """zxing.dll (ZXing.Net, Apache-2.0) : la DLL du FD-9 la charge depuis le
+    dossier du pont (ticket #87). Dossiers factices, rien n'est compilé."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.racine = Path(self.tmp.name)
+
+    def poser(self, dossier, *noms, octets=None):
+        dossier.mkdir(parents=True, exist_ok=True)
+        for nom in noms:
+            (dossier / nom).write_bytes(octets if octets is not None else pe_factice())
+        return dossier
+
+    def test_sans_zxing_rien_n_est_embarque_et_une_ligne_le_dit(self):
+        ressources = pi.zxing_embarque(self.racine, dossiers=[self.racine / "FD-S2w" / "Module"])
+        self.assertEqual({}, ressources)
+        annonce = pi.annonce_zxing(None)
+        self.assertNotIn("\n", annonce)
+        self.assertIn("zxing.dll", annonce)
+        self.assertIn("QR", annonce)
+
+    def test_zxing_est_pose_a_cote_du_pont_avec_sa_licence(self):
+        module = self.poser(self.racine / "FD-S2w" / "Module", "zxing.dll")
+        ressources = pi.zxing_embarque(self.racine, dossiers=[module])
+        # Copié dans app/binaries/ (ignoré par git), installé à côté des ponts.
+        self.assertEqual("zxing.dll", ressources["binaries/zxing/zxing.dll"])
+        self.assertEqual(pe_factice(), (self.racine / "app" / "binaries" / "zxing" / "zxing.dll").read_bytes())
+        self.assertEqual("licences/zxing/LICENSE-2.0.txt",
+                         ressources["../outils/licences/zxing/LICENSE-2.0.txt"])
+        self.assertEqual("licences/zxing/NOTICE.txt", ressources["../outils/licences/zxing/NOTICE.txt"])
+        annonce = pi.annonce_zxing(module / "zxing.dll")
+        self.assertNotIn("\n", annonce)
+        self.assertIn("Apache-2.0", annonce)
+
+    def test_zxing_presentation_suit_zxing_quand_il_est_a_cote(self):
+        module = self.poser(self.racine / "Module", "zxing.dll", "zxing.presentation.dll")
+        ressources = pi.zxing_embarque(self.racine, dossiers=[module])
+        self.assertEqual("zxing.presentation.dll", ressources["binaries/zxing/zxing.presentation.dll"])
+
+    def test_le_premier_dossier_qui_a_zxing_l_emporte(self):
+        vide = self.racine / "FD-S2w" / "Module"
+        sdk = self.poser(self.racine / "SDK" / "FD-S2w", "zxing.dll")
+        self.assertIn("binaries/zxing/zxing.dll", pi.zxing_embarque(self.racine, dossiers=[vide, sdk]))
+        self.assertEqual(sdk / "zxing.dll", pi.source_zxing([vide, sdk]))
+
+    def test_les_dossiers_par_defaut_sont_fd_s2w_puis_sdk(self):
+        self.poser(self.racine / "SDK" / "B", "zxing.dll")
+        self.poser(self.racine / "SDK" / "A", "autre.txt")
+        dossiers = pi.dossiers_zxing(self.racine)
+        self.assertEqual(Path(pi.MODULE_FD_S2W), dossiers[0])
+        self.assertEqual([self.racine / "SDK", self.racine / "SDK" / "A", self.racine / "SDK" / "B"], dossiers[1:])
+
+    def test_un_zxing_qui_n_est_pas_un_executable_arrete(self):
+        module = self.poser(self.racine / "Module", "zxing.dll", octets=b"pas un PE")
+        with self.assertRaises(SystemExit) as arret:
+            pi.zxing_embarque(self.racine, dossiers=[module])
+        self.assertIn("zxing.dll", str(arret.exception.code))
+
+    def test_la_licence_versionnee_est_l_apache_2_0(self):
+        licence = (pi.RACINE / "outils" / "licences" / "zxing" / "LICENSE-2.0.txt").read_text(encoding="utf-8")
+        self.assertIn("Apache License", licence)
+        self.assertIn("Version 2.0, January 2004", licence)
+        # Copie exacte du texte de la fondation Apache (fins de ligne mises à
+        # part : git peut les changer à l'extraction sous Windows).
+        octets = (pi.RACINE / "outils" / "licences" / "zxing" / "LICENSE-2.0.txt").read_bytes()
+        self.assertEqual(pi.EMPREINTE_APACHE_2_0, pi.hashlib.sha256(octets.replace(b"\r\n", b"\n")).hexdigest())
+        notice = (pi.RACINE / "outils" / "licences" / "zxing" / "NOTICE.txt").read_text(encoding="utf-8")
+        self.assertIn("ZXing.Net", notice)
+        self.assertIn("0.14.0", notice)
+
+
 class AideColprof(unittest.TestCase):
     def test_un_colprof_qui_ne_repond_pas_arrete_clairement(self):
         attente = subprocess.TimeoutExpired(cmd="colprof", timeout=30)

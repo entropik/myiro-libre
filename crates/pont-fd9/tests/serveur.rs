@@ -350,11 +350,16 @@ fn mesurer_feuille_rend_la_mesure_de_toutes_les_plages() {
     let Reponse::Mesure {
         mesure,
         remise_au_repos,
+        calage,
     } = &reponses[2]
     else {
         panic!("{}", lignes[2])
     };
     assert_eq!(mesure.plages().len(), 6);
+    // Points visés et image de la feuille, à côté de la mesure.
+    let calage = calage.as_ref().unwrap();
+    assert_eq!(calage.points.len(), 6);
+    assert!(calage.image.is_some());
     assert!(mesure.provenance().feuille.is_some());
     // La feuille est close avant la réponse.
     assert_eq!(*remise_au_repos, Info::Confirmee(RemiseAuRepos::AuRepos {}));
@@ -374,18 +379,23 @@ fn prenumeriser_rend_la_lecture_de_la_feuille() {
             r#"{"cmd":"fermer"}"#,
         ],
     );
+    let Reponse::Prenumerisee { lecture, calage } = &reponses(&lignes)[2] else {
+        panic!("{}", lignes[2])
+    };
     assert_eq!(
-        reponses(&lignes)[2],
-        Reponse::Prenumerisee {
-            lecture: LectureFeuille {
-                qr: Info::Confirmee("RGB-2520 - 1P MY9*1+".into()),
-                zones: 1,
-                plages: 2_520,
-                fiabilite: 0,
-                ecart_max: 0,
-            }
+        *lecture,
+        LectureFeuille {
+            qr: Info::Confirmee("RGB-2520 - 1P MY9*1+".into()),
+            zones: 1,
+            plages: 2_520,
+            fiabilite: 0,
+            ecart_max: 0,
         }
     );
+    let calage = calage.as_ref().unwrap();
+    assert_eq!(calage.points.len(), 2_520);
+    assert_eq!(calage.image.as_ref().unwrap().largeur(), 40);
+    assert!(lignes[2].contains(r#""calage":{"decalage":[0,0],"ecart_max":0,"points":[{"zone":0"#));
     assert_eq!(reponses(&lignes)[3], Reponse::Ferme {});
     assert!(!session
         .sdk()

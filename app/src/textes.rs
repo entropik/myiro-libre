@@ -1765,6 +1765,14 @@ const FRANCAIS: Catalogue = &[
         "Réinstallez myiro-libre, puis réessayez.",
     ),
     (
+        "probleme.composant_qr_introuvable.cause",
+        "Composant de lecture du QR introuvable\u{202f}: sans lui, le FD-9 ne peut pas lire le code de la mire. La mesure de la feuille n’a pas été lancée.",
+    ),
+    (
+        "probleme.composant_qr_introuvable.action",
+        "Réinstallez myiro-libre, puis relancez la mesure de la feuille.",
+    ),
+    (
         "probleme.pont_en_panne.cause",
         "Le dialogue avec l’instrument s’est interrompu.",
     ),
@@ -4031,6 +4039,14 @@ const ANGLAIS: Catalogue = &[
     (
         "probleme.pont_introuvable.action",
         "Reinstall myiro-libre, then try again.",
+    ),
+    (
+        "probleme.composant_qr_introuvable.cause",
+        "QR code reading component not found: without it, the FD-9 cannot read the chart’s code. The sheet measurement was not started.",
+    ),
+    (
+        "probleme.composant_qr_introuvable.action",
+        "Reinstall myiro-libre, then start the sheet measurement again.",
     ),
     (
         "probleme.pont_en_panne.cause",

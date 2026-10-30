@@ -342,6 +342,7 @@ fn reponse_mesure(
     Ok(Reponse::Mesure {
         mesure,
         remise_au_repos: Info::Confirmee(remise_au_repos),
+        calage: None,
     })
 }
 

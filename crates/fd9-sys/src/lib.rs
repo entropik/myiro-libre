@@ -60,7 +60,20 @@ pub const EXPORTS_AUTORISES: &[&str] = &[
     // Fiche docs/abi/FD9_GetPremeasurementError.md ; en `extern "C"`, seule
     // exception aux appels `extern "system"`.
     "FD9_GetPremeasurementError",
+    // Fiche docs/abi/FD9_GetChartImage.md ; lecture seule de l'image de la
+    // feuille prise, refusée aux états 1 à 6.
+    "FD9_GetChartImage",
 ];
+
+/// `FD9_GetChartImage` : largeur du tampon passé à la DLL, en pixels (celle
+/// de FD-S2w, `s2w-x86` 0x446312 ; aussi la largeur maximale d'une image
+/// modèle).
+pub const IMAGE_FEUILLE_LARGEUR: u32 = 3_638;
+/// Hauteur la plus grande que FD-S2w prévoit (`s2w-x86` 0x44631c).
+pub const IMAGE_FEUILLE_HAUTEUR_MAX: u32 = 19_000;
+/// Résolution supposée de l'image de la feuille : celle des points de
+/// mesure (pixels à 300 ppp convertis en 1/100 mm).
+pub const IMAGE_FEUILLE_PPP: u32 = 300;
 
 /// Codes publics renvoyés par les exports (fiche `docs/abi/FD9SDK.md`).
 /// `FD9_GetLastError`, lui, rend le code interne d'origine.

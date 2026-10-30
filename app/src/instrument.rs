@@ -307,6 +307,11 @@ pub enum Probleme {
     /// Mesure automatique : l'instrument n'a pas signalé la fin de la mesure
     /// dans le délai du pont. Personne n'avait de bouton à presser.
     MesureDelaiAutomatique { detail: String },
+    /// FD-9 : le composant de lecture du QR (`zxing.dll`) manque à côté du
+    /// pont ; la feuille est refusée avant d'être lancée (erreur
+    /// `composant_qr_introuvable` du pont, ticket #87). `detail` : le chemin
+    /// où il est attendu.
+    ComposantQrIntrouvable { detail: String },
 }
 
 impl Probleme {
@@ -320,6 +325,7 @@ impl Probleme {
                 Ecran::Etalonnage
             }
             Probleme::PontIntrouvable { .. }
+            | Probleme::ComposantQrIntrouvable { .. }
             | Probleme::PontEnPanne { .. }
             | Probleme::PontBloque { .. }
             | Probleme::AucunInstrument
@@ -377,6 +383,7 @@ impl Probleme {
             Probleme::MesureDelaiAutomatique { .. } => "mesure_delai_automatique",
             Probleme::EtalonnageARefaire { .. } => "etalonnage_a_refaire",
             Probleme::DeclenchementRefuse { .. } => "declenchement_refuse",
+            Probleme::ComposantQrIntrouvable { .. } => "composant_qr_introuvable",
         }
     }
 
@@ -387,6 +394,7 @@ impl Probleme {
             Probleme::LogicielAbsent { examines: d }
             | Probleme::LogicielInutilisable { detail: d }
             | Probleme::PontIntrouvable { detail: d }
+            | Probleme::ComposantQrIntrouvable { detail: d }
             | Probleme::PontEnPanne { detail: d }
             | Probleme::PontBloque { detail: d }
             | Probleme::AucunFd9 { detail: d }
@@ -687,6 +695,7 @@ impl<P: Pont> Instrument<P> {
             Ok(Reponse::Mesure {
                 mesure,
                 remise_au_repos,
+                ..
             }) if mesure.provenance().geometrie == Geometrie::Ponctuelle {} => {
                 let acquise = MesureAcquise {
                     mesure,

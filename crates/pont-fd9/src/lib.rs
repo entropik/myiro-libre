@@ -9,9 +9,11 @@
 //! La session n'avance que sur un code de retour lu ou un événement reçu du
 //! rappel ; elle n'invente aucun état.
 
+mod apercu;
 mod arret;
 mod attente;
 pub mod calage;
+pub mod composants;
 mod connexion;
 pub mod dll;
 pub mod evenements;
@@ -22,6 +24,7 @@ pub mod plantage;
 pub mod serveur;
 pub mod trace;
 
+pub use apercu::HAUTEUR_APERCU;
 pub use arret::ATTENTE_APRES_ARRET_REFUSE;
 pub use attente::{Annulation, Delais, ATTENTE_APRES_DECONNEXION};
 pub use feuille::{ECART_ADMIS, TAILLE_IMAGE_MAX};
@@ -32,8 +35,9 @@ use fd9_sys::{
     Appareil, CleOption, CoordonneesMire, CouleursMire, DonneesQr, EtatSdk, ModeReconnaissance,
     NomApplication, PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES,
 };
-use pont_protocole::{ErreurPont, Identite, Palier, RemiseAuRepos};
+use pont_protocole::{CalageFeuille, ErreurPont, Identite, Palier, RemiseAuRepos};
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// Dernier palier que ce pont sait franchir, quel que soit le plafond demandé.
@@ -112,6 +116,11 @@ pub trait SdkFd9 {
     fn erreur_premesure(&mut self, erreur_systeme: &mut i32) -> i32;
     /// `FD9_GetMeasurePoint`, un point de 20 octets par plage reconnue.
     fn points_mesure(&mut self, points: &mut [PointMesure]) -> i32;
+    /// `FD9_GetChartImage`, sans points : l'image de la feuille, gris sur
+    /// 8 bits. À l'entrée, `largeur × hauteur` est la place offerte (au plus
+    /// `gris.len()` octets) ; la DLL y écrit l'image et rend sa taille dans
+    /// `largeur` et `hauteur`. Lecture seule, refusée aux états 1 à 6.
+    fn image_feuille(&mut self, largeur: &mut u32, hauteur: &mut u32, gris: &mut [u8]) -> i32;
     /// `FD9_StartMeasurement2(1, 1)`, comme MYIROtools : le type n'admet pas
     /// d'autre mode.
     fn mesurer(&mut self) -> i32;
@@ -207,6 +216,12 @@ pub struct Session<S: SdkFd9> {
     /// Dernier état connu du SDK : dernier événement traité (hors avis de
     /// plages), ou état lu au début d'une feuille.
     dernier_etat: Option<EtatSdk>,
+    /// Dossier du pont, où la DLL cherche le composant de lecture du QR
+    /// (`composants`) ; `None` : rien n'est vérifié (instrument simulé).
+    dossier_du_pont: Option<PathBuf>,
+    /// Points visés et image de la dernière feuille reconnue, pas encore
+    /// rendus (`prendre_calage`).
+    calage: Option<CalageFeuille>,
 }
 
 const APPAREIL_VIDE: Appareil = Appareil {
@@ -235,7 +250,17 @@ impl<S: SdkFd9> Session<S> {
             annulation: Annulation::default(),
             recus: VecDeque::new(),
             dernier_etat: None,
+            dossier_du_pont: None,
+            calage: None,
         }
+    }
+
+    /// Vérifie, avant chaque feuille, que le composant de lecture du QR est
+    /// dans `dossier` (celui de l'exécutable du pont) : sans lui, la DLL
+    /// arrêterait le pont à la lecture du QR (ticket #87).
+    pub fn avec_dossier_du_pont(mut self, dossier: PathBuf) -> Self {
+        self.dossier_du_pont = Some(dossier);
+        self
     }
 
     /// Délais d'attente de la feuille et de chaque étape.

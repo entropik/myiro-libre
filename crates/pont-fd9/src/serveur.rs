@@ -300,9 +300,14 @@ fn traiter<S: SdkFd9>(
         Requete::Etalonner {} => Err(session.hors_paliers(Palier::Etalonnage)),
         Requete::MesurerPonctuelle { .. } => Err(session.hors_paliers(Palier::MesurePonctuelle)),
         Requete::MesurerBande { .. } => Err(session.hors_paliers(Palier::Bande)),
-        Requete::Prenumeriser { mire } => session
-            .prenumeriser(&mire)
-            .map(|lecture| Reponse::Prenumerisee { lecture }),
+        Requete::Prenumeriser { mire } => {
+            session
+                .prenumeriser(&mire)
+                .map(|lecture| Reponse::Prenumerisee {
+                    lecture,
+                    calage: session.prendre_calage(),
+                })
+        }
         // La feuille est close (ExitMeasurement) avant la réponse : rien ne
         // reste armé dans l'instrument.
         Requete::MesurerFeuille { mire } => {
@@ -311,6 +316,7 @@ fn traiter<S: SdkFd9>(
                 .map(|mesure| Reponse::Mesure {
                     mesure,
                     remise_au_repos: Info::Confirmee(RemiseAuRepos::AuRepos {}),
+                    calage: session.prendre_calage(),
                 })
         }
         // Déconnexion puis désinscription du rappel, sous la garde ; une

@@ -7,6 +7,10 @@
 //! Paliers déclarés par ce pont : version (par défaut), detection, connexion,
 //! prenumerisation, feuille. Tout autre palier est refusé au lancement.
 //!
+//! Avant chaque feuille, `zxing.dll` doit être à côté de cet exécutable : la
+//! DLL le charge depuis ce dossier pour lire le QR (ticket #87). Sinon, la
+//! feuille est refusée (`composant_qr_introuvable`), sans appel à la DLL.
+//!
 //! Diagnostic des essais : un plantage est toujours rapporté sur la sortie
 //! d'erreur (code, module et décalage de l'adresse fautive, fil), puis le
 //! pont s'arrête avec le code de l'exception (`pont_fd9::plantage`).
@@ -133,8 +137,19 @@ fn main() -> ExitCode {
 
 fn servir_avec<S: SdkFd9>(sdk: S, arguments: &Arguments) -> ExitCode {
     let trace = arguments.trace;
+    // La DLL charge le composant de lecture du QR (`zxing.dll`) depuis le
+    // dossier de l'exécutable (ticket #87) : il est vérifié avant chaque
+    // feuille. Dossier illisible : le dossier courant, vérifié de même.
+    let dossier_du_pont = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(PathBuf::from))
+        .unwrap_or_else(|| {
+            noter("dossier de l'exécutable illisible : composant de lecture du QR cherché dans le dossier courant");
+            PathBuf::from(".")
+        });
     let mut session = Session::new(sdk, arguments.plafond)
         .avec_delais(arguments.delais)
+        .avec_dossier_du_pont(dossier_du_pont)
         // Au fil de l'eau : un pont arrêté de force a déjà tout écrit.
         .avec_echo_journal(move |ligne| {
             if trace {
