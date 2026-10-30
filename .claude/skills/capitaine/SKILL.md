@@ -49,6 +49,7 @@ Ces règles priment sur tout le reste :
 
 5. **Faire tester par l'utilisateur**, si le ticket a des critères humains (écran, instrument réel), ou si l'ouvrier, *bloqué* au diagnostic, demande une observation sur l'appareil (la réponse lui revient par `SendMessage`) :
    - **Écran** : lance l'application depuis le worktree. Dis à l'utilisateur quoi regarder, critère par critère, et attends sa réponse. Une remarque de sa part repart à l'ouvrier (retour à l'étape 4).
+     Si la branche ajoute ou change une organisation de la bibliothèque (constante `ORGANISATION_n` de `crates/bibliotheque`), l'essai se fait sur une bibliothèque d'essai, jamais sur la vraie : application fermée, copie le dossier `bibliotheque` du poste (`%APPDATA%\org.myiro-libre.app\bibliotheque`) dans un dossier de travail, puis lance avec `--bibliotheque <copie>`.
    - **Instrument** : annonce le palier, ce qu'il fera sur l'appareil et le geste attendu. Lance-le seulement sur son « oui ». Les mesures produites restent dans `Archivage/donnees/`.
 
    Consigne le résultat en commentaire du ticket, sans identifiant matériel réel. Pendant l'attente, les autres ouvriers continuent.
