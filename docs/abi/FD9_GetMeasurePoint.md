@@ -25,7 +25,7 @@ int32_t __stdcall FD9_GetMeasurePoint(tFD9_PatchMeasurePoint *points,
   - `x`, `y` : le centre de la plage trouvée, en pixels de l'image à 300 ppp, converti en 1/100 mm (`× 2540 / 300`, arrondi) ;
   - `zone`, `rangee`, `colonne` : sa place dans la définition, corrigée si la feuille a été vue tournée de 90°, 180° ou 270° (`+0x159c`).
 - Plus de points demandés que de plages trouvées : refus interne 0x807 (journal Windows « result = %d, pMeasurePoint = %p, length = %d, layout.allPatchCount = %d »).
-- **FD-S2w** (`s2w-x86` `0x41e490`, `CFD9SDKController::EventWaitPatchrecogCompletion`) : à l'événement 7, `FD9_GetPatchRecognitionResult2`, puis l'image de la feuille par [FD9_GetChartImage](FD9SDK.md#hors-liste-blanche) (taille, puis image), puis `FD9_GetMeasurePoint` pour toutes les plages ; il garde image et points pour l'onglet « Measured Point » (`0x41f750`, `0x41ddf0`).
+- **FD-S2w** (`s2w-x86` `0x41e490`, `CFD9SDKController::EventWaitPatchrecogCompletion`) : à l'événement 7, `FD9_GetPatchRecognitionResult2`, puis une copie de l’image prise, gardée depuis `FD9_GetCaptureResult` (`0x41eca0`, taille puis image ; correction du 30 octobre 2026 : ce n’est pas [FD9_GetChartImage](FD9_GetChartImage.md)), puis `FD9_GetMeasurePoint` pour toutes les plages ; il garde image et points pour l'onglet « Measured Point » (`0x41f750`, `0x41ddf0`).
 
 ## Propriété de la mémoire
 
@@ -41,20 +41,21 @@ int32_t __stdcall FD9_GetMeasurePoint(tFD9_PatchMeasurePoint *points,
 - Après la reconnaissance COMBINE, lire un point par plage reconnue ; **chaque place de la mire une fois** (sinon `positions_plages` : doublon, hors mire, manquante) ; décalage moyen de la feuille ≤ 21 mm, et chaque point à moins de 3 mm de la grille décalée (sinon `mire_non_reconnue`). La mesure vise ces points : jamais les seules coordonnées théoriques.
 - Fait aux deux paliers, Prénumérisation et Feuille.
 
-### Pour l'application, plus tard (contrat proposé, pas encore fait)
+### Pour l'application : le calage (fait le 30 octobre 2026, ticket #34)
 
-Montrer, comme FD-S2w, l'image de la feuille et les points visés, avant de mesurer :
+Pour montrer, comme FD-S2w, l'image de la feuille et les points visés, le pont rend un champ `calage` dans ses réponses `prenumerisee` et `mesure` (feuille) :
 
 ```json
 {"rep":"prenumerisee","lecture":{...},
  "calage":{"decalage":[880,-110],"ecart_max":40,
            "points":[{"zone":0,"rangee":0,"colonne":0,"x":1649,"y":2600}, ...],
-           "image":{"largeur":330,"hauteur":496,"ppp":30,"gris":"<base64, 8 bits>"}}}
+           "image":{"largeur":660,"hauteur":984,"ppp":60,"gris":"<base64, 8 bits>"}}}
 ```
 
+- `decalage`, `ecart_max` : ceux du contrôle ci-dessus, en 1/100 mm.
 - `points` : les points de `FD9_GetMeasurePoint`, dans l'ordre de la définition ; `x`, `y` en 1/100 mm.
-- `image` : l'image de `FD9_GetChartImage`, réduite par le pont (par exemple au dixième, 30 ppp), en gris 8 bits ; elle ne contient ni adresse ni identifiant. `FD9_GetChartImage` est à ajouter à la liste blanche (lecture seule, admise hors des états 1 à 6) après une fiche.
-- Champ facultatif : une réponse sans `calage` reste lisible.
+- `image` : l'image de [FD9_GetChartImage](FD9_GetChartImage.md), lue juste après les points, réduite par le pont à 1 000 pixels de haut au plus (carrés de k × k pixels moyennés, k diviseur de 300 : 60 ppp pour une A3), gris 8 bits, une rangée après l'autre, en base64. Un point tombe sur le pixel `(x × ppp / 2540, y × ppp / 2540)` (supposé, fiche `FD9_GetChartImage`). Elle ne contient ni adresse ni identifiant, mais peut montrer ce que l'opérateur a écrit sur la feuille : jamais dans un fichier versionné. Si la DLL ne la rend pas, `image` est absent et la feuille continue.
+- Champs facultatifs : une réponse sans `calage`, ou un calage sans `image`, reste lisible. Le calage n'entre pas dans la mesure conservée (`myiro-libre/mesure/1`).
 
 ## À vérifier sur l'instrument
 
