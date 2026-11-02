@@ -5,6 +5,8 @@
 //! - `normal` : un MYIRO-1 fictif (n° 12345678), version, détection, connexion ;
 //! - `echo` : répond à tout par `requete_invalide` en recopiant ses arguments ;
 //! - `dll_refusee` : s'arrête comme `pont-myiro1` devant une DLL introuvable ;
+//! - `bavard` : comme `normal`, mais avant de répondre à la détection, écrit
+//!   20 000 lignes (2 Mo) sur sa sortie d'erreur, comme `pont-fd9 --trace` ;
 //! - `muet` : lit une requête puis s'arrête avec le code 1 ;
 //! - `illisible` : répond par une ligne hors protocole ;
 //! - `erreur_inconnue` : répond par une erreur d'un type inconnu du protocole ;
@@ -161,6 +163,17 @@ fn main() -> ExitCode {
                         effet: EffetAnnulation::Appliquee,
                     }
                 }
+            }
+            // Comme `pont-fd9 --trace` pendant une feuille : des milliers de
+            // lignes sur la sortie d'erreur avant la réponse (2 Mo, bien
+            // plus qu'un tube n'en garde).
+            "bavard" if matches!(requete, Ok(Requete::Detecter {})) => {
+                let mut erreurs = std::io::stderr().lock();
+                for n in 0..20_000 {
+                    writeln!(erreurs, "trace {n:>6} : {}", "x".repeat(84)).unwrap();
+                }
+                writeln!(erreurs, "dernière ligne de trace").unwrap();
+                Reponse::Instruments { liste: vec![] }
             }
             "muet" => {
                 eprintln!("arrêt simulé");

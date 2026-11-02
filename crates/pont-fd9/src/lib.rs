@@ -19,6 +19,7 @@ pub mod dll;
 pub mod evenements;
 mod feuille;
 mod fichier;
+pub mod masque;
 mod plages;
 pub mod plantage;
 pub mod serveur;
@@ -36,6 +37,7 @@ use fd9_sys::{
     Appareil, CleOption, CoordonneesMire, CouleursMire, DonneesQr, EtatSdk, ModeReconnaissance,
     NomApplication, PointMesure, PositionPlage, TamponInfosSysteme, DONNEES_BRUTES,
 };
+pub use masque::Masque;
 use pont_protocole::{
     AvancementFeuille, CalageFeuille, ErreurPont, Identite, Palier, RemiseAuRepos,
 };
@@ -180,17 +182,19 @@ type Echo = Box<dyn FnMut(&str)>;
 
 /// Journal de la session : chaque ligne est gardée en mémoire et, si un écho
 /// est branché, lui est donnée au moment où elle est écrite. Un pont arrêté de
-/// force ne perd ainsi rien de ce qu'il a déjà noté.
+/// force ne perd ainsi rien de ce qu'il a déjà noté. L'écho reçoit la ligne
+/// masquée ([`Masque`]) : il sort du processus.
 #[derive(Default)]
 struct Journal {
     lignes: Vec<String>,
     echo: Option<Echo>,
+    masque: Masque,
 }
 
 impl Journal {
     fn push(&mut self, ligne: String) {
         if let Some(echo) = &mut self.echo {
-            echo(&ligne);
+            echo(&self.masque.appliquer(&ligne));
         }
         self.lignes.push(ligne);
     }
@@ -326,10 +330,32 @@ impl<S: SdkFd9> Session<S> {
     }
 
     /// Donne chaque ligne du journal à `echo` dès qu'elle est écrite
-    /// (l'exécutable l'écrit sur la sortie d'erreur).
+    /// (l'exécutable l'écrit sur la sortie d'erreur), masquée : adresse,
+    /// identifiant, n° de série et adresse MAC de l'instrument n'y sont
+    /// jamais.
     pub fn avec_echo_journal(mut self, echo: impl FnMut(&str) + 'static) -> Self {
         self.journal.echo = Some(Box::new(echo));
         self
+    }
+
+    /// Partage `masque` : la session y retient les identifiants de
+    /// l'instrument dès qu'elle les connaît, et l'exécutable l'applique aussi
+    /// à la trace.
+    pub fn avec_masque(mut self, masque: Masque) -> Self {
+        self.journal.masque = masque;
+        self
+    }
+
+    /// Le masque des identifiants de l'instrument.
+    pub fn masque(&self) -> Masque {
+        self.journal.masque.clone()
+    }
+
+    /// Retient l'adresse et l'identifiant d'un instrument détecté ou visé.
+    pub(crate) fn retenir_appareil(&self, appareil: &Appareil) {
+        let masque = &self.journal.masque;
+        masque.retenir(&appareil.adresse(), "adresse");
+        masque.retenir(&appareil.identifiant(), "identifiant");
     }
 
     /// Poignée d'annulation de la requête en cours, à donner au fil qui lit
@@ -403,6 +429,9 @@ impl<S: SdkFd9> Session<S> {
                 self.journal
                     .push(format!("FD9_GetDeviceList : liaison inconnue {code}"));
             }
+        }
+        for appareil in &tableau[..trouves] {
+            self.retenir_appareil(appareil);
         }
         self.detectes = tableau[..trouves].to_vec();
         self.franchir(Palier::Detection);

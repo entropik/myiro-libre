@@ -28,7 +28,7 @@ use pont_fd9::composants::dossier_de_l_executable;
 use pont_fd9::dll::Fd9Dll;
 use pont_fd9::serveur::{servir, Garde, DELAI_FERMETURE};
 use pont_fd9::trace::{self, SdkTrace};
-use pont_fd9::{evenements, plantage, Delais, SdkFd9, Session};
+use pont_fd9::{evenements, plantage, Delais, Masque, SdkFd9, Session};
 use pont_protocole::Palier;
 use std::io::Write;
 use std::path::PathBuf;
@@ -128,21 +128,29 @@ fn main() -> ExitCode {
             return ExitCode::from(3);
         }
     };
+    // Adresse, identifiant, n° de série et MAC de l'instrument, retenus par
+    // la session dès qu'elle les connaît, masqués dans tout ce qui part sur
+    // la sortie d'erreur (l'application la range dans un fichier local).
+    let masque = Masque::default();
     if arguments.trace {
         noter("trace des appels à la DLL et du rappel active");
-        servir_avec(SdkTrace::new(dll, noter), &arguments)
+        let m = masque.clone();
+        let sdk = SdkTrace::new(dll, move |ligne| noter(&m.appliquer(ligne)));
+        servir_avec(sdk, &arguments, masque)
     } else {
-        servir_avec(dll, &arguments)
+        servir_avec(dll, &arguments, masque)
     }
 }
 
-fn servir_avec<S: SdkFd9>(sdk: S, arguments: &Arguments) -> ExitCode {
+fn servir_avec<S: SdkFd9>(sdk: S, arguments: &Arguments, masque: Masque) -> ExitCode {
     let trace = arguments.trace;
     // La DLL charge le composant de lecture du QR (`zxing.dll`) depuis le
     // dossier de l'exécutable (ticket #87) : il est vérifié avant chaque
     // feuille. Dossier illisible : toute feuille est refusée, sans chercher
     // ailleurs (la DLL, elle, ne cherche que là).
-    let session = Session::new(sdk, arguments.plafond).avec_delais(arguments.delais);
+    let session = Session::new(sdk, arguments.plafond)
+        .avec_delais(arguments.delais)
+        .avec_masque(masque);
     let session = match dossier_de_l_executable(std::env::current_exe()) {
         Some(dossier) => session.avec_dossier_du_pont(dossier),
         None => {

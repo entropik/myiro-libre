@@ -24,8 +24,8 @@ use crate::mesurer_feuille::{
     self, etat_feuille_fd9, EchecFeuille, EtatFeuille, FeuilleRangee, RAISON_OCCUPE,
     RAISON_SANS_FD9,
 };
-use crate::pont::{self, PontProcessus};
-use crate::{DossierBibliotheque, Instruments, Lanceur};
+use crate::pont;
+use crate::{DossierBibliotheque, Instruments};
 use mires::MireFd9;
 
 /// Annulation de la feuille en cours, utilisable pendant qu'elle tient
@@ -218,7 +218,8 @@ pub(crate) fn mesurer_feuille_fd9(
                 selection.instrument_mut(),
                 lue,
                 &dossier.0,
-                &mut (PontProcessus::lancer as Lanceur),
+                // Le pont de la feuille trace dans `mesures-fd9/traces/`.
+                &mut mesurer_feuille::lanceur_feuille(&dossier.0),
                 &mut suivi,
             );
             (resultat, Some(selection.vue()))

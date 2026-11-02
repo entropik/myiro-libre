@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use app::instrument::{Etat, Instrument, Probleme, PLAFOND};
-use app::pont::{architecture, chercher_ponts, Architecture, Panne, Pont, PontProcessus};
+use app::pont::{
+    architecture, chercher_ponts, Architecture, OptionsPont, Panne, Pont, PontProcessus,
+};
 use pont_protocole::{Palier, Reponse, Requete};
 
 /// L'exemple est compilé par `cargo test` (toutes cibles) ou par
@@ -106,6 +108,119 @@ fn un_pont_qui_s_arrete_rend_son_code_et_son_message() {
         }
         autre => panic!("réponse inattendue : {autre:?}"),
     }
+}
+
+/// Un pont qui écrit beaucoup sur sa sortie d'erreur (trace, journal d'une
+/// feuille de 2 520 plages) n'est jamais bloqué par un tube plein : la
+/// sortie d'erreur est lue au fil de l'eau (essai E5). Lancement ordinaire,
+/// celui de `pont-myiro1` et du pont FD-9 hors feuille.
+#[test]
+fn un_pont_bavard_sur_sa_sortie_d_erreur_n_est_pas_bloque() {
+    let mut pont = lancer_pret("bavard", Duration::from_secs(10));
+
+    assert_eq!(
+        pont.demander(&Requete::Detecter {}),
+        Ok(Reponse::Instruments { liste: vec![] })
+    );
+    assert_eq!(
+        pont.demander(&Requete::Version {}),
+        Ok(Reponse::Version { parties: [1, 0, 1] })
+    );
+}
+
+/// Contenu du fichier de trace une fois `fin` écrite (le fil qui lit la
+/// sortie d'erreur finit après le pont), au plus 10 s.
+fn trace_finie(chemin: &Path, fin: &str) -> String {
+    let echeance = Instant::now() + Duration::from_secs(10);
+    loop {
+        let texte = std::fs::read_to_string(chemin).unwrap_or_default();
+        if texte.contains(fin) || Instant::now() > echeance {
+            return texte;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// Le pont d'une feuille au FD-9 est lancé avec `--trace` : sa sortie
+/// d'erreur, 2 Mo, va au fichier `mesures-fd9/traces/<horodatage>.txt` de la
+/// bibliothèque, sans bloquer le pont.
+#[test]
+fn le_pont_d_une_feuille_trace_dans_la_bibliotheque_sans_se_bloquer() {
+    let dossier = dossier_vide("trace_feuille");
+    let mut lancer = app::mesurer_feuille::lanceur_feuille(&dossier);
+    let mut pont = lancer(&pont_factice(), Path::new("bavard"), Palier::Feuille)
+        .unwrap()
+        .avec_delai(Duration::from_secs(10));
+
+    assert_eq!(
+        pont.demander(&Requete::Detecter {}),
+        Ok(Reponse::Instruments { liste: vec![] })
+    );
+    drop(pont);
+
+    let traces: Vec<PathBuf> = std::fs::read_dir(dossier.join("mesures-fd9").join("traces"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(traces.len(), 1, "{traces:?}");
+    let nom = traces[0].file_name().unwrap().to_string_lossy().to_string();
+    assert!(nom.ends_with("Z.txt") && !nom.contains(':'), "{nom}");
+    let texte = trace_finie(&traces[0], "dernière ligne de trace");
+    assert_eq!(texte.lines().count(), 20_001);
+    assert!(texte.starts_with("trace      0 : "));
+    assert!(!texte.contains("trace coupée"));
+}
+
+/// `--trace` n'est passé qu'au pont de la feuille ; le pont ordinaire,
+/// relancé ensuite, ne trace rien dans la bibliothèque.
+#[test]
+fn seul_le_pont_de_la_feuille_recoit_trace() {
+    let dossier = dossier_vide("trace_paliers");
+    let mut lancer = app::mesurer_feuille::lanceur_feuille(&dossier);
+    let arguments = |pont: &mut PontProcessus| match pont.demander(&Requete::Version {}) {
+        Ok(Reponse::RequeteInvalide { detail }) => detail,
+        autre => panic!("{autre:?}"),
+    };
+
+    let mut ordinaire = lancer(&pont_factice(), Path::new("echo"), Palier::Connexion).unwrap();
+    assert!(!arguments(&mut ordinaire).contains("--trace"));
+    assert!(!dossier.join("mesures-fd9").exists());
+
+    let mut feuille = lancer(&pont_factice(), Path::new("echo"), Palier::Feuille).unwrap();
+    assert!(arguments(&mut feuille).ends_with("--plafond feuille --trace"));
+}
+
+/// Au-delà de son plafond, la trace garde son début, dit combien de lignes
+/// sont omises, puis ajoute les dernières à l'arrêt du pont.
+#[test]
+fn une_trace_trop_longue_garde_son_debut_et_sa_fin() {
+    let dossier = dossier_vide("trace_plafond");
+    let chemin = dossier.join("trace.txt");
+    let options = OptionsPont {
+        trace: Some(chemin.clone()),
+        plafond_trace: 10_000,
+        ..OptionsPont::default()
+    };
+    let mut pont = PontProcessus::lancer_avec(
+        &pont_factice(),
+        Path::new("bavard"),
+        Palier::Connexion,
+        &options,
+    )
+    .unwrap()
+    .avec_delai(Duration::from_secs(10));
+    assert!(pont.demander(&Requete::Detecter {}).is_ok());
+    drop(pont);
+
+    let texte = trace_finie(&chemin, "dernière ligne de trace");
+    assert!(texte.starts_with("trace      0 : "));
+    assert!(
+        texte.contains("--- trace coupée à 10000 octets : 17901 ligne(s) omise(s), puis les 2000 dernière(s) ---"),
+        "{}",
+        texte.lines().find(|l| l.starts_with("---")).unwrap_or("")
+    );
+    assert!(texte.trim_end().ends_with("dernière ligne de trace"));
+    assert!(texte.len() < 10_000 + 2_001 * 120, "{}", texte.len());
 }
 
 /// Un pont bloqué (DLL qui ne rend pas la main) ne bloque pas l'application :

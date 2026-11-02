@@ -42,6 +42,7 @@ impl<S: SdkFd9> Session<S> {
     /// Inscrit le rappel, se connecte, lit l'identité et l'état. Un échec
     /// défait ce qui a été fait, dans l'ordre inverse.
     fn ouvrir(&mut self, appareil: &Appareil) -> Result<Identite, ErreurPont> {
+        self.retenir_appareil(appareil);
         // Déjà connectée, la DLL rendrait 0 sans rien faire : succès trompeur.
         if self.connecte {
             return Err(ErreurPont::EtatIncompatible {});
@@ -105,6 +106,9 @@ impl<S: SdkFd9> Session<S> {
         }
         // 8 chiffres supposés en BCD : lus en décimal, sans rien deviner.
         let texte = infos.numero_de_serie();
+        let masque = self.masque();
+        masque.retenir(&texte, "n° de série");
+        masque.retenir(&infos.mac(), "MAC");
         let numero_serie = Some(&texte)
             .filter(|t| !t.is_empty() && t.bytes().all(|o| o.is_ascii_digit()))
             .and_then(|t| t.parse().ok())

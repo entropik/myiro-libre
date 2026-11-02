@@ -12,6 +12,7 @@
 use std::fs;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use bibliotheque::{IdCondition, IdMesure};
 use mires::{lire_mire_fd9, ErreurMire, MireFd9};
@@ -22,10 +23,59 @@ use crate::colonne::BibliothequeOuverte;
 use crate::instrument::choix::Fermeture;
 use crate::instrument::feuille::{definition_rgb2520, ErreurFeuille, EtapeFeuille, FeuilleMesuree};
 use crate::instrument::Instrument;
-use crate::pont::{Panne, Pont};
+use crate::pont::{OptionsPont, Panne, Pont, PontProcessus};
 
 /// Dossier de la bibliothèque où la mesure complète est gardée.
 pub const DOSSIER_MESURES_FD9: &str = "mesures-fd9";
+
+/// Sous-dossier de [`DOSSIER_MESURES_FD9`] où la trace du pont de chaque
+/// feuille est écrite (local, jamais versionné).
+pub const DOSSIER_TRACES: &str = "traces";
+
+/// Fichier de trace d'une feuille lancée à `instant` :
+/// `<dossier>/mesures-fd9/traces/<AAAA-MM-JJTHH-MM-SSZ>.txt` (heure UTC,
+/// sans deux-points, interdits dans un nom de fichier Windows).
+pub fn fichier_trace(dossier: &Path, instant: SystemTime) -> PathBuf {
+    let nom = crate::parc::instant_utc(instant).replace(':', "-");
+    dossier
+        .join(DOSSIER_MESURES_FD9)
+        .join(DOSSIER_TRACES)
+        .join(format!("{nom}.txt"))
+}
+
+/// Options du pont lancé au palier Feuille : `--trace`, et sa sortie
+/// d'erreur recopiée dans [`fichier_trace`] (plafonnée, sans adresse ni
+/// n° de série : le pont les masque). Le dossier refusé, le pont se lance
+/// sans trace. Les autres paliers gardent les options ordinaires.
+pub fn options_feuille(dossier: &Path, palier: Palier, instant: SystemTime) -> OptionsPont {
+    if palier != Palier::Feuille {
+        return OptionsPont::default();
+    }
+    let chemin = fichier_trace(dossier, instant);
+    if let Some(parent) = chemin.parent() {
+        if let Err(e) = fs::create_dir_all(parent) {
+            eprintln!("traces du pont FD-9 {} : {e}", parent.display());
+            return OptionsPont::default();
+        }
+    }
+    OptionsPont {
+        arguments: vec!["--trace".into()],
+        trace: Some(chemin),
+        ..OptionsPont::default()
+    }
+}
+
+/// Lanceur des ponts d'une feuille au FD-9 : au palier Feuille, avec les
+/// [`options_feuille`] ; aux autres (pont ordinaire relancé ensuite), comme
+/// [`PontProcessus::lancer`].
+pub fn lanceur_feuille(
+    dossier: &Path,
+) -> impl FnMut(&Path, &Path, Palier) -> Result<PontProcessus, Panne> + '_ {
+    move |programme, dll, palier| {
+        let options = options_feuille(dossier, palier, SystemTime::now());
+        PontProcessus::lancer_avec(programme, dll, palier, &options)
+    }
+}
 
 /// Lit et vérifie la mire RGB-2520 trouvée (`chercher_mire_fd9`) ; sans
 /// fichier, ou avec un autre, le refus est une clé `mire.erreur.*`.
