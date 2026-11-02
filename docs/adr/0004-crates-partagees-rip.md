@@ -40,6 +40,15 @@ Ajout seulement, rien ne change dans l'interface existante : `Seuil` (écart ΔE
 
 Ajout seulement : `lire_sans_condition` lit un CGATS comme `lire`, mais un tableau sans condition de mesure écrite est accepté. Ses plages vont dans l'emplacement `m0`, sous une condition **inconnue**, jamais supposée. Il sert aux mesures qu'un profil embarque (balise `targ`) : ArgyllCMS y recopie le `.ti3` de myiro-libre, qui ne porte pas de condition, et les RVB et Lab suffisent pour juger le profil. `lire` reste strict : à l'import dans la bibliothèque, un fichier sans condition de mesure reconnaissable est toujours refusé.
 
+### Complément du 2 novembre 2026 : la mesure moyennée (ticket #35)
+
+Ajout seulement : `ecrire` et la lecture des fichiers `myiro-libre/cgats/1` ne changent pas.
+
+- **Ajouts à l'interface publique** : `FORMAT_MOYENNE` (`myiro-libre/moyenne/1`) et `ecrire_moyenne(mesure, mire, sources)`, qui écrit le résultat d'une séance de mesure (crate `seance-mesure`).
+- **Mots-clés** : `MYIRO_LIBRE_MIRE` (empreinte de la mire mesurée) et `MYIRO_LIBRE_SOURCES` (numéros, dans la bibliothèque, des mesures sources, séparés par une espace). `lire` les laisse de côté : la bibliothèque garde le texte du fichier tel quel.
+- **Relecture** : `lire` reconnaît `myiro-libre/moyenne/1`. Une mesure moyennée relue a une provenance **inconnue** (ce n'est pas une mesure attestée par un pont) et des RVB **confirmés** (ce sont ceux de la mire). Une condition supposée n'est écrite que par sa source lumineuse et se relit supposée. Écrire puis relire rend la même mesure.
+- **Numéro de série** : jamais écrit. `INSTRUMENTATION` ne porte que le modèle reconnu par `modele_instrument` (« FD-9 »), ou rien.
+
 ## Contrat de la crate `gamut` (28 octobre 2026, ticket #71)
 
 La crate `gamut` calcule tout ce qui sert à comparer des profils ICC RVB. Elle ne dépend que de `colorimetrie` et de `serde` (ni Tauri, ni Windows, ni ponts, ni `cgats`) et fait partie de la liste `CRATES` du poste Linux de la CI.
