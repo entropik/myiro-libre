@@ -51,7 +51,7 @@ Une mesure rangée dans une séance : celle d'un exemplaire, faite au FD-9 ou im
 _Éviter_ : lecture source, relevé
 
 **Mesure moyennée** :
-Le résultat d'une séance : pour chaque plage, la moyenne des mesures sources qui la donnent. Elle n'est faite qu'entre mesures d'une même mire, au même instrument et dans les mêmes conditions ; sinon elle est refusée, en disant pourquoi. Les écarts entre mesures sont montrés avant de l'accepter, et aucune mesure n'en est retirée d'office.
+Le résultat d'une séance : pour chaque plage, la moyenne des mesures sources qui la donnent. Elle n'est faite qu'entre mesures d'une même mire, au même instrument, et seulement sur les conditions de mesure que toutes les mesures ont en commun : une condition que certaines mesures seulement ont (M0 ou M2 d'une feuille mesurée par myiro-libre, à côté d'un export FD-S2w qui n'a que M1) est laissée de côté, en le disant. Sans condition commune, ou dans les autres cas, elle est refusée, en disant pourquoi. Les écarts entre mesures sont montrés avant de l'accepter, et aucune mesure n'en est retirée d'office.
 _Éviter_ : mesure fusionnée, mesure combinée
 
 **Complément manuel** :

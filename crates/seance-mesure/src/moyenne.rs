@@ -80,6 +80,17 @@ pub struct Ecart {
     pub signale: bool,
 }
 
+/// Un emplacement de spectre qu'une mesure avait et que la mesure moyennée
+/// n'a pas, parce que d'autres mesures ne l'avaient pas.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConditionEcartee {
+    /// « m0 », « m1 » ou « m2 ».
+    pub emplacement: String,
+    pub source: i64,
+    /// Sa condition de mesure, si la mesure la donnait.
+    pub condition: Option<ConditionMesure>,
+}
+
 /// Le résultat du moyennage.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Moyenne {
@@ -91,6 +102,9 @@ pub struct Moyenne {
     pub manquantes: Vec<String>,
     /// Pour chaque plage de la mesure moyennée, ses apports.
     pub composition: Vec<CompositionPlage>,
+    /// Emplacements que certaines mesures avaient, et pas toutes : laissés
+    /// hors de la mesure moyennée, nommés avec chaque mesure qui les avait.
+    pub conditions_ecartees: Vec<ConditionEcartee>,
     /// Tous les écarts, signalés ou non.
     pub ecarts: Vec<Ecart>,
 }
@@ -119,6 +133,7 @@ pub enum Incompatible {
     ModelesDifferents { source: i64 },
     InstrumentsDifferents { source: i64 },
     ConditionsDifferentes { source: i64 },
+    AucuneConditionCommune,
     LongueursOndeDifferentes { source: i64 },
     GeometriesDifferentes { source: i64 },
     SpectresMeles { emplacement: String },
@@ -138,18 +153,27 @@ pub enum Incompatible {
 /// 4. le modèle d'instrument est connu, le même partout : jamais de
 ///    mélange MYIRO-1/FD-9 ;
 /// 5. même instrument : deux numéros de série connus sont égaux ;
-/// 6. mêmes conditions de mesure, emplacement par emplacement ;
-/// 7. mêmes longueurs d'onde, quand elles sont connues des deux côtés ;
-/// 8. même géométrie de mesure, quand elle est connue des deux côtés ;
+/// 6. mêmes longueurs d'onde, quand elles sont connues des deux côtés ;
+/// 7. même géométrie de mesure, quand elle est connue des deux côtés ;
+/// 8. conditions communes : un emplacement de spectre (`m0`, `m1`, `m2`)
+///    que toutes les mesures donnent doit avoir partout la même condition
+///    de mesure, sinon refus ; il est gardé. Un emplacement que certaines
+///    mesures seulement donnent est écarté de la mesure moyennée, et dit
+///    dans [`Moyenne::conditions_ecartees`] avec chaque mesure qui l'avait
+///    (une feuille mesurée par myiro-libre, M0/M1/M2, et un export FD-S2w,
+///    M1, se moyennent sur M1). Aucun emplacement commun : refus ;
 /// 9. chaque complément manuel désigne une plage du plan qu'aucun
 ///    exemplaire ne donne, une seule fois, dans une mesure de rôle
 ///    [`Role::Complement`] de la liste qui a cet identifiant une fois ;
-/// 10. pour chaque emplacement, toutes les mesures d'une plage ont un
+/// 10. pour chaque emplacement gardé, toutes les mesures d'une plage ont un
 ///     spectre (de même longueur), ou aucune ; de même pour le Lab. Pas de
 ///     moyenne mêlant des mesures avec et sans spectre.
 ///
-/// Les spectres sont moyennés valeur par valeur et les Lab composante par
-/// composante, sans recalcul : un seul exemplaire est rendu tel quel. Les
+/// Les spectres sont moyennés valeur par valeur, et les Lab composante par
+/// composante : les Lab ne sont **jamais recalculés** depuis le spectre
+/// moyen. Ainsi un exemplaire seul est rendu tel quel, et les Lab venus de
+/// FD-S2w ou de la DLL de l'instrument ne sont jamais remplacés par un
+/// calcul de myiro-libre. Les
 /// écarts à la moyenne sont tous écrits, signalés au-delà de
 /// [`SEUIL_ECART_DE00`] ; aucune mesure n'est exclue d'office.
 pub fn moyenner(
@@ -178,8 +202,9 @@ pub fn moyenner(
         }
     }
     let modele = meme_instrument(sources)?;
+    let (gardes, conditions_ecartees) = conditions_communes(sources)?;
     completer(plan, sources, complements, &mut apports)?;
-    verifier_melanges(sources, &apports)?;
+    verifier_melanges(sources, &apports, gardes)?;
 
     let premiere = &sources[0].mesure;
     let mut plages = Vec::new();
@@ -197,8 +222,8 @@ pub fn moyenner(
             .collect();
         let plage = PlageImportee {
             identifiant: attendue.identifiant.clone(),
-            spectres: std::array::from_fn(|e| moyenne_spectres(&mesurees, e)),
-            lab: std::array::from_fn(|e| moyenne_lab(&mesurees, e)),
+            spectres: std::array::from_fn(|e| gardee(gardes[e], || moyenne_spectres(&mesurees, e))),
+            lab: std::array::from_fn(|e| gardee(gardes[e], || moyenne_lab(&mesurees, e))),
             rvb: Info::Confirmee(attendue.rvb.map(|c| (c / 100.0) as f32)),
         };
         if apports.len() > 1 {
@@ -231,7 +256,9 @@ pub fn moyenner(
             instrument: Info::Confirmee(modele),
             numero_serie: Info::Inconnue,
             date: Info::Inconnue,
-            conditions: std::array::from_fn(|e| condition_commune(sources, e)),
+            conditions: std::array::from_fn(|e| {
+                gardee(gardes[e], || condition_commune(sources, e))
+            }),
             longueurs_onde: sources
                 .iter()
                 .find(|s| s.mesure.longueurs_onde != Info::Inconnue)
@@ -242,11 +269,64 @@ pub fn moyenner(
         },
         manquantes,
         composition,
+        conditions_ecartees,
         ecarts,
     })
 }
 
-/// Règles 4 à 8 : rend le modèle commun.
+/// La valeur d'un emplacement gardé ; inconnue pour un emplacement écarté.
+fn gardee<T>(garde: bool, valeur: impl FnOnce() -> Info<T>) -> Info<T> {
+    if garde {
+        valeur()
+    } else {
+        Info::Inconnue
+    }
+}
+
+/// Un Lab ou un spectre est connu à l'emplacement `e` sur au moins une plage.
+fn a_des_donnees(m: &MesureImportee, e: usize) -> bool {
+    m.plages
+        .iter()
+        .any(|p| p.lab[e].valeur().is_some() || p.spectres[e].valeur().is_some())
+}
+
+/// Règle 8 : les emplacements gardés (ceux que toutes les mesures
+/// donnent, sous la même condition) et ceux écartés, nommés avec la mesure
+/// qui les avait.
+fn conditions_communes(
+    sources: &[Source],
+) -> Result<([bool; 3], Vec<ConditionEcartee>), Incompatible> {
+    let mut gardes = [false; 3];
+    let mut ecartees = Vec::new();
+    for (e, nom) in EMPLACEMENTS.iter().enumerate() {
+        let avec: Vec<&Source> = sources
+            .iter()
+            .filter(|s| a_des_donnees(&s.mesure, e))
+            .collect();
+        if avec.len() == sources.len() {
+            let condition = sources[0].mesure.conditions[e].valeur();
+            if let Some(s) = sources
+                .iter()
+                .find(|s| s.mesure.conditions[e].valeur() != condition)
+            {
+                return Err(Incompatible::ConditionsDifferentes { source: s.id });
+            }
+            gardes[e] = true;
+        } else {
+            ecartees.extend(avec.iter().map(|s| ConditionEcartee {
+                emplacement: (*nom).into(),
+                source: s.id,
+                condition: s.mesure.conditions[e].valeur().copied(),
+            }));
+        }
+    }
+    if !gardes.contains(&true) {
+        return Err(Incompatible::AucuneConditionCommune);
+    }
+    Ok((gardes, ecartees))
+}
+
+/// Règles 4 à 7 : rend le modèle commun.
 fn meme_instrument(sources: &[Source]) -> Result<String, Incompatible> {
     let mut modele: Option<String> = None;
     let premiere = &sources[0].mesure;
@@ -266,9 +346,6 @@ fn meme_instrument(sources: &[Source]) -> Result<String, Incompatible> {
             if a.trim() != b.trim() {
                 return Err(Incompatible::InstrumentsDifferents { source });
             }
-        }
-        if (0..3).any(|e| premiere.conditions[e].valeur() != m.conditions[e].valeur()) {
-            return Err(Incompatible::ConditionsDifferentes { source });
         }
         if let (Some(a), Some(b)) = (premiere.longueurs_onde.valeur(), m.longueurs_onde.valeur()) {
             if a != b {
@@ -326,12 +403,16 @@ fn completer(
     Ok(())
 }
 
-/// Règle 10, emplacement par emplacement, sur toutes les plages.
+/// Règle 10, sur les emplacements gardés, sur toutes les plages.
 fn verifier_melanges(
     sources: &[Source],
     apports: &[Vec<(usize, usize, bool)>],
+    gardes: [bool; 3],
 ) -> Result<(), Incompatible> {
     for (e, nom) in EMPLACEMENTS.iter().enumerate() {
+        if !gardes[e] {
+            continue;
+        }
         let mesurees = || {
             apports
                 .iter()

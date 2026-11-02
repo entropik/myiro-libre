@@ -9,7 +9,7 @@ mod plan;
 
 pub use association::{associer, vue_plages, Association, Doute, EtatPlage, VuePlage};
 pub use moyenne::{
-    moyenner, Apport, Complement, CompositionPlage, Ecart, Incompatible, Moyenne, Role, Source,
-    SEUIL_ECART_DE00,
+    moyenner, Apport, Complement, CompositionPlage, ConditionEcartee, Ecart, Incompatible, Moyenne,
+    Role, Source, SEUIL_ECART_DE00,
 };
 pub use plan::{IdentiteMire, PlageAttendue, Plan, RefusPlan};

@@ -5,8 +5,12 @@ mod commun;
 
 use cgats::MesureImportee;
 use commun::{lignes, plan, Export, EMPREINTE};
-use pont_protocole::{Calcul, Geometrie, Horodatage, Info, InstrumentMesurant, Provenance};
-use seance_mesure::{moyenner, Apport, Complement, Incompatible, Role, Source, SEUIL_ECART_DE00};
+use pont_protocole::{
+    Calcul, ConditionMesure, Geometrie, Horodatage, Info, InstrumentMesurant, Provenance,
+};
+use seance_mesure::{
+    moyenner, Apport, Complement, ConditionEcartee, Incompatible, Role, Source, SEUIL_ECART_DE00,
+};
 
 fn exemplaire(id: i64, mesure: MesureImportee) -> Source {
     Source {
@@ -281,18 +285,90 @@ fn deux_fd9_differents_ne_se_melangent_pas() {
 }
 
 #[test]
-fn d_autres_conditions_de_mesure_sont_refusees() {
-    let mut e = Export::fd9(lignes(0.0));
-    e.source = "A".into();
+fn sans_condition_commune_rien_n_est_moyenne() {
+    let mut m0 = Export::fd9(lignes(0.0));
+    m0.source = "A".into();
+    let mut m2 = Export::fd9(lignes(0.0));
+    m2.source = "UVCUT".into();
     assert_eq!(
         moyenner(
             &plan(),
-            &[exemplaire_decale(1, 0.0), exemplaire(2, e.mesure())],
+            &[exemplaire(1, m0.mesure()), exemplaire(2, m2.mesure())],
             &[]
         )
         .unwrap_err(),
+        Incompatible::AucuneConditionCommune
+    );
+}
+
+#[test]
+fn une_autre_condition_au_meme_emplacement_est_refusee() {
+    let mut autre = exemplaire_decale(2, 0.0);
+    autre.mesure.conditions[1] = Info::Supposee(ConditionMesure::M2);
+    assert_eq!(
+        moyenner(&plan(), &[exemplaire_decale(1, 0.0), autre], &[]).unwrap_err(),
         Incompatible::ConditionsDifferentes { source: 2 }
     );
+}
+
+/// Une mesure à la manière d'une feuille mesurée par myiro-libre : les
+/// trois emplacements M0, M1, M2, conditions supposées.
+fn acquisition(id: i64) -> Source {
+    let mut s = exemplaire_decale(id, 0.0);
+    s.mesure.conditions = [
+        Info::Supposee(ConditionMesure::M0),
+        Info::Supposee(ConditionMesure::M1),
+        Info::Supposee(ConditionMesure::M2),
+    ];
+    for p in &mut s.mesure.plages {
+        p.lab[0] = p.lab[1].clone();
+        p.lab[2] = p.lab[1].clone();
+        p.spectres[0] = p.spectres[1].clone();
+        p.spectres[2] = p.spectres[1].clone();
+    }
+    s
+}
+
+#[test]
+fn une_acquisition_et_un_export_fd_s2w_se_moyennent_sur_leur_condition_commune() {
+    let m = moyenner(&plan(), &[acquisition(1), exemplaire_decale(2, 1.0)], &[]).unwrap();
+    assert_eq!(
+        m.mesure.conditions,
+        [
+            Info::Inconnue,
+            Info::Supposee(ConditionMesure::M1),
+            Info::Inconnue
+        ]
+    );
+    assert!(m
+        .mesure
+        .plages
+        .iter()
+        .all(|p| p.lab[0] == Info::Inconnue && p.spectres[2] == Info::Inconnue));
+    assert_eq!(l_de(&m.mesure, 0), 90.5);
+    // Ce qui est écarté est dit, avec la mesure qui l'avait.
+    assert_eq!(
+        m.conditions_ecartees,
+        [
+            ConditionEcartee {
+                emplacement: "m0".into(),
+                source: 1,
+                condition: Some(ConditionMesure::M0)
+            },
+            ConditionEcartee {
+                emplacement: "m2".into(),
+                source: 1,
+                condition: Some(ConditionMesure::M2)
+            }
+        ]
+    );
+}
+
+#[test]
+fn des_conditions_communes_a_toutes_n_ecartent_rien() {
+    let m = moyenner(&plan(), &[acquisition(1), acquisition(2)], &[]).unwrap();
+    assert!(m.conditions_ecartees.is_empty());
+    assert!(m.mesure.conditions.iter().all(|c| c.valeur().is_some()));
 }
 
 #[test]
