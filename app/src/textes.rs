@@ -444,6 +444,374 @@ const FRANCAIS: Catalogue = &[
         "Une plage complétée à la main ne convient pas\u{202f}: plage inconnue, déjà mesurée, ou absente de la mesure choisie. Corrigez les compléments.",
     ),
     (
+        "seance.ouvrir",
+        "Mesurer le tirage",
+    ),
+    (
+        "seance.titre",
+        "Mesure guidée du tirage",
+    ),
+    (
+        "seance.reprendre",
+        "Une séance de mesure est en cours dans cette résolution\u{202f}: ouvrez «\u{202f}Mesurer le tirage\u{202f}» pour la reprendre.",
+    ),
+    (
+        "seance.etat.aucune",
+        "Choisissez le tirage FD-9, remplissez la fiche d’impression et confirmez-la, puis commencez la séance.",
+    ),
+    (
+        "seance.etat.en_cours",
+        "Séance en cours depuis le {date}. Feuilles rangées\u{202f}: {n}.",
+    ),
+    (
+        "seance.etat.terminee",
+        "Séance terminée le {date}. La mesure moyennée est rangée dans les mesures de la résolution.",
+    ),
+    (
+        "seance.etat.incomplete",
+        "Séance fermée incomplète le {date}\u{202f}: son résultat ne fait pas de profil.",
+    ),
+    (
+        "seance.tirage",
+        "Tirage à mesurer",
+    ),
+    (
+        "seance.tirage.option",
+        "{nom}, préparé le {date}",
+    ),
+    (
+        "seance.tirage.en_cours",
+        "(séance en cours)",
+    ),
+    (
+        "seance.tirage.aucun",
+        "Aucun tirage FD-9 à mesurer\u{202f}: préparez d’abord la mire.",
+    ),
+    (
+        "seance.fiche",
+        "Fiche d’impression de la mire, imprimée sans gestion des couleurs",
+    ),
+    (
+        "seance.commencer",
+        "Commencer la séance",
+    ),
+    (
+        "seance.commencee",
+        "Séance commencée.",
+    ),
+    (
+        "seance.reprise",
+        "Séance reprise\u{202f}: les feuilles déjà rangées sont là.",
+    ),
+    (
+        "seance.mesurer",
+        "Mesurer une feuille au FD-9",
+    ),
+    (
+        "seance.importer",
+        "Importer un export FD-S2w…",
+    ),
+    (
+        "seance.importer_complement",
+        "Importer une mesure de complément…",
+    ),
+    (
+        "seance.filtre",
+        "Fichiers CGATS",
+    ),
+    (
+        "seance.importee",
+        "Feuille rangée\u{202f}: {fichier}.",
+    ),
+    (
+        "seance.raison.en_cours",
+        "Action en cours…",
+    ),
+    (
+        "seance.raison.fiche",
+        "Confirmez la fiche d’impression pour commencer la séance.",
+    ),
+    (
+        "seance.raison.fermee",
+        "Cette séance est fermée\u{202f}: elle ne change plus.",
+    ),
+    (
+        "seance.raison.mesure_a_venir",
+        "La mesure au FD-9 depuis la séance arrive bientôt\u{202f}: en attendant, importez l’export de FD-S2w.",
+    ),
+    (
+        "seance.motif",
+        "Motif pour écarter une feuille",
+    ),
+    (
+        "seance.sources",
+        "Feuilles de la séance",
+    ),
+    (
+        "seance.sources.vide",
+        "Aucune feuille rangée pour l’instant.",
+    ),
+    (
+        "seance.source.acquisition",
+        "mesurée au FD-9",
+    ),
+    (
+        "seance.source.import",
+        "importée",
+    ),
+    (
+        "seance.source.complement",
+        "mesure de complément",
+    ),
+    (
+        "seance.source.associee",
+        "toutes les plages",
+    ),
+    (
+        "seance.source.incomplete",
+        "{n} plages manquantes",
+    ),
+    (
+        "seance.source.douteuse",
+        "plages incertaines\u{202f}: ne sert pas",
+    ),
+    (
+        "seance.source.ecartee",
+        "écartée\u{202f}: {motif}",
+    ),
+    (
+        "seance.inspecter",
+        "Inspecter",
+    ),
+    (
+        "seance.ecarter",
+        "Écarter",
+    ),
+    (
+        "seance.retenir",
+        "Retenir",
+    ),
+    (
+        "seance.apercu",
+        "Ce que donne la moyenne",
+    ),
+    (
+        "seance.apercu.plages",
+        "Plages moyennées",
+    ),
+    (
+        "seance.apercu.manquantes",
+        "Plages manquantes",
+    ),
+    (
+        "seance.apercu.conditions",
+        "Conditions laissées de côté",
+    ),
+    (
+        "seance.apercu.ecarts",
+        "Écarts signalés entre feuilles",
+    ),
+    (
+        "seance.apercu.ecarts.valeur",
+        "{n}, au plus {max} ΔE00",
+    ),
+    (
+        "seance.apercu.aucune",
+        "aucune",
+    ),
+    (
+        "seance.apercu.vide",
+        "Rangez une feuille pour voir la moyenne.",
+    ),
+    (
+        "seance.fin.incomplete",
+        "Fermer la séance même s’il manque des plages (son résultat ne fera pas de profil)",
+    ),
+    (
+        "seance.fin.ecarts_vus",
+        "J’ai vu les écarts signalés",
+    ),
+    (
+        "seance.terminer",
+        "Terminer la séance",
+    ),
+    (
+        "seance.terminee",
+        "Séance terminée\u{202f}: la mesure moyennée est rangée.",
+    ),
+    (
+        "seance.plages.titre",
+        "Plages de la feuille",
+    ),
+    (
+        "seance.plages.avertissement",
+        "L’aperçu écran n’est pas une preuve colorimétrique\u{202f}: seules les valeurs mesurées comptent.",
+    ),
+    (
+        "seance.plages.alt",
+        "Plages de la mire, dans la couleur demandée à l’imprimante",
+    ),
+    (
+        "seance.plages.survol.vide",
+        "Survolez une plage, ou choisissez-la au clavier avec les flèches.",
+    ),
+    (
+        "seance.plages.plage",
+        "Plage {id}",
+    ),
+    (
+        "seance.plages.demande",
+        "demandé {rvb}",
+    ),
+    (
+        "seance.plages.fichier",
+        "fichier {rvb}",
+    ),
+    (
+        "seance.plages.lab",
+        "{m}\u{202f}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "seance.plages.etat.associee",
+        "mesurée",
+    ),
+    (
+        "seance.plages.etat.manquante",
+        "manquante",
+    ),
+    (
+        "seance.plages.etat.douteuse",
+        "incertaine",
+    ),
+    (
+        "seance.plages.legende",
+        "Chaque case montre la couleur demandée à l’imprimante, approchée à l’écran. Une case barrée manque dans ce fichier\u{202f}; une case bordée de rouge est incertaine\u{202f}; une case bordée d’orange a un écart signalé, dit aussi au survol.",
+    ),
+    (
+        "seance.plages.fermer",
+        "Fermer l’inspection",
+    ),
+    (
+        "seance.complements",
+        "Compléments manuels",
+    ),
+    (
+        "seance.complements.plage",
+        "Plage de la mire à compléter",
+    ),
+    (
+        "seance.complements.source",
+        "Mesure de complément",
+    ),
+    (
+        "seance.complements.identifiant",
+        "Plage à prendre dans cette mesure",
+    ),
+    (
+        "seance.complements.ajouter",
+        "Ajouter le complément",
+    ),
+    (
+        "seance.complements.retirer",
+        "Retirer",
+    ),
+    (
+        "seance.complements.ligne",
+        "Plage {plage} ← plage {identifiant} de «\u{202f}{fichier}\u{202f}»",
+    ),
+    (
+        "seance.complements.vide",
+        "Aucun complément.",
+    ),
+    (
+        "seance.complements.sans_source",
+        "Importez d’abord une mesure de complément.",
+    ),
+    (
+        "seance.raison.sans_seance",
+        "Importer, écarter et terminer viennent après le début de la séance.",
+    ),
+    (
+        "seance.raison.aucune_feuille",
+        "Rangez au moins une feuille pour terminer la séance.",
+    ),
+    (
+        "seance.raison.deja_commencee",
+        "La séance est commencée\u{202f}: rangez ses feuilles.",
+    ),
+    (
+        "seance.raison.chargement",
+        "Lecture de la séance…",
+    ),
+    (
+        "seance.terminee.resultat",
+        "Séance terminée\u{202f}: la mesure moyennée «\u{202f}{fichier}\u{202f}» est rangée dans les mesures de la résolution.",
+    ),
+    (
+        "seance.incomplete.resultat",
+        "Séance fermée incomplète\u{202f}: la mesure «\u{202f}{fichier}\u{202f}» est rangée, mais elle ne fait pas de profil.",
+    ),
+    (
+        "seance.ecarts",
+        "Écarts signalés entre feuilles",
+    ),
+    (
+        "seance.ecarts.ligne",
+        "Plage {plage} · {fichier}",
+    ),
+    (
+        "seance.ecarts.valeur",
+        "{de00} ΔE00",
+    ),
+    (
+        "seance.ecarts.vide",
+        "Aucun écart signalé.",
+    ),
+    (
+        "seance.ecarts.autres",
+        "Et {n} autres écarts signalés, plus petits.",
+    ),
+    (
+        "seance.mire",
+        "Mire du plan\u{202f}: {nom}, empreinte {empreinte}",
+    ),
+    (
+        "seance.refus.feuille",
+        "Feuille en cause\u{202f}: {fichier}.",
+    ),
+    (
+        "seance.refus.plage",
+        "Plage en cause\u{202f}: {plage}.",
+    ),
+    (
+        "seance.apercu.plages.valeur",
+        "{n} sur {total}",
+    ),
+    (
+        "seance.apercu.manquantes.valeur",
+        "{n} ({liste})",
+    ),
+    (
+        "seance.emplacement.m0",
+        "M0",
+    ),
+    (
+        "seance.emplacement.m1",
+        "M1",
+    ),
+    (
+        "seance.emplacement.m2",
+        "M2",
+    ),
+    (
+        "seance.plages.original",
+        "Voir le fichier d’origine",
+    ),
+    (
+        "seance.plages.ecart",
+        "écart signalé",
+    ),
+    (
         "profil.erreur.argyll_introuvable",
         "ArgyllCMS 3.5.0 est introuvable. Placez-le dans le dossier argyll à côté de l’application, puis relancez l’application.",
     ),
@@ -3755,6 +4123,374 @@ const ANGLAIS: Catalogue = &[
     (
         "seance.refus.complement_invalide",
         "A patch completed by hand does not fit: unknown patch, already measured, or missing from the chosen measurement. Correct the complements.",
+    ),
+    (
+        "seance.ouvrir",
+        "Measure the print",
+    ),
+    (
+        "seance.titre",
+        "Guided measurement of the print",
+    ),
+    (
+        "seance.reprendre",
+        "A measuring session is in progress in this resolution: open “Measure the print” to resume it.",
+    ),
+    (
+        "seance.etat.aucune",
+        "Choose the FD-9 print, fill in the print sheet and confirm it, then start the session.",
+    ),
+    (
+        "seance.etat.en_cours",
+        "Session in progress since {date}. Sheets stored: {n}.",
+    ),
+    (
+        "seance.etat.terminee",
+        "Session finished on {date}. The averaged measurement is stored with the measurements of the resolution.",
+    ),
+    (
+        "seance.etat.incomplete",
+        "Session closed incomplete on {date}: its result does not make a profile.",
+    ),
+    (
+        "seance.tirage",
+        "Print to measure",
+    ),
+    (
+        "seance.tirage.option",
+        "{nom}, prepared on {date}",
+    ),
+    (
+        "seance.tirage.en_cours",
+        "(session in progress)",
+    ),
+    (
+        "seance.tirage.aucun",
+        "No FD-9 print to measure: prepare the chart first.",
+    ),
+    (
+        "seance.fiche",
+        "Print sheet of the chart, printed without colour management",
+    ),
+    (
+        "seance.commencer",
+        "Start the session",
+    ),
+    (
+        "seance.commencee",
+        "Session started.",
+    ),
+    (
+        "seance.reprise",
+        "Session resumed: the sheets already stored are there.",
+    ),
+    (
+        "seance.mesurer",
+        "Measure a sheet on the FD-9",
+    ),
+    (
+        "seance.importer",
+        "Import an FD-S2w export…",
+    ),
+    (
+        "seance.importer_complement",
+        "Import a complement measurement…",
+    ),
+    (
+        "seance.filtre",
+        "CGATS files",
+    ),
+    (
+        "seance.importee",
+        "Sheet stored: {fichier}.",
+    ),
+    (
+        "seance.raison.en_cours",
+        "Action in progress…",
+    ),
+    (
+        "seance.raison.fiche",
+        "Confirm the print sheet to start the session.",
+    ),
+    (
+        "seance.raison.fermee",
+        "This session is closed: it no longer changes.",
+    ),
+    (
+        "seance.raison.mesure_a_venir",
+        "Measuring on the FD-9 from the session is coming soon: meanwhile, import the FD-S2w export.",
+    ),
+    (
+        "seance.motif",
+        "Reason for setting a sheet aside",
+    ),
+    (
+        "seance.sources",
+        "Sheets of the session",
+    ),
+    (
+        "seance.sources.vide",
+        "No sheet stored yet.",
+    ),
+    (
+        "seance.source.acquisition",
+        "measured on the FD-9",
+    ),
+    (
+        "seance.source.import",
+        "imported",
+    ),
+    (
+        "seance.source.complement",
+        "complement measurement",
+    ),
+    (
+        "seance.source.associee",
+        "all patches",
+    ),
+    (
+        "seance.source.incomplete",
+        "{n} patches missing",
+    ),
+    (
+        "seance.source.douteuse",
+        "uncertain patches: not used",
+    ),
+    (
+        "seance.source.ecartee",
+        "set aside: {motif}",
+    ),
+    (
+        "seance.inspecter",
+        "Inspect",
+    ),
+    (
+        "seance.ecarter",
+        "Set aside",
+    ),
+    (
+        "seance.retenir",
+        "Keep",
+    ),
+    (
+        "seance.apercu",
+        "What the average gives",
+    ),
+    (
+        "seance.apercu.plages",
+        "Averaged patches",
+    ),
+    (
+        "seance.apercu.manquantes",
+        "Missing patches",
+    ),
+    (
+        "seance.apercu.conditions",
+        "Conditions left aside",
+    ),
+    (
+        "seance.apercu.ecarts",
+        "Flagged differences between sheets",
+    ),
+    (
+        "seance.apercu.ecarts.valeur",
+        "{n}, at most {max} ΔE00",
+    ),
+    (
+        "seance.apercu.aucune",
+        "none",
+    ),
+    (
+        "seance.apercu.vide",
+        "Store a sheet to see the average.",
+    ),
+    (
+        "seance.fin.incomplete",
+        "Close the session even with missing patches (its result will not make a profile)",
+    ),
+    (
+        "seance.fin.ecarts_vus",
+        "I have seen the flagged differences",
+    ),
+    (
+        "seance.terminer",
+        "Finish the session",
+    ),
+    (
+        "seance.terminee",
+        "Session finished: the averaged measurement is stored.",
+    ),
+    (
+        "seance.plages.titre",
+        "Patches of the sheet",
+    ),
+    (
+        "seance.plages.avertissement",
+        "The screen preview is not colorimetric proof: only the measured values count.",
+    ),
+    (
+        "seance.plages.alt",
+        "Patches of the chart, in the colour requested from the printer",
+    ),
+    (
+        "seance.plages.survol.vide",
+        "Hover a patch, or choose it with the arrow keys.",
+    ),
+    (
+        "seance.plages.plage",
+        "Patch {id}",
+    ),
+    (
+        "seance.plages.demande",
+        "requested {rvb}",
+    ),
+    (
+        "seance.plages.fichier",
+        "file {rvb}",
+    ),
+    (
+        "seance.plages.lab",
+        "{m}: L* {l}, a* {a}, b* {b}",
+    ),
+    (
+        "seance.plages.etat.associee",
+        "measured",
+    ),
+    (
+        "seance.plages.etat.manquante",
+        "missing",
+    ),
+    (
+        "seance.plages.etat.douteuse",
+        "uncertain",
+    ),
+    (
+        "seance.plages.legende",
+        "Each square shows the colour requested from the printer, approximated on screen. A crossed square is missing from this file; a square bordered in red is uncertain; a square bordered in orange has a flagged difference, also said on hover.",
+    ),
+    (
+        "seance.plages.fermer",
+        "Close the inspection",
+    ),
+    (
+        "seance.complements",
+        "Manual complements",
+    ),
+    (
+        "seance.complements.plage",
+        "Patch of the chart to complete",
+    ),
+    (
+        "seance.complements.source",
+        "Complement measurement",
+    ),
+    (
+        "seance.complements.identifiant",
+        "Patch to take from this measurement",
+    ),
+    (
+        "seance.complements.ajouter",
+        "Add the complement",
+    ),
+    (
+        "seance.complements.retirer",
+        "Remove",
+    ),
+    (
+        "seance.complements.ligne",
+        "Patch {plage} ← patch {identifiant} of “{fichier}”",
+    ),
+    (
+        "seance.complements.vide",
+        "No complement.",
+    ),
+    (
+        "seance.complements.sans_source",
+        "Import a complement measurement first.",
+    ),
+    (
+        "seance.raison.sans_seance",
+        "Importing, setting aside and finishing come after the session starts.",
+    ),
+    (
+        "seance.raison.aucune_feuille",
+        "Store at least one sheet to finish the session.",
+    ),
+    (
+        "seance.raison.deja_commencee",
+        "The session is started: store its sheets.",
+    ),
+    (
+        "seance.raison.chargement",
+        "Reading the session…",
+    ),
+    (
+        "seance.terminee.resultat",
+        "Session finished: the averaged measurement “{fichier}” is stored with the measurements of the resolution.",
+    ),
+    (
+        "seance.incomplete.resultat",
+        "Session closed incomplete: the measurement “{fichier}” is stored, but it does not make a profile.",
+    ),
+    (
+        "seance.ecarts",
+        "Flagged differences between sheets",
+    ),
+    (
+        "seance.ecarts.ligne",
+        "Patch {plage} · {fichier}",
+    ),
+    (
+        "seance.ecarts.valeur",
+        "{de00} ΔE00",
+    ),
+    (
+        "seance.ecarts.vide",
+        "No flagged difference.",
+    ),
+    (
+        "seance.ecarts.autres",
+        "And {n} other flagged differences, smaller.",
+    ),
+    (
+        "seance.mire",
+        "Chart of the plan: {nom}, fingerprint {empreinte}",
+    ),
+    (
+        "seance.refus.feuille",
+        "Sheet concerned: {fichier}.",
+    ),
+    (
+        "seance.refus.plage",
+        "Patch concerned: {plage}.",
+    ),
+    (
+        "seance.apercu.plages.valeur",
+        "{n} of {total}",
+    ),
+    (
+        "seance.apercu.manquantes.valeur",
+        "{n} ({liste})",
+    ),
+    (
+        "seance.emplacement.m0",
+        "M0",
+    ),
+    (
+        "seance.emplacement.m1",
+        "M1",
+    ),
+    (
+        "seance.emplacement.m2",
+        "M2",
+    ),
+    (
+        "seance.plages.original",
+        "See the original file",
+    ),
+    (
+        "seance.plages.ecart",
+        "flagged difference",
     ),
     (
         "profil.erreur.argyll_introuvable",

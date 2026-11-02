@@ -1,8 +1,10 @@
 //! Commandes de la page pour la séance de mesure d'un tirage FD-9 (ticket
 //! #35) : elles ne font qu'appeler les méthodes de [`BibliothequeOuverte`]
-//! (testées sans Tauri). La feuille mesurée au FD-9 passe par
-//! `ecran_feuille::seance_mesurer_exemplaire`, qui tient l'instrument comme
-//! « Mesurer une feuille au FD-9 ». Aucun écran ne les appelle encore.
+//! (testées sans Tauri), et l'écran de la séance (`seance.js`,
+//! `seance-apercu.js`, `seance-plages.js`) les appelle. La feuille mesurée au
+//! FD-9 passe par `ecran_feuille::seance_mesurer_exemplaire`, qui tient
+//! l'instrument comme « Mesurer une feuille au FD-9 » : l'écran ne l'appelle
+//! pas encore, en attendant son câblage dans `feuille-fd9.js`.
 
 use std::time::SystemTime;
 

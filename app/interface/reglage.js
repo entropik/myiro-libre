@@ -43,6 +43,8 @@ window.Reglage = (() => {
   const mire = window.PreparerMire;
   // Mesurer une feuille au FD-9 : bouton, état de la feuille, mire et points mesurés (feuille-fd9.js).
   const feuilleFd9 = window.FeuilleFd9;
+  // Séance de mesure d'un tirage FD-9 : feuilles, moyenne, fin (seance.js, seance-plages.js).
+  const seance = window.SeanceFd9;
 
   // Comparaison de profils (comparer.js) : elle prend la place de cette vue.
   const comparer = window.Comparer;
@@ -93,6 +95,7 @@ window.Reglage = (() => {
     verification.dessiner(d);
     mire.dessiner(d);
     feuilleFd9.dessiner(d);
+    seance.dessiner(d);
     dessinerOccupation(!actif);
 
     const historique = vue.querySelector("[data-historique]");
@@ -243,6 +246,14 @@ window.Reglage = (() => {
   feuilleFd9.brancher({
     reglage: () => parc.reglage(),
     recharger: () => parc.recharger(),
+  });
+
+  // La séance agit sur la résolution affichée ; ses actions et ses messages lui sont propres, à
+  // leur place dans sa section : elle ne bloque pas les autres boutons de la vue.
+  seance.brancher({
+    reglage: () => parc.reglage(),
+    recharger: () => parc.recharger(),
+    texteErreur,
   });
 
   return {
