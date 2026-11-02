@@ -107,9 +107,11 @@ window.RapportImage = (() => {
   // Le dessin de chaque partie cochée, avec les données de la vue (comparer.js).
   const DESSINS = {
     "comparer.volume": (d, zone) => {
+      // Toute la largeur utile de la page (180 mm) et presque toute sa hauteur au-dessus du
+      // cartouche : 1 200 × 1 080 donnent 180 × 162 mm (mainteneur, 2 novembre 2026).
       const canvas = el("canvas", "vue3d");
       canvas.style.width = "1200px";
-      canvas.style.height = "900px";
+      canvas.style.height = "1080px";
       zone.append(canvas);
       const vue = window.Vue3d.creer(canvas, { couleur: d.reglages.couleur, rendu: d.reglages.rendu });
       try {

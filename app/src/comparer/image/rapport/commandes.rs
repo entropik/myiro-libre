@@ -65,7 +65,7 @@ pub fn image_rapport_exporter(
     demande: DemandeRapportImage,
     filtre: String,
 ) -> Result<Option<RapportEnregistre>, String> {
-    let jour = Jour::aujourdhui();
+    let jour = Jour::maintenant();
     let numero = reglage
         .prochain_numero(jour.annee)
         .map_err(|e| e.cle().to_string())?;

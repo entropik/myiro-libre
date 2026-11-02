@@ -60,6 +60,7 @@ dependencies = [
  "base64 0.22.1",
  "bibliotheque",
  "cgats",
+ "chrono",
  "colorimetrie",
  "gamut",
  "image",

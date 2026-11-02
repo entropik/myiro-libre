@@ -23,6 +23,8 @@ pub const PARTIES: [&str; 7] = [
     "comparer.ecarts",
 ];
 
+/// Largeur utile d'une page A4 du rapport (210 mm moins deux marges de 15).
+pub const LARGEUR_UTILE_MM: f32 = 180.0;
 /// Taille d'un PNG reçu au plus, en base 64.
 const BASE64_MAX: usize = 24 << 20;
 /// Bornes d'un tableau reçu : colonnes, lignes, caractères par cellule.
@@ -103,10 +105,12 @@ fn blocs(g: &GraphiquePartie, langue: Langue) -> Vec<Bloc> {
         };
     }
     match g.png_base64.as_deref().and_then(png) {
+        // La vue 3D sur toute la largeur utile de la page (mainteneur,
+        // 2 novembre 2026 : « plus grand dans la page le gamut en volume »).
         Some(png) => vec![Bloc::Images(vec![rapport::Figure {
-            png,
+            image: png,
             legende,
-            largeur_mm: 140.0,
+            largeur_mm: LARGEUR_UTILE_MM,
         }])],
         None => refuse(),
     }

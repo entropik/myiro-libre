@@ -7,8 +7,8 @@ mod commun_image;
 
 use app::atelier::{AtelierSaisi, ReglageAtelier};
 use app::comparer::image::rapport::{
-    phrase_imprimable, vignette, vignette_surimpression, DemandeRapportImage, GraphiquePartie,
-    Jour, TableauPage,
+    marques_surimpression, phrase_imprimable, vignette, vignette_surimpression,
+    DemandeRapportImage, GraphiquePartie, Jour, TableauPage,
 };
 use app::textes::{texte, Langue};
 use commun_image::*;
@@ -19,6 +19,8 @@ const JOUR: Jour = Jour {
     annee: 2026,
     mois: 10,
     jour: 30,
+    heure: 14,
+    minute: 5,
 };
 
 fn analyse(histogramme: Vec<u64>, inconnus: u64) -> AnalyseImage {
@@ -160,7 +162,7 @@ fn le_rapport_porte_verdict_vignettes_et_pastilles() {
         .unwrap();
     assert_eq!(figures.len(), 2);
     for f in &figures {
-        let png = image::load_from_memory(&f.png).unwrap();
+        let png = image::load_from_memory(&f.image).unwrap();
         assert_eq!((png.width(), png.height()), (40, 30));
     }
     let paires = tout
@@ -180,7 +182,8 @@ fn le_rapport_porte_verdict_vignettes_et_pastilles() {
         "Photo-Rag-308_720-dpi",
         "Canon PRO-4100 › Photo Rag 308 › 720 dpi",
         "photo.png",
-        "30 octobre 2026",
+        // Lu dans sa forme `{:?}` : espaces insécables échappés.
+        "30 octobre 2026, 14\\u{a0}h\\u{a0}05",
     ] {
         assert!(lignes.contains(attendu), "{attendu} absent de {lignes}");
     }
@@ -195,11 +198,9 @@ fn la_surimpression_suit_le_seuil_choisi() {
     let mut ecarts: Vec<u8> = (0..100).map(|i| i as u8).collect();
     ecarts[99] = 255;
     let verts = |seuil: f64| {
-        let png = vignette_surimpression(&pixels, &ecarts, 10, seuil, 1_600);
-        let image = image::load_from_memory(&png).unwrap().to_rgba8();
-        image
-            .pixels()
-            .filter(|p| p.0 == [0x39, 0xff, 0x14, 255])
+        marques_surimpression(&pixels, &ecarts, seuil)
+            .iter()
+            .filter(|p| **p == [0x39, 0xff, 0x14, 255])
             .count()
     };
     assert_eq!(verts(2.0), 79); // codes 20 à 98
@@ -207,6 +208,55 @@ fn la_surimpression_suit_le_seuil_choisi() {
                                 // Réduite, la vignette garde ses proportions.
     let petite = image::load_from_memory(&vignette(&pixels, 10, 5)).unwrap();
     assert_eq!((petite.width(), petite.height()), (5, 5));
+    // En JPEG, le vert reste franc : un aplat de vert sort vert.
+    let aplat = vec![[0u8, 0, 0, 255]; 64 * 64];
+    let jpeg = vignette_surimpression(&aplat, &[200; 64 * 64], 64, 2.0, 1_600);
+    let relu = image::load_from_memory(&jpeg).unwrap().to_rgb8();
+    let p = relu.get_pixel(32, 32).0;
+    assert!(
+        p[0].abs_diff(0x39) < 8 && p[1] > 245 && p[2].abs_diff(0x14) < 8,
+        "{p:?}"
+    );
+}
+
+/// La vue 3D occupe toute la largeur utile de la page (180 mm) : elle n'en
+/// faisait qu'un tiers à l'œil (mainteneur, 2 novembre 2026).
+#[test]
+fn la_vue_3d_prend_toute_la_largeur() {
+    let (b, _, numero) = prepare();
+    let mut d = demande(numero);
+    d.parties = vec!["comparer.volume".into()];
+    d.graphiques = vec![GraphiquePartie {
+        partie: "comparer.volume".into(),
+        svg: None,
+        png_base64: Some(vue_3d()),
+        tableau: None,
+        texte: None,
+        legende: None,
+    }];
+    let doc = document(&b, &d);
+    let largeurs: Vec<f32> = blocs(&doc)
+        .iter()
+        .filter_map(|b| match b {
+            Bloc::Images(f) if f.len() == 1 => Some(f[0].largeur_mm),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(largeurs, [180.0]);
+}
+
+/// Une photo du rapport part en JPEG (premiers octets FF D8 FF), pas en PNG :
+/// le PDF pesait plusieurs Mo (2 novembre 2026).
+#[test]
+fn les_vignettes_sont_en_jpeg() {
+    let pixels: Vec<[u8; 4]> = (0..400).map(|i| [i as u8, 50, 200, 255]).collect();
+    for octets in [
+        vignette(&pixels, 20, 1_600),
+        vignette_surimpression(&pixels, &[0; 400], 20, 2.0, 1_600),
+    ] {
+        assert!(octets.starts_with(&[0xff, 0xd8, 0xff]));
+    }
+    assert_eq!(app::comparer::image::rapport::QUALITE_JPEG, 90);
 }
 
 #[test]
@@ -454,14 +504,55 @@ fn le_nom_par_defaut_reprend_l_image_et_le_numero() {
     );
 }
 
+/// Une vue 3D d'essai de 1 200 × 900 pixels en PNG base 64, comme la page
+/// l'envoie : un disque coloré sur fond clair.
+fn vue_3d() -> String {
+    use base64::Engine;
+    let image = image::RgbaImage::from_fn(1_200, 900, |x, y| {
+        let (dx, dy) = (x as f64 - 600.0, y as f64 - 450.0);
+        if dx.hypot(dy) < 400.0 {
+            image::Rgba([(x / 5) as u8, (y / 4) as u8, 160, 255])
+        } else {
+            image::Rgba([245, 245, 245, 255])
+        }
+    });
+    let mut png = Vec::new();
+    image
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    base64::engine::general_purpose::STANDARD.encode(png)
+}
+
 /// Écrit un rapport d'image d'essai dans le dossier `APERCU_RAPPORT`, pour le
-/// regarder.
+/// regarder : vraie photo si `PHOTO_RAPPORT` la désigne, vue 3D, coupe
+/// carrée et nom de profil long, avec un logo. Dit la taille de chaque PDF.
 #[test]
 #[ignore]
 fn ecrire_apercu_image() {
     let dossier = std::path::PathBuf::from(std::env::var("APERCU_RAPPORT").unwrap());
-    let (b, _, numero) = prepare();
+    let b = banc();
+    let rangee = b.ranger(
+        "canon_HFA-Mat-200g_High_2026-10-26.icc",
+        &essai("canon_HFA-Mat-200g_High_2026-10-26.icc"),
+    );
+    let fichier = b.ouvrir_fichier("autre.icc", &essai("Essai fichier"));
+    match std::env::var("PHOTO_RAPPORT") {
+        Ok(photo) => {
+            let octets = std::fs::read(&photo).unwrap();
+            let nom = std::path::Path::new(&photo).file_name().unwrap();
+            b.image
+                .ouvrir_octets(&nom.to_string_lossy(), &octets)
+                .unwrap();
+        }
+        Err(_) => {
+            b.image.ouvrir_octets("photo.png", &png(40, 30)).unwrap();
+        }
+    }
+    let numero = b.analyser(&[rangee, fichier]).numero;
     let reglage = ReglageAtelier::new(b.dossier.path().join("atelier"));
+    let logo = b.dossier.path().join("logo.png");
+    std::fs::write(&logo, png(300, 100)).unwrap();
+    reglage.poser_logo(&logo).unwrap();
     reglage
         .enregistrer(&AtelierSaisi {
             nom: "Atelier Exemple".into(),
@@ -475,16 +566,30 @@ fn ecrire_apercu_image() {
         points: vec![(0, 0), (10, 5), (39, 29)],
         ..demande(numero)
     };
-    d.parties = vec!["comparer.coupe".into()];
-    d.graphiques = vec![graphique("comparer.coupe", SVG)];
+    d.parties = vec!["comparer.volume".into(), "comparer.coupe".into()];
+    d.graphiques = vec![
+        GraphiquePartie {
+            partie: "comparer.volume".into(),
+            svg: None,
+            png_base64: Some(vue_3d()),
+            tableau: None,
+            texte: None,
+            legende: None,
+        },
+        graphique("comparer.coupe", SVG_CARRE),
+    ];
     for langue in ["fr", "en"] {
         d.langue = langue.into();
         let sortie = dossier.join(format!("image-{langue}.pdf"));
         b.ouverte
             .exporter_rapport_image(&b.image, &b.fichiers, &d, &reglage, &sortie, JOUR)
             .unwrap();
+        let taille = std::fs::metadata(&sortie).unwrap().len();
+        println!("{} : {} Kio", sortie.display(), taille / 1024);
     }
 }
+
+const SVG_CARRE: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 400 400\"><rect width=\"400\" height=\"400\" fill=\"none\" stroke=\"black\"/><circle cx=\"200\" cy=\"200\" r=\"150\" fill=\"none\" stroke=\"black\"/></svg>";
 
 #[test]
 fn une_partie_a_deux_graphiques_les_garde_tous() {

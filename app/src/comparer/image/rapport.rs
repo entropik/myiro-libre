@@ -23,7 +23,7 @@ mod jour;
 mod parties;
 mod redaction;
 
-pub use super::vignette::{vignette, vignette_surimpression};
+pub use super::vignette::{marques_surimpression, vignette, vignette_surimpression, QUALITE_JPEG};
 pub use jour::Jour;
 pub use parties::{GraphiquePartie, TableauPage, PARTIES};
 use redaction::{code, colonne_chiffres, ecart, lignes_chiffres, lignes_point, t};
@@ -33,8 +33,10 @@ pub use redaction::{nombre, phrase_imprimable};
 pub const POINTS_MAX: usize = 8;
 /// Pastilles hors gamut reprises, au plus (comme la page).
 pub const PASTILLES_MAX: usize = 12;
-/// Plus grand côté d'une vignette, en pixels.
-pub const COTE_VIGNETTE: u32 = 1_600;
+/// Plus grand côté d'une vignette, en pixels : une vignette fait au plus
+/// 85 mm de large ou 110 mm de haut, soit 280 à 360 points par pouce au
+/// tirage, sans perte visible ; 1 600 pixels doublaient le poids du PDF.
+pub const COTE_VIGNETTE: u32 = 1_200;
 const TROP_DE_POINTS: &str = "rapport.erreur.points";
 
 /// Ce que la page demande.
@@ -165,13 +167,13 @@ impl BibliothequeOuverte {
 
         let largeur = largeur_mm(r);
         let mut figures = vec![Figure {
-            png: vignette(&g.pixels, r.largeur, COTE_VIGNETTE),
+            image: vignette(&g.pixels, r.largeur, COTE_VIGNETTE),
             legende: tt("rapport.image.photo"),
             largeur_mm: largeur,
         }];
         if let Some(Some(ecarts)) = g.ecarts.get(rang) {
             figures.push(Figure {
-                png: vignette_surimpression(&g.pixels, ecarts, r.largeur, seuil, COTE_VIGNETTE),
+                image: vignette_surimpression(&g.pixels, ecarts, r.largeur, seuil, COTE_VIGNETTE),
                 legende: tt("rapport.image.surimpression").replace("{s}", &s),
                 largeur_mm: largeur,
             });

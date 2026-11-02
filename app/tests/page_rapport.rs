@@ -149,8 +149,10 @@ fn exporter_dessine_hors_ecran_les_parties_cochees_repliees() {
     let svg = corps(&script, "function serialiser(noeud) {");
     assert!(svg.contains("BALISES.has("), "{svg}");
     assert!(script.contains("getComputedStyle("));
-    // La vue 3D est rendue en PNG dans un canvas de 1 200 × 900.
+    // La vue 3D est rendue en PNG dans un canvas de 1 200 × 1 080.
     assert!(script.contains("canvas.style.width = \"1200px\";"));
+    // Presque toute la hauteur de la page au-dessus du cartouche (180 × 162 mm).
+    assert!(script.contains("canvas.style.height = \"1080px\";"));
     assert!(lire("interface/vue3d.js").contains("capturer() {"));
     assert!(script.lines().count() < 400);
 }
