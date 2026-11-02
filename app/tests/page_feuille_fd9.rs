@@ -181,16 +181,17 @@ fn la_feuille_se_met_a_jour_sur_place_dans_des_places_gardees() {
 }
 
 /// Le bouton est actif seulement quand le module Rust le dit, et sa raison
-/// est écrite juste dessous ; « Annuler » ne vaut que pendant l'attente et
-/// la lecture.
+/// est écrite juste dessous ; « Annuler » vaut jusqu'au rangement, mesure
+/// des plages comprise : il n'y a plus de feuille sans issue (essai E5).
 #[test]
 fn le_bouton_et_annuler_suivent_l_etat_de_la_feuille() {
     let fd9 = lire("interface/feuille-fd9.js");
     for attendu in [
         "mesurer.disabled = enCours() || !etat || !etat.disponible || condition === null;",
         "etat.raisons.map((c) => t(c)).join(\" \")",
-        // L'attente et la lecture, calage prêt compris (montré « Lecture »).
-        "const ANNULABLES = [\"connexion\", \"glisser_feuille\", \"feuille_engagee\", \"lecture\", \"calage_pret\"];",
+        // L'attente, la lecture (calage prêt compris, montré « Lecture ») et
+        // la mesure des plages ; pas le rangement.
+        "const ANNULABLES = [\"connexion\", \"glisser_feuille\", \"feuille_engagee\", \"lecture\", \"calage_pret\", \"mesure_lancee\", \"mesure\"];",
         "mesure_lancee: \"mesure\"",
         "annuler.disabled = !enCours() || !ANNULABLES.includes(feuille.etape);",
         "invoke(\"annuler_feuille_fd9\")",
@@ -203,6 +204,39 @@ fn le_bouton_et_annuler_suivent_l_etat_de_la_feuille() {
     let mesurer = bloc.find("data-feuille-mesurer").unwrap();
     let raison = bloc.find("data-feuille-raison").unwrap();
     assert!(mesurer < raison, "la raison est juste sous le bouton");
+}
+
+/// Pendant la mesure des plages, avant tout clic, la raison dit sur place
+/// que « Annuler » perd la feuille, et le bouton le redit au survol. Ni
+/// fenêtre du navigateur, ni libellé plus long qui pousserait ses voisins.
+#[test]
+fn annuler_pendant_la_mesure_dit_d_avance_que_la_feuille_sera_perdue() {
+    let fd9 = lire("interface/feuille-fd9.js");
+    for attendu in [
+        "const PERDUE = [\"mesure_lancee\", \"mesure\"];",
+        "t(PERDUE.includes(feuille.etape) ? \"feuille_fd9.raison.mesure_en_cours\" : \"feuille_fd9.raison.en_cours\")",
+        "annuler.title = enCours() && PERDUE.includes(feuille.etape) ? t(\"feuille_fd9.annuler.perdue\") : \"\";",
+    ] {
+        assert!(fd9.contains(attendu), "{attendu}");
+    }
+    for interdit in ["confirm(", "alert(", "prompt(", "annuler.textContent"] {
+        assert!(!fd9.contains(interdit), "{interdit}");
+    }
+    use app::textes::{texte, Langue};
+    let avis = texte(Langue::Francais, "feuille_fd9.raison.mesure_en_cours");
+    assert!(
+        avis.contains("arrête la mesure") && avis.contains("perdue"),
+        "{avis}"
+    );
+    assert!(!avis.contains("jusqu’au bout"), "{avis}");
+    let avis = texte(Langue::Anglais, "feuille_fd9.raison.mesure_en_cours");
+    assert!(avis.contains("will be lost"), "{avis}");
+    for langue in [Langue::Francais, Langue::Anglais] {
+        assert_ne!(
+            texte(langue, "feuille_fd9.annuler.perdue"),
+            "feuille_fd9.annuler.perdue"
+        );
+    }
 }
 
 /// L'état en clair : glissez la feuille, lecture, « Mesure : n / 2 520 »

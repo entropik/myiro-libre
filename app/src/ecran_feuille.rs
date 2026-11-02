@@ -241,7 +241,8 @@ pub(crate) fn mesurer_feuille_fd9(
     })
 }
 
-/// Bouton « Annuler » pendant l'attente et la lecture de la feuille ; sans
+/// Bouton « Annuler », de l'attente de la feuille à la fin de la mesure des
+/// plages (la feuille est alors perdue) ; sans
 /// feuille en cours, rien ne se passe.
 #[tauri::command]
 pub(crate) fn annuler_feuille_fd9(annulation: State<'_, AnnulationFeuille>) -> bool {

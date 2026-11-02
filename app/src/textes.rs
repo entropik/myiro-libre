@@ -2499,6 +2499,10 @@ const FRANCAIS: Catalogue = &[
         "Annuler",
     ),
     (
+        "feuille_fd9.annuler.perdue",
+        "Annuler la mesure (la feuille sera perdue)",
+    ),
+    (
         "feuille_fd9.voir",
         "Mire et points mesurés",
     ),
@@ -2520,7 +2524,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "feuille_fd9.raison.mesure_en_cours",
-        "Les plages sont en cours de mesure\u{202f}: la feuille va jusqu’au bout.",
+        "Les plages sont en cours de mesure. «\u{202f}Annuler\u{202f}» arrête la mesure\u{202f}: la feuille sera perdue, à remesurer en entier.",
     ),
     (
         "feuille_fd9.raison.ailleurs",
@@ -5527,6 +5531,10 @@ const ANGLAIS: Catalogue = &[
         "Cancel",
     ),
     (
+        "feuille_fd9.annuler.perdue",
+        "Cancel the measurement (the sheet will be lost)",
+    ),
+    (
         "feuille_fd9.voir",
         "Chart and measured points",
     ),
@@ -5548,7 +5556,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "feuille_fd9.raison.mesure_en_cours",
-        "The patches are being measured: the sheet goes through to the end.",
+        "The patches are being measured. “Cancel” stops the measurement: the sheet will be lost and must be measured again in full.",
     ),
     (
         "feuille_fd9.raison.ailleurs",

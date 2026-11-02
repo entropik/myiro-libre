@@ -1,7 +1,7 @@
 // « Mesurer une feuille au FD-9 » dans la vue d'une résolution (ticket #34, tâche 9) : le bouton,
 // actif quand un FD-9 est prêt et la mire RGB-2520 trouvée, sinon inactif avec sa raison juste
 // dessous ; l'état de la feuille en clair (glissez la feuille, lecture, mesure n / 2 520, rangée, ou
-// l'erreur avec sa cause et l'action à faire) ; « Annuler » pendant l'attente et la lecture. Tout
+// l'erreur avec sa cause et l'action à faire) ; « Annuler » jusqu'au rangement. Tout
 // est mis à jour sur place dans des blocs de taille gardée (index.html) : rien ne bouge, les
 // anciennes valeurs restent jusqu'aux nouvelles. L'avancement vient du module Rust par l'événement
 // `feuille_fd9` ; la mire et les points mesurés sont montrés par feuille-vue.js. Utilisé par
@@ -32,9 +32,11 @@ window.FeuilleFd9 = (() => {
     connexion: "feuille", glisser_feuille: "feuille", feuille_engagee: "feuille",
     lecture: "lecture", calage_pret: "lecture", mesure_lancee: "mesure", mesure: "mesure", rangement: "rangement",
   };
-  // Pendant l'attente et la lecture (calage prêt compris, montré « Lecture »), « Annuler » arrête
-  // la feuille sans rien mesurer.
-  const ANNULABLES = ["connexion", "glisser_feuille", "feuille_engagee", "lecture", "calage_pret"];
+  // « Annuler » vaut jusqu'au rangement. Pendant l'attente et la lecture (calage prêt compris,
+  // montré « Lecture »), il arrête la feuille sans rien mesurer ; pendant la mesure des plages, il
+  // arrête la mesure et la feuille est perdue : la raison, à sa place gardée, le dit avant le clic.
+  const ANNULABLES = ["connexion", "glisser_feuille", "feuille_engagee", "lecture", "calage_pret", "mesure_lancee", "mesure"];
+  const PERDUE = ["mesure_lancee", "mesure"];
   const ORDRE = ["feuille", "lecture", "mesure", "rangement"];
   const nombre = (v) => new Intl.NumberFormat(document.documentElement.lang).format(v);
 
@@ -53,7 +55,7 @@ window.FeuilleFd9 = (() => {
   function texteRaison() {
     if (enCours()) {
       if (feuille.condition !== condition) return t("feuille_fd9.raison.ailleurs");
-      return t(ANNULABLES.includes(feuille.etape) ? "feuille_fd9.raison.en_cours" : "feuille_fd9.raison.mesure_en_cours");
+      return t(PERDUE.includes(feuille.etape) ? "feuille_fd9.raison.mesure_en_cours" : "feuille_fd9.raison.en_cours");
     }
     if (!etat) return t("feuille_fd9.raison.chargement");
     return etat.raisons.map((c) => t(c)).join(" ");
@@ -63,6 +65,8 @@ window.FeuilleFd9 = (() => {
     mesurer.disabled = enCours() || !etat || !etat.disponible || condition === null;
     annuler.toggleAttribute("data-vide", !enCours());
     annuler.disabled = !enCours() || !ANNULABLES.includes(feuille.etape);
+    // Même libellé, même largeur : rien ne bouge ; l'avertissement est dans la raison et au survol.
+    annuler.title = enCours() && PERDUE.includes(feuille.etape) ? t("feuille_fd9.annuler.perdue") : "";
     raison.textContent = texteRaison();
     raison.title = raison.textContent; // coupée à deux lignes, lisible en entier au survol
     demonstration.textContent = etat && etat.demonstration ? t("feuille_fd9.demonstration") : "";

@@ -255,7 +255,7 @@ impl<P: Pont> Instrument<P> {
     /// est ensuite relancé ([`super::fd9::PLAFOND_FD9`]), quelle que soit
     /// l'issue.
     /// L'annulation ([`Instrument::annulation`]) est transmise au pont
-    /// pendant l'attente et la lecture de la feuille.
+    /// jusqu'à la fin de la mesure des plages (le pont arrête alors la mesure).
     pub fn mesurer_feuille(
         &mut self,
         mire: DefinitionFeuille,
