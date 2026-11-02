@@ -328,6 +328,26 @@ const FRANCAIS: Catalogue = &[
         "Aucune condition de mesure de ce fichier n’a toutes ses plages en Lab. Importez un export complet de FD-S2w ou de MYIROtools.",
     ),
     (
+        "profil.refus.association_incertaine",
+        "Les plages de cette mesure ne correspondent pas avec certitude à celles de la mire (plage en plus, en double, ou d’une autre couleur). Vérifiez le fichier ou mesurez à nouveau la feuille.",
+    ),
+    (
+        "profil.refus.mesure_incomplete",
+        "Il manque des plages à cette mesure. Utilisez la mesure moyennée de la séance, une fois toutes les plages mesurées.",
+    ),
+    (
+        "profil.refus.mesure_ecartee",
+        "Cette mesure a été écartée de sa séance de mesure. Elle ne sert ni pour un profil ni pour une vérification.",
+    ),
+    (
+        "profil.refus.seance_en_cours",
+        "Cette mesure fait partie d’une séance de mesure en cours. Terminez la séance, puis calculez le profil à partir de son résultat.",
+    ),
+    (
+        "profil.refus.seance_incomplete",
+        "Cette séance de mesure a été fermée avec des plages manquantes. Mesurez un nouveau tirage complet pour calculer un profil.",
+    ),
+    (
         "profil.erreur.argyll_introuvable",
         "ArgyllCMS 3.5.0 est introuvable. Placez-le dans le dossier argyll à côté de l’application, puis relancez l’application.",
     ),
@@ -3523,6 +3543,26 @@ const ANGLAIS: Catalogue = &[
     (
         "profil.refus.aucune_condition",
         "No measurement condition of this file has all its patches in Lab. Import a complete export from FD-S2w or MYIROtools.",
+    ),
+    (
+        "profil.refus.association_incertaine",
+        "The patches of this measurement do not match those of the chart with certainty (extra, duplicated, or of another colour). Check the file or measure the sheet again.",
+    ),
+    (
+        "profil.refus.mesure_incomplete",
+        "Patches are missing from this measurement. Use the averaged measurement of the session, once all patches are measured.",
+    ),
+    (
+        "profil.refus.mesure_ecartee",
+        "This measurement was set aside from its measuring session. It is used neither for a profile nor for a verification.",
+    ),
+    (
+        "profil.refus.seance_en_cours",
+        "This measurement belongs to a measuring session still in progress. Finish the session, then compute the profile from its result.",
+    ),
+    (
+        "profil.refus.seance_incomplete",
+        "This measuring session was closed with missing patches. Measure a new complete print to compute a profile.",
     ),
     (
         "profil.erreur.argyll_introuvable",

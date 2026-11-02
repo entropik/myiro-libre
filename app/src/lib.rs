@@ -23,6 +23,7 @@ pub mod pdf;
 pub mod pont;
 pub mod profiler;
 pub mod rapport_verification;
+pub mod seance_fd9;
 pub mod textes;
 pub mod verifier;
 

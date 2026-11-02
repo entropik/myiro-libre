@@ -299,20 +299,21 @@ fn non_verifie_n_est_pas_un_resultat() {
 }
 
 /// Une base de l'organisation 5 (avant les mires #33 et les vérifications)
-/// passe à l'organisation 7, par la 6, sans rien perdre : profil, état,
+/// passe à l'organisation 8, par la 6 et la 7, sans rien perdre : profil, état,
 /// mesures.
 #[test]
-fn une_base_de_l_organisation_5_passe_a_la_7_sans_rien_perdre() {
+fn une_base_de_l_organisation_5_passe_a_la_8_sans_rien_perdre() {
     let banc = banc();
     let dossier = banc._dossier;
     let (profil, condition) = (banc.profil, banc.condition);
     drop(banc.b);
     let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
     let base = rusqlite::Connection::open(&chemin).unwrap();
-    // Retour à l'organisation 5 : rien de ce que les organisations 6 et 7
-    // ajoutent (effacer une table efface ses déclencheurs).
+    // Retour à l'organisation 5 : rien de ce que les organisations 6, 7 et
+    // 8 ajoutent (effacer une table efface ses déclencheurs).
     base.execute_batch(
-        "DROP TABLE verifications; DROP TABLE tolerances; DROP TABLE tirages; DROP TABLE mires;
+        "DROP TABLE seance_sources; DROP TABLE seances;
+         DROP TABLE verifications; DROP TABLE tolerances; DROP TABLE tirages; DROP TABLE mires;
          PRAGMA user_version = 5;",
     )
     .unwrap();
@@ -332,7 +333,7 @@ fn une_base_de_l_organisation_5_passe_a_la_7_sans_rien_perdre() {
     b.ranger_mire_verification(&mire_verification(XML, "2026-10-28T09:00:00Z"))
         .unwrap();
     drop(b);
-    assert_eq!(organisation(&chemin), 7);
+    assert_eq!(organisation(&chemin), 8);
     verifier_cles_etrangeres(&chemin);
 }
 
@@ -417,18 +418,18 @@ fn verifier_cles_etrangeres(chemin: &std::path::Path) {
 }
 
 /// Une bibliothèque réelle déjà en organisation 6 (mires et tirages de #33)
-/// passe à la 7 sans rien perdre : ses mires restent des mires de profilage,
+/// passe à la 8 sans rien perdre : ses mires restent des mires de profilage,
 /// ses tirages restent préparés, et une mire de vérification se range à
 /// côté, dans la même table, sans devenir un tirage.
 #[test]
-fn une_base_d_organisation_6_passe_a_la_7_sans_rien_perdre() {
+fn une_base_d_organisation_6_passe_a_la_8_sans_rien_perdre() {
     let dossier = tempfile::tempdir().unwrap();
     let chemin = dossier.path().join(bibliotheque::FICHIER_BASE);
     std::fs::copy(FIXTURE_ORGANISATION_6, &chemin).unwrap();
     assert_eq!(organisation(&chemin), 6);
 
     let b = Bibliotheque::ouvrir(dossier.path()).unwrap();
-    assert_eq!(organisation(&chemin), 7);
+    assert_eq!(organisation(&chemin), 8);
     let condition = b.conditions().unwrap()[0].id;
     let tirages = b.tirages(condition).unwrap();
     let noms: Vec<_> = tirages

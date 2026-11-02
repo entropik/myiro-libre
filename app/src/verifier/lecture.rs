@@ -1,7 +1,8 @@
 //! Ce que la vérification lit dans la bibliothèque avant de calculer, et
 //! les refus qui arrivent avant tout calcul : fiche non confirmée, profil
 //! CMJN, mesure du profil lui-même, mesure d'une autre résolution, mesure
-//! qu'aucune mire connue ne couvre.
+//! qu'aucune mire connue ne couvre, mesure d'une séance qui ne sert pas
+//! (#35).
 
 use bibliotheque::{EspaceProfil, IdProfil, MesureImporteeEnregistree};
 use verification::{lire_xml_fds2w, Criteres};
@@ -10,6 +11,7 @@ use super::association::{associer, Association, MireConnue};
 use super::{lire_criteres, DemandeVerification};
 use crate::colonne::BibliothequeOuverte;
 use crate::profiler::{sources_profil, ErreurProfil, SourceProfil};
+use crate::seance_fd9::refus_seance;
 
 /// Ce qu'il faut pour interroger le profil, lu sous le verrou.
 pub(super) struct Lecture {
@@ -98,11 +100,18 @@ impl BibliothequeOuverte {
             }
             let jeu = b.jeu_tolerances(d.tolerances)?;
             let icc = b.fichier_profil(d.profil)?;
-            Ok((condition, espace, du_profil, importee, mires, jeu, icc))
+            let seance = refus_seance(b, d.mesure)?;
+            Ok((
+                condition, espace, du_profil, importee, mires, jeu, icc, seance,
+            ))
         })?;
-        let (condition, espace, du_profil, importee, mires, jeu, icc) = lu;
+        let (condition, espace, du_profil, importee, mires, jeu, icc, seance) = lu;
         if espace == Some(EspaceProfil::Cmjn) {
             return Err(ErreurProfil::sans_cause("verif.refus.cmjn"));
+        }
+        // Séance de mesure (#35) : les mêmes refus que pour un profil.
+        if let Some(cle) = seance {
+            return Err(ErreurProfil::sans_cause(cle));
         }
         if du_profil.contains(&d.mesure) {
             return Err(ErreurProfil::sans_cause("verif.refus.mesure_du_profil"));

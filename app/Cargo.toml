@@ -34,6 +34,7 @@ rapport = { path = "../crates/rapport" }
 image ={ version = "0.25", default-features = false, features = ["png", "jpeg"] }
 pont-protocole = { path = "../crates/pont-protocole" }
 verification = { path = "../crates/verification" }
+seance-mesure = { path = "../crates/seance-mesure" }
 serde = { version = "1", features = ["derive"] }
 # Nombres relus à l'identique : un calcul de vérification rangé en JSON
 # redonne le même rapport à l'octet.

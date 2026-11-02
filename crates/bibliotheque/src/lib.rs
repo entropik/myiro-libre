@@ -16,10 +16,12 @@ use serde::{Deserialize, Serialize};
 mod mires;
 mod parc;
 mod profils;
+mod seances;
 mod verifications;
 pub use mires::*;
 pub use parc::*;
 pub use profils::*;
+pub use seances::*;
 pub use verifications::*;
 
 /// Nom du fichier de la base, dans le dossier de la bibliothèque.
@@ -72,7 +74,7 @@ fn fichier_libre(chemin: &Path) -> std::path::PathBuf {
 }
 
 /// Version de l'organisation de la base ; une base plus récente est refusée.
-const VERSION_BASE: i32 = 7;
+const VERSION_BASE: i32 = 8;
 
 /// Ce qui peut empêcher une opération sur la bibliothèque.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -117,6 +119,9 @@ pub enum ErreurBibliotheque {
     /// n'est enregistré.
     MireInvalide(String),
     TirageInconnu(IdTirage),
+    SeanceInconnue(IdSeance),
+    /// La séance est terminée : elle ne change plus.
+    SeanceFermee(IdSeance),
     /// Erreur du fichier ou de la base elle-même.
     Base(String),
 }
@@ -164,6 +169,8 @@ impl fmt::Display for ErreurBibliotheque {
                 write!(f, "mire refusée, rien n'a été enregistré : {detail}")
             }
             Self::TirageInconnu(id) => write!(f, "tirage n° {} inconnu", id.0),
+            Self::SeanceInconnue(id) => write!(f, "séance n° {} inconnue", id.0),
+            Self::SeanceFermee(id) => write!(f, "séance n° {} terminée : elle ne change plus", id.0),
             Self::Base(detail) => write!(f, "bibliothèque : {detail}"),
         }
     }
@@ -726,6 +733,20 @@ impl Bibliotheque {
         })
     }
 
+    /// Le texte d'une mesure importée, tel qu'il a été rangé : celui du
+    /// fichier d'origine, champs inconnus compris, converti en UTF-8 s'il ne
+    /// l'était pas (un export Windows-1252, par exemple).
+    pub fn texte_importee(&self, id: IdMesure) -> Resultat<String> {
+        self.base
+            .query_row(
+                "SELECT contenu FROM mesures WHERE id = ?1 AND origine = 'importee'",
+                params![id.0],
+                |l| l.get(0),
+            )
+            .optional()?
+            .ok_or(ErreurBibliotheque::MesureInconnue(id))
+    }
+
     /// Instruments qui ont produit au moins une mesure de la bibliothèque.
     pub fn instruments(&self) -> Resultat<Vec<Instrument>> {
         let mut requete = self.base.prepare(
@@ -970,6 +991,7 @@ fn migrer(base: &mut Connection) -> Resultat<()> {
             4 => transaction.execute_batch(ORGANISATION_5)?,
             5 => transaction.execute_batch(ORGANISATION_6)?,
             6 => transaction.execute_batch(verifications::ORGANISATION_7)?,
+            7 => transaction.execute_batch(seances::ORGANISATION_8)?,
             autre => unreachable!("aucune migration depuis l'organisation {autre}"),
         }
         version += 1;

@@ -198,9 +198,12 @@ impl Bibliotheque {
         Ok(tirages)
     }
 
-    /// Les tirages pas encore mesurés (état `prepare`) de la condition dont
-    /// la mire est de cet instrument (`"fd9"` ou `"myiro1"`), avec leur mire,
-    /// du plus récent au plus ancien.
+    /// Les tirages pas encore mesurés de la condition dont la mire est de
+    /// cet instrument (`"fd9"` ou `"myiro1"`), avec leur mire, du plus
+    /// récent au plus ancien. Un tirage est mesuré dès qu'une séance de
+    /// mesure qui le mesure est fermée (terminée ou incomplète,
+    /// organisation 8) : préparer à nouveau la même mire en crée alors un
+    /// nouveau. Une séance en cours le laisse à reprendre.
     pub fn tirages_prepares(
         &self,
         condition: IdCondition,
@@ -210,7 +213,9 @@ impl Bibliotheque {
             "SELECT t.id, t.pages, t.horodatage, m.id, m.nom, m.instrument, m.plages,
                     m.generation, m.valeurs, m.mise_en_page, m.empreinte
              FROM tirages t JOIN mires m ON m.id = t.mire
-             WHERE t.condition = ?1 AND m.instrument = ?2 AND t.etat = 'prepare'",
+             WHERE t.condition = ?1 AND m.instrument = ?2 AND t.etat = 'prepare'
+               AND NOT EXISTS (SELECT 1 FROM seances s
+                               WHERE s.tirage = t.id AND s.etat <> 'en_cours')",
         )?;
         let lignes = requete.query_map(params![condition.0, instrument], |l| {
             Ok(TiragePrepare {

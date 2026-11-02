@@ -143,7 +143,7 @@ fn un_tirage_inconnu_est_dit_inconnu() {
 }
 
 #[test]
-fn une_base_en_organisation_5_passe_en_7_sans_rien_perdre() {
+fn une_base_en_organisation_5_passe_en_8_sans_rien_perdre() {
     let (dossier, b, condition) = condition_rangee();
     let mut icc = vec![0u8; 132];
     icc[0..4].copy_from_slice(&132u32.to_be_bytes());
@@ -183,8 +183,8 @@ fn une_base_en_organisation_5_passe_en_7_sans_rien_perdre() {
     let parc_avant = b.parc("", std::time::SystemTime::UNIX_EPOCH).unwrap();
     drop(b);
 
-    // Retour à l'organisation 5 : sans les tables des mires (6) ni celles
-    // des vérifications (7, ticket #41).
+    // Retour à l'organisation 5 : sans les tables des mires (6), celles
+    // des vérifications (7, ticket #41) ni celles des séances (8, #35).
     let chemin = std::fs::read_dir(dossier.path())
         .unwrap()
         .map(|e| e.unwrap().path())
@@ -192,7 +192,8 @@ fn une_base_en_organisation_5_passe_en_7_sans_rien_perdre() {
         .unwrap();
     let base = rusqlite::Connection::open(&chemin).unwrap();
     base.execute_batch(
-        "DROP TABLE verifications; DROP TABLE tolerances;
+        "DROP TABLE seance_sources; DROP TABLE seances;
+         DROP TABLE verifications; DROP TABLE tolerances;
          DROP TABLE tirages; DROP TABLE mires; PRAGMA user_version = 5;",
     )
     .unwrap();
@@ -219,7 +220,7 @@ fn une_base_en_organisation_5_passe_en_7_sans_rien_perdre() {
     let version: i32 = base
         .pragma_query_value(None, "user_version", |l| l.get(0))
         .unwrap();
-    assert_eq!(version, 7);
+    assert_eq!(version, 8);
 }
 
 /// Le tirage n'est rangé qu'après l'écriture de ses fichiers : une écriture
