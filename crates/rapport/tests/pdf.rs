@@ -286,6 +286,51 @@ fn le_cartouche_courant_est_compact_et_sous_le_contenu() {
     assert!(dernier > 297.0 - 70.0, "page mal remplie : {dernier:.1}");
 }
 
+/// Les chiffres tabulaires ne valent que pour les colonnes de nombres : posés
+/// sur tout le tableau, ils élargissaient aussi les traits d'union du texte
+/// (« au - delà », mainteneur, 2 novembre 2026). Dans une colonne de texte,
+/// « au-delà » a la chasse d'un paragraphe (à la taille près : 8 pt contre
+/// 9 pt) ; dans une colonne de nombres, « 111,1 » et « 888,8 » ont la même
+/// largeur.
+#[test]
+fn les_chiffres_tabulaires_ne_touchent_que_les_nombres() {
+    let d = document(vec![Section {
+        titre: "x".into(),
+        blocs: vec![
+            Bloc::Paragraphe("au-delà".into()),
+            Bloc::Tableau {
+                entetes: vec!["Mesure".into(), "Valeur".into()],
+                lignes: vec![
+                    vec!["au-delà".into(), "111,1".into()],
+                    vec!["Couleurs".into(), "888,8".into()],
+                ],
+                nombres: vec![false, true],
+            },
+        ],
+    }]);
+    let p = rendre(&d);
+    let largeur = |t: &str| -> Vec<f64> {
+        p.pages[0]
+            .morceaux
+            .iter()
+            .filter(|m| m.texte == t)
+            .map(|m| m.largeur_mm)
+            .collect()
+    };
+    let dela = largeur("au-delà");
+    assert_eq!(dela.len(), 2, "{dela:?}");
+    let (paragraphe, cellule) = (dela[0] / 9.0, dela[1] / 8.0);
+    assert!(
+        (paragraphe - cellule).abs() < paragraphe * 0.01,
+        "trait d’union élargi : {dela:?}"
+    );
+    let (un, huit) = (largeur("111,1")[0], largeur("888,8")[0]);
+    assert!(
+        (un - huit).abs() < 0.01,
+        "chiffres non tabulaires : {un} / {huit}"
+    );
+}
+
 /// Un cartouche avec logo et noms longs.
 fn cartouche_long() -> Document {
     let mut d = document(vec![]);

@@ -90,13 +90,16 @@
   grid(columns: (38%, 1fr), column-gutter: 3mm, row-gutter: 1.6mm,
     ..liste.map(((k, v)) => (text(fill: gris, k), multiligne(v))).flatten()))
 
+// Chiffres tabulaires dans les seules colonnes de nombres : sur tout le
+// tableau, ils élargissaient aussi les traits d'union du texte (« au - delà »).
 #let tableau(entetes, lignes, nombres) = {
-  set text(size: 8pt, number-width: "tabular")
+  set text(size: 8pt)
+  let nombre(x) = nombres.at(x, default: false)
   table(columns: entetes.len(), inset: (x: 2mm, y: 1.6mm),
     stroke: (x, y) => (bottom: if y == 0 { filet } else { filet-fin }),
-    align: (x, y) => if nombres.at(x, default: false) { right } else { left },
+    align: (x, y) => if nombre(x) { right } else { left },
     table.header(..entetes.map(e => text(weight: 600, e))),
-    ..lignes.flatten())
+    ..lignes.map(l => l.enumerate().map(((x, c)) => if nombre(x) { text(number-width: "tabular", c) } else { c })).flatten())
 }
 
 #let legende(t) = text(size: 7.5pt, fill: gris, t)
