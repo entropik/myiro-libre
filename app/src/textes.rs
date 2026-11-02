@@ -685,7 +685,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "seance.plages.legende",
-        "Chaque case montre la couleur demandée à l’imprimante, approchée à l’écran. Une case barrée manque dans ce fichier\u{202f}; une case bordée est incertaine.",
+        "Chaque case montre la couleur demandée à l’imprimante, approchée à l’écran. Une case barrée manque dans ce fichier\u{202f}; une case bordée de rouge est incertaine\u{202f}; une case bordée d’orange a un écart signalé, dit aussi au survol.",
     ),
     (
         "seance.plages.fermer",
@@ -726,6 +726,90 @@ const FRANCAIS: Catalogue = &[
     (
         "seance.complements.sans_source",
         "Importez d’abord une mesure de complément.",
+    ),
+    (
+        "seance.raison.sans_seance",
+        "Importer, écarter et terminer viennent après le début de la séance.",
+    ),
+    (
+        "seance.raison.aucune_feuille",
+        "Rangez au moins une feuille pour terminer la séance.",
+    ),
+    (
+        "seance.raison.deja_commencee",
+        "La séance est commencée\u{202f}: rangez ses feuilles.",
+    ),
+    (
+        "seance.raison.chargement",
+        "Lecture de la séance…",
+    ),
+    (
+        "seance.terminee.resultat",
+        "Séance terminée\u{202f}: la mesure moyennée «\u{202f}{fichier}\u{202f}» est rangée dans les mesures de la résolution.",
+    ),
+    (
+        "seance.incomplete.resultat",
+        "Séance fermée incomplète\u{202f}: la mesure «\u{202f}{fichier}\u{202f}» est rangée, mais elle ne fait pas de profil.",
+    ),
+    (
+        "seance.ecarts",
+        "Écarts signalés entre feuilles",
+    ),
+    (
+        "seance.ecarts.ligne",
+        "Plage {plage} · {fichier}",
+    ),
+    (
+        "seance.ecarts.valeur",
+        "{de00} ΔE00",
+    ),
+    (
+        "seance.ecarts.vide",
+        "Aucun écart signalé.",
+    ),
+    (
+        "seance.ecarts.autres",
+        "Et {n} autres écarts signalés, plus petits.",
+    ),
+    (
+        "seance.mire",
+        "Mire du plan\u{202f}: {nom}, empreinte {empreinte}",
+    ),
+    (
+        "seance.refus.feuille",
+        "Feuille en cause\u{202f}: {fichier}.",
+    ),
+    (
+        "seance.refus.plage",
+        "Plage en cause\u{202f}: {plage}.",
+    ),
+    (
+        "seance.apercu.plages.valeur",
+        "{n} sur {total}",
+    ),
+    (
+        "seance.apercu.manquantes.valeur",
+        "{n} ({liste})",
+    ),
+    (
+        "seance.emplacement.m0",
+        "M0",
+    ),
+    (
+        "seance.emplacement.m1",
+        "M1",
+    ),
+    (
+        "seance.emplacement.m2",
+        "M2",
+    ),
+    (
+        "seance.plages.original",
+        "Voir le fichier d’origine",
+    ),
+    (
+        "seance.plages.ecart",
+        "écart signalé",
     ),
     (
         "profil.erreur.argyll_introuvable",
@@ -4282,7 +4366,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "seance.plages.legende",
-        "Each square shows the colour requested from the printer, approximated on screen. A crossed square is missing from this file; a bordered square is uncertain.",
+        "Each square shows the colour requested from the printer, approximated on screen. A crossed square is missing from this file; a square bordered in red is uncertain; a square bordered in orange has a flagged difference, also said on hover.",
     ),
     (
         "seance.plages.fermer",
@@ -4323,6 +4407,90 @@ const ANGLAIS: Catalogue = &[
     (
         "seance.complements.sans_source",
         "Import a complement measurement first.",
+    ),
+    (
+        "seance.raison.sans_seance",
+        "Importing, setting aside and finishing come after the session starts.",
+    ),
+    (
+        "seance.raison.aucune_feuille",
+        "Store at least one sheet to finish the session.",
+    ),
+    (
+        "seance.raison.deja_commencee",
+        "The session is started: store its sheets.",
+    ),
+    (
+        "seance.raison.chargement",
+        "Reading the session…",
+    ),
+    (
+        "seance.terminee.resultat",
+        "Session finished: the averaged measurement “{fichier}” is stored with the measurements of the resolution.",
+    ),
+    (
+        "seance.incomplete.resultat",
+        "Session closed incomplete: the measurement “{fichier}” is stored, but it does not make a profile.",
+    ),
+    (
+        "seance.ecarts",
+        "Flagged differences between sheets",
+    ),
+    (
+        "seance.ecarts.ligne",
+        "Patch {plage} · {fichier}",
+    ),
+    (
+        "seance.ecarts.valeur",
+        "{de00} ΔE00",
+    ),
+    (
+        "seance.ecarts.vide",
+        "No flagged difference.",
+    ),
+    (
+        "seance.ecarts.autres",
+        "And {n} other flagged differences, smaller.",
+    ),
+    (
+        "seance.mire",
+        "Chart of the plan: {nom}, fingerprint {empreinte}",
+    ),
+    (
+        "seance.refus.feuille",
+        "Sheet concerned: {fichier}.",
+    ),
+    (
+        "seance.refus.plage",
+        "Patch concerned: {plage}.",
+    ),
+    (
+        "seance.apercu.plages.valeur",
+        "{n} of {total}",
+    ),
+    (
+        "seance.apercu.manquantes.valeur",
+        "{n} ({liste})",
+    ),
+    (
+        "seance.emplacement.m0",
+        "M0",
+    ),
+    (
+        "seance.emplacement.m1",
+        "M1",
+    ),
+    (
+        "seance.emplacement.m2",
+        "M2",
+    ),
+    (
+        "seance.plages.original",
+        "See the original file",
+    ),
+    (
+        "seance.plages.ecart",
+        "flagged difference",
     ),
     (
         "profil.erreur.argyll_introuvable",

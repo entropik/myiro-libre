@@ -1,13 +1,15 @@
 // Séance de mesure d'un tirage FD-9 (ticket #35), dans la vue d'une résolution : la section ouverte
-// par « Mesurer le tirage ». Le tirage à mesurer, la fiche d'impression à confirmer, puis les
-// feuilles rangées (importées de FD-S2w, ou de complément), chacune avec son état, à inspecter
-// (seance-plages.js), à écarter avec un motif ou à retenir ; ce que donnerait la moyenne ; enfin
-// la fin de la séance, incomplète ou écarts vus par choix explicite. Une séance en cours dans la
-// résolution est dite sous les boutons de la vue. Tout s'écrit sur place, dans les blocs de taille
-// gardée de index.html : une action ne redessine pas la section et ne fait pas bouger la page.
-// La mesure au FD-9 depuis la séance reste inactive, avec sa raison, en attendant son câblage dans
-// feuille-fd9.js : jamais l'ancienne mesure d'une feuille de résolution à sa place. Les actions
-// passent par le module Rust `seance_fd9` ; les textes, par le catalogue. Utilisé par reglage.js.
+// par « Mesurer le tirage ». Le tirage à mesurer, la fiche d'impression à confirmer (vide et non
+// confirmée pour chaque nouveau tirage), puis les feuilles rangées (importées de FD-S2w, ou de
+// complément), chacune avec son état, à inspecter (seance-plages.js), à écarter avec un motif ou à
+// retenir ; ce que donne la moyenne (seance-apercu.js) ; enfin la fin de la séance, incomplète ou
+// écarts vus par choix explicite, après quoi un tirage restant peut se commencer. Une séance en
+// cours dans la résolution est dite sous les boutons de la vue. Tout s'écrit sur place, dans les
+// blocs de taille gardée de index.html, et les anciennes valeurs restent jusqu'aux nouvelles. Un
+// bouton inactif dit pourquoi, juste dessous. La mesure au FD-9 depuis la séance reste inactive,
+// avec sa raison, en attendant son câblage dans feuille-fd9.js : jamais l'ancienne mesure d'une
+// feuille de résolution à sa place. Les actions passent par le module Rust `seance_fd9` ; les
+// textes, par le catalogue. Utilisé par reglage.js.
 "use strict";
 
 window.SeanceFd9 = (() => {
@@ -15,6 +17,7 @@ window.SeanceFd9 = (() => {
   const t = (cle) => textes[cle] || cle;
   const { date } = window.Arbre;
   const plages = window.SeancePlages;
+  const apercu = window.SeanceApercu;
 
   const vue = document.querySelector("[data-vue-reglage]");
   const ouvrirBouton = vue.querySelector("[data-seance-ouvrir]");
@@ -34,11 +37,10 @@ window.SeanceFd9 = (() => {
   const liste = q("[data-seance-sources]");
   const vide = q("[data-seance-sources-vide]");
   const modele = q("[data-seance-modele]");
-  const apercu = (nom) => q(`[data-seance-apercu="${nom}"]`);
-  const refus = q("[data-seance-refus]");
   const incomplete = q("[data-seance-incomplete]");
   const ecartsVus = q("[data-seance-ecarts-vus]");
   const terminer = q("[data-seance-terminer]");
+  const raisonFin = q("[data-seance-raison-fin]");
   const message = q("[data-seance-message]");
 
   // Ce que reglage.js prête : la résolution affichée, de quoi la recharger, et le texte d'une erreur.
@@ -46,37 +48,44 @@ window.SeanceFd9 = (() => {
   let condition = null; // résolution affichée
   let tirages = []; // tirages FD-9 pas encore mesurés de la résolution
   let seance = null; // numéro de la séance montrée
-  let etat = null; // réponse de `seance_etat`
+  let etat = null; // réponse de `seance_etat` : celle de la séance montrée, ou la précédente
+  let chargement = false; // l'état d'une autre séance est demandé : l'ancien reste montré
   let occupe = false;
   let texteMessage = "";
   let demande = 0; // le dernier état demandé l'emporte
+  let ficheDe = null; // séance dont la fiche figée est dans les champs
   const lignes = []; // lignes des feuilles, créées au besoin puis gardées
 
-  const enCours = () => Boolean(etat && etat.etat === "en_cours");
-  const decimal = (v) => new Intl.NumberFormat(document.documentElement.lang, {
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(v);
+  const libre = () => !occupe && !chargement;
+  const enCours = () => Boolean(etat && etat.id === seance && etat.etat === "en_cours");
 
-  // ---- Lire et écrire la fiche d'impression (mire de profilage : sans gestion des couleurs) ----
+  // ---- La fiche d'impression (mire de profilage : sans gestion des couleurs) ----
   function fiche() {
     const f = { impression: "sans_gestion", confirmee: confirmee.checked };
     for (const champ of champsFiche) f[champ.dataset.seanceFiche] = champ.value.trim();
     return f;
   }
 
+  // Une fiche vide et non confirmée : chaque tirage se confirme pour lui-même.
+  function viderFiche() {
+    for (const champ of champsFiche) champ.value = "";
+    confirmee.checked = false;
+    ficheDe = null;
+  }
+
   // La fiche figée de la séance montrée remplace la saisie, et ne se modifie plus.
   function ecrireFiche() {
-    let figee = null;
-    try {
-      figee = etat ? JSON.parse(etat.plan.fiche) : null;
-    } catch (erreur) {
-      console.error("fiche figée", erreur);
+    if (etat && etat.id === seance && ficheDe !== etat.id) {
+      try {
+        const figee = JSON.parse(etat.plan.fiche);
+        for (const champ of champsFiche) champ.value = figee[champ.dataset.seanceFiche] || "";
+        confirmee.checked = Boolean(figee.confirmee);
+        ficheDe = etat.id;
+      } catch (erreur) {
+        console.error("fiche figée", erreur);
+      }
     }
-    for (const champ of champsFiche) {
-      if (figee) champ.value = figee[champ.dataset.seanceFiche] || "";
-      champ.disabled = occupe || seance !== null;
-    }
-    if (figee) confirmee.checked = Boolean(figee.confirmee);
+    for (const champ of champsFiche) champ.disabled = occupe || seance !== null;
     confirmee.disabled = occupe || seance !== null;
   }
 
@@ -89,8 +98,10 @@ window.SeanceFd9 = (() => {
         return { valeur: String(r.id), texte: r.seance ? `${texte} ${t("seance.tirage.en_cours")}` : texte };
       })
       : [{ valeur: "", texte: t("seance.tirage.aucun") }];
-    const choisi = etat ? String(etat.tirage) : choixTirage.value;
-    if (options.map((o) => o.valeur + o.texte).join() !== [...choixTirage.options].map((o) => o.value + o.text).join()) {
+    const deLaSeance = tirages.find((r) => r.seance !== null && r.seance === seance);
+    const choisi = deLaSeance ? String(deLaSeance.id) : choixTirage.value;
+    const actuelles = [...choixTirage.options].map((o) => o.value + o.text).join();
+    if (options.map((o) => o.valeur + o.texte).join() !== actuelles) {
       choixTirage.length = 0;
       for (const o of options) choixTirage.add(new Option(o.texte, o.valeur));
     }
@@ -100,29 +111,42 @@ window.SeanceFd9 = (() => {
 
   choixTirage.addEventListener("change", () => {
     const r = tirages.find((x) => String(x.id) === choixTirage.value);
-    montrerSeance(r && r.seance !== null ? r.seance : null);
+    if (r && r.seance !== null) return montrerSeance(r.seance);
+    viderFiche();
+    return montrerSeance(null);
   });
 
-  // ---- Boutons et raison : un bouton inactif dit pourquoi, juste dessous ----
+  // ---- Boutons et raisons : un bouton inactif dit pourquoi, juste dessous ----
+  function raisonCommune() {
+    if (occupe) return "seance.raison.en_cours";
+    if (chargement) return "seance.raison.chargement";
+    if (seance === null) return "seance.raison.sans_seance";
+    return enCours() ? null : "seance.raison.fermee";
+  }
+
   function ecrireBoutons() {
     const tirage = tirages.find((x) => String(x.id) === choixTirage.value);
-    commencer.disabled = occupe || seance !== null || !tirage || !confirmee.checked;
+    const ouverte = libre() && enCours();
+    commencer.disabled = !libre() || seance !== null || !tirage || !confirmee.checked;
     // En attente du câblage de la mesure dans feuille-fd9.js (raison dite ci-dessous).
     mesurer.disabled = true;
-    importer.disabled = occupe || !enCours();
-    complement.disabled = occupe || !enCours();
-    motif.disabled = occupe || !enCours();
-    incomplete.disabled = occupe || !enCours();
-    ecartsVus.disabled = occupe || !enCours();
-    terminer.disabled = occupe || !enCours() || !etat.sources.length;
+    for (const b of [importer, complement, motif, incomplete, ecartsVus]) b.disabled = !ouverte;
+    terminer.disabled = !ouverte || !etat.sources.length;
     const raisons = [];
-    if (occupe) raisons.push("seance.raison.en_cours");
-    else if (seance === null && !tirage) raisons.push("seance.tirage.aucun");
-    else if (seance === null && !confirmee.checked) raisons.push("seance.raison.fiche");
-    else if (seance !== null && !enCours()) raisons.push("seance.raison.fermee");
+    const commune = raisonCommune();
+    if (seance === null && libre()) {
+      if (!tirage) raisons.push("seance.tirage.aucun");
+      else if (!confirmee.checked) raisons.push("seance.raison.fiche");
+    } else if (seance !== null && libre() && enCours()) {
+      raisons.push("seance.raison.deja_commencee");
+    }
+    if (commune) raisons.push(commune);
     raisons.push("seance.raison.mesure_a_venir");
     raison.textContent = raisons.map((c) => t(c)).join(" ");
     raison.title = raison.textContent; // coupée à deux lignes, lisible en entier au survol
+    const fin = commune || (etat && !etat.sources.length ? "seance.raison.aucune_feuille" : null);
+    raisonFin.textContent = fin ? t(fin) : "";
+    raisonFin.title = raisonFin.textContent;
   }
 
   // ---- Une ligne par feuille rangée ; les lignes sont gardées et réécrites ----
@@ -147,9 +171,10 @@ window.SeanceFd9 = (() => {
     if (!lignes[i]) {
       const ligne = modele.content.firstElementChild.cloneNode(true);
       const source = () => etat.sources.find((s) => String(s.mesure) === ligne.dataset.mesure);
-      ligne.querySelector("[data-inspecter]").addEventListener("click", () => {
+      const inspecter = ligne.querySelector("[data-inspecter]");
+      inspecter.addEventListener("click", () => {
         const s = source();
-        if (s) plages.ouvrir(s.mesure, s.fichier);
+        if (s) plages.ouvrir(s.mesure, s.fichier, inspecter);
       });
       ligne.querySelector("[data-retenir]").addEventListener("click", () => {
         const s = source();
@@ -163,6 +188,7 @@ window.SeanceFd9 = (() => {
 
   function ecrireSources() {
     const sources = etat ? etat.sources : [];
+    const pourquoi = raisonCommune();
     sources.forEach((s, i) => {
       const ligne = ligneSource(i);
       ligne.dataset.mesure = String(s.mesure);
@@ -173,48 +199,23 @@ window.SeanceFd9 = (() => {
       libelle.title = texte;
       const inspecter = ligne.querySelector("[data-inspecter]");
       inspecter.textContent = t("seance.inspecter");
-      inspecter.disabled = occupe;
+      inspecter.disabled = !libre();
+      inspecter.title = inspecter.disabled ? t(pourquoi) : "";
       const bouton = ligne.querySelector("[data-retenir]");
       bouton.textContent = t(s.retenue ? "seance.ecarter" : "seance.retenir");
       // Une mesure de complément ne s'écarte pas : le bouton garde sa place, invisible.
       bouton.toggleAttribute("data-vide", s.role === "complement");
-      bouton.disabled = occupe || !enCours() || s.role === "complement";
+      bouton.disabled = !libre() || !enCours() || s.role === "complement";
+      bouton.title = bouton.disabled && pourquoi ? t(pourquoi) : "";
       ligne.hidden = false;
     });
     lignes.slice(sources.length).forEach((l) => { l.hidden = true; });
     vide.hidden = sources.length > 0;
   }
 
-  // ---- Ce que donnerait la moyenne, ou ce qu'elle a donné ----
-  function ecrireApercu() {
-    const a = etat && (etat.apercu || etat.composition);
-    const valeur = (nom, texte) => {
-      apercu(nom).textContent = texte;
-      apercu(nom).title = texte;
-    };
-    if (!a) {
-      for (const nom of ["plages", "manquantes", "conditions", "ecarts"]) valeur(nom, "");
-      refus.textContent = etat && etat.refus ? parc.texteErreur(etat.refus) : t("seance.apercu.vide");
-      return;
-    }
-    const total = etat.plan.plages.length;
-    const moyennees = etat.apercu ? a.plages : a.composition.length;
-    valeur("plages", `${moyennees} / ${total}`);
-    valeur("manquantes", a.manquantes.length
-      ? `${a.manquantes.length} (${a.manquantes.slice(0, 8).join(", ")}${a.manquantes.length > 8 ? "…" : ""})`
-      : t("seance.apercu.aucune"));
-    const conditions = [...new Set(a.conditions_ecartees.map((c) => c.emplacement.toUpperCase()))];
-    valeur("conditions", conditions.length ? conditions.join(", ") : t("seance.apercu.aucune"));
-    const signales = a.ecarts.filter((e) => e.signale);
-    const max = Math.max(0, ...a.ecarts.map((e) => e.de00 || 0));
-    valeur("ecarts", t("seance.apercu.ecarts.valeur").replace("{n}", () => String(signales.length))
-      .replace("{max}", () => decimal(max)));
-    refus.textContent = "";
-  }
-
   function ecrireEtat() {
     let texte = t("seance.etat.aucune");
-    if (etat) {
+    if (etat && seance !== null) {
       const quand = etat.fin || etat.horodatage;
       texte = t(`seance.etat.${etat.etat}`).replace("{date}", () => date(quand))
         .replace("{n}", () => String(etat.sources.length));
@@ -231,7 +232,7 @@ window.SeanceFd9 = (() => {
     ecrireFiche();
     ecrireBoutons();
     ecrireSources();
-    ecrireApercu();
+    apercu.ecrire(seance === null ? null : etat, parc.texteErreur);
     message.textContent = texteMessage;
     message.title = texteMessage;
     plages.ecrire();
@@ -247,15 +248,17 @@ window.SeanceFd9 = (() => {
     } catch (erreur) {
       if (n === demande) texteMessage = parc.texteErreur(erreur);
     }
+    if (n === demande) chargement = false;
     ecrire();
   }
 
   function montrerSeance(id) {
     if (id !== seance) {
       seance = id;
-      etat = null;
       texteMessage = "";
       plages.fermer();
+      if (id === null) etat = null; // rien à attendre
+      else chargement = true; // l'ancien état reste montré jusqu'au nouveau
     }
     ecrire();
     return chargerEtat();
@@ -263,7 +266,7 @@ window.SeanceFd9 = (() => {
 
   // Une action à la fois ; son message s'écrit à sa place gardée, sous « Terminer la séance ».
   async function agir(faire) {
-    if (occupe) return;
+    if (!libre()) return;
     occupe = true;
     texteMessage = "";
     ecrire();
@@ -278,9 +281,7 @@ window.SeanceFd9 = (() => {
   }
 
   commencer.addEventListener("click", () => agir(async () => {
-    const r = await invoke("seance_commencer", {
-      condition, tirage: Number(choixTirage.value), fiche: fiche(),
-    });
+    const r = await invoke("seance_commencer", { condition, tirage: Number(choixTirage.value), fiche: fiche() });
     seance = r.seance;
     texteMessage = t(r.reprise ? "seance.reprise" : "seance.commencee");
     await parc.recharger();
@@ -302,12 +303,24 @@ window.SeanceFd9 = (() => {
     });
   }
 
+  // Après la fin : la séance et la fiche sont remises à vide, un tirage restant est choisi, et le
+  // message gardé dit la fin avec son résultat.
   terminer.addEventListener("click", () => agir(async () => {
-    await invoke("seance_terminer", {
+    const resultat = await invoke("seance_terminer", {
       seance, fin: { incomplet_assume: incomplete.checked, ecarts_vus: ecartsVus.checked },
     });
-    texteMessage = t("seance.terminee");
+    const close = await invoke("seance_etat", { seance });
+    seance = null;
+    etat = null;
+    viderFiche();
+    incomplete.checked = false;
+    ecartsVus.checked = false;
+    plages.fermer();
     await parc.recharger();
+    const d = parc.reglage();
+    const rangee = d && d.importees.find((m) => m.id === resultat);
+    const cle = close.etat === "incomplete" ? "seance.incomplete.resultat" : "seance.terminee.resultat";
+    texteMessage = t(cle).replace("{fichier}", () => (rangee ? rangee.fichier : String(resultat)));
   }));
 
   confirmee.addEventListener("change", ecrireBoutons);
@@ -323,16 +336,21 @@ window.SeanceFd9 = (() => {
 
   plages.brancher({
     id: () => seance,
-    etat: () => etat,
+    etat: () => (seance === null ? null : etat),
     recharger: chargerEtat,
     texteErreur: (e) => parc.texteErreur(e),
   });
 
-  // Une autre résolution : sa séance en cours, s'il y en a une ; la même : son état relu.
+  // Une autre résolution : fiche vide, et sa séance en cours s'il y en a une ; la même : son état
+  // relu.
   function dessiner(d) {
     tirages = d.tirages.filter((r) => r.instrument === "fd9" && !r.mesure);
     if (condition !== d.condition.id) {
       condition = d.condition.id;
+      texteMessage = "";
+      viderFiche();
+      incomplete.checked = false;
+      ecartsVus.checked = false;
       const enCoursIci = tirages.find((r) => r.seance !== null);
       return montrerSeance(enCoursIci ? enCoursIci.seance : null);
     }

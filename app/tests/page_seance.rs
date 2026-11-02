@@ -15,7 +15,7 @@ fn lire(relatif: &str) -> String {
         .replace("\r\n", "\n")
 }
 
-const SCRIPTS: [&str; 2] = ["seance-plages.js", "seance.js"];
+const SCRIPTS: [&str; 3] = ["seance-plages.js", "seance-apercu.js", "seance.js"];
 
 fn script(nom: &str) -> String {
     lire(&format!("interface/{nom}"))
@@ -52,7 +52,8 @@ fn les_scripts_de_la_seance_sont_charges_avant_reglage_js_et_courts() {
     };
     assert!(position("app.js") < position("arbre.js"));
     assert!(position("arbre.js") < position("seance-plages.js"));
-    assert!(position("seance-plages.js") < position("seance.js"));
+    assert!(position("seance-plages.js") < position("seance-apercu.js"));
+    assert!(position("seance-apercu.js") < position("seance.js"));
     assert!(position("seance.js") < position("reglage.js"));
     for nom in SCRIPTS.iter().chain(&["reglage.js"]) {
         let lignes = script(nom).lines().count();
@@ -137,7 +138,7 @@ fn chaque_valeur_a_sa_place_gardee() {
     ] {
         assert!(b.contains(attendu), "{attendu}");
     }
-    assert_eq!(b.matches("<div class=\"feuille-fd9__etat\"").count(), 3);
+    assert_eq!(b.matches("<div class=\"feuille-fd9__etat\"").count(), 5);
     let page = lire("interface/index.html");
     assert!(page.contains(
         "<p class=\"why chiffres-image__cellule\" role=\"status\" data-seance-reprendre></p>"
@@ -270,4 +271,165 @@ fn l_apercu_ecran_n_est_pas_une_preuve_colorimetrique() {
     assert!(
         texte(Langue::Anglais, "seance.plages.avertissement").contains("not colorimetric proof")
     );
+}
+
+/// Le corps d'une fonction d'un script : de `function nom(` à la prochaine
+/// fonction de même niveau.
+fn corps(script: &str, nom: &str) -> String {
+    let debut = script
+        .find(&format!("function {nom}("))
+        .unwrap_or_else(|| panic!("function {nom} absente"));
+    let fin = script[debut + 1..]
+        .find("\n  function ")
+        .or_else(|| script[debut + 1..].find("\n  // ----"))
+        .map_or(script.len(), |f| debut + 1 + f);
+    script[debut..fin].to_string()
+}
+
+/// Relecture de l'écran : la fiche repart vide, case décochée, à chaque
+/// autre résolution, à chaque tirage sans séance et après la fin d'une
+/// séance ; jamais une confirmation qui suit d'un tirage à l'autre.
+#[test]
+fn la_fiche_repart_vide_et_non_confirmee() {
+    let s = script("seance.js");
+    let vider = corps(&s, "viderFiche");
+    for attendu in ["champ.value = \"\";", "confirmee.checked = false;"] {
+        assert!(vider.contains(attendu), "{attendu} :\n{vider}");
+    }
+    assert!(s.matches("viderFiche();").count() >= 3, "{s}");
+    let dessiner = corps(&s, "dessiner");
+    assert!(dessiner.contains("viderFiche();"), "{dessiner}");
+}
+
+/// Après « Terminer » : la séance et la fiche sont remises à vide, un
+/// tirage restant est choisi et peut se commencer sans changer de
+/// résolution ; un message gardé dit la fin et son résultat.
+#[test]
+fn apres_la_fin_un_tirage_restant_peut_se_commencer() {
+    let s = script("seance.js");
+    let fin = &s[s.find("terminer.addEventListener(\"click\"").unwrap()..];
+    let fin = &fin[..fin.find("}));").unwrap()];
+    for attendu in [
+        "seance = null;",
+        "etat = null;",
+        "viderFiche();",
+        "seance.terminee.resultat",
+        "await parc.recharger();",
+    ] {
+        assert!(fin.contains(attendu), "{attendu} :\n{fin}");
+    }
+    present("seance.terminee.resultat");
+    present("seance.incomplete.resultat");
+}
+
+/// Les écarts signalés se montrent : plage, feuille et ΔE00, dans un bloc
+/// de taille gardée qui défile ; la grille d'inspection les borde aussi.
+#[test]
+fn les_ecarts_signales_se_montrent() {
+    let b = bloc();
+    assert!(b.contains(
+        "<div class=\"feuille-fd9__echec defile-gauche\" role=\"list\" data-t-aria=\"seance.ecarts\" data-seance-ecarts>"
+    ));
+    assert!(b.contains("<template data-seance-ecart-modele>"));
+    let apercu = script("seance-apercu.js");
+    for attendu in [
+        "e.signale",
+        "seance.ecarts.ligne",
+        "seance.ecarts.valeur",
+        "e.de00",
+    ] {
+        assert!(apercu.contains(attendu), "{attendu}");
+    }
+    let plages = script("seance-plages.js");
+    assert!(plages.contains("jeton(\"--limite\")"));
+}
+
+/// Chaque bouton inactif dit pourquoi, juste à côté, dans une ligne gardée :
+/// sous la rangée des boutons de la séance, et sous « Terminer la séance ».
+#[test]
+fn chaque_bouton_inactif_de_la_seance_dit_pourquoi() {
+    let b = bloc();
+    let terminer = b.find("data-seance-terminer").unwrap();
+    let apres = &b[terminer..];
+    let raison = apres.find("<p class=\"why").unwrap();
+    assert!(apres[raison..].starts_with(
+        "<p class=\"why feuille-fd9__raison\" role=\"status\" data-seance-raison-fin>"
+    ));
+    assert!(!apres[..raison].contains("<button"));
+    let s = script("seance.js");
+    for attendu in [
+        "seance.raison.sans_seance",
+        "seance.raison.aucune_feuille",
+        "seance.raison.deja_commencee",
+        "seance.raison.chargement",
+        "raisonFin.textContent",
+    ] {
+        assert!(s.contains(attendu), "{attendu}");
+    }
+}
+
+/// Les anciennes valeurs restent jusqu'aux nouvelles : une autre séance ne
+/// vide pas l'écran avant son état ; une inspection n'écrit le nom de la
+/// feuille qu'une fois ses plages reçues.
+#[test]
+fn les_anciennes_valeurs_restent_jusqu_aux_nouvelles() {
+    let s = script("seance.js");
+    let montrer = corps(&s, "montrerSeance");
+    assert!(montrer.contains("chargement = true;"), "{montrer}");
+    assert!(!montrer.contains("    etat = null;\n"), "{montrer}");
+    let p = script("seance-plages.js");
+    let ouvrir = corps(&p, "ouvrir");
+    let recu = ouvrir.find("plages = r;").unwrap();
+    let nom = ouvrir.find("nomFichier.textContent = fichier;").unwrap();
+    assert!(recu < nom, "{ouvrir}");
+}
+
+/// Fermer l'inspection rend le focus au bouton « Inspecter » ; l'ouvrir
+/// amène la grille dans la vue. Le fichier d'origine se lit sur demande.
+#[test]
+fn l_inspection_garde_le_focus_et_montre_le_fichier_d_origine() {
+    let p = script("seance-plages.js");
+    for attendu in [
+        "retour.focus()",
+        "scrollIntoView({ block: \"nearest\" })",
+        "invoke(\"seance_original\"",
+    ] {
+        assert!(p.contains(attendu), "{attendu}");
+    }
+    let b = bloc();
+    assert!(b.contains(
+        "<button class=\"btn\" data-seance-plages-original data-t=\"seance.plages.original\" aria-expanded=\"false\" aria-controls=\"seance-original\"></button>"
+    ));
+    assert!(b.contains("<pre data-seance-original-texte></pre>"));
+}
+
+/// La mire du plan est nommée ; un refus de moyennage nomme la feuille en
+/// cause ; aucun texte en dur pour les nombres et les conditions.
+#[test]
+fn la_mire_et_la_feuille_en_cause_sont_nommees_sans_texte_en_dur() {
+    assert!(bloc().contains("data-seance-mire"));
+    let apercu = script("seance-apercu.js");
+    for attendu in [
+        "seance.mire",
+        "refus.incompatible.source",
+        "seance.refus.feuille",
+        "seance.apercu.plages.valeur",
+        "seance.apercu.manquantes.valeur",
+        "seance.emplacement.",
+    ] {
+        assert!(apercu.contains(attendu), "{attendu}");
+    }
+    for nom in SCRIPTS {
+        let s = script(nom);
+        for en_dur in ["} / ${", "\"M0\"", "\"M1\"", "\"M2\""] {
+            assert!(!s.contains(en_dur), "{nom} : {en_dur}");
+        }
+    }
+    for cle in [
+        "seance.emplacement.m0",
+        "seance.emplacement.m1",
+        "seance.emplacement.m2",
+    ] {
+        present(cle);
+    }
 }

@@ -26,11 +26,16 @@ window.SeancePlages = (() => {
   const vide = bloc.querySelector("[data-seance-complements-vide]");
   const modele = bloc.querySelector("[data-seance-complement-modele]");
   const message = bloc.querySelector("[data-seance-complements-message]");
+  const voirOriginal = bloc.querySelector("[data-seance-plages-original]");
+  const original = bloc.querySelector("[data-seance-original]");
+  const texteOriginal = bloc.querySelector("[data-seance-original-texte]");
 
   // Ce que seance.js prête : la séance, son état (`seance_etat`) et de quoi le recharger.
   let seance = { id: () => null, etat: () => null, recharger: async () => {}, texteErreur: (e) => String(e) };
   let plages = []; // réponse de `seance_inspecter` : une entrée par plage du plan
   let choisie = -1; // plage survolée ou choisie au clavier
+  let inspectee = null; // la mesure montrée
+  let retour = null; // le bouton « Inspecter » qui l'a ouverte : il reprend le focus
   let demande = 0; // la dernière inspection demandée l'emporte
   let texteMessage = "";
   let occupe = false;
@@ -43,7 +48,15 @@ window.SeancePlages = (() => {
   const decimal = (v) => new Intl.NumberFormat(document.documentElement.lang, {
     minimumFractionDigits: 1, maximumFractionDigits: 1,
   }).format(v);
-  const EMPLACEMENTS = ["M0", "M1", "M2"];
+  const EMPLACEMENTS = ["m0", "m1", "m2"];
+
+  // Les plages de la feuille montrée dont l'écart à la moyenne est signalé.
+  function signalees() {
+    const e = seance.etat();
+    const a = e && (e.apercu || e.composition);
+    if (!a) return new Set();
+    return new Set(a.ecarts.filter((x) => x.signale && x.source === inspectee).map((x) => x.plage));
+  }
 
   // ---- La grille : des cases carrées qui remplissent la toile, de taille fixe ----
   function grille() {
@@ -68,6 +81,7 @@ window.SeancePlages = (() => {
     const g = grille();
     if (!g) return;
     const plein = g.cote - 1; // un filet de fond entre deux cases
+    const ecarts = signalees();
     plages.forEach((p, i) => {
       const x = (i % g.colonnes) * g.cote;
       const y = Math.floor(i / g.colonnes) * g.cote;
@@ -82,6 +96,9 @@ window.SeancePlages = (() => {
         ctx.stroke();
       } else if (p.etat === "douteuse") {
         ctx.strokeStyle = jeton("--hors");
+        ctx.strokeRect(x + 0.5, y + 0.5, plein - 1, plein - 1);
+      } else if (ecarts.has(p.identifiant)) {
+        ctx.strokeStyle = jeton("--limite");
         ctx.strokeRect(x + 0.5, y + 0.5, plein - 1, plein - 1);
       }
     });
@@ -114,11 +131,12 @@ window.SeancePlages = (() => {
     if (p.rvb_fichier) morceaux.push(t("seance.plages.fichier").replace("{rvb}", () => rvb(p.rvb_fichier)));
     p.lab.forEach((lab, k) => {
       if (!lab) return;
-      morceaux.push(t("seance.plages.lab").replace("{m}", () => EMPLACEMENTS[k])
+      morceaux.push(t("seance.plages.lab").replace("{m}", () => t(`seance.emplacement.${EMPLACEMENTS[k]}`))
         .replace("{l}", () => decimal(lab[0])).replace("{a}", () => decimal(lab[1]))
         .replace("{b}", () => decimal(lab[2])));
     });
     morceaux.push(t(`seance.plages.etat.${p.etat}`));
+    if (signalees().has(p.identifiant)) morceaux.push(t("seance.plages.ecart"));
     survol.textContent = morceaux.join(" · ");
     survol.title = survol.textContent;
   }
@@ -156,17 +174,21 @@ window.SeancePlages = (() => {
   });
 
   // ---- Ouvrir et fermer l'inspection ; l'ancienne grille reste jusqu'à la nouvelle ----
-  async function ouvrir(mesure, fichier) {
+  // En cas d'échec, l'ancienne feuille reste montrée, avec son nom, et l'erreur est dite.
+  async function ouvrir(mesure, fichier, bouton) {
+    retour = bouton || null;
     bloc.hidden = false;
-    nomFichier.textContent = fichier;
-    nomFichier.title = fichier;
     const n = ++demande;
     try {
       const r = await invoke("seance_inspecter", { seance: seance.id(), mesure });
       if (n !== demande) return;
       plages = r;
       choisie = -1;
+      inspectee = mesure;
+      nomFichier.textContent = fichier;
+      nomFichier.title = fichier;
       texteMessage = "";
+      montrerOriginal(false);
     } catch (erreur) {
       if (n !== demande) return;
       texteMessage = seance.texteErreur(erreur);
@@ -174,10 +196,34 @@ window.SeancePlages = (() => {
     dessiner();
     ecrireSurvol();
     ecrireComplements();
+    toile.scrollIntoView({ block: "nearest" });
   }
 
   fermer.addEventListener("click", () => {
     bloc.hidden = true;
+    if (retour && retour.isConnected) retour.focus();
+  });
+
+  // ---- Le fichier d'origine de la feuille, tel qu'il a été rangé, sur demande ----
+  function montrerOriginal(ouvert) {
+    original.hidden = !ouvert;
+    voirOriginal.setAttribute("aria-expanded", String(ouvert));
+    if (!ouvert) texteOriginal.textContent = "";
+  }
+
+  voirOriginal.addEventListener("click", async () => {
+    if (!original.hidden || inspectee === null) return montrerOriginal(false);
+    const n = demande;
+    try {
+      const texte = await invoke("seance_original", { seance: seance.id(), mesure: inspectee });
+      if (n !== demande) return undefined;
+      texteOriginal.textContent = texte;
+      montrerOriginal(true);
+    } catch (erreur) {
+      texteMessage = seance.texteErreur(erreur);
+      ecrireComplements();
+    }
+    return undefined;
   });
 
   // ---- Compléments manuels : une plage du plan prise à la main dans une mesure de complément ----
@@ -280,12 +326,17 @@ window.SeancePlages = (() => {
     // Une autre séance, ou une autre résolution : l'inspection se ferme.
     fermer: () => {
       bloc.hidden = true;
+      inspectee = null;
+      montrerOriginal(false);
       plages = [];
       choisie = -1;
       texteMessage = "";
     },
-    // Après un rechargement de la séance : compléments et sources. Une mesure source ne change
-    // jamais : la grille inspectée reste telle quelle.
-    ecrire: ecrireComplements,
+    // Après un rechargement de la séance : compléments, sources et écarts signalés de la grille.
+    // Une mesure source ne change jamais : ses plages ne sont pas redemandées.
+    ecrire: () => {
+      ecrireComplements();
+      if (!bloc.hidden) dessiner();
+    },
   };
 })();
