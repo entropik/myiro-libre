@@ -78,7 +78,7 @@ let occupe = true; // recherche de l'instrument en cours
 // un geste, la liste des instruments ne doit pas cacher son écran.
 let operationEnCours = null;
 // Seule Mesurer a besoin de l'instrument ; les tâches prévues montrent leur carte.
-const TACHES_SANS_INSTRUMENT = ["bibliotheque", "profiler", "controler", "imprimer"];
+const TACHES_SANS_INSTRUMENT = ["bibliotheque", "profiler", "controler", "imprimer", "reglages"];
 
 // Reçoit la vue du module : l'instrument actif et la liste du poste.
 function recevoir(poste) {

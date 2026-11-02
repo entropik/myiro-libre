@@ -1,0 +1,130 @@
+// Gabarit des rapports de myiro-libre (crate rapport, ADR 0008).
+// Sobre : noir et gris, filets fins, ni arrondi ni ombre. Les textes du
+// document arrivent toujours en chaînes : ils ne sont jamais lus comme du
+// balisage. Les seules couleurs posées sont celles des paires de pastilles.
+
+#let gris = luma(38%)
+#let filet-fin = 0.5pt + luma(55%)
+#let filet = 0.75pt + black
+
+#set text(font: "Inter", size: 9pt)
+#set par(leading: 0.55em, spacing: 0.9em)
+
+// Un texte dont les sauts de ligne sont gardés.
+#let multiligne(t) = t.split("\n").map(l => [#l]).join(linebreak())
+
+#let etiquette(t) = text(size: 5.5pt, weight: 600, tracking: 0.1em, fill: gris, upper(t))
+
+// Traits haut et bas du cartouche, épais comme sur un cartouche d'architecte.
+#let filet-epais = 2pt + black
+
+// Le cartouche d'architecte, en pied de chaque page. Il prend la hauteur de
+// son texte : rien n'est jamais rogné ni caché. Les mots se coupent (césure
+// de la langue du rapport) et les noms longs passent à la ligne à leurs
+// séparateurs, où le document a posé des espaces sans chasse. La marge du
+// bas de la page est mesurée sur lui (`#show` du document) : il ne recouvre
+// jamais le contenu. `numero-page` : « Page 1 / 2 ».
+#let cartouche(a, client, objet, details, numero, titre, l, numero-page) = block(width: 100%, breakable: false, {
+  set text(size: 6.5pt, hyphenate: true)
+  set par(leading: 0.4em, spacing: 0.55em, justify: false)
+  let cellules = ()
+  if a.logo != none {
+    cellules.push(image(a.logo, width: 100%, height: 16mm, fit: "contain"))
+  }
+  let contacts = (a.courriel, a.telephone, a.site).filter(c => c != "")
+  cellules.push({
+    etiquette(l.atelier)
+    parbreak()
+    text(size: 7.5pt, weight: 600, a.nom)
+    if a.adresse != "" { linebreak(); multiligne(a.adresse) }
+    for c in contacts { linebreak(); c }
+  })
+  cellules.push({
+    etiquette(l.client)
+    parbreak()
+    text(weight: 600, client)
+    v(1.2mm)
+    etiquette(l.objet)
+    parbreak()
+    objet
+  })
+  // Les détails (date, seuil, profil, papier, image…) sur deux colonnes,
+  // l'étiquette au-dessus de sa valeur : la largeur sert, la hauteur reste basse.
+  cellules.push(grid(columns: (1fr, 1fr), column-gutter: 3mm, row-gutter: 1.6mm,
+    ..details.map(((k, v)) => stack(spacing: 0.9mm, etiquette(k), v))))
+  cellules.push({
+    etiquette(l.numero)
+    parbreak()
+    text(size: 10pt, weight: 600, numero)
+    parbreak()
+    titre
+    parbreak()
+    text(fill: gris, numero-page)
+  })
+  let colonnes = (1fr, 0.85fr, 2fr, 30mm)
+  if a.logo != none { colonnes.insert(0, 22mm) }
+  let dernier = colonnes.len() - 1
+  table(columns: colonnes, inset: (x: 2mm, y: 1.8mm),
+    stroke: (x, y) => (
+      top: filet-epais,
+      bottom: filet-epais,
+      left: if x == 0 { filet } else { 0.5pt + black },
+      right: if x == dernier { filet } else { none },
+    ),
+    ..cellules)
+})
+
+#let titre-document(t) = block(below: 6mm, text(size: 15pt, weight: 600, t))
+
+#let section(t) = block(above: 7mm, below: 3mm, sticky: true, width: 100%, inset: (bottom: 1.5mm), stroke: (bottom: filet-fin),
+  text(size: 7.5pt, weight: 600, tracking: 0.12em, upper(t)))
+
+#let verdict(t, detail) = block(breakable: false, width: 100%, below: 4mm, {
+  text(size: 16pt, weight: 600, t)
+  if detail != "" { parbreak(); text(size: 8pt, fill: gris, detail) }
+})
+
+#let paragraphe(t) = block(width: 100%, multiligne(t))
+
+#let couples(liste) = block(breakable: false, width: 100%,
+  grid(columns: (38%, 1fr), column-gutter: 3mm, row-gutter: 1.6mm,
+    ..liste.map(((k, v)) => (text(fill: gris, k), multiligne(v))).flatten()))
+
+// Chiffres tabulaires dans les seules colonnes de nombres : sur tout le
+// tableau, ils élargissaient aussi les traits d'union du texte (« au - delà »).
+#let tableau(entetes, lignes, nombres) = {
+  set text(size: 8pt)
+  let nombre(x) = nombres.at(x, default: false)
+  table(columns: entetes.len(), inset: (x: 2mm, y: 1.6mm),
+    stroke: (x, y) => (bottom: if y == 0 { filet } else { filet-fin }),
+    align: (x, y) => if nombre(x) { right } else { left },
+    table.header(..entetes.map(e => text(weight: 600, e))),
+    ..lignes.map(l => l.enumerate().map(((x, c)) => if nombre(x) { text(number-width: "tabular", c) } else { c })).flatten())
+}
+
+#let legende(t) = text(size: 7.5pt, fill: gris, t)
+
+#let images(liste) = block(breakable: false, width: 100%,
+  grid(columns: liste.len(), column-gutter: 5mm,
+    ..liste.map(((chemin, largeur, l)) => stack(spacing: 1.5mm, image(chemin, width: largeur), legende(l)))))
+
+#let carre(c) = box(width: 9mm, height: 9mm, stroke: filet-fin, fill: if c == none { none } else { rgb(c) })
+
+#let paires(liste) = block(breakable: false, width: 100%, {
+  set text(size: 7.5pt)
+  grid(columns: (1fr, 1fr, 1fr), column-gutter: 4mm, row-gutter: 3.5mm,
+    ..liste.map(((c-image, c-imprime, titre, lignes)) => grid(columns: (auto, 1fr), column-gutter: 2.5mm,
+      stack(dir: ltr, carre(c-image), carre(c-imprime)),
+      { text(weight: 600, titre); for l in lignes { linebreak(); l } })))
+})
+
+#let graphique(chemin, l) = block(breakable: false, width: 100%, {
+  layout(taille => {
+    let img = image(chemin, width: taille.width)
+    if measure(img).height > 190mm { image(chemin, height: 190mm) } else { img }
+  })
+  v(1.5mm)
+  legende(l)
+})
+
+#let pre(t) = block(width: 100%, inset: 2mm, stroke: filet-fin, text(size: 7.5pt, multiligne(t)))

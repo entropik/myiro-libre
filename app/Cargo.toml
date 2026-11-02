@@ -28,12 +28,21 @@ colorimetrie = { path = "../crates/colorimetrie" }
 gamut = { path = "../crates/gamut" }
 photo = { path = "../crates/photo" }
 profilage = { path = "../crates/profilage" }
+rapport = { path = "../crates/rapport" }
+# Logo de l'atelier : PNG ou JPEG lu, réduit et réencodé en PNG ; photo
+# du rapport réencodée en JPEG (#89).
+image ={ version = "0.25", default-features = false, features = ["png", "jpeg"] }
 pont-protocole = { path = "../crates/pont-protocole" }
 verification = { path = "../crates/verification" }
 serde = { version = "1", features = ["derive"] }
 # Nombres relus à l'identique : un calcul de vérification rangé en JSON
 # redonne le même rapport à l'octet.
 serde_json = { version = "1", features = ["float_roundtrip"] }
+# Vue 3D du rapport, reçue de la page en PNG base 64 (#89).
+base64 = "0.22"
+# Heure locale du poste (fuseau, heure d'été) pour la date du rapport (#89),
+# déjà employé par le pont MYIRO-1.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
 # Images d'essai construites en mémoire par les tests (aucune n'est écrite).
