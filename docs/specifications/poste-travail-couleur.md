@@ -19,9 +19,11 @@ Premier cas terrain : Epson à encres pigmentaires, papier semigloss classique,
 via le pilote d'imprimante. Le modèle précis, la référence papier et les réglages
 seront renseignés dans la fiche d'essai, sans les inventer.
 
-MYIRO-1 et FD-9 sont développés en parallèle et font tous deux partie de cette
-première livraison. Le FD-9 est utilisé quotidiennement et n'est pas reporté
-après le MYIRO-1. Les paliers de sécurité matérielle restent applicables.
+**Changement de plan du 2 novembre 2026 (mainteneur) : la première livraison se
+finalise avec le FD-9 seul.** Le MYIRO-1 devient optionnel : ce qui existe (pont,
+paliers jusqu'à la bande, mires MYIRO-1) est conservé, mais sa mesure dans le
+parcours de l'application n'est plus requise pour publier. Le FD-9 est l'instrument
+utilisé tous les jours. Les paliers de sécurité matérielle restent applicables.
 
 - Chaque instrument possède ses propres mires et préréglages ; plages plus
   petites possibles au FD-9, dans les limites validées par essais.
@@ -48,7 +50,7 @@ après le MYIRO-1. Les paliers de sécurité matérielle restent applicables.
 | Tickets | Place dans le cadrage |
 |---|---|
 | #33 | Mires RVB par instrument, exports et fiche d'impression : première livraison |
-| #34 et #35 | FD-9 et MYIRO-1, acquisition/import, reprise et moyennage : première livraison |
+| #34 et #35 | FD-9, acquisition/import, reprise et moyennage : première livraison ; MYIRO-1 dans le parcours : optionnel (2 novembre 2026) |
 | #40 | Profilage RVB direct : première livraison ; CMJN en extension |
 | #41 | Vérification ICC et son rapport : première livraison |
 | #31 et #32 | Densités, listes de couleurs et nuanciers : ultérieurement |
@@ -81,7 +83,8 @@ pas les nuanciers, les densités ou le contrôle complet.
 ## Critères de fin
 
 - [ ] Première livraison démontrée sur Epson pigmentaire / semigloss : profil RVB
-  calculé puis vérifié avec rapport pour chacun des deux parcours instrument.
+  calculé puis vérifié avec rapport, au FD-9 (le parcours MYIRO-1 est optionnel
+  depuis le 2 novembre 2026).
 - [ ] Import FD-S2w exercé localement, avec provenance et association des plages vérifiées.
 - [ ] Reprise, moyennage, données manquantes et refus de mesures incohérentes couverts.
 - [ ] Premier flux réalisable sans #31, #32, #36–#39 ni #42 ; #40 ne dépend plus

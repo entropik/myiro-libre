@@ -1,0 +1,14 @@
+[package]
+name = "rapport"
+version = "0.1.0"
+description = "Moteur de rapport : un document (cartouche d'architecte, sections, blocs) écrit en source Typst puis compilé en PDF, sans Windows ni Tauri (ticket #89, ADR 0008)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Typst en bibliothèque (Apache-2.0) : compilation en mémoire, aucun paquet
+# téléchargé, aucune police du système (ADR 0008).
+typst = "0.15.1"
+typst-layout = "0.15.1"
+typst-pdf = "0.15.1"

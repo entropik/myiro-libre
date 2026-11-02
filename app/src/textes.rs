@@ -44,6 +44,12 @@ const FRANCAIS: Catalogue = &[
     ("tache.profiler", "Profiler"),
     ("tache.bibliotheque", "Bibliothèque"),
     ("tache.imprimer", "Imprimer"),
+    ("tache.reglages", "Réglages"),
+    ("reglages.atelier", "Atelier"),
+    (
+        "reglages.atelier.aide",
+        "Les coordonnées et le logo de l’atelier, repris dans le cartouche de chaque rapport PDF. Ils sont enregistrés sur ce poste une fois pour toutes.",
+    ),
     ("marque.sous_titre", "poste couleur et impression"),
     ("instrument.libelle", "Instrument"),
     ("instrument.aucun", "Aucun instrument"),
@@ -3077,6 +3083,155 @@ const FRANCAIS: Catalogue = &[
         "mire.preparees.vide",
         "Aucune mire préparée pour cette résolution.",
     ),
+    // Réglage « Atelier » (ticket #89)
+    (
+        "atelier.erreur.logo_format",
+        "Ce logo n’est ni un PNG ni un JPEG. Enregistrez-le dans l’un de ces formats.",
+    ),
+    (
+        "atelier.erreur.logo_illisible",
+        "Ce logo est abîmé ou trop grand pour être lu.",
+    ),
+    ("atelier.erreur.trop_long", "Ce champ est trop long."),
+    (
+        "atelier.erreur.ecriture",
+        "Le réglage de l’atelier n’a pas pu être enregistré.",
+    ),
+    (
+        "atelier.erreur.lecture",
+        "Le réglage de l’atelier n’a pas pu être lu.",
+    ),
+    // Rapport d'une image (ticket #89)
+    ("rapport.image.titre", "Rapport d’image"),
+    ("cartouche_rapport.page", "Page {n} / {total}"),
+    ("cartouche_rapport.atelier", "Atelier"),
+    ("cartouche_rapport.client", "Client"),
+    ("cartouche_rapport.objet", "Objet"),
+    ("cartouche_rapport.numero", "N° de rapport"),
+    ("rapport.section.verdict", "Verdict"),
+    ("rapport.image.photo", "Image d’origine"),
+    (
+        "rapport.image.surimpression",
+        "En vert, les couleurs au-delà de {s}\u{202f}ΔE00",
+    ),
+    (
+        "rapport.precaution",
+        "Couleurs approchées\u{202f}: elles dépendent de l’écran ou de l’imprimante qui montre ce rapport.",
+    ),
+    ("rapport.points", "Points relevés"),
+    ("rapport.point", "Point {n} (x {x}, y {y})"),
+    (
+        "rapport.graphique_refuse",
+        "Graphique non repris dans le rapport.",
+    ),
+    ("rapport.cartouche.profil", "Profil"),
+    ("rapport.cartouche.papier", "Papier"),
+    ("rapport.cartouche.image", "Image"),
+    ("rapport.cartouche.image.valeur", "{nom}, {l} × {h}\u{202f}px"),
+    ("rapport.cartouche.seuil", "Seuil"),
+    ("rapport.cartouche.date", "Date"),
+    ("rapport.date_longue", "{j} {mois} {a}, {h}\u{a0}h\u{a0}{mn}"),
+    ("rapport.mois.1", "janvier"),
+    ("rapport.mois.2", "février"),
+    ("rapport.mois.3", "mars"),
+    ("rapport.mois.4", "avril"),
+    ("rapport.mois.5", "mai"),
+    ("rapport.mois.6", "juin"),
+    ("rapport.mois.7", "juillet"),
+    ("rapport.mois.8", "août"),
+    ("rapport.mois.9", "septembre"),
+    ("rapport.mois.10", "octobre"),
+    ("rapport.mois.11", "novembre"),
+    ("rapport.mois.12", "décembre"),
+    (
+        "rapport.erreur.points",
+        "Huit points au plus partent dans le rapport.",
+    ),
+    (
+        "rapport.erreur.destination",
+        "Le rapport n’a pas pu être enregistré\u{202f}: le fichier est ouvert ou protégé, ou le dossier n’existe plus. Fermez le PDF ou choisissez un autre nom.",
+    ),
+    (
+        "rapport.erreur.moteur",
+        "Le rapport n’a pas pu être mis en page. Recommencez\u{202f}; si cela se répète, signalez-le.",
+    ),
+    // Page : coches, points relevés et fenêtre d'export (ticket #89)
+    ("rapport.inclure", "Inclure dans le rapport"),
+    (
+        "rapport.toujours",
+        "Toujours dans le rapport PDF.",
+    ),
+    ("rapport.points.garder", "Garder ce point"),
+    ("rapport.points.retirer", "Retirer"),
+    (
+        "rapport.points.raison.aucun",
+        "Cliquez d’abord sur l’image pour relever un point.",
+    ),
+    (
+        "rapport.points.raison.plein",
+        "Huit points sont gardés, le plus que le rapport reprend. Retirez-en un pour en garder un autre.",
+    ),
+    ("rapport.points.raison.deja", "Ce point est déjà gardé."),
+    (
+        "rapport.points.aide",
+        "Les points gardés partent dans le rapport PDF.",
+    ),
+    ("rapport.points.nombre", "Points relevés\u{202f}: {n}"),
+    ("rapport.bouton", "Rapport PDF…"),
+    (
+        "rapport.bouton.raison",
+        "Ouvrez une image et attendez la fin de son analyse pour en faire un rapport.",
+    ),
+    (
+        "rapport.bouton.aide",
+        "Le rapport reprend l’image, son verdict, les points gardés et les parties cochées.",
+    ),
+    ("rapport.fenetre.titre", "Rapport PDF de l’image"),
+    ("rapport.atelier_lecture", "Lecture de l’atelier…"),
+    ("rapport.atelier_vide", "Atelier non rempli"),
+    ("rapport.logo", "Logo de l’atelier"),
+    ("rapport.modifier_atelier", "Modifier l’atelier"),
+    ("rapport.champ.client", "Client (facultatif)"),
+    ("rapport.champ.objet", "Objet ou référence (facultatif)"),
+    ("rapport.champ.langue", "Langue du rapport"),
+    ("rapport.langue.fr", "Français"),
+    ("rapport.langue.en", "English"),
+    ("rapport.contenu", "Dans le rapport"),
+    ("rapport.exporter", "Exporter le PDF"),
+    ("rapport.fermer", "Fermer"),
+    ("rapport.ouvrir_dossier", "Ouvrir le dossier"),
+    ("rapport.en_cours", "Rapport en cours…"),
+    ("rapport.enregistre", "Rapport enregistré\u{202f}: {nom}"),
+    ("rapport.filtre", "Document PDF"),
+    ("rapport.chemin", "Chemin\u{202f}: {depart} → {arrivee}"),
+    // Formulaire « Atelier » (ticket #89)
+    ("atelier.titre", "Atelier"),
+    (
+        "atelier.premiere",
+        "Remplissez une fois les coordonnées de l’atelier\u{202f}: elles seront reprises sur chaque rapport.",
+    ),
+    ("atelier.champ.nom", "Nom de l’atelier"),
+    ("atelier.champ.adresse", "Adresse"),
+    ("atelier.champ.courriel", "Courriel"),
+    ("atelier.champ.telephone", "Téléphone"),
+    ("atelier.champ.site", "Site"),
+    ("atelier.logo", "Logo"),
+    ("atelier.choisir_logo", "Choisir un logo…"),
+    ("atelier.retirer_logo", "Retirer le logo"),
+    (
+        "atelier.retirer_logo.raison",
+        "Aucun logo n’est posé.",
+    ),
+    (
+        "atelier.logo.aide",
+        "PNG ou JPEG, réduit à 600 pixels de côté.",
+    ),
+    ("atelier.filtre_logo", "Image PNG ou JPEG"),
+    ("atelier.apercu", "Aperçu du cartouche"),
+    ("atelier.apercu.numero", "2026-0001"),
+    ("atelier.enregistrer", "Enregistrer"),
+    ("atelier.fermer", "Fermer"),
+    ("atelier.enregistre", "Atelier enregistré."),
 ];
 
 const ANGLAIS: Catalogue = &[
@@ -3089,6 +3244,12 @@ const ANGLAIS: Catalogue = &[
     ("tache.profiler", "Profile"),
     ("tache.bibliotheque", "Library"),
     ("tache.imprimer", "Print"),
+    ("tache.reglages", "Settings"),
+    ("reglages.atelier", "Studio"),
+    (
+        "reglages.atelier.aide",
+        "The studio details and logo, shown in the title block of every PDF report. They are saved on this computer once and for all.",
+    ),
     ("marque.sous_titre", "colour and print station"),
     ("instrument.libelle", "Instrument"),
     ("instrument.aucun", "No instrument"),
@@ -6106,6 +6267,149 @@ const ANGLAIS: Catalogue = &[
         "mire.preparees.vide",
         "No chart prepared for this resolution.",
     ),
+    // Studio settings (ticket #89)
+    (
+        "atelier.erreur.logo_format",
+        "This logo is neither a PNG nor a JPEG. Save it in one of these formats.",
+    ),
+    (
+        "atelier.erreur.logo_illisible",
+        "This logo is damaged or too large to be read.",
+    ),
+    ("atelier.erreur.trop_long", "This field is too long."),
+    (
+        "atelier.erreur.ecriture",
+        "The studio settings could not be saved.",
+    ),
+    (
+        "atelier.erreur.lecture",
+        "The studio settings could not be read.",
+    ),
+    // Image report (ticket #89)
+    ("rapport.image.titre", "Image report"),
+    ("cartouche_rapport.page", "Page {n} of {total}"),
+    ("cartouche_rapport.atelier", "Studio"),
+    ("cartouche_rapport.client", "Client"),
+    ("cartouche_rapport.objet", "Reference"),
+    ("cartouche_rapport.numero", "Report no."),
+    ("rapport.section.verdict", "Verdict"),
+    ("rapport.image.photo", "Original image"),
+    (
+        "rapport.image.surimpression",
+        "In green, the colours beyond {s} ΔE00",
+    ),
+    (
+        "rapport.precaution",
+        "Approximate colours: they depend on the screen or printer showing this report.",
+    ),
+    ("rapport.points", "Sampled points"),
+    ("rapport.point", "Point {n} (x {x}, y {y})"),
+    (
+        "rapport.graphique_refuse",
+        "Chart not included in the report.",
+    ),
+    ("rapport.cartouche.profil", "Profile"),
+    ("rapport.cartouche.papier", "Paper"),
+    ("rapport.cartouche.image", "Image"),
+    ("rapport.cartouche.image.valeur", "{nom}, {l} × {h} px"),
+    ("rapport.cartouche.seuil", "Threshold"),
+    ("rapport.cartouche.date", "Date"),
+    ("rapport.date_longue", "{j} {mois} {a}, {h}:{mn}"),
+    ("rapport.mois.1", "January"),
+    ("rapport.mois.2", "February"),
+    ("rapport.mois.3", "March"),
+    ("rapport.mois.4", "April"),
+    ("rapport.mois.5", "May"),
+    ("rapport.mois.6", "June"),
+    ("rapport.mois.7", "July"),
+    ("rapport.mois.8", "August"),
+    ("rapport.mois.9", "September"),
+    ("rapport.mois.10", "October"),
+    ("rapport.mois.11", "November"),
+    ("rapport.mois.12", "December"),
+    (
+        "rapport.erreur.points",
+        "At most eight points go into the report.",
+    ),
+    (
+        "rapport.erreur.destination",
+        "The report could not be saved: the file is open or protected, or the folder no longer exists. Close the PDF or choose another name.",
+    ),
+    (
+        "rapport.erreur.moteur",
+        "The report could not be laid out. Try again; if it happens again, please report it.",
+    ),
+    // Page: report checkboxes, sampled points and export window (ticket #89)
+    ("rapport.inclure", "Include in the report"),
+    ("rapport.toujours", "Always in the PDF report."),
+    ("rapport.points.garder", "Keep this point"),
+    ("rapport.points.retirer", "Remove"),
+    (
+        "rapport.points.raison.aucun",
+        "Click the image first to sample a point.",
+    ),
+    (
+        "rapport.points.raison.plein",
+        "Eight points are kept, the most the report takes. Remove one to keep another.",
+    ),
+    ("rapport.points.raison.deja", "This point is already kept."),
+    (
+        "rapport.points.aide",
+        "Kept points go into the PDF report.",
+    ),
+    ("rapport.points.nombre", "Sampled points: {n}"),
+    ("rapport.bouton", "PDF report…"),
+    (
+        "rapport.bouton.raison",
+        "Open an image and wait for its analysis to finish to make a report.",
+    ),
+    (
+        "rapport.bouton.aide",
+        "The report takes the image, its verdict, the kept points and the ticked parts.",
+    ),
+    ("rapport.fenetre.titre", "PDF report of the image"),
+    ("rapport.atelier_lecture", "Reading the studio settings…"),
+    ("rapport.atelier_vide", "Studio not filled in"),
+    ("rapport.logo", "Studio logo"),
+    ("rapport.modifier_atelier", "Edit studio"),
+    ("rapport.champ.client", "Client (optional)"),
+    ("rapport.champ.objet", "Subject or reference (optional)"),
+    ("rapport.champ.langue", "Report language"),
+    ("rapport.langue.fr", "Français"),
+    ("rapport.langue.en", "English"),
+    ("rapport.contenu", "In the report"),
+    ("rapport.exporter", "Export the PDF"),
+    ("rapport.fermer", "Close"),
+    ("rapport.ouvrir_dossier", "Open folder"),
+    ("rapport.en_cours", "Report in progress…"),
+    ("rapport.enregistre", "Report saved: {nom}"),
+    ("rapport.filtre", "PDF document"),
+    ("rapport.chemin", "Path: {depart} → {arrivee}"),
+    // Studio form (ticket #89)
+    ("atelier.titre", "Studio"),
+    (
+        "atelier.premiere",
+        "Fill in the studio details once: they will appear on every report.",
+    ),
+    ("atelier.champ.nom", "Studio name"),
+    ("atelier.champ.adresse", "Address"),
+    ("atelier.champ.courriel", "Email"),
+    ("atelier.champ.telephone", "Phone"),
+    ("atelier.champ.site", "Website"),
+    ("atelier.logo", "Logo"),
+    ("atelier.choisir_logo", "Choose a logo…"),
+    ("atelier.retirer_logo", "Remove the logo"),
+    ("atelier.retirer_logo.raison", "No logo is set."),
+    (
+        "atelier.logo.aide",
+        "PNG or JPEG, reduced to 600 pixels per side.",
+    ),
+    ("atelier.filtre_logo", "PNG or JPEG image"),
+    ("atelier.apercu", "Title block preview"),
+    ("atelier.apercu.numero", "2026-0001"),
+    ("atelier.enregistrer", "Save"),
+    ("atelier.fermer", "Close"),
+    ("atelier.enregistre", "Studio saved."),
 ];
 
 fn catalogue(langue: Langue) -> Catalogue {
@@ -6313,6 +6617,22 @@ mod tests {
     #[test]
     fn chaque_cle_existe_en_francais_et_en_anglais() {
         assert_eq!(cles_manquantes(), vec![]);
+    }
+
+    /// Une clé n'est définie qu'une fois par langue : une seconde définition
+    /// serait cachée par la première (deux tickets qui choisissent la même
+    /// clé, comme `rapport.date` pour #41 et #89).
+    #[test]
+    fn aucune_cle_n_est_definie_deux_fois() {
+        for catalogue in [FRANCAIS, ANGLAIS] {
+            let mut vues = std::collections::HashSet::new();
+            let doubles: Vec<&str> = catalogue
+                .iter()
+                .map(|(c, _)| *c)
+                .filter(|c| !vues.insert(*c))
+                .collect();
+            assert_eq!(doubles, Vec::<&str>::new());
+        }
     }
 
     /// Typographie française : apostrophe courbe, guillemets français « » (ni

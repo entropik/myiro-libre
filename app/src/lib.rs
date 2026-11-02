@@ -5,11 +5,13 @@
 //! modules `instrument` et `pont` n'en dépendent pas non plus : seul ce
 //! fichier fait le lien avec la fenêtre.
 
+pub mod atelier;
 pub mod colonne;
 pub mod comparer;
 pub mod demonstration;
 pub mod demonstration_fd9;
 mod ecran_feuille;
+pub mod ecriture;
 pub mod installation;
 pub mod instrument;
 pub mod lancement;
@@ -17,6 +19,7 @@ pub mod mesurer;
 pub mod mesurer_feuille;
 pub mod mires;
 pub mod parc;
+pub mod pdf;
 pub mod pont;
 pub mod profiler;
 pub mod rapport_verification;
@@ -344,6 +347,11 @@ fn ouvrir_bibliotheque(
                     essai.display()
                 );
             }
+            // Le réglage « Atelier » (ADR 0008) : en démonstration, dans le
+            // dossier temporaire.
+            app.manage(atelier::ReglageAtelier::new(
+                demonstration::dossier().join("atelier"),
+            ));
             let ouverte = colonne::BibliothequeOuverte::demonstration(&demonstration::dossier());
             let seance = demonstration::seance(&ouverte);
             app.manage(ouverte);
@@ -358,12 +366,20 @@ fn ouvrir_bibliotheque(
                 std::process::exit(2);
             }
             eprintln!("bibliothèque d'essai : {}", dossier.display());
+            // Atelier d'essai, dans le dossier d'essai : jamais celui du poste.
+            app.manage(atelier::ReglageAtelier::new(dossier.join("atelier")));
             for fenetre in app.webview_windows().values() {
                 fenetre.set_title(textes::texte(langue, "fenetre.titre.essai"))?;
             }
             dossier.clone()
         }
-        BibliothequeDemandee::Poste => colonne::emplacement(&app.path().app_data_dir()?),
+        BibliothequeDemandee::Poste => {
+            // Le réglage « Atelier » vit à côté des données, hors de la
+            // bibliothèque (ADR 0008).
+            let donnees = app.path().app_data_dir()?;
+            app.manage(atelier::ReglageAtelier::new(donnees.join("atelier")));
+            colonne::emplacement(&donnees)
+        }
     };
     let ouverte = colonne::BibliothequeOuverte::ouvrir(&dossier);
     // La couleur de référence conservée revient dans Mesurer (ticket #8).
@@ -751,6 +767,13 @@ pub fn lancer() {
             comparer::image::commandes::image_ecarts,
             comparer::image::commandes::image_annuler,
             comparer::image::commandes::image_pixel,
+            comparer::image::rapport::commandes::image_rapport_exporter,
+            comparer::image::rapport::commandes::rapport_ouvrir_dossier,
+            atelier::commandes::atelier_lire,
+            atelier::commandes::atelier_logo,
+            atelier::commandes::atelier_enregistrer,
+            atelier::commandes::atelier_choisir_logo,
+            atelier::commandes::atelier_retirer_logo,
             etalonner,
             repondre_geste
         ])

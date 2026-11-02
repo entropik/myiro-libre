@@ -1,0 +1,374 @@
+//! Le PDF d'un document, compilé en mémoire par Typst : A4 portrait,
+//! cartouche sur chaque page, textes repris tels quels, blocs entiers.
+
+mod commun;
+
+use commun::*;
+use rapport::*;
+
+fn rendre(d: &Document) -> Pdf {
+    pdf(d).unwrap_or_else(|e| panic!("{e:?}"))
+}
+
+#[test]
+fn un_document_devient_un_pdf_a4_portrait() {
+    let p = rendre(&document_complet());
+    assert!(p.octets.starts_with(b"%PDF-"));
+    assert!(p.octets.trim_ascii_end().ends_with(b"%%EOF"));
+    // Cartouche compact (2 novembre 2026) : les deux photos de 80 mm et le
+    // graphique tiennent sur une page.
+    assert_eq!(p.pages.len(), 1);
+    for page in &p.pages {
+        assert!((page.largeur_mm - 210.0).abs() < 0.1, "{}", page.largeur_mm);
+        assert!((page.hauteur_mm - 297.0).abs() < 0.1, "{}", page.hauteur_mm);
+    }
+}
+
+#[test]
+fn les_textes_attendus_sont_dans_le_pdf() {
+    let p = rendre(&document_complet());
+    let texte = p.pages.iter().map(|p| p.texte.as_str()).collect::<String>();
+    for attendu in [
+        "97,2 % de l'image est imprimable",
+        "Galerie Dupont",
+        "Atelier Exemple",
+        "75011 Paris",
+        "2026-0001",
+        "Point 1",
+        "Photo",
+        "Surimpression",
+        "812 000",
+        "Page 1 / 1",
+        "ligne 2",
+    ] {
+        assert!(texte.contains(attendu), "{attendu} absent de\n{texte}");
+    }
+}
+
+#[test]
+fn un_texte_piege_reste_du_texte() {
+    let mut d = document(vec![Section {
+        titre: "x".into(),
+        blocs: vec![Bloc::Paragraphe("#panic(\"non\") *gras* $x$ \\".into())],
+    }]);
+    d.cartouche.client = "\") #panic(\"x\") [".into();
+    let p = rendre(&d);
+    let texte = &p.pages[0].texte;
+    assert!(texte.contains("\") #panic(\"x\") ["), "{texte}");
+    assert!(texte.contains("#panic(\"non\") *gras* $x$ \\"), "{texte}");
+}
+
+/// Un document de `n` blocs de paires, chacune nommée « Bloc i ».
+fn long(n: usize) -> Document {
+    let paire = |i: usize, j: usize| PaireCouleurs {
+        image: "#808080".into(),
+        imprime: "#707070".into(),
+        titre: format!("Bloc {i} paire {j}"),
+        lignes: vec!["ΔE00 3,0".into(), format!("fin du bloc {i} paire {j}")],
+    };
+    document(vec![Section {
+        titre: "Points".into(),
+        blocs: (0..n)
+            .map(|i| Bloc::Paires((0..12).map(|j| paire(i, j)).collect()))
+            .collect(),
+    }])
+}
+
+#[test]
+fn le_cartouche_est_sur_chaque_page() {
+    let p = rendre(&long(12));
+    let total = p.pages.len();
+    assert!(total >= 3, "{total} pages");
+    for (i, page) in p.pages.iter().enumerate() {
+        for attendu in [
+            "Atelier Exemple".to_string(),
+            "Galerie Dupont".into(),
+            "2026-0001".into(),
+            format!("Page {} / {total}", i + 1),
+        ] {
+            assert!(page.texte.contains(&attendu), "page {} : {attendu}", i + 1);
+        }
+    }
+}
+
+#[test]
+fn les_blocs_ne_se_coupent_pas() {
+    let p = rendre(&long(12));
+    for i in 0..12 {
+        let debut = format!("Bloc {i} paire 0");
+        let fin = format!("fin du bloc {i} paire 11");
+        let page = p.pages.iter().position(|pg| pg.texte.contains(&debut));
+        assert!(page.is_some(), "{debut}");
+        assert!(
+            p.pages[page.unwrap()].texte.contains(&fin),
+            "bloc {i} coupé"
+        );
+    }
+}
+
+#[test]
+fn un_rapport_court_tient_sur_une_page() {
+    assert_eq!(rendre(&document(vec![])).pages.len(), 1);
+}
+
+#[test]
+fn le_logo_s_affiche() {
+    let mut d = document(vec![]);
+    d.cartouche.atelier.logo_png = Some(PNG_1X1.to_vec());
+    assert_eq!(rendre(&d).pages.len(), 1);
+}
+
+#[test]
+fn une_image_illisible_est_refusee_sans_arret() {
+    let d = document(vec![Section {
+        titre: "x".into(),
+        blocs: vec![Bloc::Images(vec![Figure {
+            image: b"pas une image".to_vec(),
+            legende: "x".into(),
+            largeur_mm: 50.0,
+        }])],
+    }]);
+    assert!(matches!(pdf(&d), Err(ErreurRapport::Compilation(_))));
+}
+
+#[test]
+fn un_rapport_anglais_garde_ses_libelles() {
+    let mut d = document(vec![]);
+    d.langue = "en".into();
+    d.libelles.page = "Page {n} of {total}".into();
+    assert!(rendre(&d).pages[0].texte.contains("Page 1 of 1"));
+}
+
+/// Écrit les PDF d'essai dans le dossier `APERCU_RAPPORT`, pour les regarder.
+#[test]
+#[ignore]
+fn ecrire_apercu() {
+    let dossier = std::path::PathBuf::from(std::env::var("APERCU_RAPPORT").unwrap());
+    let mut complet = document_complet();
+    complet.cartouche.atelier.logo_png = Some(PNG_1X1.to_vec());
+    for (nom, d) in [
+        ("complet", complet),
+        ("long", long(8)),
+        ("cartouche", cartouche_long()),
+    ] {
+        let p = rendre(&d);
+        std::fs::write(dossier.join(format!("{nom}.pdf")), &p.octets).unwrap();
+        for (i, page) in p.pages.iter().enumerate() {
+            println!("--- {nom} page {}\n{}", i + 1, page.texte);
+        }
+    }
+}
+
+/// Avec un logo et des noms longs, toutes les lignes du cartouche restent
+/// dans le cartouche, au-dessus du bas de page (297 − 10 mm) : le texte passe
+/// à la ligne au lieu d'être rogné, et la date reste lisible.
+#[test]
+fn le_cartouche_garde_toutes_ses_lignes_avec_des_noms_longs() {
+    let p = rendre(&cartouche_long());
+    let page = &p.pages[0];
+    let date = page
+        .lignes
+        .iter()
+        .find(|(_, t)| t.contains("30 octobre 2026"))
+        .expect("date présente");
+    let bas = page.lignes.iter().map(|(y, _)| *y).fold(0.0, f64::max);
+    assert!(
+        bas < 297.0 - 10.0,
+        "ligne la plus basse à {bas:.1} mm : {date:?}"
+    );
+}
+
+/// Les morceaux de texte du cartouche : sous le haut de sa première étiquette
+/// (« ATELIER »), à 2 mm près.
+fn morceaux_cartouche(page: &PagePdf) -> Vec<&Morceau> {
+    let haut = page
+        .morceaux
+        .iter()
+        .find(|m| m.texte == "ATELIER")
+        .expect("étiquette Atelier")
+        .y_mm
+        - 2.0;
+    page.morceaux.iter().filter(|m| m.y_mm >= haut).collect()
+}
+
+/// Rien ne déborde ni ne se chevauche dans le cartouche (mainteneur,
+/// 2 novembre 2026 : le nom du profil chevauchait « Rapport d'image ») :
+/// chaque morceau reste dans la page, deux morceaux d'une même ligne ne se
+/// recouvrent pas, et le texte des détails s'arrête avant la case du numéro.
+/// Un nom sans espace ni séparateur passe aussi à la ligne.
+#[test]
+fn le_cartouche_ne_deborde_ni_ne_chevauche_jamais() {
+    let mut d = cartouche_long();
+    d.cartouche.lignes.push((
+        "Note".into(),
+        "ProfilSansAucuneSeparationNiEspaceQuiNeFinitJamaisVraimentPasDuTout".into(),
+    ));
+    d.cartouche.atelier.adresse = "Bâtiment B, 2e étage\n12 rue des Presses\n75011 Paris".into();
+    d.cartouche.atelier.courriel = "contact-tirages-fine-art@atelier-exemple-et-associes.fr".into();
+    let p = rendre(&d);
+    let page = &p.pages[0];
+    let morceaux = morceaux_cartouche(page);
+    let numero = morceaux
+        .iter()
+        .find(|m| m.texte == "2026-0001")
+        .expect("numéro");
+    for m in &morceaux {
+        assert!(
+            m.x_mm >= 15.0 - 0.1 && m.x_mm + m.largeur_mm <= 195.0 + 0.1,
+            "{m:?}"
+        );
+        if m.x_mm < numero.x_mm {
+            assert!(
+                m.x_mm + m.largeur_mm < numero.x_mm - 1.0,
+                "déborde sur le numéro : {m:?}"
+            );
+        }
+        for autre in &morceaux {
+            let meme_ligne = (m.y_mm - autre.y_mm).abs() < 0.5;
+            let recouvre = m.x_mm < autre.x_mm + autre.largeur_mm - 0.1
+                && autre.x_mm < m.x_mm + m.largeur_mm - 0.1;
+            assert!(
+                std::ptr::eq(*m, *autre) || !(meme_ligne && recouvre),
+                "{m:?} chevauche {autre:?}"
+            );
+        }
+    }
+    // Tout le texte est là, coupé en plusieurs lignes au besoin (une césure
+    // laisse un trait d'union conditionnel en fin de morceau).
+    let tout: String = morceaux
+        .iter()
+        .map(|m| m.texte.replace('\u{ad}', ""))
+        .collect();
+    for attendu in [
+        "Canon-PRO-4100_Hahnemuhle-Photo-Rag-Baryta-315_2400-dpi_2026-10-28.icc",
+        "ProfilSansAucuneSeparationNiEspaceQuiNeFinitJamaisVraimentPasDuTout",
+        "contact-tirages-fine-art@atelier-exemple-et-associes.fr",
+        "Bâtiment B, 2e étage",
+    ] {
+        let sans_tirets = |t: &str| t.replace(['-', '\u{2010}', ' '], "");
+        assert!(
+            sans_tirets(&tout).contains(&sans_tirets(attendu)),
+            "{attendu} absent de {tout}"
+        );
+    }
+    let bas = morceaux.iter().map(|m| m.y_mm).fold(0.0, f64::max);
+    assert!(bas < 297.0 - 10.0, "ligne la plus basse à {bas:.1} mm");
+}
+
+/// Le cartouche est plus compact qu'avant (36 mm de haut fixes, 1/5 de la
+/// page) : il prend la hauteur de son texte, moins de 28 mm pour un
+/// cartouche courant, et le contenu de la page s'arrête au-dessus de lui.
+#[test]
+fn le_cartouche_courant_est_compact_et_sous_le_contenu() {
+    let mut d = document(vec![Section {
+        titre: "Long".into(),
+        blocs: (0..80)
+            .map(|i| Bloc::Paragraphe(format!("Paragraphe {i}")))
+            .collect(),
+    }]);
+    d.cartouche.atelier.logo_png = Some(PNG_1X1.to_vec());
+    let p = rendre(&d);
+    let page = &p.pages[0];
+    let morceaux = morceaux_cartouche(page);
+    let haut = morceaux.iter().map(|m| m.y_mm).fold(f64::MAX, f64::min);
+    let bas = morceaux.iter().map(|m| m.y_mm).fold(0.0, f64::max);
+    assert!(bas - haut < 24.0, "cartouche de {:.1} mm", bas - haut);
+    let dernier = page
+        .morceaux
+        .iter()
+        .filter(|m| m.texte.starts_with("Paragraphe"))
+        .map(|m| m.y_mm)
+        .fold(0.0, f64::max);
+    assert!(
+        dernier < haut - 4.0,
+        "contenu à {dernier:.1}, cartouche à {haut:.1}"
+    );
+    assert!(dernier > 297.0 - 70.0, "page mal remplie : {dernier:.1}");
+}
+
+/// Les chiffres tabulaires ne valent que pour les colonnes de nombres : posés
+/// sur tout le tableau, ils élargissaient aussi les traits d'union du texte
+/// (« au - delà », mainteneur, 2 novembre 2026). Dans une colonne de texte,
+/// « au-delà » a la chasse d'un paragraphe (à la taille près : 8 pt contre
+/// 9 pt) ; dans une colonne de nombres, « 111,1 » et « 888,8 » ont la même
+/// largeur.
+#[test]
+fn les_chiffres_tabulaires_ne_touchent_que_les_nombres() {
+    let d = document(vec![Section {
+        titre: "x".into(),
+        blocs: vec![
+            Bloc::Paragraphe("au-delà".into()),
+            Bloc::Tableau {
+                entetes: vec!["Mesure".into(), "Valeur".into()],
+                lignes: vec![
+                    vec!["au-delà".into(), "111,1".into()],
+                    vec!["Couleurs".into(), "888,8".into()],
+                ],
+                nombres: vec![false, true],
+            },
+        ],
+    }]);
+    let p = rendre(&d);
+    let largeur = |t: &str| -> Vec<f64> {
+        p.pages[0]
+            .morceaux
+            .iter()
+            .filter(|m| m.texte == t)
+            .map(|m| m.largeur_mm)
+            .collect()
+    };
+    let dela = largeur("au-delà");
+    assert_eq!(dela.len(), 2, "{dela:?}");
+    let (paragraphe, cellule) = (dela[0] / 9.0, dela[1] / 8.0);
+    assert!(
+        (paragraphe - cellule).abs() < paragraphe * 0.01,
+        "trait d’union élargi : {dela:?}"
+    );
+    let (un, huit) = (largeur("111,1")[0], largeur("888,8")[0]);
+    assert!(
+        (un - huit).abs() < 0.01,
+        "chiffres non tabulaires : {un} / {huit}"
+    );
+}
+
+/// Un cartouche avec logo et noms longs.
+fn cartouche_long() -> Document {
+    let mut d = document(vec![]);
+    d.cartouche.atelier.logo_png = Some(PNG_1X1.to_vec());
+    d.cartouche.lignes = vec![
+        ("Date".into(), "30 octobre 2026".into()),
+        ("Seuil".into(), "2,0 ΔE00".into()),
+        (
+            "Profil".into(),
+            "Canon-PRO-4100_Hahnemuhle-Photo-Rag-Baryta-315_2400-dpi_2026-10-28.icc".into(),
+        ),
+        (
+            "Papier".into(),
+            "Canon imagePROGRAF PRO-4100 › Hahnemühle Photo Rag Baryta 315 › 2400 × 1200 ppp"
+                .into(),
+        ),
+        (
+            "Image".into(),
+            "Paysage de Bretagne au coucher du soleil version finale.tif, 8256 × 5504 px".into(),
+        ),
+    ];
+    d
+}
+
+/// Un tableau sans colonne n'arrête pas le rapport : il est laissé de côté.
+#[test]
+fn un_tableau_sans_colonne_n_arrete_pas_le_rapport() {
+    let d = document(vec![Section {
+        titre: "x".into(),
+        blocs: vec![
+            Bloc::Tableau {
+                entetes: vec![],
+                lignes: vec![vec!["a".into()]],
+                nombres: vec![],
+            },
+            Bloc::Paragraphe("après le tableau".into()),
+        ],
+    }]);
+    let p = rendre(&d);
+    assert!(p.pages[0].texte.contains("après le tableau"));
+}

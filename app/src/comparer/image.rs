@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use gamut::{AnalyseImage, ErreurIcc, ProfilSource};
+use gamut::{AnalyseImage, ErreurIcc, ProfilSource, Rendu};
 use serde::Serialize;
 
 use super::{detail_refus, SourceComparaison};
@@ -17,6 +17,8 @@ use super::{detail_refus, SourceComparaison};
 mod analyse;
 pub mod commandes;
 mod pipette;
+pub mod rapport;
+mod vignette;
 
 pub use pipette::{pixel_affiche, EtatPixel, PixelImage, PointAffiche};
 
@@ -94,6 +96,11 @@ struct EcartsRanges {
     analyse: u64,
     /// Un octet par pixel, profil par profil (`None` pour un profil inconnu).
     par_profil: Vec<Option<Vec<u8>>>,
+    /// L'analyse de chaque profil, sans ses codes d'écart, gardée pour le
+    /// rapport (ticket #89), avec les profils et le rendu demandés.
+    etats: Vec<EtatAnalyse>,
+    sources: Vec<SourceComparaison>,
+    rendu: Rendu,
 }
 
 /// Une conversion du profil de l'image écartée parce qu'illisible.
