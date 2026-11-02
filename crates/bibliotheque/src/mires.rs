@@ -50,6 +50,10 @@ pub struct ResumeTirage {
     pub plages: usize,
     pub pages: usize,
     pub horodatage: String,
+    /// La séance de mesure en cours sur ce tirage, à reprendre (#35).
+    pub seance: Option<crate::IdSeance>,
+    /// Une séance qui le mesure est fermée (terminée ou incomplète).
+    pub mesure: bool,
 }
 
 /// Un tirage préparé, pas encore mesuré (état `prepare`), avec sa mire.
@@ -178,7 +182,9 @@ impl Bibliotheque {
     /// Les tirages de la condition, du plus récent au plus ancien.
     pub fn tirages(&self, condition: IdCondition) -> Resultat<Vec<ResumeTirage>> {
         let mut requete = self.base.prepare(
-            "SELECT t.id, m.id, m.nom, m.instrument, m.plages, t.pages, t.horodatage
+            "SELECT t.id, m.id, m.nom, m.instrument, m.plages, t.pages, t.horodatage,
+                    (SELECT s.id FROM seances s WHERE s.tirage = t.id AND s.etat = 'en_cours'),
+                    EXISTS (SELECT 1 FROM seances s WHERE s.tirage = t.id AND s.etat <> 'en_cours')
              FROM tirages t JOIN mires m ON m.id = t.mire
              WHERE t.condition = ?1",
         )?;
@@ -191,6 +197,8 @@ impl Bibliotheque {
                 plages: l.get::<_, i64>(4)?.try_into().unwrap_or(0),
                 pages: l.get::<_, i64>(5)?.try_into().unwrap_or(0),
                 horodatage: l.get(6)?,
+                seance: l.get::<_, Option<i64>>(7)?.map(crate::IdSeance),
+                mesure: l.get(8)?,
             })
         })?;
         let mut tirages = lignes.collect::<Result<Vec<_>, _>>()?;
