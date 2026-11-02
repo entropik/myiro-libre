@@ -2629,6 +2629,10 @@ const FRANCAIS: Catalogue = &[
         "Mise en page de la mire sur la feuille A3, plages dans leurs couleurs de consigne, approchées à l’écran.",
     ),
     (
+        "feuille_fd9.mire.legende.mesure",
+        "Mesure en cours\u{202f}: les plages déjà mesurées reprennent leur couleur, les autres restent voilées. Ordre de lecture du FD-9 en serpentin, rangée par rangée.",
+    ),
+    (
         "feuille_fd9.mire.absente",
         "La mire RGB-2520 n’a pas pu être lue\u{202f}: sa mise en page ne peut pas être montrée.",
     ),
@@ -5814,6 +5818,10 @@ const ANGLAIS: Catalogue = &[
     (
         "feuille_fd9.mire.legende",
         "Chart layout on the A3 sheet, patches in their target colours, approximated on screen.",
+    ),
+    (
+        "feuille_fd9.mire.legende.mesure",
+        "Measuring: patches already measured get their colour back, the others stay veiled. The FD-9 reads in a serpentine, row by row.",
     ),
     (
         "feuille_fd9.mire.absente",

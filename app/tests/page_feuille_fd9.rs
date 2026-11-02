@@ -47,10 +47,16 @@ fn les_scripts_de_la_feuille_sont_charges_avant_reglage_js_et_courts() {
         page.find(&format!("<script src=\"{nom}\" defer>"))
             .unwrap_or_else(|| panic!("{nom} non chargé"))
     };
-    assert!(position("app.js") < position("feuille-vue.js"));
+    assert!(position("app.js") < position("feuille-remplissage.js"));
+    assert!(position("feuille-remplissage.js") < position("feuille-vue.js"));
     assert!(position("feuille-vue.js") < position("feuille-fd9.js"));
     assert!(position("feuille-fd9.js") < position("reglage.js"));
-    for nom in ["feuille-vue.js", "feuille-fd9.js", "reglage.js"] {
+    for nom in [
+        "feuille-remplissage.js",
+        "feuille-vue.js",
+        "feuille-fd9.js",
+        "reglage.js",
+    ] {
         let lignes = lire(&format!("interface/{nom}")).lines().count();
         assert!(lignes < 400, "{nom} : {lignes} lignes");
     }
@@ -62,7 +68,7 @@ fn les_scripts_de_la_feuille_sont_charges_avant_reglage_js_et_courts() {
 /// couleur de consigne d'une plage passe par `--c`, contrôlée.
 #[test]
 fn aucune_couleur_en_dur_dans_la_feuille() {
-    for nom in ["feuille-vue.js", "feuille-fd9.js"] {
+    for nom in ["feuille-remplissage.js", "feuille-vue.js", "feuille-fd9.js"] {
         let script = lire(&format!("interface/{nom}"));
         let hexa = script.match_indices('#').any(|(i, _)| {
             script[i + 1..]
@@ -110,7 +116,7 @@ fn aucune_couleur_en_dur_dans_la_feuille() {
 /// a sa hauteur gardée ; « Annuler » garde sa place, invisible au repos.
 #[test]
 fn la_feuille_se_met_a_jour_sur_place_dans_des_places_gardees() {
-    for nom in ["feuille-vue.js", "feuille-fd9.js"] {
+    for nom in ["feuille-remplissage.js", "feuille-vue.js", "feuille-fd9.js"] {
         let script = lire(&format!("interface/{nom}"));
         for interdit in [
             "replaceChildren",
@@ -346,4 +352,35 @@ fn le_systeme_graphique_a_les_onglets_et_la_feuille() {
     let css = lire("../design-system/components.css");
     let choisi = regle(&css, ".onglets [role=\"tab\"][aria-selected=\"true\"]");
     assert!(choisi.contains("background:var(--carte)"), "{choisi}");
+}
+
+/// Ticket #103 : pendant la mesure, l'onglet « Mire » voile les plages pas
+/// encore mesurées, dans l'ordre de lecture du FD-9 (serpentin, marqué
+/// supposé hors de la RGB-2520), et les rend pleines au fil du compte. Hors
+/// de la mesure, la mire est pleine. Rien ne bouge : seule la toile est
+/// redessinée, et seulement quand le compte change.
+#[test]
+fn la_mire_se_remplit_pendant_la_mesure_dans_l_ordre_de_lecture() {
+    let remplissage = lire("interface/feuille-remplissage.js");
+    assert!(remplissage.contains("serpentin"));
+    assert!(remplissage.contains("supposé"));
+    assert!(remplissage.contains("rangee % 2 === 0 ? k : z.colonnes - 1 - k"));
+    // Le voile vient du fond du thème, en un seul tracé.
+    assert!(remplissage.contains("ctx.fillStyle = fond;"));
+    assert_eq!(remplissage.matches("ctx.fill()").count(), 1);
+
+    let vue = lire("interface/feuille-vue.js");
+    assert!(vue.contains("window.FeuilleRemplissage.ordre(mire)"));
+    assert!(vue.contains("if (onglet === \"mire\" && dessinMire && mesurees !== null) {"));
+    assert!(vue.contains(
+        "window.FeuilleRemplissage.voile(ctx, liste, lecture, mesurees, o, jeton(\"--fond\"));"
+    ));
+    assert!(vue.contains("if (nouveau === mesurees) return;"));
+    assert!(vue.contains("\"feuille_fd9.mire.legende.mesure\""));
+
+    let feuille = lire("interface/feuille-fd9.js");
+    assert!(feuille.contains(
+        "const enMesure = enCours() && (feuille.etape === \"mesure_lancee\" || feuille.etape === \"mesure\");"
+    ));
+    assert!(feuille.contains("vueFeuille.remplissage(enMesure ? feuille.mesurees : null);"));
 }
