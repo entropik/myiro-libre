@@ -62,6 +62,25 @@ fn confirmee<T: Clone>(
 /// Refuse seulement une mesure dont un texte de provenance tient sur
 /// plusieurs lignes, que CGATS ne sait pas écrire.
 pub fn ecrire(mesure: &Mesure) -> Result<String, ErreurCgats> {
+    ecrire_tableaux(mesure, None)
+}
+
+/// Comme [`ecrire`], avec les valeurs RVB envoyées à l'imprimante pour
+/// chaque plage, de 0 à 100, dans l'ordre des plages : colonnes `RGB_R`,
+/// `RGB_G`, `RGB_B` dans chaque tableau, relues avec une échelle confirmée.
+/// Refuse des valeurs RVB en nombre différent des plages.
+pub fn ecrire_avec_rvb(mesure: &Mesure, rvb: &[[f64; 3]]) -> Result<String, ErreurCgats> {
+    let plages = mesure.plages().len();
+    if rvb.len() != plages {
+        return erreur(format!(
+            "{} valeurs RVB pour {plages} plages : chaque plage a les siennes",
+            rvb.len()
+        ));
+    }
+    ecrire_tableaux(mesure, Some(rvb))
+}
+
+fn ecrire_tableaux(mesure: &Mesure, rvb: Option<&[[f64; 3]]>) -> Result<String, ErreurCgats> {
     let p = mesure.provenance();
     let demande = &p.calcul.demande;
     let mut s = Sortie(String::new());
@@ -109,12 +128,11 @@ pub fn ecrire(mesure: &Mesure) -> Result<String, ErreurCgats> {
             s.mot_cle_declare("SPECTRAL_START_NM", &e.debut_nm.to_string())?;
             s.mot_cle_declare("SPECTRAL_END_NM", &nm(e, longueur - 1).to_string())?;
         }
-        let mut champs = vec![
-            "SAMPLE_ID".to_string(),
-            "LAB_L".into(),
-            "LAB_A".into(),
-            "LAB_B".into(),
-        ];
+        let mut champs = vec!["SAMPLE_ID".to_string()];
+        if rvb.is_some() {
+            champs.extend(["RGB_R".into(), "RGB_G".into(), "RGB_B".into()]);
+        }
+        champs.extend(["LAB_L".into(), "LAB_A".into(), "LAB_B".into()]);
         champs.extend((0..longueur).map(|i| match echantillonnage {
             Some(e) => format!("SPEC_{}", nm(e, i)),
             None => format!("{PREFIXE}SPECTRE_{}", i + 1),
@@ -128,6 +146,9 @@ pub fn ecrire(mesure: &Mesure) -> Result<String, ErreurCgats> {
         s.ligne("BEGIN_DATA");
         for (rang, (plage, spectre)) in mesure.plages().iter().zip(&spectres).enumerate() {
             let mut ligne = (rang + 1).to_string();
+            for v in rvb.and_then(|r| r.get(rang)).into_iter().flatten() {
+                let _ = write!(ligne, "	{v}");
+            }
             // `{}` d'un nombre : la plus courte écriture décimale qui se relit
             // à l'identique, sans exposant.
             for v in plage.lab()[n].valeurs() {

@@ -188,9 +188,9 @@ fn le_rappel_d_evenements_tient_dans_un_pointeur_et_nul_desinscrit() {
 }
 
 #[test]
-fn la_connexion_est_etablie_sur_0_et_sur_calibration_periodique_due() {
+fn la_connexion_est_etablie_sur_0_et_sur_recertification_due() {
     assert!(connexion_etablie(0));
-    // 1901 : connecté, mais l'instrument demande sa calibration périodique.
+    // 1901 : connecté, mais l'instrument est à faire recertifier.
     assert!(connexion_etablie(1901));
     assert!(!connexion_etablie(1001));
     assert!(!connexion_etablie(1003));

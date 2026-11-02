@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use pont_protocole::{ConditionMesure, Echantillonnage, Info, Lab, Spectre};
+use pont_protocole::{ConditionMesure, ConditionsCalcul, Echantillonnage, Info, Lab, Spectre};
 
 use crate::provenance::{self, condition_depuis, PREFIXE};
 use crate::{erreur, ErreurCgats, MesureImportee, PlageImportee, EMPLACEMENTS, FORMAT_CGATS};
@@ -197,7 +197,8 @@ fn nombre_f64(texte: &str, quoi: &str) -> Result<f64, ErreurCgats> {
 /// Échelle des valeurs RVB d'un fichier, décidée par le logiciel qui l'a
 /// écrit, jamais devinée (`docs/formats/cgats.md`).
 enum EchelleRvb {
-    /// Fichier `CTI3` d'ArgyllCMS : 0 à 100, établi par la description du format.
+    /// Fichier `CTI3` d'ArgyllCMS : 0 à 100, établi par la description du
+    /// format ; fichier de myiro-libre (`ecrire_avec_rvb`) : 0 à 100.
     Confirmee(f64),
     /// Export FD-S2w ou MYIROtools : 0 à 255, observé sur des exports réels
     /// de FD-S2w et de MYIROtools, sans document du fabricant qui l'affirme.
@@ -207,7 +208,9 @@ enum EchelleRvb {
 
 impl EchelleRvb {
     fn du_fichier(premier: &Tableau) -> Self {
-        if premier.identifiant.as_deref() == Some("CTI3") {
+        if premier.identifiant.as_deref() == Some("CTI3")
+            || premier.mot_cle(&format!("{PREFIXE}FORMAT")) == Some(FORMAT_CGATS)
+        {
             EchelleRvb::Confirmee(100.0)
         } else if premier.mot_cle("FILE_DESCRIPTOR") == Some("FD-S2w")
             || premier.mot_cle("ORIGINATOR") == Some("MYIROtools")
@@ -511,6 +514,20 @@ fn lire_tableau(
     Ok(lu)
 }
 
+/// Condition de l'emplacement `e` dans les conditions de calcul demandées
+/// par le pont, jamais plus sûre que la demande elle-même : une demande
+/// supposée rend la condition supposée.
+fn condition_declaree(demande: &Info<ConditionsCalcul>, e: usize) -> Info<ConditionMesure> {
+    match demande {
+        Info::Confirmee(c) => c.conditions_spectres[e].clone(),
+        Info::Supposee(c) => match &c.conditions_spectres[e] {
+            Info::Confirmee(v) | Info::Supposee(v) => Info::Supposee(*v),
+            Info::Inconnue => Info::Inconnue,
+        },
+        Info::Inconnue => Info::Inconnue,
+    }
+}
+
 fn declare(t: &Tableau, nom: &str) -> Info<String> {
     match t.mot_cle(nom) {
         Some(v) if !v.trim().is_empty() => Info::Confirmee(v.to_string()),
@@ -568,7 +585,12 @@ fn lire_avec(texte: &str, condition_exigee: bool) -> Result<MesureImportee, Erre
                 EMPLACEMENTS[e]
             ));
         }
-        conditions[e] = lu.condition;
+        conditions[e] = match (&lu.condition, &provenance) {
+            // Fichier de myiro-libre sans condition écrite pour ce tableau :
+            // celle que sa provenance déclare, avec sa qualification.
+            (Info::Inconnue, Info::Confirmee(p)) => condition_declaree(&p.calcul.demande, e),
+            _ => lu.condition,
+        };
         if lu.longueurs_onde != Info::Inconnue {
             if longueurs_onde != Info::Inconnue && longueurs_onde != lu.longueurs_onde {
                 return erreur(format!("tableau {} : autres longueurs d'onde", i + 1));

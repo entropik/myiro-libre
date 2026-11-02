@@ -88,6 +88,15 @@ function recevoir(poste) {
   if (poste.montrer_liste) listeOuverte = true;
 }
 
+// Couleur d'une ligne : vert pour l'instrument en service et prêt (détecté pour le FD-9, connecté ou
+// étalonné, ou à l'adresse saisie), rouge s'il n'est pas trouvé, orange sinon (en attente,
+// étalonnage requis).
+function classeLigne(l) {
+  if (l.etat === "non_detecte" || l.etat === "non_trouve") return "state--bad";
+  if (l.actif && ["detecte", "adresse", "connecte", "etalonne"].includes(l.etat)) return "state--ok";
+  return "state--warn";
+}
+
 // Liste des instruments : une ligne par instrument présent, « Utiliser » sur les autres.
 function remplirListe(section) {
   const lignes = section.querySelector("[data-choix-lignes]");
@@ -96,7 +105,7 @@ function remplirListe(section) {
     const li = document.createElement("li");
     li.classList.toggle("sel", l.actif);
     const etat = document.createElement("span");
-    etat.className = "state " + (l.actif && vueInstrument && vueInstrument.pret ? "state--ok" : "state--warn");
+    etat.className = "state " + classeLigne(l);
     etat.append(document.createElement("i"));
     const texte = document.createElement("span");
     texte.textContent = textes["choix.ligne"]
@@ -108,7 +117,9 @@ function remplirListe(section) {
     if (l.actif) {
       const actif = document.createElement("span");
       actif.className = "label label--ink";
-      actif.textContent = textes["choix.en_service"];
+      // Choisi mais pas trouvé : il n'est pas « en service ».
+      const trouve = vueInstrument && vueInstrument.etat !== "non_detecte";
+      actif.textContent = textes[trouve ? "choix.en_service" : "choix.choisi"];
       li.append(actif);
     } else {
       const b = document.createElement("button");
@@ -120,6 +131,11 @@ function remplirListe(section) {
     }
     lignes.append(li);
   }
+  // « Se connecter par l'adresse » : proposé par le module quand le FD-9 n'est pas trouvé ou n'a pas
+  // répondu à la feuille. L'adresse tapée reste dans le champ, jamais ailleurs.
+  const adresse = section.querySelector("[data-choix-adresse]");
+  adresse.hidden = !(vuePoste && vuePoste.proposer_adresse);
+  adresse.querySelector("button").disabled = occupe;
   remplirAnnonces(section.querySelector("[data-choix-annonce]"));
   // Vues dans la liste : l'avis de la feuille ne les répète pas.
   annoncesLues = signatureAnnonces();
@@ -178,6 +194,25 @@ async function choisirInstrument(code) {
   listeOuverte = true;
   afficherInstrument();
 }
+
+// Le FD-9 à l'adresse tapée : le module ferme le pont en cours et lance celui du FD-9, ou refuse.
+async function connecterParAdresse(adresse) {
+  occupe = true;
+  refusChoix = null;
+  afficherInstrument();
+  try {
+    recevoir(await invoke("connecter_fd9_adresse", { adresse }));
+  } catch (cle) {
+    refusChoix = String(cle);
+  }
+  occupe = false;
+  listeOuverte = true;
+  afficherInstrument();
+}
+document.querySelector("[data-choix-adresse]").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (!occupe) connecterParAdresse(e.target.querySelector("[data-choix-adresse-texte]").value);
+});
 
 // L'écran d'étalonnage ne s'ouvre que sur demande de l'opérateur (bouton « Étalonner »).
 // Un problème de mesure s'affiche sur la feuille Mesurer elle-même (mesurer.js).
@@ -247,13 +282,15 @@ function remplirEcran(section) {
   section.querySelector("[data-raison-recherche]").hidden = !occupe;
 }
 
-// Cinq états de la pastille : non détecté, connecté, étalonnage requis, étalonné, en mesure.
-// Un instrument seulement détecté (FD-9) est présent : pastille « connecté », le texte dit « détecté ».
-const PASTILLES = { non_detecte: "non-detecte", etalonnage_requis: "etalonnage-requis", etalonne: "etalonne" };
+// États de la pastille : recherche, non trouvé (rouge), connecté et étalonné (vert : prêt), étalonnage
+// requis (orange), en mesure. Un instrument seulement détecté (FD-9) est présent et prêt : pastille
+// « connecté », le texte dit « détecté ».
+const PASTILLES = { etalonnage_requis: "etalonnage-requis", etalonne: "etalonne" };
 function etatPastille(vue) {
   // L'étalonnage garde l'état de l'instrument (« étalonnage requis ») ; seule la mesure est « en mesure ».
   if (operationEnCours === "mesure") return "en-mesure";
-  if (!vue || !vue.modele) return "non-detecte";
+  if (!vue) return "non-detecte"; // recherche en cours
+  if (vue.etat === "non_detecte" || !vue.modele) return "introuvable";
   return PASTILLES[vue.etat] || "connecte";
 }
 

@@ -9,11 +9,14 @@ pub mod atelier;
 pub mod colonne;
 pub mod comparer;
 pub mod demonstration;
+pub mod demonstration_fd9;
+mod ecran_feuille;
 pub mod ecriture;
 pub mod installation;
 pub mod instrument;
 pub mod lancement;
 pub mod mesurer;
+pub mod mesurer_feuille;
 pub mod mires;
 pub mod parc;
 pub mod pdf;
@@ -189,6 +192,9 @@ fn ouvrir(
     instruments: &Instruments,
     dossier: Option<PathBuf>,
 ) -> Result<VueSelection, String> {
+    if let Some(vue) = app.state::<ecran_feuille::DemonstrationFd9>().vue() {
+        return vue;
+    }
     let jeton = instruments
         .occupation
         .commencer(Operation::Recherche)
@@ -250,6 +256,44 @@ fn choisir_dossier(
     ouvrir(&app, &instruments, Some(dossier)).map(Some)
 }
 
+/// « Se connecter par l'adresse » (ticket #98) : le FD-9 que la détection ne
+/// voit pas, à l'adresse saisie. Elle ne vit qu'en mémoire, pour la séance :
+/// jamais écrite, ni journalisée, ni retenue pour le lancement suivant (seul
+/// le choix du FD-9 l'est). Un refus rend la clé du catalogue.
+#[tauri::command(async)]
+fn connecter_fd9_adresse(
+    app: AppHandle,
+    instruments: State<'_, Instruments>,
+    adresse: String,
+) -> Result<VueSelection, String> {
+    // Le refus cite l'adresse : seule la clé part, sans elle.
+    let adresse = pont_protocole::AdresseReseau::new(adresse.trim())
+        .map_err(|_| "refus.adresse_fd9".to_string())?;
+    if let Some(vue) = app.state::<ecran_feuille::DemonstrationFd9>().vue() {
+        return vue;
+    }
+    let jeton = instruments
+        .occupation
+        .commencer(Operation::Changement)
+        .map_err(|refus| refus.cle())?;
+    let mut courant = instruments
+        .selection
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let selection = courant
+        .as_mut()
+        .ok_or_else(|| "refus.occupe.recherche".to_string())?;
+    avec_ouverture(&app, None, |o| {
+        selection.connecter_par_adresse(&jeton, adresse.texte(), o)
+    })
+    .map_err(|refus| refus.cle())?;
+    match fichier_choix(&app) {
+        Some(fichier) => selection.retenir(&fichier),
+        None => selection.retenir(Path::new("")),
+    }
+    Ok(vue_retenue(&app, selection))
+}
+
 /// Liste des instruments : l'opérateur choisit `code` (`myiro1`, `fd9`). Le
 /// pont en cours est fermé, l'autre ouvert, et le choix retenu pour le
 /// lancement suivant. Un refus rend la clé du catalogue qui l'explique.
@@ -260,6 +304,10 @@ fn choisir_instrument(
     code: &str,
 ) -> Result<VueSelection, String> {
     let vers = Modele::depuis_code(code).ok_or_else(|| "refus.absent".to_string())?;
+    // En démonstration, le FD-9 simulé est le seul instrument.
+    if let Some(vue) = app.state::<ecran_feuille::DemonstrationFd9>().vue() {
+        return vue;
+    }
     let jeton = instruments
         .occupation
         .commencer(Operation::Changement)
@@ -307,6 +355,7 @@ fn ouvrir_bibliotheque(
             let ouverte = colonne::BibliothequeOuverte::demonstration(&demonstration::dossier());
             let seance = demonstration::seance(&ouverte);
             app.manage(ouverte);
+            app.manage(DossierBibliotheque(demonstration::dossier()));
             app.manage(SeanceMesures(Mutex::new(seance)));
             return Ok(());
         }
@@ -337,6 +386,7 @@ fn ouvrir_bibliotheque(
     let mut seance = Seance::default();
     let _ = seance.reprendre_reference(&ouverte, langue);
     app.manage(ouverte);
+    app.manage(DossierBibliotheque(dossier));
     app.manage(SeanceMesures(Mutex::new(seance)));
     Ok(())
 }
@@ -536,6 +586,10 @@ fn mesurer(
     Ok(EcranMesurer::de(&seance, langue, Some(selection.vue())))
 }
 
+/// Dossier de la bibliothèque ouverte : les mesures complètes du FD-9 y
+/// sont gardées (`mesures-fd9/`).
+struct DossierBibliotheque(PathBuf);
+
 /// Range à nouveau les mesures que la bibliothèque avait refusées.
 #[tauri::command]
 fn ranger_a_nouveau(
@@ -639,8 +693,17 @@ pub fn lancer() {
         .manage(comparer::image::ImageOuverte::default())
         .setup(move |app| ouvrir_bibliotheque(app, &demandee))
         .manage(GesteEnAttente::default())
+        .manage(ecran_feuille::AnnulationFeuille::default())
+        .manage(ecran_feuille::CalageAffiche::default())
+        .manage(ecran_feuille::MireFeuille::default())
+        .manage(ecran_feuille::DemonstrationFd9::au_lancement())
         .invoke_handler(tauri::generate_handler![
             mesurer,
+            ecran_feuille::mesurer_feuille_fd9,
+            ecran_feuille::annuler_feuille_fd9,
+            ecran_feuille::feuille_fd9_etat,
+            ecran_feuille::feuille_fd9_dernier_calage,
+            ecran_feuille::feuille_fd9_image,
             mode_mesure,
             choisir_mode_mesure,
             mesures_seance,
@@ -655,6 +718,7 @@ pub fn lancer() {
             autoriser_pare_feu_fd9,
             choisir_dossier,
             choisir_instrument,
+            connecter_fd9_adresse,
             colonne::version_application,
             colonne::bibliotheque_demonstration,
             colonne::bibliotheque_arborescence,

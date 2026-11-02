@@ -2,20 +2,21 @@
 //! le vrai processus `pont-myiro1` (`PontProcessus`) et un pont simulé à
 //! échecs injectables (`PontSimule`). Rien ici ne dépend de Tauri.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
+use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::process::{Child, ChildStderr, ChildStdin, Command, ExitStatus, Stdio};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::instrument::Delais;
 use pont_protocole::{
-    lire_reponse, Calcul, ConditionMesure, ConditionsCalcul, DonneesBrutes, Echantillonnage,
-    EffetAnnulation, ErreurPont, Geometrie, Horodatage, Identite, Illuminant, Info,
-    InstrumentDetecte, InstrumentMesurant, Lab, Mesure, Observateur, Palier, Plage, Provenance,
-    RemiseAuRepos, Reponse, Requete, Spectre, MODELE_MYIRO1,
+    lire_reponse, AvancementFeuille, Calcul, ConditionMesure, ConditionsCalcul, DonneesBrutes,
+    Echantillonnage, EffetAnnulation, ErreurPont, Geometrie, Horodatage, Identite, Illuminant,
+    Info, InstrumentDetecte, InstrumentMesurant, Lab, Mesure, Observateur, Palier, Plage,
+    Provenance, RemiseAuRepos, Reponse, Requete, Spectre, MODELE_MYIRO1,
 };
 
 /// Le pont n'a pas pu répondre : ce n'est pas une erreur de l'instrument, mais
@@ -107,6 +108,20 @@ pub trait Pont {
             annulation: None,
         }
     }
+
+    /// Comme `demander_annulable`, et chaque ligne d'avancement écrite par
+    /// le pont avant sa réponse (feuille au FD-9, ticket #34) est donnée à
+    /// `suivi`, dans l'ordre. Un pont qui n'en écrit pas (écrit avant le
+    /// ticket #34) répond comme `demander_annulable`.
+    fn demander_suivi(
+        &mut self,
+        requete: &Requete,
+        annulation: &Annulation,
+        suivi: &mut dyn FnMut(AvancementFeuille),
+    ) -> Echange {
+        let _ = suivi;
+        self.demander_annulable(requete, annulation)
+    }
 }
 
 /// Architecture d'un exécutable ou d'une DLL Windows. Un pont ne charge
@@ -180,26 +195,172 @@ const CODE_DLL_REFUSEE: i32 = 3;
 /// cette durée, pour voir l'annulation demandée.
 const PAS_ATTENTE_REPONSE: Duration = Duration::from_millis(20);
 
-/// Le vrai programme `pont-myiro1`, lancé avec la DLL et le plafond, auquel on
-/// parle par une ligne JSON par message (crate `pont-protocole`). Chaque
-/// réponse est attendue au plus le délai fixé par le module instrument
-/// ([`Delais`]) ; au-delà, le pont est arrêté de force.
+/// Plafond par défaut du fichier où la sortie d'erreur d'un pont est
+/// recopiée ([`OptionsPont::trace`]) : 8 Mio.
+pub const PLAFOND_TRACE: u64 = 8 << 20;
+
+/// Dernières lignes de la sortie d'erreur gardées en mémoire : le détail
+/// d'une panne ([`Panne::Arret`], [`Panne::DllRefusee`]).
+const LIGNES_GARDEES: usize = 200;
+
+/// Dernières lignes gardées d'une trace qui dépasse son plafond, écrites à
+/// la fin du fichier quand le pont s'arrête.
+const LIGNES_FIN_TRACE: usize = 2_000;
+
+/// Réglages du lancement d'un pont, au-delà de la DLL et du plafond.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OptionsPont {
+    /// Arguments ajoutés à la ligne de commande (`--trace`…).
+    pub arguments: Vec<String>,
+    /// Fichier local où la sortie d'erreur du pont est recopiée au fil de
+    /// l'eau (ajoutée à la fin s'il existe). Sans fichier, seules les
+    /// dernières lignes sont gardées, en mémoire.
+    pub trace: Option<PathBuf>,
+    /// Taille au-delà de laquelle le fichier n'est plus écrit au fil de
+    /// l'eau : le début reste, les dernières lignes sont ajoutées à l'arrêt
+    /// du pont, après une ligne qui dit combien ont été omises.
+    pub plafond_trace: u64,
+}
+
+impl Default for OptionsPont {
+    fn default() -> Self {
+        OptionsPont {
+            arguments: Vec::new(),
+            trace: None,
+            plafond_trace: PLAFOND_TRACE,
+        }
+    }
+}
+
+/// Sortie d'erreur du pont, lue en continu par un fil à part : le pont
+/// n'est jamais bloqué par un tube plein. À l'essai E5, le journal recopié
+/// d'une feuille (une ligne par événement) a rempli le tube, lu seulement à
+/// l'arrêt, et le pont s'est figé en pleine mesure.
+struct SortieErreur {
+    /// Dernières lignes lues ([`LIGNES_GARDEES`]).
+    dernieres: Arc<Mutex<VecDeque<String>>>,
+    /// Le fil a tout lu (sortie fermée) et fini d'écrire le fichier.
+    finie: Receiver<()>,
+}
+
+impl SortieErreur {
+    fn lire(source: ChildStderr, options: &OptionsPont) -> Self {
+        let fichier = options.trace.as_ref().and_then(|chemin| {
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(chemin)
+                .map_err(|e| eprintln!("trace du pont {} : {e}", chemin.display()))
+                .ok()
+        });
+        let dernieres = Arc::new(Mutex::new(VecDeque::new()));
+        let (signal, finie) = mpsc::channel();
+        let copie = dernieres.clone();
+        let plafond = options.plafond_trace;
+        std::thread::spawn(move || lire_erreurs(source, fichier, plafond, &copie, &signal));
+        SortieErreur { dernieres, finie }
+    }
+
+    /// Les dernières lignes, une fois la sortie fermée ou passé `attente`.
+    fn texte(&self, attente: Duration) -> String {
+        let _ = self.finie.recv_timeout(attente);
+        let dernieres = self.dernieres.lock().unwrap_or_else(|e| e.into_inner());
+        let lignes: Vec<&str> = dernieres.iter().map(String::as_str).collect();
+        lignes.join("\n").trim().to_string()
+    }
+}
+
+/// Lit `source` jusqu'à sa fermeture, ligne par ligne : chaque ligne va au
+/// fichier tant qu'il reste sous `plafond`, puis aux dernières lignes
+/// gardées. Une écriture refusée du fichier n'arrête pas la lecture.
+fn lire_erreurs(
+    source: ChildStderr,
+    mut fichier: Option<File>,
+    plafond: u64,
+    dernieres: &Mutex<VecDeque<String>>,
+    finie: &Sender<()>,
+) {
+    let mut lecteur = BufReader::new(source);
+    let mut octets = Vec::new();
+    let mut ecrits = 0u64;
+    let mut coupees = 0u64;
+    let mut fin_trace = VecDeque::new();
+    loop {
+        octets.clear();
+        match lecteur.read_until(b'\n', &mut octets) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+        let ligne = String::from_utf8_lossy(&octets)
+            .trim_end_matches(['\r', '\n'])
+            .to_string();
+        if let Some(f) = fichier.as_mut() {
+            let taille = ligne.len() as u64 + 1;
+            if coupees == 0 && ecrits + taille <= plafond {
+                let _ = writeln!(f, "{ligne}");
+                ecrits += taille;
+            } else {
+                coupees += 1;
+                fin_trace.push_back(ligne.clone());
+                if fin_trace.len() > LIGNES_FIN_TRACE {
+                    fin_trace.pop_front();
+                }
+            }
+        }
+        let mut gardees = dernieres.lock().unwrap_or_else(|e| e.into_inner());
+        gardees.push_back(ligne);
+        if gardees.len() > LIGNES_GARDEES {
+            gardees.pop_front();
+        }
+    }
+    if let (Some(f), true) = (fichier.as_mut(), coupees > 0) {
+        let omises = coupees - fin_trace.len() as u64;
+        let _ = writeln!(
+            f,
+            "--- trace coupée à {plafond} octets : {omises} ligne(s) omise(s), puis les {} dernière(s) ---",
+            fin_trace.len()
+        );
+        for ligne in &fin_trace {
+            let _ = writeln!(f, "{ligne}");
+        }
+    }
+    let _ = finie.send(());
+}
+
+/// Le vrai programme `pont-myiro1` ou `pont-fd9`, lancé avec la DLL et le
+/// plafond, auquel on parle par une ligne JSON par message (crate
+/// `pont-protocole`). Chaque réponse est attendue au plus le délai fixé par
+/// le module instrument ([`Delais`]) ; au-delà, le pont est arrêté de force.
+/// Sa sortie d'erreur est lue en continu ([`OptionsPont`]).
 pub struct PontProcessus {
     enfant: Child,
     entree: Option<ChildStdin>,
     /// Lignes lues par un fil à part, pour pouvoir attendre avec un délai.
     lignes: Receiver<String>,
+    erreurs: SortieErreur,
     delais: Delais,
 }
 
 impl PontProcessus {
     pub fn lancer(programme: &Path, dll: &Path, plafond: Palier) -> Result<Self, Panne> {
+        Self::lancer_avec(programme, dll, plafond, &OptionsPont::default())
+    }
+
+    /// Comme [`PontProcessus::lancer`], avec des arguments en plus et, s'il
+    /// est donné, le fichier où recopier la sortie d'erreur.
+    pub fn lancer_avec(
+        programme: &Path,
+        dll: &Path,
+        plafond: Palier,
+        options: &OptionsPont,
+    ) -> Result<Self, Panne> {
         let mut commande = Command::new(programme);
         commande
             .arg("--dll")
             .arg(dll)
             .arg("--plafond")
             .arg(nom_palier(plafond))
+            .args(&options.arguments)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -214,6 +375,10 @@ impl PontProcessus {
             detail: format!("{} : {e}", programme.display()),
         })?;
         let entree = enfant.stdin.take();
+        let erreurs = SortieErreur::lire(
+            enfant.stderr.take().expect("sortie d'erreur du pont"),
+            options,
+        );
         let sortie = BufReader::new(enfant.stdout.take().expect("sortie du pont"));
         let (envoi, lignes) = mpsc::channel();
         std::thread::spawn(move || {
@@ -228,6 +393,7 @@ impl PontProcessus {
             enfant,
             entree,
             lignes,
+            erreurs,
             delais: Delais::default(),
         })
     }
@@ -265,11 +431,7 @@ impl PontProcessus {
                 detail: "sortie du pont fermée sans fin du processus ; arrêté de force".into(),
             };
         };
-        let mut detail = String::new();
-        if let Some(mut erreurs) = self.enfant.stderr.take() {
-            let _ = erreurs.read_to_string(&mut detail);
-        }
-        let detail = detail.trim().to_string();
+        let detail = self.erreurs.texte(self.delais.arret());
         match statut.code() {
             Some(CODE_DLL_REFUSEE) => Panne::DllRefusee { detail },
             code => Panne::Arret { code, detail },
@@ -318,14 +480,49 @@ impl PontProcessus {
         let _ = self.enfant.wait();
     }
 
-    /// Lit la réponse à `ligne`, au plus `delai`.
+    /// Lit la réponse à `ligne`, au plus `delai`. Une ligne d'avancement
+    /// n'est pas une réponse : elle est écartée.
     fn recevoir(&mut self, ligne: &str, delai: Duration) -> Result<Reponse, Panne> {
-        match self.lignes.recv_timeout(delai) {
-            Ok(reponse) => lire(&reponse),
-            Err(RecvTimeoutError::Disconnected) => Err(self.arret()),
-            Err(RecvTimeoutError::Timeout) => Err(self.couper(ligne, delai)),
+        let debut = Instant::now();
+        loop {
+            let reste = delai.saturating_sub(debut.elapsed());
+            match self.lignes.recv_timeout(reste) {
+                Ok(reponse) => match lire_ligne(&reponse) {
+                    Ligne::Avancement(_) => {}
+                    Ligne::Reponse(lue) => return lue,
+                },
+                Err(RecvTimeoutError::Disconnected) => return Err(self.arret()),
+                Err(RecvTimeoutError::Timeout) => return Err(self.couper(ligne, delai)),
+            }
         }
     }
+}
+
+/// Une ligne écrite par le pont : de l'avancement, ou la réponse attendue.
+enum Ligne {
+    /// Avancement d'une feuille ; `None` s'il est illisible (étape ou champ
+    /// d'un pont plus récent) : il est noté au journal et écarté, jamais
+    /// pris pour la réponse.
+    Avancement(Option<AvancementFeuille>),
+    Reponse(Result<Reponse, Panne>),
+}
+
+fn lire_ligne(texte: &str) -> Ligne {
+    match lire(texte) {
+        Ok(Reponse::Avancement { avancement }) => Ligne::Avancement(Some(avancement)),
+        Err(panne) if est_avancement(texte) => {
+            eprintln!("ligne d'avancement du pont illisible, écartée : {panne:?}");
+            Ligne::Avancement(None)
+        }
+        lue => Ligne::Reponse(lue),
+    }
+}
+
+/// La ligne se dit d'avancement (`"rep":"avancement"`), même si le reste ne
+/// se lit pas.
+fn est_avancement(texte: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(texte.trim())
+        .is_ok_and(|v| v.get("rep").and_then(|r| r.as_str()) == Some("avancement"))
 }
 
 fn lire(reponse: &str) -> Result<Reponse, Panne> {
@@ -340,12 +537,22 @@ impl Pont for PontProcessus {
         self.recevoir(&ligne, self.delais.reponse(requete))
     }
 
+    fn demander_annulable(&mut self, requete: &Requete, annulation: &Annulation) -> Echange {
+        self.demander_suivi(requete, annulation, &mut |_| {})
+    }
+
     /// La requête est envoyée, puis sa réponse attendue par tranches courtes :
     /// dès que l'annulation est demandée, `annuler` part sans attendre, et le
     /// délai restant devient celui de l'annulation (le pont désarme avant de
-    /// répondre). Les deux réponses sont lues dans l'ordre ; un pont qui ne
-    /// confirme pas l'annulation est arrêté.
-    fn demander_annulable(&mut self, requete: &Requete, annulation: &Annulation) -> Echange {
+    /// répondre). Les lignes d'avancement lues entre-temps vont à `suivi`.
+    /// Les deux réponses sont lues dans l'ordre ; un pont qui ne confirme pas
+    /// l'annulation est arrêté.
+    fn demander_suivi(
+        &mut self,
+        requete: &Requete,
+        annulation: &Annulation,
+        suivi: &mut dyn FnMut(AvancementFeuille),
+    ) -> Echange {
         let sans_annulation = |reponse| Echange {
             reponse,
             annulation: None,
@@ -371,7 +578,11 @@ impl Pont for PontProcessus {
             }
             let reste = delai.saturating_sub(debut.elapsed());
             match self.lignes.recv_timeout(reste.min(PAS_ATTENTE_REPONSE)) {
-                Ok(texte) => break lire(&texte),
+                Ok(texte) => match lire_ligne(&texte) {
+                    Ligne::Avancement(Some(avancement)) => suivi(avancement),
+                    Ligne::Avancement(None) => {}
+                    Ligne::Reponse(lue) => break lue,
+                },
                 Err(RecvTimeoutError::Disconnected) => break Err(self.arret()),
                 Err(RecvTimeoutError::Timeout) if reste.is_zero() => {
                     break Err(self.couper(&ligne, delai))
@@ -494,6 +705,7 @@ fn mesure_simulee(serie: u32, etalonnage: Option<Horodatage>) -> Mesure {
             }),
             observe: Info::Inconnue,
         },
+        feuille: None,
     };
     Mesure::new(vec![plage], provenance).expect("mesure fictive valable")
 }
@@ -626,6 +838,11 @@ impl Pont for PontSimule {
                     detail: "connecter_adresse : commande du FD-9".into(),
                 })
             }
+            Requete::Prenumeriser { .. } | Requete::MesurerFeuille { .. } => {
+                return Ok(Reponse::RequeteInvalide {
+                    detail: "mesure d'une feuille : commande du FD-9".into(),
+                })
+            }
         };
         if let Some((reussites, resultat)) = self.echecs.get_mut(&palier) {
             if *reussites == 0 {
@@ -661,6 +878,7 @@ impl Pont for PontSimule {
                             date_initiale: None,
                             anomalie_date_initiale: false,
                             brute_hex: String::new(),
+                            recertification_due: false,
                         },
                     }
                 }
@@ -681,6 +899,7 @@ impl Pont for PontSimule {
                 (Some(serie), Some(date)) => Reponse::Mesure {
                     mesure: mesure_simulee(serie, Some(date.clone())),
                     remise_au_repos: self.remise_au_repos.clone(),
+                    calage: None,
                 },
                 _ => Reponse::Erreur {
                     erreur: ErreurPont::EtalonnageRequis {},
@@ -729,6 +948,7 @@ impl Pont for PontSimule {
             (Some(serie), Some(date)) => Reponse::Mesure {
                 mesure: mesure_simulee(serie, Some(date.clone())),
                 remise_au_repos: self.remise_au_repos.clone(),
+                calage: None,
             },
             _ => Reponse::Erreur {
                 erreur: ErreurPont::EtalonnageRequis {},

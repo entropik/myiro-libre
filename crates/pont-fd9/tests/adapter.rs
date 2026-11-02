@@ -21,9 +21,12 @@ fn les_exports_usine_et_d_ecriture_sont_refuses_avant_toute_resolution() {
         "JIG_GetSDKVersion",
         "JIG_SetNetworkSetting",
         "FD9_SetNetworkSetting",
-        "FD9_SetOption",
+        // FD9_SetOption est admise (réglages de calcul de la DLL, fiche
+        // FD9_SetOption) ; les autres écritures et les travaux restent dehors.
         "FD9_TAConnect",
         "FD9_StartMeasurement",
+        "FD9_RegisterJob",
+        "FD9_MatchingChart",
     ] {
         assert_eq!(
             autoriser_export(nom),

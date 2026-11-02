@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use pont_protocole::{
     Calcul, ConditionMesure, ConditionsCalcul, Echantillonnage, Empreinte, Geometrie, Horodatage,
-    Illuminant, Info, InstrumentMesurant, Observateur, Provenance,
+    Illuminant, Info, InstrumentMesurant, LectureFeuille, Observateur, Provenance,
 };
 
 use crate::{erreur, ErreurCgats};
@@ -130,6 +130,14 @@ pub(crate) fn ecrire(p: &Provenance) -> Vec<(String, String)> {
     ];
     conditions_calcul("DEMANDE", &p.calcul.demande, &mut cles);
     conditions_calcul("OBSERVE", &p.calcul.observe, &mut cles);
+    // Mesure en feuille (FD-9) : ce que le pont a lu de la feuille.
+    if let Some(f) = &p.feuille {
+        cles.push(("FEUILLE_QR".into(), qualifier(&f.qr, String::clone)));
+        cles.push(("FEUILLE_ZONES".into(), f.zones.to_string()));
+        cles.push(("FEUILLE_PLAGES".into(), f.plages.to_string()));
+        cles.push(("FEUILLE_FIABILITE".into(), f.fiabilite.to_string()));
+        cles.push(("FEUILLE_ECART_MAX".into(), f.ecart_max.to_string()));
+    }
     cles
 }
 
@@ -169,6 +177,20 @@ pub(crate) fn lire(cles: &HashMap<String, String>) -> Result<Provenance, ErreurC
         _ => return Err(illisible("GEOMETRIE", geometrie_texte)),
     };
     let horodatage = |t: &str| Horodatage::new(t).ok();
+    let feuille = lire_feuille(cles, &champ)?;
+    // Mêmes règles que `Mesure::new` : une provenance relue doit pouvoir
+    // porter une mesure.
+    match (&geometrie, &feuille) {
+        (Geometrie::Feuille {}, None) => {
+            return erreur("provenance : mesure en feuille sans lecture de la feuille")
+        }
+        (Geometrie::Ponctuelle {} | Geometrie::Bande { .. }, Some(_)) => {
+            return erreur(
+                "provenance : lecture de feuille sur une mesure qui n'est pas en feuille",
+            )
+        }
+        _ => {}
+    }
 
     Ok(Provenance {
         instrument: InstrumentMesurant {
@@ -192,7 +214,35 @@ pub(crate) fn lire(cles: &HashMap<String, String>) -> Result<Provenance, ErreurC
             demande: lire_conditions("DEMANDE", &champ)?,
             observe: lire_conditions("OBSERVE", &champ)?,
         },
+        feuille,
     })
+}
+
+/// Lecture de la feuille, présente seulement si l'en-tête en porte un
+/// mot-clé ; alors il n'y en manque aucun.
+fn lire_feuille<'a>(
+    cles: &HashMap<String, String>,
+    champ: &impl Fn(&str) -> Result<&'a str, ErreurCgats>,
+) -> Result<Option<LectureFeuille>, ErreurCgats> {
+    if !cles
+        .keys()
+        .any(|cle| cle.starts_with(&format!("{PREFIXE}FEUILLE_")))
+    {
+        return Ok(None);
+    }
+    let nombre = |nom: &str| -> Result<u32, ErreurCgats> {
+        let texte = champ(nom)?;
+        texte
+            .parse()
+            .map_err(|_| ErreurCgats(format!("{PREFIXE}{nom} : « {texte} » illisible")))
+    };
+    Ok(Some(LectureFeuille {
+        qr: dequalifier("FEUILLE_QR", champ("FEUILLE_QR")?, |t| Some(t.to_string()))?,
+        zones: nombre("FEUILLE_ZONES")?,
+        plages: nombre("FEUILLE_PLAGES")?,
+        fiabilite: nombre("FEUILLE_FIABILITE")?,
+        ecart_max: nombre("FEUILLE_ECART_MAX")?,
+    }))
 }
 
 fn lire_conditions<'a>(

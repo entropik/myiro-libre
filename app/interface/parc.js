@@ -389,6 +389,10 @@
     if (premiereFois) {
       premiereFois = false;
       await charger();
+      // En démonstration (--demo), la résolution du parc fictif s'ouvre d'elle-même : « Mesurer une
+      // feuille au FD-9 » se voit sans rien chercher.
+      const bp = parc.imprimantes.flatMap((bi) => bi.papiers).find((p) => p.reglages.length > 0);
+      if (bp && (await invoke("bibliotheque_demonstration"))) choisirReglage(bp.reglages[0].condition.id);
       return;
     }
     dessiner();

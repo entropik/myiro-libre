@@ -1,11 +1,11 @@
 //! Le FD-9 dans le module `instrument` (ticket #13) : son pont `pont-fd9` et
-//! ses paliers (version, détection), et la règle du pare-feu (ticket #47).
+//! ses paliers (version, détection, connexion), et la règle du pare-feu (ticket #47).
 //! Isolé du reste du module : le MYIRO-1 garde son chemin,
 //! `Instrument::ouvrir` ; le choix est dans `choix`.
 
 use std::path::{Path, PathBuf};
 
-use pont_protocole::{Info, Palier, Reponse, Requete};
+use pont_protocole::{InstrumentFd9, Palier, Reponse, Requete};
 
 use super::parefeu::{
     AutorisationPareFeu, EchecPareFeu, EtatRegle, PareFeu, RegleFd9, PORT_DETECTION,
@@ -19,8 +19,38 @@ pub const NOM_DLL_FD9: &str = "FD9SDK.dll";
 /// Programme pont du FD-9 (`pont-fd9-x64.exe`, `pont-fd9-x86.exe` installés).
 pub const NOM_PONT_FD9: &str = "pont-fd9";
 
-/// Derniers paliers déclarés par `pont-fd9` : la version et la détection.
-pub const PLAFOND_FD9: Palier = Palier::Detection;
+/// Plafond ordinaire de `pont-fd9` dans l'application : la connexion (par
+/// adresse). L'ouverture s'arrête à la détection ; seule la mesure d'une
+/// feuille relance le pont au plafond Feuille, pour cette mesure seulement
+/// (module `feuille`).
+pub const PLAFOND_FD9: Palier = Palier::Connexion;
+
+/// Un FD-9 détecté : le pont et la DLL choisis, et l'adresse rendue par la
+/// détection ou saisie par l'opérateur, à laquelle la mesure d'une feuille se
+/// connecte. L'adresse saisie ne vit qu'en mémoire, pour la séance
+/// (ticket #98) : elle n'est jamais écrite.
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct Fd9Detecte {
+    pub(crate) programme: PathBuf,
+    pub(crate) dll: PathBuf,
+    pub(crate) adresse: String,
+    /// Adresse saisie par l'opérateur, sans détection.
+    pub(crate) saisie: bool,
+    /// La dernière feuille n'a pas pu se connecter à cette adresse.
+    pub(crate) connexion_echouee: bool,
+}
+
+/// Jamais l'adresse, même dans un message de débogage.
+impl std::fmt::Debug for Fd9Detecte {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Fd9Detecte")
+            .field("programme", &self.programme)
+            .field("dll", &self.dll)
+            .field("saisie", &self.saisie)
+            .field("connexion_echouee", &self.connexion_echouee)
+            .finish_non_exhaustive()
+    }
+}
 
 /// Modèle affiché dans la barre.
 pub const MODELE_FD9: &str = "FD-9";
@@ -45,8 +75,9 @@ pub fn emplacements_fd9(choisi: Option<PathBuf>) -> Vec<PathBuf> {
 
 impl<P: Pont> Instrument<P> {
     /// Cherche `FD9SDK.dll`, lance `pont-fd9` de la même architecture avec le
-    /// plafond Détection, puis demande la version et la détection. Un FD-9
-    /// vu devient `Etat::Detecte` : ce pont ne connecte pas encore.
+    /// plafond ordinaire ([`PLAFOND_FD9`]), puis demande la version et la
+    /// détection. Un FD-9 vu devient `Etat::Detecte` : l'ouverture ne le
+    /// connecte pas, il reste libre pour un autre logiciel.
     ///
     /// À la première détection vide, si la règle du pare-feu manque, elle est
     /// demandée à Windows pour le pont lancé, puis la détection est relancée
@@ -69,24 +100,146 @@ impl<P: Pont> Instrument<P> {
         let vu = lire_version(&mut pont)
             .and_then(|()| detecter(&mut pont))
             .and_then(|vu| match vu {
-                Some(identifiant) => Ok(identifiant),
+                Some(fd9) => Ok(fd9),
                 None => ouvrir_pare_feu(&mut pont, &programme, autorisation),
             });
         match vu {
-            Ok(identifiant) => Instrument {
-                pont: Some(pont),
-                sdk: None,
-                etat: Etat::Detecte {
-                    modele: MODELE_FD9.into(),
-                    identifiant,
-                },
-                probleme: None,
-                etalonnage: None,
-                repos_incertain: false,
-                annulation: crate::pont::Annulation::default(),
-            },
+            Ok(fd9) => Self::detecte(pont, programme, dll, fd9),
             Err(probleme) => Self::en_echec(None, probleme),
         }
+    }
+
+    /// FD-9 à l'adresse saisie par l'opérateur, quand la détection ne le voit
+    /// pas (ticket #98) : `pont-fd9` est lancé comme à l'ouverture, la
+    /// version lue, sans détection ni connexion. La feuille se connectera à
+    /// `adresse` ; l'instrument reste libre d'ici là.
+    pub fn ouvrir_fd9_adresse(
+        emplacements: &[PathBuf],
+        ponts: &[(Architecture, PathBuf)],
+        lancer: impl FnOnce(&Path, &Path, Palier) -> Result<P, Panne>,
+        adresse: &str,
+    ) -> Self {
+        let (programme, dll) = match choisir(NOM_DLL_FD9, NOM_PONT_FD9, emplacements, ponts) {
+            Ok(choix) => choix,
+            Err(probleme) => return Self::en_echec(None, probleme),
+        };
+        let mut pont = match lancer(&programme, &dll, PLAFOND_FD9) {
+            Ok(pont) => pont,
+            Err(panne) => return Self::en_echec(None, panne.into()),
+        };
+        match lire_version(&mut pont) {
+            Ok(()) => Self::a_l_adresse(pont, programme, dll, adresse.into()),
+            Err(probleme) => Self::en_echec(None, probleme),
+        }
+    }
+
+    /// FD-9 simulé (démonstration, `--demo`) : `pont` est interrogé comme à
+    /// l'ouverture (version, détection), sans DLL, sans pare-feu. Une
+    /// feuille relance ensuite un pont par le lanceur qu'on lui donne ; les
+    /// chemins du programme et de la DLL sont fictifs.
+    pub fn ouvrir_fd9_simule(mut pont: P) -> Self {
+        let vu = lire_version(&mut pont).and_then(|()| detecter(&mut pont));
+        match vu {
+            Ok(Some(fd9)) => Self::detecte(
+                pont,
+                PathBuf::from("pont-fd9 (simulé)"),
+                PathBuf::from("FD9SDK.dll (simulée)"),
+                fd9,
+            ),
+            Ok(None) => Self::en_echec(
+                None,
+                Probleme::AucunFd9 {
+                    detail: DETAIL_AUCUN_FD9.into(),
+                },
+            ),
+            Err(probleme) => Self::en_echec(None, probleme),
+        }
+    }
+
+    /// Relance le pont du FD-9 déjà choisi au plafond ordinaire, puis la
+    /// version et la détection, sans pare-feu : après une feuille, le FD-9
+    /// revient détecté comme à l'ouverture. Un FD-9 à l'adresse saisie la
+    /// garde, sans détection.
+    pub(crate) fn relancer_fd9(
+        lance: &Fd9Detecte,
+        lancer: &mut impl FnMut(&Path, &Path, Palier) -> Result<P, Panne>,
+    ) -> Self {
+        let mut pont = match lancer(&lance.programme, &lance.dll, PLAFOND_FD9) {
+            Ok(pont) => pont,
+            Err(panne) => return Self::en_echec(None, panne.into()),
+        };
+        if lance.saisie {
+            return match lire_version(&mut pont) {
+                Ok(()) => Self::a_l_adresse(
+                    pont,
+                    lance.programme.clone(),
+                    lance.dll.clone(),
+                    lance.adresse.clone(),
+                ),
+                Err(probleme) => Self::en_echec(None, probleme),
+            };
+        }
+        let vu = lire_version(&mut pont).and_then(|()| detecter(&mut pont));
+        match vu {
+            Ok(Some(fd9)) => Self::detecte(pont, lance.programme.clone(), lance.dll.clone(), fd9),
+            Ok(None) => Self::en_echec(
+                None,
+                Probleme::AucunFd9 {
+                    detail: DETAIL_AUCUN_FD9.into(),
+                },
+            ),
+            Err(probleme) => Self::en_echec(None, probleme),
+        }
+    }
+
+    fn detecte(pont: P, programme: PathBuf, dll: PathBuf, fd9: InstrumentFd9) -> Self {
+        Instrument {
+            pont: Some(pont),
+            sdk: None,
+            etat: Etat::Detecte {
+                modele: MODELE_FD9.into(),
+                identifiant: fd9.identifiant,
+            },
+            probleme: None,
+            etalonnage: None,
+            repos_incertain: false,
+            annulation: crate::pont::Annulation::default(),
+            fd9: Some(Fd9Detecte {
+                programme,
+                dll,
+                adresse: fd9.adresse,
+                saisie: false,
+                connexion_echouee: false,
+            }),
+        }
+    }
+
+    fn a_l_adresse(pont: P, programme: PathBuf, dll: PathBuf, adresse: String) -> Self {
+        let mut instrument = Self::detecte(
+            pont,
+            programme,
+            dll,
+            InstrumentFd9 {
+                liaison: pont_protocole::Info::Confirmee(pont_protocole::LiaisonFd9::Reseau),
+                identifiant: pont_protocole::Info::Inconnue,
+                adresse,
+            },
+        );
+        if let Some(fd9) = instrument.fd9.as_mut() {
+            fd9.saisie = true;
+        }
+        instrument
+    }
+
+    /// Le FD-9 est à une adresse saisie par l'opérateur.
+    pub fn fd9_par_adresse(&self) -> bool {
+        self.fd9.as_ref().is_some_and(|f| f.saisie)
+    }
+
+    /// La dernière feuille n'a pas pu se connecter au FD-9 : « Se connecter
+    /// par l'adresse » est proposé.
+    pub fn connexion_fd9_echouee(&self) -> bool {
+        self.fd9.as_ref().is_some_and(|f| f.connexion_echouee)
     }
 }
 
@@ -106,7 +259,7 @@ fn ouvrir_pare_feu<F: PareFeu>(
     pont: &mut impl Pont,
     programme: &Path,
     autorisation: &mut AutorisationPareFeu<F>,
-) -> Result<Info<String>, Probleme> {
+) -> Result<InstrumentFd9, Probleme> {
     let aucun = || Probleme::AucunFd9 {
         detail: DETAIL_AUCUN_FD9.into(),
     };
@@ -164,12 +317,10 @@ fn lire_version(pont: &mut impl Pont) -> Result<(), Probleme> {
     }
 }
 
-/// Détection : l'identifiant du premier FD-9 vu, `None` si la liste est vide.
-fn detecter(pont: &mut impl Pont) -> Result<Option<Info<String>>, Probleme> {
+/// Détection : le premier FD-9 vu, `None` si la liste est vide.
+fn detecter(pont: &mut impl Pont) -> Result<Option<InstrumentFd9>, Probleme> {
     match pont.demander(&Requete::Detecter {})? {
-        Reponse::InstrumentsFd9 { liste } => {
-            Ok(liste.into_iter().next().map(|fd9| fd9.identifiant))
-        }
+        Reponse::InstrumentsFd9 { liste } => Ok(liste.into_iter().next()),
         Reponse::Erreur { erreur } => Err(Probleme::DetectionImpossible {
             detail: format!("détection du FD-9 : {erreur:?}"),
         }),

@@ -20,7 +20,7 @@ int32_t __stdcall FD9_Connect(const tFD9_DeviceData *appareil,  /* 44 octets */
 - **Liaison 1 (USB)** : ouverture du port série nommé dans l'adresse, sous la forme `\\.\COMn`, dans un texte de 15 octets (`0x100a46fa..0x100a471b`).
 - **Nom d'application** : la DLL en recopie au plus **20 octets** dans une commande envoyée à l'instrument, avec une attente de 30 secondes (`0x1008fbd2..0x1008fc2c`). FD-S2w envoie le nom de l'application suivi du nom de l'ordinateur entre parenthèses.
 - Si l'instrument refuse cette commande, la DLL produit le code interne 10002108 ou 10002109, absent de la table : public **1999**. Seul `FD9_GetLastError` les distingue.
-- Ensuite, selon un état interne, la DLL vérifie l'échéance de la calibration périodique : **1901** veut dire « connecté, calibration périodique due » (code interne 8011, `0x1008ab83..0x1008ab94`). FD-S2w le traite comme un succès, avec un avertissement.
+- Ensuite, selon un état interne, la DLL vérifie une échéance : **1901** veut dire « connecté, **recertification due** » (code interne 8011, `0x1008ab83..0x1008ab94`). FD-S2w le traite comme un succès, avec un avertissement. MYIROtools aussi (succès si 0 ou 1901, `mit-x64` `0x1403ebd80`), et journalise alors « Instrument should be recertified » : c'est l'échéance de la recertification périodique de l'instrument (supposé : vérification par le fabricant), **pas un étalonnage demandé à l'opérateur**. La mesure reste possible.
 - Une connexion réussie pose le drapeau de session (1 = réseau, 2 = USB).
 
 ## Propriété de la mémoire
@@ -57,7 +57,7 @@ En réseau, **la détection n'est pas obligatoire** : une entrée construite à 
 
 - Enregistrer le rappel d'événements avant, comme FD-S2w ([FD9_RegisterDeviceEventHandler](FD9_RegisterDeviceEventHandler.md)).
 - Ne jamais appeler `FD9_Connect` sur une session déjà ouverte : le succès serait trompeur.
-- Juger le résultat avec `connexion_etablie` (0 ou 1901) ; signaler 1901 à l'opérateur ; journaliser le code public et le code interne de `FD9_GetLastError`.
+- Juger le résultat avec `connexion_etablie` (0 ou 1901) ; signaler 1901 à l'opérateur comme « recertification de l'instrument due », sans lui demander d'étalonnage ; journaliser le code public et le code interne de `FD9_GetLastError`.
 - Fermer FD-S2w, ou au moins le déconnecter, avant la connexion.
 - Lire aussitôt l'identité avec [FD9_GetSystemInfo](FD9_GetSystemInfo.md).
 
@@ -70,7 +70,7 @@ En réseau, **la détection n'est pas obligatoire** : une entrée construite à 
 ## Preuves (locales)
 
 - `fd9-x86/exports/FD9_Connect.asm.txt` (pointeurs, `ret 8`) et `fd9-x64/exports/FD9_Connect.asm.txt`.
-- Session : `desassemble.py fd9-x86 --address 0x1008a970` (déjà connecté, drapeau de session, calibration périodique).
+- Session : `desassemble.py fd9-x86 --address 0x1008a970` (déjà connecté, drapeau de session, code 1901).
 - Ouverture du transport : `--address 0x1008f1a0` (adresse vide, choix réseau ou USB) ; TCP : balayage `--address 0x10087471 --end 0x10087599` (port 49152, `gethostbyname`, `connect`).
 - Nom d'application : `--address 0x1008fbb0`.
-- `retroanalyse/logiciels/fd-s2w.md` § 2.4 (licence), § 5 (séquence et nom passé par FD-S2w, traitement de 1901).
+- `retroanalyse/logiciels/fd-s2w.md` § 2.4 (licence), § 5 (séquence et nom passé par FD-S2w, traitement de 1901) ; `fd9-feuille.md` § 3 (connexion de MYIROtools, message de recertification).

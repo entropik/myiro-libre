@@ -117,6 +117,35 @@ fn la_connexion_par_adresse_du_fd9_est_refusee_sans_appel_a_la_dll() {
     );
 }
 
+/// Définition de la RGB-2520, telle que l'application l'enverra au FD-9.
+const MIRE: &str = r#"{"nom":"RGB-2520 - 1P MY9","largeur":27940,"hauteur":41660,"zones":[{"gauche":1349,"haut":2300,"largeur_plage":601,"hauteur_plage":601,"pas_x":601,"pas_y":601,"rangees":60,"colonnes":42}]}"#;
+
+#[test]
+fn la_mesure_d_une_feuille_du_fd9_est_refusee_sans_appel_a_la_dll() {
+    let prenumeriser = format!(r#"{{"cmd":"prenumeriser","mire":{MIRE}}}"#);
+    let mesurer = format!(r#"{{"cmd":"mesurer_feuille","mire":{MIRE}}}"#);
+    let (lignes, session) = dialoguer_brut(
+        SdkSimule::avec_un_myiro1(),
+        Palier::Bande,
+        &[prenumeriser.as_str(), mesurer.as_str()],
+    );
+    assert_eq!(lignes.len(), 2);
+    for ligne in &lignes {
+        assert!(
+            matches!(
+                lire_reponse(ligne).unwrap(),
+                Reponse::RequeteInvalide { .. }
+            ),
+            "{ligne}"
+        );
+    }
+    assert!(
+        session.sdk().appels.is_empty(),
+        "{:?}",
+        session.sdk().appels
+    );
+}
+
 #[test]
 fn la_mesure_automatique_est_declenchee_par_le_pont() {
     let mut sdk = SdkSimule::avec_un_myiro1();
@@ -447,6 +476,7 @@ fn une_mesure_acquise_est_rendue_avec_un_repos_incertain_et_la_suivante_refusee(
     let Reponse::Mesure {
         mesure,
         remise_au_repos,
+        calage: None,
     } = lire_reponse(&lignes[4]).unwrap()
     else {
         panic!("{}", lignes[4])

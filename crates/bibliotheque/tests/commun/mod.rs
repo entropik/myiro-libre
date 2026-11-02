@@ -63,6 +63,7 @@ pub fn provenance(numero_serie: u32, horodatage: &str, geometrie: Geometrie) -> 
             }),
             observe: Info::Inconnue,
         },
+        feuille: None,
     }
 }
 

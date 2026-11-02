@@ -64,6 +64,7 @@ fn gris_spectres(r: [f32; 3], demande: Info<ConditionsCalcul>) -> Mesure {
             demande,
             observe: Info::Inconnue,
         },
+        feuille: None,
     };
     Mesure::new(vec![plage], provenance).unwrap()
 }

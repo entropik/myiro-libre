@@ -29,8 +29,15 @@ int32_t __stdcall FD9_Disconnect(void);   /* x86 : ret (aucun argument) */
 ## Pour le pont
 
 - Appeler à la fermeture de l'adapter, et après un échec en cours de session ; un code 1004 à la fermeture n'est pas une anomalie.
-- Sur 1104, ne pas insister : arrêter d'abord la mesure (fonctions hors du périmètre de ces fiches).
+- **Fermeture, dans l'ordre de MYIROtools** : [FD9_ExitMeasurement](FD9_ExitMeasurement.md)`(&0, NULL)` sans tenir compte du retour, puis `FD9_Disconnect`, puis [FD9_GetStatus](FD9_GetStatus.md) toutes les 100 ms jusqu'à l'état 1 (code 0) ou au code 1102 (plus de session). Le pont borne cette attente à 10 s (`ATTENTE_APRES_DECONNEXION`) ; au-delà, il le dit dans son journal, et la fermeture reste confirmée puisque `FD9_Disconnect` a rendu 0 ou 1004.
+- Sur 1104, ne pas insister ni attendre l'état : la fermeture est dite incertaine (`arret_refuse` avec le code), le rappel reste inscrit.
 - Désinscrire ensuite le rappel (`FD9_RegisterDeviceEventHandler` avec un pointeur nul).
+- Toute la fermeture est bornée par un chien de garde (20 s, `DELAI_FERMETURE`) : passé ce délai, le pont répond `fermeture_incertaine` avec `deconnexion_bloquee` et s'arrête avec le code 4 ([protocole](../formats/protocole.md#fermeture-du-fd-9-qui-ne-rend-pas-la-main--deconnexion_bloquee)).
+
+## Ce qu'a montré l'instrument
+
+- **E2 (28 octobre 2026)** : après un `FD9_StopMeasurement(&faux)` admis depuis l'état 1 et sans événement 10, `FD9_Disconnect` **n'a pas rendu la main** en près de 5 minutes (processus arrêté de force). L'appel peut donc bloquer : le pont le borne (confirmé). Cause : voir [FD9_StopMeasurement](FD9_StopMeasurement.md).
+- MYIROtools, à sa déconnexion (`mit-x64` `0x1403eb7f0`), appelle `FD9_ExitMeasurement(&0, NULL)` sans lire le retour, puis `FD9_Disconnect`, puis attend par `FD9_GetStatus` l'état 1 ou le code 1102, sans limite (confirmé).
 
 ## À vérifier sur l'instrument
 

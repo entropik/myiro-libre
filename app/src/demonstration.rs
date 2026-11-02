@@ -117,6 +117,7 @@ fn provenance(horodatage: &str, etalonnage: &str, geometrie: Geometrie) -> Prove
             }),
             observe: Info::Inconnue,
         },
+        feuille: None,
     }
 }
 
@@ -165,8 +166,18 @@ pub fn remplir(biblio: &Bibliotheque) -> Result<(), ErreurBibliotheque> {
     // de comparaison : Lab seuls, en M1 d'après la source lumineuse, sans
     // date ; ses spectres restent inconnus.
     biblio.importer_mesure(jet.id, "releve-lab.txt", &cgats_lab_seul())?;
+    // Une imprimante, un papier et une résolution, vides : la vue d'une
+    // résolution et « Mesurer une feuille au FD-9 » s'y voient (ticket #34).
+    let traceur = biblio.creer_imprimante(IMPRIMANTE)?;
+    let papier = biblio.creer_papier(traceur.id, PAPIER_PARC)?;
+    biblio.creer_reglage(papier.id, RESOLUTION)?;
     Ok(())
 }
+
+/// Le parc de démonstration : la page y ouvre d'elle-même la résolution.
+pub const IMPRIMANTE: &str = "Traceur de démonstration";
+pub const PAPIER_PARC: &str = "Satiné 260\u{202f}g";
+pub const RESOLUTION: &str = "1440 dpi";
 
 /// Fichier CGATS fictif : 36 plages réparties sur un cercle de teintes, à
 /// trois clartés. Aucune valeur ne vient d'une mesure réelle.

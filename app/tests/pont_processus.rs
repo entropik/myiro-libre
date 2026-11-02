@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use app::instrument::{Etat, Instrument, Probleme, PLAFOND};
-use app::pont::{architecture, chercher_ponts, Architecture, Panne, Pont, PontProcessus};
+use app::pont::{
+    architecture, chercher_ponts, Architecture, OptionsPont, Panne, Pont, PontProcessus,
+};
 use pont_protocole::{Palier, Reponse, Requete};
 
 /// L'exemple est compilé par `cargo test` (toutes cibles) ou par
@@ -106,6 +108,119 @@ fn un_pont_qui_s_arrete_rend_son_code_et_son_message() {
         }
         autre => panic!("réponse inattendue : {autre:?}"),
     }
+}
+
+/// Un pont qui écrit beaucoup sur sa sortie d'erreur (trace, journal d'une
+/// feuille de 2 520 plages) n'est jamais bloqué par un tube plein : la
+/// sortie d'erreur est lue au fil de l'eau (essai E5). Lancement ordinaire,
+/// celui de `pont-myiro1` et du pont FD-9 hors feuille.
+#[test]
+fn un_pont_bavard_sur_sa_sortie_d_erreur_n_est_pas_bloque() {
+    let mut pont = lancer_pret("bavard", Duration::from_secs(10));
+
+    assert_eq!(
+        pont.demander(&Requete::Detecter {}),
+        Ok(Reponse::Instruments { liste: vec![] })
+    );
+    assert_eq!(
+        pont.demander(&Requete::Version {}),
+        Ok(Reponse::Version { parties: [1, 0, 1] })
+    );
+}
+
+/// Contenu du fichier de trace une fois `fin` écrite (le fil qui lit la
+/// sortie d'erreur finit après le pont), au plus 10 s.
+fn trace_finie(chemin: &Path, fin: &str) -> String {
+    let echeance = Instant::now() + Duration::from_secs(10);
+    loop {
+        let texte = std::fs::read_to_string(chemin).unwrap_or_default();
+        if texte.contains(fin) || Instant::now() > echeance {
+            return texte;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// Le pont d'une feuille au FD-9 est lancé avec `--trace` : sa sortie
+/// d'erreur, 2 Mo, va au fichier `mesures-fd9/traces/<horodatage>.txt` de la
+/// bibliothèque, sans bloquer le pont.
+#[test]
+fn le_pont_d_une_feuille_trace_dans_la_bibliotheque_sans_se_bloquer() {
+    let dossier = dossier_vide("trace_feuille");
+    let mut lancer = app::mesurer_feuille::lanceur_feuille(&dossier);
+    let mut pont = lancer(&pont_factice(), Path::new("bavard"), Palier::Feuille)
+        .unwrap()
+        .avec_delai(Duration::from_secs(10));
+
+    assert_eq!(
+        pont.demander(&Requete::Detecter {}),
+        Ok(Reponse::Instruments { liste: vec![] })
+    );
+    drop(pont);
+
+    let traces: Vec<PathBuf> = std::fs::read_dir(dossier.join("mesures-fd9").join("traces"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(traces.len(), 1, "{traces:?}");
+    let nom = traces[0].file_name().unwrap().to_string_lossy().to_string();
+    assert!(nom.ends_with("Z.txt") && !nom.contains(':'), "{nom}");
+    let texte = trace_finie(&traces[0], "dernière ligne de trace");
+    assert_eq!(texte.lines().count(), 20_001);
+    assert!(texte.starts_with("trace      0 : "));
+    assert!(!texte.contains("trace coupée"));
+}
+
+/// `--trace` n'est passé qu'au pont de la feuille ; le pont ordinaire,
+/// relancé ensuite, ne trace rien dans la bibliothèque.
+#[test]
+fn seul_le_pont_de_la_feuille_recoit_trace() {
+    let dossier = dossier_vide("trace_paliers");
+    let mut lancer = app::mesurer_feuille::lanceur_feuille(&dossier);
+    let arguments = |pont: &mut PontProcessus| match pont.demander(&Requete::Version {}) {
+        Ok(Reponse::RequeteInvalide { detail }) => detail,
+        autre => panic!("{autre:?}"),
+    };
+
+    let mut ordinaire = lancer(&pont_factice(), Path::new("echo"), Palier::Connexion).unwrap();
+    assert!(!arguments(&mut ordinaire).contains("--trace"));
+    assert!(!dossier.join("mesures-fd9").exists());
+
+    let mut feuille = lancer(&pont_factice(), Path::new("echo"), Palier::Feuille).unwrap();
+    assert!(arguments(&mut feuille).ends_with("--plafond feuille --trace"));
+}
+
+/// Au-delà de son plafond, la trace garde son début, dit combien de lignes
+/// sont omises, puis ajoute les dernières à l'arrêt du pont.
+#[test]
+fn une_trace_trop_longue_garde_son_debut_et_sa_fin() {
+    let dossier = dossier_vide("trace_plafond");
+    let chemin = dossier.join("trace.txt");
+    let options = OptionsPont {
+        trace: Some(chemin.clone()),
+        plafond_trace: 10_000,
+        ..OptionsPont::default()
+    };
+    let mut pont = PontProcessus::lancer_avec(
+        &pont_factice(),
+        Path::new("bavard"),
+        Palier::Connexion,
+        &options,
+    )
+    .unwrap()
+    .avec_delai(Duration::from_secs(10));
+    assert!(pont.demander(&Requete::Detecter {}).is_ok());
+    drop(pont);
+
+    let texte = trace_finie(&chemin, "dernière ligne de trace");
+    assert!(texte.starts_with("trace      0 : "));
+    assert!(
+        texte.contains("--- trace coupée à 10000 octets : 17901 ligne(s) omise(s), puis les 2000 dernière(s) ---"),
+        "{}",
+        texte.lines().find(|l| l.starts_with("---")).unwrap_or("")
+    );
+    assert!(texte.trim_end().ends_with("dernière ligne de trace"));
+    assert!(texte.len() < 10_000 + 2_001 * 120, "{}", texte.len());
 }
 
 /// Un pont bloqué (DLL qui ne rend pas la main) ne bloque pas l'application :
@@ -392,6 +507,137 @@ fn une_demande_annulable_sans_annulation_reste_une_demande() {
     let echange = pont.demander_annulable(&Requete::Version {}, &annulation);
     assert_eq!(echange.reponse, Ok(Reponse::Version { parties: [1, 0, 1] }));
     assert_eq!(echange.annulation, None);
+}
+
+// ---- Avancement d'une feuille au FD-9 (ticket #34) ----
+
+/// Requête de feuille quelconque : le pont factice ne la lit pas.
+fn feuille() -> Requete {
+    Requete::MesurerFeuille {
+        mire: pont_protocole::DefinitionFeuille {
+            nom: "RGB-2520 - 1P MY9".into(),
+            largeur: 27_940,
+            hauteur: 41_660,
+            zones: vec![pont_protocole::ZoneFeuille {
+                gauche: 1_349,
+                haut: 2_300,
+                largeur_plage: 601,
+                hauteur_plage: 601,
+                pas_x: 601,
+                pas_y: 601,
+                rangees: 1,
+                colonnes: 6,
+            }],
+            couleurs: None,
+        },
+    }
+}
+
+/// Les lignes d'avancement écrites avant la réponse sont données au suivi,
+/// dans l'ordre ; la réponse de la requête est la ligne qui suit.
+#[test]
+fn l_avancement_d_une_feuille_est_suivi_jusqu_a_sa_reponse() {
+    use pont_protocole::AvancementFeuille as A;
+    let mut pont = lancer("feuille_suivie");
+    let mut vus = Vec::new();
+
+    let echange = pont.demander_suivi(&feuille(), &app::pont::Annulation::default(), &mut |a| {
+        vus.push(a)
+    });
+
+    assert_eq!(
+        vus,
+        vec![
+            A::FeuilleEngagee {},
+            A::Lecture {},
+            A::Mesure {
+                mesurees: 0,
+                plages: 6
+            },
+            A::Mesure {
+                mesurees: 6,
+                plages: 6
+            },
+        ]
+    );
+    assert_eq!(
+        echange.reponse,
+        Ok(Reponse::Erreur {
+            erreur: pont_protocole::ErreurPont::FeuilleAbsente {}
+        })
+    );
+    assert_eq!(echange.annulation, None);
+    assert_eq!(
+        pont.demander(&Requete::Version {}),
+        Ok(Reponse::Version { parties: [1, 0, 1] })
+    );
+}
+
+/// Une ligne d'avancement illisible (étape inconnue, champ de plus : un pont
+/// plus récent) ne fait jamais perdre la feuille : elle est écartée, et la
+/// réponse finale attendue comme avant, avec ou sans suivi.
+#[test]
+fn un_avancement_illisible_ne_fait_pas_perdre_la_feuille() {
+    let mut pont = lancer("feuille_avancement_illisible");
+    let mut vus = Vec::new();
+    let echange = pont.demander_suivi(&feuille(), &app::pont::Annulation::default(), &mut |a| {
+        vus.push(a)
+    });
+    assert_eq!(vus, vec![pont_protocole::AvancementFeuille::Lecture {}]);
+    let attendue = Ok(Reponse::Erreur {
+        erreur: pont_protocole::ErreurPont::FeuilleAbsente {},
+    });
+    assert_eq!(echange.reponse, attendue);
+    assert_eq!(pont.demander(&feuille()), attendue);
+    assert_eq!(
+        pont.demander(&Requete::Version {}),
+        Ok(Reponse::Version { parties: [1, 0, 1] })
+    );
+}
+
+/// Une demande ordinaire, ou annulable sans suivi, ne prend jamais une ligne
+/// d'avancement pour sa réponse.
+#[test]
+fn sans_suivi_l_avancement_est_ecarte() {
+    let mut pont = lancer("feuille_suivie");
+    assert_eq!(
+        pont.demander(&feuille()),
+        Ok(Reponse::Erreur {
+            erreur: pont_protocole::ErreurPont::FeuilleAbsente {}
+        })
+    );
+    let echange = pont.demander_annulable(&feuille(), &app::pont::Annulation::default());
+    assert_eq!(
+        echange.reponse,
+        Ok(Reponse::Erreur {
+            erreur: pont_protocole::ErreurPont::FeuilleAbsente {}
+        })
+    );
+}
+
+/// L'annulation part pendant que le pont écrit son avancement ; ce qui
+/// arrive avant la réponse est encore suivi, puis les deux réponses sont
+/// lues dans l'ordre.
+#[test]
+fn une_feuille_suivie_reste_annulable() {
+    use pont_protocole::AvancementFeuille as A;
+    let mut pont = lancer("feuille_suivie_annulable").avec_delai(Duration::from_millis(300));
+    let mut vus = Vec::new();
+    let (annulation, _) = annuler_apres(Duration::from_millis(50));
+
+    let echange = pont.demander_suivi(&feuille(), &annulation, &mut |a| vus.push(a));
+
+    assert_eq!(vus, vec![A::FeuilleEngagee {}, A::Lecture {}]);
+    assert!(matches!(
+        echange.reponse,
+        Ok(Reponse::Erreur {
+            erreur: pont_protocole::ErreurPont::MesureAnnulee { .. }
+        })
+    ));
+    assert_eq!(
+        echange.annulation,
+        Some(Ok(pont_protocole::EffetAnnulation::Appliquee))
+    );
 }
 
 /// Fin de la sortie du pont (processus perdu) pendant la mesure.

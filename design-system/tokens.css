@@ -39,6 +39,10 @@
   --couleur-hors-gamut:        #39ff14;
   --couleur-hors-gamut-calque: #39ff14;
   --couleur-hors-gamut-fond:   #10141c;
+  /* Point visé par le FD-9 sur la photo de la feuille : rouge bordé de blanc, le même dans les deux
+     thèmes (il se pose sur la photo, pas sur l'interface). */
+  --point-vise:      #ff1f1f;
+  --point-vise-bord: #ffffff;
   /* Ascenseurs : piste au filet, poignée atténuée (contraste au-dessus de 3 : 1 face à la piste),
      encre au survol. */
   --ascenseur-piste:          var(--filet);
@@ -72,6 +76,10 @@
   --couleur-hors-gamut:        #00a316;
   --couleur-hors-gamut-calque: #39ff14;
   --couleur-hors-gamut-fond:   #10141c;
+  /* Point visé par le FD-9 sur la photo de la feuille : rouge bordé de blanc, le même dans les deux
+     thèmes (il se pose sur la photo, pas sur l'interface). */
+  --point-vise:      #ff1f1f;
+  --point-vise-bord: #ffffff;
   --ascenseur-piste:          var(--filet);
   --ascenseur-poignee:        var(--attenue);
   --ascenseur-poignee-survol: var(--encre);

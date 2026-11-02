@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::ops::Deref;
 
+use crate::feuille::LectureFeuille;
+
 /// Défaut d'une mesure, expliqué en clair.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ErreurMesure(pub String);
@@ -463,6 +465,11 @@ pub struct Provenance {
     pub etalonnage: Info<Horodatage>,
     pub geometrie: Geometrie,
     pub calcul: Calcul,
+    /// QR et reconnaissance d'une mesure en feuille (FD-9) : présent pour
+    /// cette géométrie seulement. Facultatif dans le format : les lignes
+    /// écrites avant ce champ se relisent sans lui.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feuille: Option<LectureFeuille>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -479,6 +486,9 @@ pub const FORMAT_MESURE: &str = "myiro-libre/mesure/1";
 
 /// Modèle du MYIRO-1 dans la provenance.
 pub const MODELE_MYIRO1: &str = "MYIRO-1";
+
+/// Modèle du FD-9 dans la provenance.
+pub const MODELE_FD9: &str = "FD-9";
 
 /// Valeurs par spectre et données brutes par plage exigées du MYIRO-1 ; les
 /// autres instruments ne sont tenus qu'à des plages cohérentes entre elles.
@@ -596,7 +606,15 @@ fn verifier_provenance(p: &Provenance) -> Result<(), ErreurMesure> {
             }
         }
     }
-    Ok(())
+    match (&p.geometrie, &p.feuille) {
+        (Geometrie::Feuille {}, None) => {
+            erreur("provenance : mesure en feuille sans lecture de la feuille")
+        }
+        (Geometrie::Ponctuelle {} | Geometrie::Bande { .. }, Some(_)) => {
+            erreur("provenance : lecture de feuille sur une mesure qui n'est pas en feuille")
+        }
+        _ => Ok(()),
+    }
 }
 
 /// Écrit une mesure au format conservable (une ligne JSON).
@@ -685,6 +703,7 @@ pub(crate) fn mesure_initiale(valeur: serde_json::Value) -> Result<Mesure, Erreu
             demande: Info::Inconnue,
             observe: Info::Inconnue,
         },
+        feuille: None,
     };
     Mesure::new(lue.plages, provenance)
         .map_err(|e| ErreurMesure(format!("mesure du format initial : {e}")))

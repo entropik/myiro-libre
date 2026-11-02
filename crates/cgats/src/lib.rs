@@ -7,7 +7,8 @@
 //! - [`ecrire`] écrit une mesure de myiro-libre : un tableau par spectre de
 //!   plage (M0, M1, M2), Lab et spectre de chaque plage, provenance complète
 //!   dans l'en-tête. Une donnée inconnue y est écrite `inconnue`, jamais
-//!   remplacée par une valeur par défaut.
+//!   remplacée par une valeur par défaut. [`ecrire_avec_rvb`] y ajoute les
+//!   valeurs RVB de la mire (mesure d'une feuille).
 //! - [`lire`] relit un fichier CGATS.17, de myiro-libre ou d'un autre logiciel,
 //!   en [`MesureImportee`] : ce que le fichier ne donne pas reste inconnu.
 //! - [`modele_instrument`] ne garde d'une ligne `INSTRUMENTATION` que le
@@ -21,7 +22,7 @@ use std::fmt;
 
 use pont_protocole::{ConditionMesure, Echantillonnage, Info, Lab, Provenance, Spectre};
 
-pub use ecriture::ecrire;
+pub use ecriture::{ecrire, ecrire_avec_rvb};
 pub use lecture::{lire, lire_sans_condition};
 
 /// Version du CGATS écrit par myiro-libre (mot-clé `MYIRO_LIBRE_FORMAT`).
