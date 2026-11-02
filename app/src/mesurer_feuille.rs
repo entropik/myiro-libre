@@ -183,7 +183,7 @@ impl From<String> for EchecFeuille {
 
 /// Nom de rangement : « FD-9 RGB-2520 2026-10-30 1515.txt », d'après l'heure
 /// de la mesure posée par le pont.
-fn nom_feuille(mesure: &Mesure) -> String {
+pub(crate) fn nom_feuille(mesure: &Mesure) -> String {
     let h = mesure.provenance().horodatage.texte();
     let jour = h.get(..10).unwrap_or("mesure");
     let heure: String = h.get(11..16).unwrap_or_default().replace(':', "");
@@ -279,7 +279,11 @@ fn fichier_calage(dossier: &Path, id: IdMesure) -> PathBuf {
 /// dans `<dossier>/mesures-fd9/<n°>.calage.json`, sans remplacer un fichier
 /// déjà là. L'image peut montrer l'écriture de l'opérateur : ce fichier
 /// reste dans la bibliothèque du poste, jamais dans le dépôt.
-fn garder_calage(dossier: &Path, id: IdMesure, calage: &CalageFeuille) -> Option<PathBuf> {
+pub(crate) fn garder_calage(
+    dossier: &Path,
+    id: IdMesure,
+    calage: &CalageFeuille,
+) -> Option<PathBuf> {
     let fichier = fichier_calage(dossier, id);
     let texte = serde_json::to_string(calage).expect("un calage se sérialise toujours");
     let ecrit = fs::create_dir_all(dossier.join(DOSSIER_MESURES_FD9)).and_then(|()| {
@@ -311,7 +315,7 @@ pub fn lire_calage(dossier: &Path, id: IdMesure) -> Option<CalageFeuille> {
 /// `ecrire_mesure`) dans `<dossier>/mesures-fd9/<n°>.json`, sans jamais
 /// remplacer un fichier déjà là (une bibliothèque restaurée peut réemployer
 /// un numéro).
-fn garder_mesure(dossier: &Path, id: IdMesure, mesure: &Mesure) -> Option<PathBuf> {
+pub(crate) fn garder_mesure(dossier: &Path, id: IdMesure, mesure: &Mesure) -> Option<PathBuf> {
     let fichier = dossier
         .join(DOSSIER_MESURES_FD9)
         .join(format!("{}.json", id.0));

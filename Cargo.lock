@@ -69,6 +69,7 @@ dependencies = [
  "pont-protocole",
  "profilage",
  "rapport",
+ "seance-mesure",
  "serde",
  "serde_json",
  "tauri",

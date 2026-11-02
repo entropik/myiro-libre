@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::colonne::BibliothequeOuverte;
 use crate::parc::instant_utc;
+use crate::seance_fd9::refus_seance;
 
 /// Une mesure importée de la résolution, vue comme source d'un profil.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -418,7 +419,11 @@ pub(crate) fn sources_profil(
         .map(|i| {
             let mesure = b.mesure_importee(i.id)?.mesure;
             let conditions = conditions_utilisables(&mesure);
-            let raison = if !conditions.is_empty() {
+            // Une mesure d'une séance (#35) incertaine, incomplète ou pas
+            // encore close ne sert pas, quelles que soient ses plages.
+            let raison = if let Some(cle) = refus_seance(b, i.id)? {
+                Some(cle)
+            } else if !conditions.is_empty() {
                 None
             } else if mesure.plages.is_empty() {
                 Some(RefusPlages::Vide.cle())
@@ -486,6 +491,11 @@ impl BibliothequeOuverte {
         if importee.condition != condition {
             eprintln!("mesure n° {} rangée dans une autre résolution", mesure.0);
             return Err(ErreurProfil::sans_cause("profil.erreur.mesure_ailleurs"));
+        }
+        // Séance de mesure (#35) : ni association incertaine, ni mesure
+        // incomplète, ni séance en cours ; un choix « incomplet » n'y change rien.
+        if let Some(cle) = self.avec(|b| refus_seance(b, mesure))? {
+            return Err(ErreurProfil::sans_cause(cle));
         }
         let plages = preparer_plages(&importee.mesure, mesure_condition).map_err(|e| {
             eprintln!("{} : {e}", importee.fichier);
