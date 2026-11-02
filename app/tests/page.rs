@@ -395,9 +395,10 @@ fn balises(page: &str) -> Vec<(usize, &str)> {
         .collect()
 }
 
-/// La barre du haut a les cinq tâches, dans l'ordre du poste unique, chacune
-/// avec son icône et son libellé du catalogue ; l'application s'ouvre sur la
-/// Bibliothèque. Trois zones sous la barre.
+/// La barre du haut a les cinq tâches, dans l'ordre du poste unique, puis
+/// les réglages (ticket #89), chacun avec son icône et son libellé du
+/// catalogue ; l'application s'ouvre sur la Bibliothèque. Trois zones sous la
+/// barre.
 #[test]
 fn la_barre_a_cinq_taches_dans_l_ordre_avec_une_icone() {
     let page = lire("interface/index.html");
@@ -416,7 +417,8 @@ fn la_barre_a_cinq_taches_dans_l_ordre_avec_une_icone() {
             "profiler",
             "mesurer",
             "controler",
-            "imprimer"
+            "imprimer",
+            "reglages"
         ]
     );
     for (debut, balise) in &taches {

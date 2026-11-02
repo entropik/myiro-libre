@@ -53,6 +53,35 @@ fn l_atelier_enregistre_se_relit_a_l_identique() {
     assert_eq!(autre.saisi().unwrap(), saisi());
 }
 
+/// Au lancement suivant (un nouveau réglage sur le même dossier), les
+/// coordonnées et le logo sont relus tels quels ; la vue dit l'atelier
+/// rempli, et la fenêtre « première fois » (atelier.js, `premiere`, qui
+/// regarde le nom) ne s'ouvre plus.
+#[test]
+fn l_atelier_et_son_logo_sont_relus_au_lancement_suivant() {
+    let (d, r) = reglage();
+    assert!(
+        r.saisi().unwrap().nom.trim().is_empty(),
+        "vide : première fois"
+    );
+    r.enregistrer(&saisi()).unwrap();
+    let fichier = d.path().join("logo.png");
+    std::fs::write(&fichier, png(300, 100)).unwrap();
+    r.poser_logo(&fichier).unwrap();
+    let logo = r.lire().unwrap().logo_png.unwrap();
+    drop(r);
+
+    let relance = ReglageAtelier::new(d.path().join("atelier"));
+    let vue = app::atelier::commandes::vue(&relance).unwrap();
+    assert_eq!(vue.saisi, saisi());
+    assert!(vue.logo);
+    assert!(
+        !vue.saisi.nom.trim().is_empty(),
+        "rempli : plus de première fois"
+    );
+    assert_eq!(relance.lire().unwrap().logo_png.unwrap(), logo);
+}
+
 #[test]
 fn un_champ_trop_long_est_refuse() {
     let (_d, r) = reglage();

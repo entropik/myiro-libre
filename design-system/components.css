@@ -525,8 +525,11 @@ select.input option { background: var(--panneau); color: var(--encre); }
    cases que celui du rapport PDF, crate `rapport` : logo, atelier, client et objet, numéro). */
 .fenetre-atelier__erreur { min-height: calc(1em * var(--leading-normal)); margin: 0; }
 .fenetre-atelier__apercu { padding: var(--space-3); background: var(--carte); }
-.cartouche-rapport { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border: var(--rule) solid var(--encre); font-size: var(--text-xs); }
+.cartouche-rapport { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border: var(--rule) solid var(--encre); border-block-width: var(--rule-strong); font-size: var(--text-xs); }
 .cartouche-rapport__cellule { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; height: var(--space-24); padding: var(--space-2); overflow: hidden; border-left: var(--rule) solid var(--encre); }
 .cartouche-rapport__cellule:first-child { border-left: 0; }
 .cartouche-rapport__etiquette { color: var(--attenue); font-weight: 600; letter-spacing: var(--tracking-widest); text-transform: uppercase; }
-.cartouche-rapport__logo { max-width: 100%; max-height: 100%; object-fit: contain; }
+.cartouche-rapport__logo { min-height: 0; max-width: 100%; max-height: 100%; object-fit: contain; }
+/* Vue « Réglages » : le formulaire « Atelier » en page, sur toute la largeur de la vue. */
+.reglages-atelier { display: flex; flex-direction: column; margin-top: var(--space-4); }
+.reglages-atelier > * + * { margin-top: var(--space-2); }

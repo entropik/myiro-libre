@@ -38,7 +38,7 @@
 </head>
 <!-- Les textes viennent du catalogue Rust (data-t) : la page reste masquée tant qu'il n'est pas appliqué. -->
 <body class="app" hidden>
-<!-- Barre du haut : marque, cinq tâches à icône, instrument (pastille et état), thème, langue. -->
+<!-- Barre du haut : marque, cinq tâches à icône et les réglages, instrument (pastille et état), thème, langue. -->
 <header class="barre-haut">
   <div class="marque">myiro-libre<small data-t="marque.sous_titre"></small></div>
   <nav class="taches" data-t-aria="nav.libelle">
@@ -47,6 +47,8 @@
     <button class="tache" data-tache="mesurer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 3 5-8 4 5"/></svg><span data-t="tache.mesurer"></span></button>
     <button class="tache" data-tache="controler"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg><span data-t="tache.controler"></span></button>
     <button class="tache" data-tache="imprimer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V3h10v5M5 8h14v8H5zM7 14h10v7H7z"/></svg><span data-t="tache.imprimer"></span></button>
+    <!-- Réglages du poste (atelier des rapports…), après les cinq tâches, même style. -->
+    <button class="tache" data-tache="reglages"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span data-t="tache.reglages"></span></button>
   </nav>
   <div class="barre-haut__outils">
     <!-- L’instrument actif : pastille d’état et texte ; un clic ouvre la liste des instruments du poste (ticket #49). -->
@@ -231,6 +233,16 @@
         <p class="prose" data-t="prevu.imprimer.texte"></p>
         <div class="actions"><button class="btn btn--primary" disabled data-t="prevu.imprimer.action"></button></div>
         <p class="why" data-t="prevu.imprimer.raison"></p>
+      </div>
+    </section>
+    <!-- Réglages du poste, enregistrés une fois pour toutes. L’atelier : formulaire posé en page par
+         atelier.js à la première visite, relu sur place ensuite (le même qu’en fenêtre depuis le rapport). -->
+    <section data-vue="reglages" hidden>
+      <h1 class="titre" data-t="tache.reglages"></h1>
+      <div class="section">
+        <div class="section__head"><span class="label label--ink" data-t="reglages.atelier"></span></div>
+        <p class="prose" data-t="reglages.atelier.aide"></p>
+        <div class="reglages-atelier" data-reglages-atelier></div>
       </div>
     </section>
     <!-- Bibliothèque : la vue d’une résolution (parc.js), ou la feuille des mesures (bibliotheque.js). -->
