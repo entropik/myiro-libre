@@ -348,6 +348,102 @@ const FRANCAIS: Catalogue = &[
         "Cette séance de mesure a été fermée avec des plages manquantes. Mesurez un nouveau tirage complet pour calculer un profil.",
     ),
     (
+        "seance.erreur.fiche_non_confirmee",
+        "La fiche d’impression n’est pas confirmée. Vérifiez les réglages de l’impression, puis cochez «\u{202f}Je confirme ces réglages\u{202f}».",
+    ),
+    (
+        "seance.erreur.mire_illisible",
+        "La mire de ce tirage ne se relit pas. Préparez de nouveau la mire, puis recommencez.",
+    ),
+    (
+        "seance.erreur.tirage_indisponible",
+        "Ce tirage est déjà mesuré, ou il n’est pas dans cette résolution. Préparez de nouveau la mire pour un nouveau tirage.",
+    ),
+    (
+        "seance.erreur.fermee",
+        "Cette séance de mesure est fermée\u{202f}: elle ne change plus. Commencez une séance sur un nouveau tirage.",
+    ),
+    (
+        "seance.erreur.inconnue",
+        "Cette séance de mesure n’existe pas dans la bibliothèque.",
+    ),
+    (
+        "seance.erreur.source_inconnue",
+        "Cette mesure ne fait pas partie de la séance.",
+    ),
+    (
+        "seance.erreur.fiche_differente",
+        "Une séance est déjà en cours sur ce tirage, avec une autre fiche d’impression. Reprenez-la avec sa fiche, ou préparez un nouveau tirage.",
+    ),
+    (
+        "seance.erreur.motif_vide",
+        "Dites pourquoi vous écartez cette feuille\u{202f}: le motif est gardé avec elle.",
+    ),
+    (
+        "seance.erreur.complement_non_ecartable",
+        "Une mesure de complément ne s’écarte pas. Pour ne plus vous en servir, retirez les plages que vous y avez prises.",
+    ),
+    (
+        "seance.fin.plages_manquantes",
+        "Des plages manquent encore. Mesurez ou importez une autre feuille, complétez les plages à la main, ou fermez la séance comme incomplète\u{202f}: son résultat ne fera alors pas de profil.",
+    ),
+    (
+        "seance.fin.ecarts_a_voir",
+        "Des feuilles diffèrent nettement sur certaines plages. Regardez les écarts signalés, puis confirmez pour fermer la séance.",
+    ),
+    (
+        "seance.refus.aucun_exemplaire",
+        "Aucune feuille n’est retenue dans la séance. Mesurez ou importez au moins une feuille du tirage.",
+    ),
+    (
+        "seance.refus.autre_mire",
+        "Une mesure vient d’une autre mire que celle du tirage. Écartez-la.",
+    ),
+    (
+        "seance.refus.association_incertaine",
+        "Les plages d’une feuille ne correspondent pas avec certitude à celles de la mire. Écartez-la, ou mesurez-la de nouveau.",
+    ),
+    (
+        "seance.refus.modele_inconnu",
+        "Une mesure ne dit pas avec quel instrument elle a été faite. Écartez-la.",
+    ),
+    (
+        "seance.refus.modeles_differents",
+        "Les mesures viennent d’instruments différents (MYIRO-1 et FD-9)\u{202f}: elles ne se moyennent pas. Écartez celles de l’autre instrument.",
+    ),
+    (
+        "seance.refus.instruments_differents",
+        "Les mesures viennent de deux instruments différents, du même modèle\u{202f}: elles ne se moyennent pas. Gardez celles d’un seul instrument.",
+    ),
+    (
+        "seance.refus.conditions_differentes",
+        "Une mesure a été faite dans une autre condition de mesure (M0, M1, M2). Écartez-la.",
+    ),
+    (
+        "seance.refus.aucune_condition_commune",
+        "Les mesures n’ont aucune condition de mesure en commun (M0, M1, M2). Gardez des mesures faites dans la même condition.",
+    ),
+    (
+        "seance.refus.longueurs_onde_differentes",
+        "Les spectres d’une mesure ne couvrent pas les mêmes longueurs d’onde. Écartez-la.",
+    ),
+    (
+        "seance.refus.geometries_differentes",
+        "Une mesure a été lue autrement (en bande, en feuille). Écartez-la.",
+    ),
+    (
+        "seance.refus.spectres_meles",
+        "Certaines mesures ont des spectres et d’autres non\u{202f}: elles ne se moyennent pas ensemble. Gardez des mesures du même genre.",
+    ),
+    (
+        "seance.refus.lab_meles",
+        "Certaines mesures ont des valeurs Lab et d’autres non\u{202f}: elles ne se moyennent pas ensemble. Gardez des mesures du même genre.",
+    ),
+    (
+        "seance.refus.complement_invalide",
+        "Une plage complétée à la main ne convient pas\u{202f}: plage inconnue, déjà mesurée, ou absente de la mesure choisie. Corrigez les compléments.",
+    ),
+    (
         "profil.erreur.argyll_introuvable",
         "ArgyllCMS 3.5.0 est introuvable. Placez-le dans le dossier argyll à côté de l’application, puis relancez l’application.",
     ),
@@ -3563,6 +3659,102 @@ const ANGLAIS: Catalogue = &[
     (
         "profil.refus.seance_incomplete",
         "This measuring session was closed with missing patches. Measure a new complete print to compute a profile.",
+    ),
+    (
+        "seance.erreur.fiche_non_confirmee",
+        "The print sheet is not confirmed. Check the print settings, then tick “I confirm these settings”.",
+    ),
+    (
+        "seance.erreur.mire_illisible",
+        "The chart of this print cannot be read again. Prepare the chart again, then start over.",
+    ),
+    (
+        "seance.erreur.tirage_indisponible",
+        "This print is already measured, or it is not in this resolution. Prepare the chart again for a new print.",
+    ),
+    (
+        "seance.erreur.fermee",
+        "This measuring session is closed: it no longer changes. Start a session on a new print.",
+    ),
+    (
+        "seance.erreur.inconnue",
+        "This measuring session does not exist in the library.",
+    ),
+    (
+        "seance.erreur.source_inconnue",
+        "This measurement is not part of the session.",
+    ),
+    (
+        "seance.erreur.fiche_differente",
+        "A session is already in progress on this print, with another print sheet. Resume it with its sheet, or prepare a new print.",
+    ),
+    (
+        "seance.erreur.motif_vide",
+        "Say why you set this sheet aside: the reason is kept with it.",
+    ),
+    (
+        "seance.erreur.complement_non_ecartable",
+        "A complement measurement is not set aside. To stop using it, remove the patches you took from it.",
+    ),
+    (
+        "seance.fin.plages_manquantes",
+        "Patches are still missing. Measure or import another sheet, complete the patches by hand, or close the session as incomplete: its result will then not make a profile.",
+    ),
+    (
+        "seance.fin.ecarts_a_voir",
+        "Some sheets differ clearly on some patches. Look at the flagged differences, then confirm to close the session.",
+    ),
+    (
+        "seance.refus.aucun_exemplaire",
+        "No sheet is kept in the session. Measure or import at least one sheet of the print.",
+    ),
+    (
+        "seance.refus.autre_mire",
+        "A measurement comes from another chart than the print's. Set it aside.",
+    ),
+    (
+        "seance.refus.association_incertaine",
+        "The patches of a sheet do not match those of the chart with certainty. Set it aside, or measure it again.",
+    ),
+    (
+        "seance.refus.modele_inconnu",
+        "A measurement does not say which instrument made it. Set it aside.",
+    ),
+    (
+        "seance.refus.modeles_differents",
+        "The measurements come from different instruments (MYIRO-1 and FD-9): they are not averaged. Set aside those of the other instrument.",
+    ),
+    (
+        "seance.refus.instruments_differents",
+        "The measurements come from two different instruments of the same model: they are not averaged. Keep those of a single instrument.",
+    ),
+    (
+        "seance.refus.conditions_differentes",
+        "A measurement was made in another measurement condition (M0, M1, M2). Set it aside.",
+    ),
+    (
+        "seance.refus.aucune_condition_commune",
+        "The measurements have no measurement condition in common (M0, M1, M2). Keep measurements made in the same condition.",
+    ),
+    (
+        "seance.refus.longueurs_onde_differentes",
+        "The spectra of a measurement do not cover the same wavelengths. Set it aside.",
+    ),
+    (
+        "seance.refus.geometries_differentes",
+        "A measurement was read another way (strip, sheet). Set it aside.",
+    ),
+    (
+        "seance.refus.spectres_meles",
+        "Some measurements have spectra and others do not: they are not averaged together. Keep measurements of the same kind.",
+    ),
+    (
+        "seance.refus.lab_meles",
+        "Some measurements have Lab values and others do not: they are not averaged together. Keep measurements of the same kind.",
+    ),
+    (
+        "seance.refus.complement_invalide",
+        "A patch completed by hand does not fit: unknown patch, already measured, or missing from the chosen measurement. Correct the complements.",
     ),
     (
         "profil.erreur.argyll_introuvable",

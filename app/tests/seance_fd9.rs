@@ -360,6 +360,7 @@ impl Banc {
         self.ouverte
             .commencer_seance_fd9(self.condition, self.tirage, &fiche(true), maintenant())
             .unwrap()
+            .seance
     }
 
     fn mesurer(&mut self, seance: IdSeance) -> Result<SourceAjoutee, EchecFeuille> {
@@ -469,6 +470,7 @@ impl Banc {
         self.ouverte
             .commencer_seance_fd9(self.condition, IdTirage(tirage), &fiche(true), maintenant())
             .unwrap()
+            .seance
     }
 
     fn verifier(
@@ -535,9 +537,40 @@ fn une_fiche_non_confirmee_ne_commence_rien() {
 #[test]
 fn commencer_deux_fois_reprend_la_meme_seance() {
     let b = banc();
+    let premiere = b
+        .ouverte
+        .commencer_seance_fd9(b.condition, b.tirage, &fiche(true), maintenant())
+        .unwrap();
+    assert!(!premiere.reprise);
+    let seconde = b
+        .ouverte
+        .commencer_seance_fd9(b.condition, b.tirage, &fiche(true), maintenant())
+        .unwrap();
+    assert!(seconde.reprise);
+    assert_eq!(seconde.seance, premiere.seance);
+    assert_eq!(
+        b.ouverte.seances_en_cours(b.condition).unwrap(),
+        [premiere.seance]
+    );
+}
+
+#[test]
+fn une_reprise_avec_une_autre_fiche_est_refusee() {
+    let b = banc();
     let seance = b.commencer();
-    assert_eq!(b.commencer(), seance);
-    assert_eq!(b.ouverte.seances_en_cours(b.condition).unwrap(), [seance]);
+    let mut autre = fiche(true);
+    autre.encres = "Autres encres".into();
+    let refus = b
+        .ouverte
+        .commencer_seance_fd9(b.condition, b.tirage, &autre, maintenant())
+        .unwrap_err();
+    assert_eq!(refus.cle, "seance.erreur.fiche_differente");
+    // La fiche figée n'a pas changé.
+    let etat = b.ouverte.etat_seance(seance).unwrap();
+    assert_eq!(
+        serde_json::from_str::<FicheTirage>(&etat.plan.fiche).unwrap(),
+        fiche(true)
+    );
 }
 
 #[test]
@@ -547,6 +580,8 @@ fn le_plan_est_fige_au_depart_avec_la_mire_et_la_fiche() {
     let etat = b.ouverte.etat_seance(seance).unwrap();
     assert_eq!(etat.plan.mire.empreinte, "0".repeat(64));
     assert_eq!(etat.plan.plages.len(), PLAGES);
+    // La résolution d'une feuille de la séance est celle de la séance.
+    assert_eq!(b.ouverte.condition_seance(seance).unwrap(), b.condition);
     assert_eq!(
         serde_json::from_str::<FicheTirage>(&etat.plan.fiche).unwrap(),
         fiche(true)
@@ -625,7 +660,16 @@ fn un_export_fd_s2w_est_garde_tel_quel_et_marque_importe() {
     assert_eq!(etat.sources[0].origine, bibliotheque::OrigineSource::Import);
     assert_eq!(etat.sources[0].fichier, "export FD-S2w.txt");
     // Le texte d'origine, champ inconnu compris, est gardé tel quel (déjà en UTF-8).
-    assert_eq!(b.ouverte.original_source(source.mesure).unwrap(), texte);
+    assert_eq!(
+        b.ouverte.original_source(seance, source.mesure).unwrap(),
+        texte
+    );
+    // Seulement pour une mesure de cette séance.
+    let ailleurs = b
+        .ouverte
+        .original_source(seance, IdMesure(9_999))
+        .unwrap_err();
+    assert_eq!(ailleurs.cle, "seance.erreur.source_inconnue");
 }
 
 #[test]

@@ -9,6 +9,22 @@ use bibliotheque::{
 };
 use tempfile::TempDir;
 
+#[test]
+fn le_resume_d_un_tirage_dit_sa_seance_en_cours_et_s_il_est_mesure() {
+    let banc = banc();
+    let resume = |b: &Banc| {
+        let t = b.b.tirages(b.condition).unwrap().remove(0);
+        (t.seance, t.mesure)
+    };
+    assert_eq!(resume(&banc), (None, false));
+    let seance = banc.commencer();
+    assert_eq!(resume(&banc), (Some(seance), false));
+    banc.b
+        .terminer_seance(seance, &fin(EtatSeance::Incomplete, None))
+        .unwrap();
+    assert_eq!(resume(&banc), (None, true));
+}
+
 struct Banc {
     dossier: TempDir,
     b: Bibliotheque,
