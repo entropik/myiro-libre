@@ -405,6 +405,8 @@ pub fn cle_erreur(erreur: &ErreurBibliotheque) -> &'static str {
             eprintln!("{detail}");
             "bibliotheque.erreur.sauvegarde_invalide"
         }
+        ErreurBibliotheque::SeanceFermee(_) => crate::seance_fd9::cle::FERMEE,
+        ErreurBibliotheque::SeanceInconnue(_) => crate::seance_fd9::cle::INCONNUE,
         autre => {
             eprintln!("{autre}");
             "bibliotheque.erreur.autre"

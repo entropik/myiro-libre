@@ -4,10 +4,14 @@
 //! dont l'image part en binaire (ADR 0003). Avec `--demo`, un FD-9 simulé
 //! (`demonstration_fd9`) remplace l'instrument et la mire.
 //!
+//! La même mesure sert à la séance de mesure d'un tirage (ticket #35) :
+//! `seance_mesurer_exemplaire` mesure une feuille de la séance avec la mire
+//! de son plan figé et la range comme mesure source.
+//!
 //! Le reste (définition de la mire, avancement, rangement, calage gardé) est
-//! dans `instrument::feuille` et `mesurer_feuille`, sans Tauri.
+//! dans `instrument::feuille`, `mesurer_feuille` et `seance_fd9`, sans Tauri.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use pont_protocole::CalageFeuille;
@@ -24,7 +28,8 @@ use crate::mesurer_feuille::{
     self, etat_feuille_fd9, EchecFeuille, EtatFeuille, FeuilleRangee, RAISON_OCCUPE,
     RAISON_SANS_FD9,
 };
-use crate::pont;
+use crate::pont::{self, Panne, Pont};
+use crate::seance_fd9::SourceAjoutee;
 use crate::{DossierBibliotheque, Instruments};
 use mires::MireFd9;
 
@@ -115,8 +120,47 @@ struct EvenementFeuille<'a> {
 #[derive(Serialize)]
 pub(crate) struct EcranFeuille {
     rangee: Option<FeuilleRangee>,
+    /// La feuille d'une séance, rangée comme mesure source (#35).
+    source: Option<SourceAjoutee>,
     echec: Option<EchecFeuille>,
     instrument: Option<VueSelection>,
+}
+
+/// Ce qui est mesuré : la RGB-2520 rangée dans une résolution (#34), ou
+/// une feuille d'une séance, avec la mire de son plan (#35).
+enum Demande {
+    Feuille {
+        condition: bibliotheque::IdCondition,
+        mire: Result<MireFd9, String>,
+    },
+    Exemplaire {
+        seance: bibliotheque::IdSeance,
+    },
+}
+
+/// La feuille rangée, selon la demande.
+enum Rangement {
+    Feuille(FeuilleRangee),
+    Exemplaire(SourceAjoutee),
+}
+
+/// Mesure et range, avec l'instrument et le lanceur de ponts donnés.
+fn mesurer_avec<P: Pont>(
+    bibliotheque: &BibliothequeOuverte,
+    demande: Demande,
+    instrument: &mut Instrument<P>,
+    dossier: &Path,
+    lancer: &mut impl FnMut(&Path, &Path, pont_protocole::Palier) -> Result<P, Panne>,
+    suivi: &mut impl FnMut(EtapeFeuille),
+) -> Result<Rangement, EchecFeuille> {
+    match demande {
+        Demande::Feuille { condition, mire } => bibliotheque
+            .mesurer_feuille_fd9(condition, instrument, mire, dossier, lancer, suivi)
+            .map(Rangement::Feuille),
+        Demande::Exemplaire { seance } => bibliotheque
+            .mesurer_exemplaire_fd9(seance, instrument, dossier, lancer, suivi)
+            .map(Rangement::Exemplaire),
+    }
 }
 
 /// Le bouton « Mesurer une feuille au FD-9 » : actif, ou les raisons qui
@@ -166,6 +210,80 @@ pub(crate) fn mesurer_feuille_fd9(
     mire: State<'_, MireFeuille>,
     condition: i64,
 ) -> Result<EcranFeuille, String> {
+    let etats = Etats {
+        instruments: &instruments,
+        bibliotheque: &bibliotheque,
+        dossier: &dossier,
+        annulation: &annulation,
+        calage: &calage,
+        demonstration: &demonstration,
+        mire: &mire,
+    };
+    mesurer_au_fd9(&app, &etats, condition, None)
+}
+
+/// Mesure une feuille de la séance `seance` (ticket #35), de la résolution
+/// `condition`, au FD-9, avec la mire du plan figé de la séance ; elle est
+/// rangée comme mesure source. Mêmes événements `feuille_fd9`, même
+/// annulation et même calage que « Mesurer une feuille au FD-9 ».
+#[tauri::command(async)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn seance_mesurer_exemplaire(
+    app: AppHandle,
+    instruments: State<'_, Instruments>,
+    bibliotheque: State<'_, BibliothequeOuverte>,
+    dossier: State<'_, DossierBibliotheque>,
+    annulation: State<'_, AnnulationFeuille>,
+    calage: State<'_, CalageAffiche>,
+    demonstration: State<'_, DemonstrationFd9>,
+    mire: State<'_, MireFeuille>,
+    condition: i64,
+    seance: i64,
+) -> Result<EcranFeuille, String> {
+    let etats = Etats {
+        instruments: &instruments,
+        bibliotheque: &bibliotheque,
+        dossier: &dossier,
+        annulation: &annulation,
+        calage: &calage,
+        demonstration: &demonstration,
+        mire: &mire,
+    };
+    mesurer_au_fd9(
+        &app,
+        &etats,
+        condition,
+        Some(bibliotheque::IdSeance(seance)),
+    )
+}
+
+/// Les états de l'application dont une feuille a besoin.
+struct Etats<'a> {
+    instruments: &'a Instruments,
+    bibliotheque: &'a BibliothequeOuverte,
+    dossier: &'a DossierBibliotheque,
+    annulation: &'a AnnulationFeuille,
+    calage: &'a CalageAffiche,
+    demonstration: &'a DemonstrationFd9,
+    mire: &'a MireFeuille,
+}
+
+/// Une feuille au FD-9, d'une résolution (`seance` absente) ou d'une séance.
+fn mesurer_au_fd9(
+    app: &AppHandle,
+    etats: &Etats,
+    condition: i64,
+    seance: Option<bibliotheque::IdSeance>,
+) -> Result<EcranFeuille, String> {
+    let Etats {
+        instruments,
+        bibliotheque,
+        dossier,
+        annulation,
+        calage,
+        demonstration,
+        mire,
+    } = *etats;
     let _jeton = instruments
         .occupation
         .commencer(Operation::Mesure)
@@ -188,15 +306,22 @@ pub(crate) fn mesurer_feuille_fd9(
         *annulation.0.lock().unwrap_or_else(|e| e.into_inner()) = Some(a);
     };
     let condition_id = bibliotheque::IdCondition(condition);
+    let demande = |mire: &dyn Fn() -> Result<MireFd9, String>| match seance {
+        Some(seance) => Demande::Exemplaire { seance },
+        None => Demande::Feuille {
+            condition: condition_id,
+            mire: mire(),
+        },
+    };
     let (resultat, instrument) = match &demonstration.0 {
         Some(demo) => {
             let mut fd9 = demo.lock().unwrap_or_else(|e| e.into_inner());
             poser(fd9.annulation());
             let issue = IssueDemonstration::du_lancement();
-            let resultat = bibliotheque.mesurer_feuille_fd9(
-                condition_id,
+            let resultat = mesurer_avec(
+                bibliotheque,
+                demande(&|| Ok(demonstration_fd9::mire())),
                 &mut fd9,
-                Ok(demonstration_fd9::mire()),
                 &dossier.0,
                 &mut demonstration_fd9::lanceur(issue, demonstration_fd9::RYTHME),
                 &mut suivi,
@@ -212,11 +337,10 @@ pub(crate) fn mesurer_feuille_fd9(
                 .as_mut()
                 .ok_or_else(|| "refus.occupe.recherche".to_string())?;
             poser(selection.instrument().annulation());
-            let lue = mire.lue().map(|m| MireFd9::clone(&m));
-            let resultat = bibliotheque.mesurer_feuille_fd9(
-                condition_id,
+            let resultat = mesurer_avec(
+                bibliotheque,
+                demande(&|| mire.lue().map(|m| MireFd9::clone(&m))),
                 selection.instrument_mut(),
-                lue,
                 &dossier.0,
                 // Le pont de la feuille trace dans `mesures-fd9/traces/`.
                 &mut mesurer_feuille::lanceur_feuille(&dossier.0),
@@ -230,12 +354,14 @@ pub(crate) fn mesurer_feuille_fd9(
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .take();
-    let (rangee, echec) = match resultat {
-        Ok(rangee) => (Some(rangee), None),
-        Err(echec) => (None, Some(echec)),
+    let (rangee, source, echec) = match resultat {
+        Ok(Rangement::Feuille(rangee)) => (Some(rangee), None, None),
+        Ok(Rangement::Exemplaire(source)) => (None, Some(source), None),
+        Err(echec) => (None, None, Some(echec)),
     };
     Ok(EcranFeuille {
         rangee,
+        source,
         echec,
         instrument,
     })

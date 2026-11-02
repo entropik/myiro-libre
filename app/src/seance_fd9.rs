@@ -7,6 +7,8 @@
 //! Chaque feuille validée est rangée aussitôt : rien ne se perd à la
 //! fermeture. Les erreurs rendues sont des clés du catalogue de textes.
 
+pub mod commandes;
+
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -55,15 +57,100 @@ impl From<&str> for RefusSeance {
     }
 }
 
+/// Clés du catalogue que la séance rend, en plus de `seance.refus.<règle>`.
+pub mod cle {
+    pub const FICHE_NON_CONFIRMEE: &str = "seance.erreur.fiche_non_confirmee";
+    pub const MIRE_ILLISIBLE: &str = "seance.erreur.mire_illisible";
+    pub const TIRAGE_INDISPONIBLE: &str = "seance.erreur.tirage_indisponible";
+    pub const FERMEE: &str = "seance.erreur.fermee";
+    pub const INCONNUE: &str = "seance.erreur.inconnue";
+    pub const SOURCE_INCONNUE: &str = "seance.erreur.source_inconnue";
+    pub const MOTIF_VIDE: &str = "seance.erreur.motif_vide";
+    pub const COMPLEMENT_NON_ECARTABLE: &str = "seance.erreur.complement_non_ecartable";
+    pub const PLAGES_MANQUANTES: &str = "seance.fin.plages_manquantes";
+    pub const ECARTS_A_VOIR: &str = "seance.fin.ecarts_a_voir";
+    pub const MESURE_ECARTEE: &str = "profil.refus.mesure_ecartee";
+    pub const ASSOCIATION_INCERTAINE: &str = "profil.refus.association_incertaine";
+    pub const MESURE_INCOMPLETE: &str = "profil.refus.mesure_incomplete";
+    pub const SEANCE_EN_COURS: &str = "profil.refus.seance_en_cours";
+    pub const SEANCE_INCOMPLETE: &str = "profil.refus.seance_incomplete";
+    pub const AUTRE: &str = "bibliotheque.erreur.autre";
+    pub const CGATS_ILLISIBLE: &str = "bibliotheque.erreur.cgats_illisible";
+
+    pub(super) const TOUTES: [&str; 17] = [
+        AUTRE,
+        CGATS_ILLISIBLE,
+        FICHE_NON_CONFIRMEE,
+        MIRE_ILLISIBLE,
+        TIRAGE_INDISPONIBLE,
+        FERMEE,
+        INCONNUE,
+        SOURCE_INCONNUE,
+        MOTIF_VIDE,
+        COMPLEMENT_NON_ECARTABLE,
+        PLAGES_MANQUANTES,
+        ECARTS_A_VOIR,
+        MESURE_ECARTEE,
+        ASSOCIATION_INCERTAINE,
+        MESURE_INCOMPLETE,
+        SEANCE_EN_COURS,
+        SEANCE_INCOMPLETE,
+    ];
+}
+
+/// Nom d'une règle du moyennage dans `seance.refus.<règle>`. Sans joker :
+/// une règle ajoutée à `seance-mesure` doit recevoir sa clé ici, et son
+/// texte dans le catalogue ([`cles_seance`]).
+fn regle(incompatible: &Incompatible) -> &'static str {
+    match incompatible {
+        Incompatible::AucunExemplaire => "aucun_exemplaire",
+        Incompatible::AutreMire { .. } => "autre_mire",
+        Incompatible::AssociationIncertaine { .. } => "association_incertaine",
+        Incompatible::ModeleInconnu { .. } => "modele_inconnu",
+        Incompatible::ModelesDifferents { .. } => "modeles_differents",
+        Incompatible::InstrumentsDifferents { .. } => "instruments_differents",
+        Incompatible::ConditionsDifferentes { .. } => "conditions_differentes",
+        Incompatible::AucuneConditionCommune => "aucune_condition_commune",
+        Incompatible::LongueursOndeDifferentes { .. } => "longueurs_onde_differentes",
+        Incompatible::GeometriesDifferentes { .. } => "geometries_differentes",
+        Incompatible::SpectresMeles { .. } => "spectres_meles",
+        Incompatible::LabMeles { .. } => "lab_meles",
+        Incompatible::ComplementInvalide { .. } => "complement_invalide",
+    }
+}
+
+/// Les règles du moyennage, une par variante de [`Incompatible`].
+const REGLES: [&str; 13] = [
+    "aucun_exemplaire",
+    "autre_mire",
+    "association_incertaine",
+    "modele_inconnu",
+    "modeles_differents",
+    "instruments_differents",
+    "conditions_differentes",
+    "aucune_condition_commune",
+    "longueurs_onde_differentes",
+    "geometries_differentes",
+    "spectres_meles",
+    "lab_meles",
+    "complement_invalide",
+];
+
+/// Toutes les clés du catalogue que la séance peut rendre (contrôlé par
+/// `app/tests/textes_seance.rs` dans les deux langues).
+pub fn cles_seance() -> Vec<String> {
+    cle::TOUTES
+        .iter()
+        .map(|c| c.to_string())
+        .chain(REGLES.iter().map(|r| format!("seance.refus.{r}")))
+        .collect()
+}
+
 impl From<Incompatible> for RefusSeance {
-    /// `seance.refus.<règle>`, du nom de la règle dans le JSON.
+    /// `seance.refus.<règle>`.
     fn from(incompatible: Incompatible) -> Self {
-        let regle = serde_json::to_value(&incompatible)
-            .ok()
-            .and_then(|v| v["refus"].as_str().map(String::from))
-            .unwrap_or_default();
         RefusSeance {
-            cle: format!("seance.refus.{regle}"),
+            cle: format!("seance.refus.{}", regle(&incompatible)),
             incompatible: Some(incompatible),
         }
     }
@@ -155,7 +242,7 @@ pub struct EtatSeanceVue {
 /// Une valeur JSON rangée par l'application qui ne se relit plus.
 fn illisible<T>(quoi: &str, e: serde_json::Error) -> Result<T, String> {
     eprintln!("{quoi} illisible : {e}");
-    Err("bibliotheque.erreur.autre".into())
+    Err(cle::AUTRE.into())
 }
 
 fn plan_de(seance: &SeanceRangee) -> Result<Plan, String> {
@@ -211,20 +298,18 @@ pub(crate) fn refus_seance(
         return Ok(None);
     };
     Ok(match situation.place {
-        PlaceEnSeance::Source { retenue: false, .. } => Some("profil.refus.mesure_ecartee"),
+        PlaceEnSeance::Source { retenue: false, .. } => Some(cle::MESURE_ECARTEE),
         PlaceEnSeance::Source { association, .. } => {
             match serde_json::from_str::<Association>(&association) {
-                Ok(a) if !a.certaine() => Some("profil.refus.association_incertaine"),
-                Err(_) => Some("profil.refus.association_incertaine"),
-                Ok(a) if !a.complete() => Some("profil.refus.mesure_incomplete"),
-                Ok(_) if situation.etat == EtatSeance::EnCours => {
-                    Some("profil.refus.seance_en_cours")
-                }
+                Ok(a) if !a.certaine() => Some(cle::ASSOCIATION_INCERTAINE),
+                Err(_) => Some(cle::ASSOCIATION_INCERTAINE),
+                Ok(a) if !a.complete() => Some(cle::MESURE_INCOMPLETE),
+                Ok(_) if situation.etat == EtatSeance::EnCours => Some(cle::SEANCE_EN_COURS),
                 Ok(_) => None,
             }
         }
         PlaceEnSeance::Resultat if situation.etat == EtatSeance::Incomplete => {
-            Some("profil.refus.seance_incomplete")
+            Some(cle::SEANCE_INCOMPLETE)
         }
         PlaceEnSeance::Resultat => None,
     })
@@ -266,7 +351,7 @@ impl BibliothequeOuverte {
             .avec(|b| b.tirages_prepares(condition, "fd9"))?
             .into_iter()
             .find(|t| t.id == tirage)
-            .ok_or("seance.erreur.tirage_indisponible")?;
+            .ok_or(cle::TIRAGE_INDISPONIBLE)?;
         let valeurs: Vec<[f64; 3]> = serde_json::from_str(&prepare.mire.valeurs)
             .or_else(|e| illisible("valeurs de la mire", e))?;
         let plan = Plan::figer(
@@ -280,10 +365,8 @@ impl BibliothequeOuverte {
             fiche.confirmee,
         )
         .map_err(|refus| match refus {
-            RefusPlan::FicheNonConfirmee => "seance.erreur.fiche_non_confirmee",
-            RefusPlan::MireVide | RefusPlan::ValeurHorsEchelle { .. } => {
-                "seance.erreur.mire_illisible"
-            }
+            RefusPlan::FicheNonConfirmee => cle::FICHE_NON_CONFIRMEE,
+            RefusPlan::MireVide | RefusPlan::ValeurHorsEchelle { .. } => cle::MIRE_ILLISIBLE,
         })?;
         Ok(self.avec(|b| {
             b.creer_seance(&NouvelleSeance {
@@ -305,7 +388,7 @@ impl BibliothequeOuverte {
     fn seance_en_cours(&self, seance: IdSeance) -> Result<(SeanceRangee, Plan), String> {
         let rangee = self.avec(|b| b.seance(seance))?;
         if rangee.etat != EtatSeance::EnCours {
-            return Err("seance.erreur.fermee".into());
+            return Err(cle::FERMEE.into());
         }
         let plan = plan_de(&rangee)?;
         Ok((rangee, plan))
@@ -368,11 +451,11 @@ impl BibliothequeOuverte {
         let valeurs: Vec<[f64; 3]> = plan.plages.iter().map(|p| p.rvb).collect();
         let texte = cgats::ecrire_avec_rvb(&feuille.mesure, &valeurs).map_err(|e| {
             eprintln!("CGATS de la feuille : {e}");
-            "bibliotheque.erreur.autre".to_string()
+            cle::AUTRE.to_string()
         })?;
         let importee = cgats::lire(&texte).map_err(|e| {
             eprintln!("CGATS de la feuille : {e}");
-            "bibliotheque.erreur.autre".to_string()
+            cle::AUTRE.to_string()
         })?;
         let source = self.ranger_source(
             seance,
@@ -409,7 +492,7 @@ impl BibliothequeOuverte {
         let texte = cgats::decoder(octets);
         let importee = cgats::lire(&texte).map_err(|e| {
             eprintln!("{fichier} : {e}");
-            "bibliotheque.erreur.cgats_illisible"
+            cle::CGATS_ILLISIBLE
         })?;
         let role = match role {
             Role::Exemplaire => RoleSource::Exemplaire,
@@ -444,7 +527,7 @@ impl BibliothequeOuverte {
     ) -> Result<Vec<VuePlage>, RefusSeance> {
         let rangee = self.avec(|b| b.seance(seance))?;
         if !rangee.sources.iter().any(|s| s.mesure == mesure) {
-            return Err("bibliotheque.erreur.autre".into());
+            return Err(cle::SOURCE_INCONNUE.into());
         }
         let plan = plan_de(&rangee)?;
         let importee = self.avec(|b| b.mesure_importee(mesure))?.mesure;
@@ -477,16 +560,16 @@ impl BibliothequeOuverte {
         maintenant: SystemTime,
     ) -> Result<(), RefusSeance> {
         if !retenue && motif.trim().is_empty() {
-            return Err("seance.erreur.motif_vide".into());
+            return Err(cle::MOTIF_VIDE.into());
         }
         let (rangee, _) = self.seance_en_cours(seance)?;
         let source = rangee
             .sources
             .iter()
             .find(|s| s.mesure == mesure)
-            .ok_or("bibliotheque.erreur.autre")?;
+            .ok_or(cle::SOURCE_INCONNUE)?;
         if source.role == RoleSource::Complement {
-            return Err("seance.erreur.complement_non_ecartable".into());
+            return Err(cle::COMPLEMENT_NON_ECARTABLE.into());
         }
         let selection = json(&serde_json::json!({
             "retenue": retenue,
@@ -591,10 +674,10 @@ impl BibliothequeOuverte {
         let (rangee, plan) = self.seance_en_cours(seance)?;
         let mut moyenne = self.moyenne(&rangee, &plan)?;
         if !moyenne.complete() && !fin.incomplet_assume {
-            return Err("seance.fin.plages_manquantes".into());
+            return Err(cle::PLAGES_MANQUANTES.into());
         }
         if moyenne.ecarts_signales().next().is_some() && !fin.ecarts_vus {
-            return Err("seance.fin.ecarts_a_voir".into());
+            return Err(cle::ECARTS_A_VOIR.into());
         }
         let horodatage = instant_utc(maintenant);
         moyenne.mesure.date = Info::Confirmee(horodatage.clone());
@@ -608,7 +691,7 @@ impl BibliothequeOuverte {
         let texte = cgats::ecrire_moyenne(&moyenne.mesure, &plan.mire.empreinte, &retenues)
             .map_err(|e| {
                 eprintln!("CGATS de la moyenne : {e}");
-                "bibliotheque.erreur.autre".to_string()
+                cle::AUTRE.to_string()
             })?;
         let composition = CompositionRangee {
             composition: moyenne.composition,
@@ -645,6 +728,6 @@ impl BibliothequeOuverte {
                 },
             )
         })?;
-        resultat.ok_or_else(|| "bibliotheque.erreur.autre".into())
+        resultat.ok_or_else(|| cle::AUTRE.into())
     }
 }
