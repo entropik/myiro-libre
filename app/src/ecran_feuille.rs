@@ -109,6 +109,8 @@ impl DemonstrationFd9 {
 #[derive(Clone, Serialize)]
 struct EvenementFeuille<'a> {
     condition: i64,
+    /// La séance de la feuille (#35) ; rien pour une feuille de résolution.
+    seance: Option<i64>,
     numero: Option<u64>,
     #[serde(flatten)]
     etape: &'a EtapeFeuille,
@@ -222,10 +224,11 @@ pub(crate) fn mesurer_feuille_fd9(
     mesurer_au_fd9(&app, &etats, condition, None)
 }
 
-/// Mesure une feuille de la séance `seance` (ticket #35), de la résolution
-/// `condition`, au FD-9, avec la mire du plan figé de la séance ; elle est
-/// rangée comme mesure source. Mêmes événements `feuille_fd9`, même
-/// annulation et même calage que « Mesurer une feuille au FD-9 ».
+/// Mesure une feuille de la séance `seance` (ticket #35) au FD-9, avec la
+/// mire du plan figé de la séance ; elle est rangée comme mesure source.
+/// La résolution est celle de la séance. Mêmes événements `feuille_fd9`
+/// (avec le numéro de la séance), même annulation et même calage que
+/// « Mesurer une feuille au FD-9 ».
 #[tauri::command(async)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn seance_mesurer_exemplaire(
@@ -237,9 +240,12 @@ pub(crate) fn seance_mesurer_exemplaire(
     calage: State<'_, CalageAffiche>,
     demonstration: State<'_, DemonstrationFd9>,
     mire: State<'_, MireFeuille>,
-    condition: i64,
     seance: i64,
 ) -> Result<EcranFeuille, String> {
+    let seance = bibliotheque::IdSeance(seance);
+    let condition = bibliotheque
+        .condition_seance(seance)
+        .map_err(|refus| refus.cle)?;
     let etats = Etats {
         instruments: &instruments,
         bibliotheque: &bibliotheque,
@@ -249,12 +255,7 @@ pub(crate) fn seance_mesurer_exemplaire(
         demonstration: &demonstration,
         mire: &mire,
     };
-    mesurer_au_fd9(
-        &app,
-        &etats,
-        condition,
-        Some(bibliotheque::IdSeance(seance)),
-    )
+    mesurer_au_fd9(&app, &etats, condition.0, Some(seance))
 }
 
 /// Les états de l'application dont une feuille a besoin.
@@ -297,6 +298,7 @@ fn mesurer_au_fd9(
             "feuille_fd9",
             EvenementFeuille {
                 condition,
+                seance: seance.map(|s| s.0),
                 numero,
                 etape: &etape,
             },

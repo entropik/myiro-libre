@@ -10,18 +10,19 @@ use bibliotheque::{IdCondition, IdMesure, IdSeance, IdTirage};
 use seance_mesure::{Complement, Role, VuePlage};
 use tauri_plugin_dialog::DialogExt;
 
-use super::{EtatSeanceVue, FinDemandee, RefusSeance, SourceAjoutee};
+use super::{EtatSeanceVue, FinDemandee, RefusSeance, SeanceCommencee, SourceAjoutee};
 use crate::colonne::BibliothequeOuverte;
 use crate::verifier::FicheTirage;
 
-/// Commence la séance du tirage, ou reprend celle qui est en cours.
+/// Commence la séance du tirage, ou reprend celle qui est en cours (avec
+/// la même fiche, sinon refus), et dit lequel.
 #[tauri::command]
 pub fn seance_commencer(
     ouverte: tauri::State<'_, BibliothequeOuverte>,
     condition: i64,
     tirage: i64,
     fiche: FicheTirage,
-) -> Result<IdSeance, RefusSeance> {
+) -> Result<SeanceCommencee, RefusSeance> {
     ouverte.commencer_seance_fd9(
         IdCondition(condition),
         IdTirage(tirage),
@@ -88,6 +89,17 @@ pub fn seance_inspecter(
     mesure: i64,
 ) -> Result<Vec<VuePlage>, RefusSeance> {
     ouverte.plages_source(IdSeance(seance), IdMesure(mesure))
+}
+
+/// Le texte d'origine d'une mesure source de la séance, tel qu'il a été
+/// rangé (converti en UTF-8 s'il ne l'était pas).
+#[tauri::command(async)]
+pub fn seance_original(
+    ouverte: tauri::State<'_, BibliothequeOuverte>,
+    seance: i64,
+    mesure: i64,
+) -> Result<String, RefusSeance> {
+    ouverte.original_source(IdSeance(seance), IdMesure(mesure))
 }
 
 /// Remplace les compléments manuels de la séance.

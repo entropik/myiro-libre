@@ -349,7 +349,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "seance.erreur.fiche_non_confirmee",
-        "La fiche d’impression n’est pas confirmée. Vérifiez les réglages de l’impression, puis cochez la case de confirmation.",
+        "La fiche d’impression n’est pas confirmée. Vérifiez les réglages de l’impression, puis cochez «\u{202f}Je confirme ces réglages\u{202f}».",
     ),
     (
         "seance.erreur.mire_illisible",
@@ -370,6 +370,10 @@ const FRANCAIS: Catalogue = &[
     (
         "seance.erreur.source_inconnue",
         "Cette mesure ne fait pas partie de la séance.",
+    ),
+    (
+        "seance.erreur.fiche_differente",
+        "Une séance est déjà en cours sur ce tirage, avec une autre fiche d’impression. Reprenez-la avec sa fiche, ou préparez un nouveau tirage.",
     ),
     (
         "seance.erreur.motif_vide",
@@ -409,7 +413,7 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "seance.refus.instruments_differents",
-        "Les mesures viennent de deux FD-9 différents\u{202f}: elles ne se moyennent pas. Gardez celles d’un seul instrument.",
+        "Les mesures viennent de deux instruments différents, du même modèle\u{202f}: elles ne se moyennent pas. Gardez celles d’un seul instrument.",
     ),
     (
         "seance.refus.conditions_differentes",
@@ -3658,7 +3662,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "seance.erreur.fiche_non_confirmee",
-        "The print sheet is not confirmed. Check the print settings, then tick the confirmation box.",
+        "The print sheet is not confirmed. Check the print settings, then tick “I confirm these settings”.",
     ),
     (
         "seance.erreur.mire_illisible",
@@ -3679,6 +3683,10 @@ const ANGLAIS: Catalogue = &[
     (
         "seance.erreur.source_inconnue",
         "This measurement is not part of the session.",
+    ),
+    (
+        "seance.erreur.fiche_differente",
+        "A session is already in progress on this print, with another print sheet. Resume it with its sheet, or prepare a new print.",
     ),
     (
         "seance.erreur.motif_vide",
@@ -3718,7 +3726,7 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "seance.refus.instruments_differents",
-        "The measurements come from two different FD-9: they are not averaged. Keep those of a single instrument.",
+        "The measurements come from two different instruments of the same model: they are not averaged. Keep those of a single instrument.",
     ),
     (
         "seance.refus.conditions_differentes",

@@ -28,6 +28,29 @@ fn chaque_cle_de_la_seance_a_son_texte_dans_les_deux_langues() {
     }
 }
 
+/// Rang de chaque règle du moyennage, sans joker : une règle ajoutée à
+/// `seance-mesure` casse la compilation ici, et le test ci-dessous exige
+/// alors son exemple, sa clé et son texte.
+fn rang(regle: &Incompatible) -> usize {
+    match regle {
+        Incompatible::AucunExemplaire => 0,
+        Incompatible::AutreMire { .. } => 1,
+        Incompatible::AssociationIncertaine { .. } => 2,
+        Incompatible::ModeleInconnu { .. } => 3,
+        Incompatible::ModelesDifferents { .. } => 4,
+        Incompatible::InstrumentsDifferents { .. } => 5,
+        Incompatible::ConditionsDifferentes { .. } => 6,
+        Incompatible::AucuneConditionCommune => 7,
+        Incompatible::LongueursOndeDifferentes { .. } => 8,
+        Incompatible::GeometriesDifferentes { .. } => 9,
+        Incompatible::SpectresMeles { .. } => 10,
+        Incompatible::LabMeles { .. } => 11,
+        Incompatible::ComplementInvalide { .. } => 12,
+    }
+}
+
+const REGLES: usize = 13;
+
 #[test]
 fn chaque_regle_du_moyennage_a_son_texte() {
     let exemples = [
@@ -49,7 +72,18 @@ fn chaque_regle_du_moyennage_a_son_texte() {
         },
         Incompatible::ComplementInvalide { plage: "3".into() },
     ];
+    // Un exemple par règle, ni plus ni moins.
+    let mut rangs: Vec<usize> = exemples.iter().map(rang).collect();
+    rangs.sort_unstable();
+    rangs.dedup();
+    assert_eq!(rangs, (0..REGLES).collect::<Vec<_>>());
     let cles = cles_seance();
+    assert_eq!(
+        cles.iter()
+            .filter(|c| c.starts_with("seance.refus."))
+            .count(),
+        REGLES
+    );
     for exemple in exemples {
         let cle = RefusSeance::from(exemple).cle;
         assert!(cles.contains(&cle), "{cle} absente de cles_seance");

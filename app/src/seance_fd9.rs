@@ -66,6 +66,7 @@ pub mod cle {
     pub const INCONNUE: &str = "seance.erreur.inconnue";
     pub const SOURCE_INCONNUE: &str = "seance.erreur.source_inconnue";
     pub const MOTIF_VIDE: &str = "seance.erreur.motif_vide";
+    pub const FICHE_DIFFERENTE: &str = "seance.erreur.fiche_differente";
     pub const COMPLEMENT_NON_ECARTABLE: &str = "seance.erreur.complement_non_ecartable";
     pub const PLAGES_MANQUANTES: &str = "seance.fin.plages_manquantes";
     pub const ECARTS_A_VOIR: &str = "seance.fin.ecarts_a_voir";
@@ -77,7 +78,8 @@ pub mod cle {
     pub const AUTRE: &str = "bibliotheque.erreur.autre";
     pub const CGATS_ILLISIBLE: &str = "bibliotheque.erreur.cgats_illisible";
 
-    pub(super) const TOUTES: [&str; 17] = [
+    pub(super) const TOUTES: [&str; 18] = [
+        FICHE_DIFFERENTE,
         AUTRE,
         CGATS_ILLISIBLE,
         FICHE_NON_CONFIRMEE,
@@ -154,6 +156,14 @@ impl From<Incompatible> for RefusSeance {
             incompatible: Some(incompatible),
         }
     }
+}
+
+/// La séance commencée, ou reprise.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct SeanceCommencee {
+    pub seance: IdSeance,
+    /// Une séance était déjà en cours sur ce tirage : elle est reprise.
+    pub reprise: bool,
 }
 
 /// Une mesure source rangée, avec son association au plan.
@@ -325,19 +335,39 @@ impl BibliothequeOuverte {
         tirage: IdTirage,
         fiche: &FicheTirage,
         maintenant: SystemTime,
-    ) -> Result<IdSeance, RefusSeance> {
-        self.avec(|b| {
+    ) -> Result<SeanceCommencee, RefusSeance> {
+        let en_cours = self.avec(|b| {
             for id in b.seances_en_cours(condition)? {
-                if b.seance(id)?.tirage == tirage {
-                    return Ok(Some(id));
+                let rangee = b.seance(id)?;
+                if rangee.tirage == tirage {
+                    return Ok(Some(rangee));
                 }
             }
             Ok(None)
-        })?
-        .map_or_else(
-            || self.nouvelle_seance(condition, tirage, fiche, maintenant),
-            Ok,
-        )
+        })?;
+        let Some(rangee) = en_cours else {
+            let seance = self.nouvelle_seance(condition, tirage, fiche, maintenant)?;
+            return Ok(SeanceCommencee {
+                seance,
+                reprise: false,
+            });
+        };
+        // La fiche figée au départ ne change pas : une autre fiche est
+        // refusée, jamais ignorée en silence.
+        let figee: FicheTirage =
+            serde_json::from_str(&rangee.fiche).or_else(|e| illisible("fiche figée", e))?;
+        if figee != *fiche {
+            return Err(cle::FICHE_DIFFERENTE.into());
+        }
+        Ok(SeanceCommencee {
+            seance: rangee.id,
+            reprise: true,
+        })
+    }
+
+    /// La résolution d'une séance.
+    pub fn condition_seance(&self, seance: IdSeance) -> Result<IdCondition, RefusSeance> {
+        Ok(self.avec(|b| b.seance(seance))?.condition)
     }
 
     fn nouvelle_seance(
@@ -514,8 +544,16 @@ impl BibliothequeOuverte {
 
     /// Le texte d'une mesure source, tel qu'il a été rangé : celui du
     /// fichier, converti en UTF-8 s'il ne l'était pas.
-    pub fn original_source(&self, mesure: IdMesure) -> Result<String, String> {
-        self.avec(|b| b.texte_importee(mesure))
+    pub fn original_source(
+        &self,
+        seance: IdSeance,
+        mesure: IdMesure,
+    ) -> Result<String, RefusSeance> {
+        let rangee = self.avec(|b| b.seance(seance))?;
+        if !rangee.sources.iter().any(|s| s.mesure == mesure) {
+            return Err(cle::SOURCE_INCONNUE.into());
+        }
+        Ok(self.avec(|b| b.texte_importee(mesure))?)
     }
 
     /// Chaque plage du plan, l'attendu à côté de ce que la mesure source en

@@ -711,6 +711,7 @@ pub fn lancer() {
             seance_fd9::commandes::seance_etat,
             seance_fd9::commandes::seance_importer,
             seance_fd9::commandes::seance_inspecter,
+            seance_fd9::commandes::seance_original,
             seance_fd9::commandes::seance_completer,
             seance_fd9::commandes::seance_retenir,
             seance_fd9::commandes::seance_terminer,
