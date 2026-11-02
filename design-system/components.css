@@ -234,6 +234,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .btn--primary { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); font-weight: 600; }
 .btn[disabled] { color: var(--attenue); cursor: not-allowed; }
 .btn--primary[disabled] { background: transparent; border-color: var(--filet); }
+/* État actif : le bouton qui a ouvert une partie (aria-expanded) ou qui est enfoncé (aria-pressed)
+   le montre, comme l'étape en cours et le nœud choisi. Seuls la couleur du fond et du filet
+   changent : ni graisse ni épaisseur, la taille du bouton reste la même. */
+.btn:not(.btn--primary)[aria-expanded="true"], .btn:not(.btn--primary)[aria-pressed="true"] { background: var(--selection); border-color: var(--accent); color: var(--encre); }
 .why { font-size: var(--text-sm); color: var(--attenue); margin-top: var(--space-2); }
 .actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin: var(--space-4) 0; }
 

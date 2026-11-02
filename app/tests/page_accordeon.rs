@@ -183,3 +183,56 @@ fn le_point_clique_et_l_etat_de_l_analyse_sont_compacts() {
     let visee = corps(&pastilles, "function visee(p) {");
     assert!(visee.contains("ligne.title = texte;"), "{visee}");
 }
+
+/// Ticket #92 (lot 1) : le bouton qui a ouvert une partie, ou qui est
+/// enfoncé, le montre, comme l'étape en cours (« sinon on est perdu »).
+/// Seules les couleurs changent, depuis les jetons : ni graisse, ni
+/// épaisseur, ni marge, la taille du bouton reste la même.
+#[test]
+fn un_bouton_actif_se_voit_sans_changer_de_taille() {
+    let css = lire("../design-system/components.css");
+    let ligne = ligne_css(
+        &css,
+        ".btn:not(.btn--primary)[aria-expanded=\"true\"], .btn:not(.btn--primary)[aria-pressed=\"true\"] {",
+    );
+    for attendu in [
+        "background: var(--selection);",
+        "border-color: var(--accent);",
+        "color: var(--encre);",
+    ] {
+        assert!(ligne.contains(attendu), "{attendu} : {ligne}");
+    }
+    for interdit in [
+        "font-weight",
+        "border-width",
+        "border:",
+        "padding",
+        "margin",
+        "#",
+        "shadow",
+        "radius",
+    ] {
+        assert!(!ligne.contains(interdit), "{interdit} : {ligne}");
+    }
+    // Les boutons qui ouvrent une partie portent bien aria-expanded.
+    let page = lire("interface/index.html");
+    for ouvre in [
+        "data-calcul-ouvrir",
+        "data-verif-ouvrir",
+        "data-mire-ouvrir",
+        "data-feuille-voir",
+    ] {
+        let debut = page.find(ouvre).unwrap_or_else(|| panic!("{ouvre} absent"));
+        let balise =
+            &page[page[..debut].rfind('<').unwrap()..debut + page[debut..].find('>').unwrap()];
+        assert!(
+            balise.contains("class=\"btn\"") && balise.contains("aria-expanded="),
+            "{ouvre} : {balise}"
+        );
+    }
+    let kit = lire("../design-system/ui-kit.html");
+    assert!(kit.contains("<button class=\"btn\" aria-expanded=\"true\">"));
+    assert!(
+        lire("../design-system/README.md").contains("aria-expanded=\"true\"`) ou qui est enfoncé")
+    );
+}
