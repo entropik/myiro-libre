@@ -10,7 +10,51 @@ use fd9_sys::{
 };
 use pont_fd9::{Annulation, Evenement, SdkFd9};
 use std::collections::{HashMap, VecDeque};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+/// Ce que fait l'instrument, `apres` le lancement de la mesure
+/// (`FD9_StartMeasurement2`) : un événement du rappel, ou un état atteint
+/// par la DLL sans rappel (essai E5).
+#[derive(Clone, Copy, Debug)]
+pub struct Programme {
+    pub apres: Duration,
+    pub etat: u32,
+    pub compte: u32,
+    /// Faux : la DLL change d'état sans appeler le rappel.
+    pub rappel: bool,
+}
+
+impl Programme {
+    /// Événement 11 : `compte` plages déjà mesurées.
+    pub fn avis(ms: u64, compte: u32) -> Self {
+        Programme {
+            apres: Duration::from_millis(ms),
+            etat: 11,
+            compte,
+            rappel: true,
+        }
+    }
+
+    /// Événement `etat` envoyé au rappel.
+    pub fn evenement(ms: u64, etat: u32) -> Self {
+        Programme {
+            apres: Duration::from_millis(ms),
+            etat,
+            compte: 0,
+            rappel: true,
+        }
+    }
+
+    /// La DLL passe à `etat` sans rien envoyer au rappel.
+    pub fn muet(ms: u64, etat: u32) -> Self {
+        Programme {
+            apres: Duration::from_millis(ms),
+            etat,
+            compte: 0,
+            rappel: false,
+        }
+    }
+}
 
 /// SDK simulé, à échecs injectables ; note chaque appel.
 #[derive(Default)]
@@ -119,6 +163,13 @@ pub struct Fd9Simule {
     /// Comptes des événements 11 envoyés pendant la mesure, dans l'ordre ;
     /// `None` : un seul, toutes les plages ; vide : aucun.
     pub comptes_mesure: Option<Vec<u32>>,
+    /// Déroulé de la mesure dans le temps, au lieu de `comptes_mesure` :
+    /// l'événement 8 tout de suite, puis ces actions à leur heure, sans
+    /// événement 9 de lui-même.
+    pub mesure_programmee: Option<Vec<Programme>>,
+    /// Actions programmées pas encore faites, à leur heure (remplies au
+    /// lancement de la mesure).
+    pub programmes: VecDeque<(Instant, Programme)>,
 }
 
 /// Motif répété 32 fois : empreinte SHA-256 fictive de la DLL simulée.
@@ -294,6 +345,31 @@ impl Fd9Simule {
         code
     }
 
+    /// Fait les actions programmées dont l'heure est venue.
+    fn faire_programmes(&mut self) {
+        let maintenant = Instant::now();
+        while self
+            .programmes
+            .front()
+            .is_some_and(|(t, _)| *t <= maintenant)
+        {
+            let (_, p) = self.programmes.pop_front().unwrap();
+            if !p.rappel {
+                self.etat = p.etat;
+            } else if p.etat == 11 {
+                // Un avis de plages ne change pas l'état du SDK.
+                if self.inscrit {
+                    self.recus.push_back(Evenement {
+                        compte: p.compte,
+                        ..evenement(11)
+                    });
+                }
+            } else {
+                self.rappeler(p.etat);
+            }
+        }
+    }
+
     pub fn appels_dll(&self) -> Vec<&str> {
         self.appels.iter().map(String::as_str).collect()
     }
@@ -391,6 +467,7 @@ impl SdkFd9 for Fd9Simule {
     }
 
     fn statut(&mut self, tampon: &mut [u32; 8]) -> i32 {
+        self.faire_programmes();
         match self.codes_statut.pop_front() {
             Some(code) if code != 0 => {
                 self.appels.push("FD9_GetStatus".into());
@@ -427,6 +504,7 @@ impl SdkFd9 for Fd9Simule {
     }
 
     fn evenements(&mut self, attente: Duration) -> Vec<Evenement> {
+        self.faire_programmes();
         if self.recus.is_empty() && !attente.is_zero() {
             // L'instrument agit pendant que la session attend.
             if self.a_venir.is_empty() {
@@ -635,6 +713,15 @@ impl SdkFd9 for Fd9Simule {
         // Sans réaction imposée : mesure, nombre de plages mesurées, fin.
         if code == 0 && !self.reactions.contains_key("FD9_StartMeasurement2") {
             self.rappeler(8);
+            if let Some(mut programme) = self.mesure_programmee.clone() {
+                programme.sort_by_key(|p| p.apres);
+                let depart = Instant::now();
+                self.programmes = programme
+                    .into_iter()
+                    .map(|p| (depart + p.apres, p))
+                    .collect();
+                return code;
+            }
             let comptes = self
                 .comptes_mesure
                 .clone()

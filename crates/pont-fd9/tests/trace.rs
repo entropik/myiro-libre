@@ -48,6 +48,7 @@ fn chaque_appel_est_trace_a_l_entree_puis_au_retour() {
         feuille: Duration::from_millis(50),
         etape: Duration::from_millis(50),
         mesure: Duration::from_millis(50),
+        silence: Duration::from_secs(60),
         deconnexion: Duration::from_millis(50),
     });
     session.version().unwrap();

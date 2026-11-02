@@ -583,12 +583,12 @@ fn sans_mire_rgb2520_la_mesure_est_refusee_en_clair() {
     }
 }
 
-/// Le pont attend la feuille 2 min, chaque étape 30 s, la mesure 10 min
+/// Le pont attend la feuille 2 min, chaque étape 30 s, la mesure 20 min
 /// (`pont_fd9::Delais`), puis lit 2 520 plages : l'application lui laisse
-/// 20 min avant de le dire bloqué, et pas plus longtemps aux autres demandes.
+/// 30 min avant de le dire bloqué, et pas plus longtemps aux autres demandes.
 #[test]
 fn la_feuille_a_le_temps_d_etre_mesuree() {
-    assert_eq!(DELAI_FEUILLE, Duration::from_secs(20 * 60));
+    assert_eq!(DELAI_FEUILLE, Duration::from_secs(30 * 60));
     let delais = app::instrument::Delais::default();
     let feuille = Requete::MesurerFeuille {
         mire: definition_rgb2520(&mire()).unwrap(),
@@ -607,7 +607,7 @@ fn la_feuille_a_le_temps_d_etre_mesuree() {
 fn un_delai_depasse_en_pleine_mesure_ne_range_rien_et_relance_le_pont_ordinaire() {
     let mut b = banc();
     *b.feuille.borrow_mut() = Some(Err(Panne::SansReponse {
-        detail: "aucune réponse en 1200000 ms à mesurer_feuille ; pont arrêté de force".into(),
+        detail: "aucune réponse en 1800000 ms à mesurer_feuille ; pont arrêté de force".into(),
     }));
     let echec = b.mesurer(Ok(mire())).0.unwrap_err();
     assert_eq!(echec.cle, "probleme.pont_bloque");

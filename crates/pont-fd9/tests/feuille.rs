@@ -38,6 +38,7 @@ const COURTS: Delais = Delais {
     feuille: Duration::from_millis(50),
     etape: Duration::from_millis(50),
     mesure: Duration::from_millis(50),
+    silence: Duration::from_secs(60),
     deconnexion: Duration::from_millis(50),
 };
 
@@ -455,6 +456,7 @@ fn annuler_pendant_l_attente_ne_touche_pas_a_l_instrument() {
         feuille: Duration::from_secs(30),
         etape: Duration::from_secs(5),
         mesure: Duration::from_secs(5),
+        silence: Duration::from_secs(60),
         deconnexion: Duration::from_millis(50),
     });
     session.version().unwrap();
@@ -609,6 +611,7 @@ fn sans_la_main_une_annulation_n_arrete_rien() {
         feuille: Duration::from_secs(30),
         etape: Duration::from_secs(5),
         mesure: Duration::from_secs(5),
+        silence: Duration::from_secs(60),
         deconnexion: Duration::from_millis(50),
     });
     session.version().unwrap();

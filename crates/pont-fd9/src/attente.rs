@@ -1,6 +1,8 @@
 //! Attente des événements du rappel pendant une feuille, délais et
 //! annulation. La session n'avance que sur un événement reçu : un délai
-//! dépassé ou une annulation sont rendus comme tels.
+//! dépassé ou une annulation sont rendus comme tels. Seule exception :
+//! pendant la mesure des plages, un silence du rappel fait relire l'état
+//! (`FD9_GetStatus`, sans question à l'instrument, essai E5).
 
 use crate::{Evenement, SdkFd9, Session};
 use fd9_sys::EtatSdk;
@@ -25,6 +27,11 @@ pub struct Delais {
     pub etape: Duration,
     /// Attente de la fin de la mesure de toutes les plages.
     pub mesure: Duration,
+    /// Pendant la mesure, silence du rappel au bout duquel l'état est relu
+    /// (`FD9_GetStatus`), puis relu à chaque nouveau silence : à l'essai E5,
+    /// la DLL a envoyé 976 événements 11 puis plus rien, ni état 9 ni
+    /// erreur.
+    pub silence: Duration,
     /// Attente, après la déconnexion, de l'état 1 ou du code 1102
     /// ([`ATTENTE_APRES_DECONNEXION`]).
     pub deconnexion: Duration,
@@ -35,8 +42,10 @@ impl Default for Delais {
         Delais {
             feuille: Duration::from_secs(120),
             etape: Duration::from_secs(30),
-            // Supposé : une RGB-2520 se mesure en quelques minutes (essai E4).
-            mesure: Duration::from_secs(600),
+            // Une RGB-2520 s'est mesurée en quelques minutes (essai E4) ;
+            // 20 min laissent de la marge à une feuille lente.
+            mesure: Duration::from_secs(20 * 60),
+            silence: Duration::from_secs(60),
             deconnexion: ATTENTE_APRES_DECONNEXION,
         }
     }
@@ -113,7 +122,12 @@ impl<S: SdkFd9> Session<S> {
         let fin = Instant::now() + delai;
         let mut engagee = false;
         let mut rien_recu = false;
+        // Dernier signe de l'instrument : un événement, ou une relecture.
+        let mut dernier_signe = Instant::now();
         loop {
+            if !self.recus.is_empty() {
+                dernier_signe = Instant::now();
+            }
             while let Some(evenement) = self.recus.pop_front() {
                 self.journaliser(&evenement, "");
                 match evenement.etat {
@@ -145,6 +159,13 @@ impl<S: SdkFd9> Session<S> {
                     return Err(Fin::Annulee);
                 }
             }
+            if attente == Attente::Mesure && dernier_signe.elapsed() >= self.delais.silence {
+                let silence = dernier_signe.elapsed();
+                dernier_signe = Instant::now();
+                if let Some(conclusion) = self.relire_pendant_la_mesure(voulu, silence) {
+                    return conclusion;
+                }
+            }
             let reste = fin.saturating_duration_since(Instant::now());
             if reste.is_zero() {
                 self.journal.push(format!(
@@ -156,6 +177,43 @@ impl<S: SdkFd9> Session<S> {
             let recus = self.sdk.evenements(reste.min(PAS_ATTENTE));
             rien_recu = recus.is_empty();
             self.recus.extend(recus);
+        }
+    }
+
+    /// Le rappel se tait depuis `silence` pendant la mesure : l'état est relu
+    /// (`FD9_GetStatus`, +0x10), sans question à l'instrument. `voulu`
+    /// atteint : la mesure est finie ; état d'erreur : incident ; sinon
+    /// (`None`), l'attente continue. Un refus de la lecture est noté, et
+    /// l'attente continue aussi.
+    fn relire_pendant_la_mesure(
+        &mut self,
+        voulu: EtatSdk,
+        silence: Duration,
+    ) -> Option<Result<(), Fin>> {
+        let mut statut = [0u32; 8];
+        let code = self.sdk.statut(&mut statut);
+        let secondes = silence.as_secs();
+        if code != 0 {
+            self.journal.push(format!(
+                "silence de {secondes} s pendant la mesure : FD9_GetStatus code {code} ; l'attente continue"
+            ));
+            return None;
+        }
+        let etat = EtatSdk::depuis(statut[4]);
+        self.journal.push(format!(
+            "silence de {secondes} s pendant la mesure : FD9_GetStatus code {code}, état {} ({statut:?})",
+            etat.code()
+        ));
+        if etat == voulu {
+            self.dernier_etat = Some(etat);
+            self.journal
+                .push("mesure finie sans événement du rappel : lecture des plages".into());
+            Some(Ok(()))
+        } else if etat.est_erreur() {
+            self.dernier_etat = Some(etat);
+            Some(Err(Fin::Incident(etat)))
+        } else {
+            None
         }
     }
 

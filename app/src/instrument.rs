@@ -90,10 +90,10 @@ pub const DELAI_REPONSE: Duration = Duration::from_secs(30);
 
 /// Délai de réponse du pont FD-9 à une feuille (`mesurer_feuille`,
 /// `prenumeriser`). Le pont attend jusqu'à 2 min la feuille, 30 s chaque
-/// étape et 10 min la mesure (`pont_fd9::Delais`), puis lit les plages :
-/// 2 520 en 7 min environ à l'essai E4, lecture comprise. Au-delà, le pont
-/// est arrêté de force et dit bloqué.
-pub const DELAI_FEUILLE: Duration = Duration::from_secs(20 * 60);
+/// étape et 20 min la mesure (`pont_fd9::Delais`), puis lit les plages :
+/// 2 520 en 7 min environ à l'essai E4, lecture comprise. Au-delà de 30 min,
+/// le pont est arrêté de force et dit bloqué.
+pub const DELAI_FEUILLE: Duration = Duration::from_secs(30 * 60);
 
 /// Délais du dialogue avec le pont, fixés par le module instrument et
 /// appliqués par `PontProcessus`. Bornés : passé un délai, le pont est arrêté

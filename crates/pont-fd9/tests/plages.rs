@@ -47,6 +47,7 @@ const COURTS: Delais = Delais {
     feuille: Duration::from_millis(50),
     etape: Duration::from_millis(50),
     mesure: Duration::from_millis(50),
+    silence: Duration::from_secs(60),
     deconnexion: Duration::from_millis(50),
 };
 
