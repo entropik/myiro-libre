@@ -1891,6 +1891,7 @@ const FRANCAIS: Catalogue = &[
     ("choix.etat.en_attente", "en attente"),
     ("choix.etat.non_trouve", "non trouvé la dernière fois"),
     ("choix.en_service", "En service"),
+    ("choix.choisi", "Choisi"),
     ("choix.utiliser", "Utiliser"),
     ("choix.fermer", "Fermer la liste"),
     (
@@ -4889,6 +4890,7 @@ const ANGLAIS: Catalogue = &[
     ("choix.etat.en_attente", "on standby"),
     ("choix.etat.non_trouve", "not found last time"),
     ("choix.en_service", "In use"),
+    ("choix.choisi", "Selected"),
     ("choix.utiliser", "Use"),
     ("choix.fermer", "Close the list"),
     (
@@ -6117,6 +6119,7 @@ mod tests {
                 "choix.liaison.usb",
                 "choix.liaison.reseau",
                 "choix.en_service",
+                "choix.choisi",
                 "choix.utiliser",
             ]
             .map(String::from),

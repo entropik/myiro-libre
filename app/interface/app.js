@@ -108,7 +108,9 @@ function remplirListe(section) {
     if (l.actif) {
       const actif = document.createElement("span");
       actif.className = "label label--ink";
-      actif.textContent = textes["choix.en_service"];
+      // Choisi mais pas trouvé : il n'est pas « en service ».
+      const trouve = vueInstrument && vueInstrument.etat !== "non_detecte";
+      actif.textContent = textes[trouve ? "choix.en_service" : "choix.choisi"];
       li.append(actif);
     } else {
       const b = document.createElement("button");

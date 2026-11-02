@@ -7,7 +7,9 @@
 use std::time::Duration;
 
 use app::colonne::{emplacement, BibliothequeOuverte};
+use app::demonstration;
 use app::demonstration_fd9::{self, IssueDemonstration};
+use app::instrument::choix::{Modele, VueSelection};
 use app::instrument::feuille::{definition_rgb2520, EtapeFeuille};
 use app::instrument::Etat;
 use app::mesurer_feuille::lire_calage;
@@ -180,4 +182,35 @@ fn une_feuille_de_demonstration_s_annule_avant_la_mesure() {
     assert!(!etapes
         .iter()
         .any(|e| matches!(e, EtapeFeuille::CalagePret { .. })));
+}
+
+/// Avec `--demo`, la liste des instruments montre le FD-9 simulé seul, en
+/// service : aucun instrument du poste n'y figure.
+#[test]
+fn la_liste_de_demonstration_montre_le_fd9_simule_seul_en_service() {
+    let instrument = demonstration_fd9::instrument(IssueDemonstration::Mesure, Duration::ZERO);
+    let vue = VueSelection::seul(Modele::Fd9, instrument.vue());
+    assert_eq!(vue.instruments.len(), 1);
+    let ligne = &vue.instruments[0];
+    assert_eq!(
+        (ligne.code, ligne.etat, ligne.actif),
+        ("fd9", "detecte", true)
+    );
+    assert_eq!(vue.instrument.modele.as_deref(), Some("FD-9"));
+    assert!(vue.annonces.is_empty() && !vue.montrer_liste);
+}
+
+/// La bibliothèque de démonstration a une résolution rangée dans le parc,
+/// où la page ouvre « Mesurer une feuille au FD-9 ».
+#[test]
+fn la_bibliotheque_de_demonstration_a_une_resolution_pour_la_feuille() {
+    let dossier = tempfile::tempdir().unwrap();
+    let ouverte = BibliothequeOuverte::demonstration(dossier.path());
+    let parc = ouverte.parc("").unwrap();
+    assert_eq!(parc.imprimantes.len(), 1);
+    let imprimante = &parc.imprimantes[0];
+    assert_eq!(imprimante.imprimante.nom, demonstration::IMPRIMANTE);
+    assert_eq!(imprimante.papiers.len(), 1);
+    assert_eq!(imprimante.papiers[0].papier.nom, demonstration::PAPIER_PARC);
+    assert_eq!(imprimante.papiers[0].reglages.len(), 1);
 }

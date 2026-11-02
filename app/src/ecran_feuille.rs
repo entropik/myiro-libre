@@ -17,7 +17,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::colonne::BibliothequeOuverte;
 use crate::demonstration_fd9::{self, IssueDemonstration, PontDemonstrationFd9};
-use crate::instrument::choix::{Operation, VueSelection};
+use crate::instrument::choix::{Modele, Operation, VueSelection};
 use crate::instrument::feuille::{EtapeFeuille, VueCalage};
 use crate::instrument::Instrument;
 use crate::mesurer_feuille::{
@@ -84,6 +84,17 @@ impl DemonstrationFd9 {
             issue,
             demonstration_fd9::RYTHME,
         ))))
+    }
+
+    /// Avec `--demo`, ce que la barre et la liste des instruments montrent :
+    /// le FD-9 simulé seul, en service ; aucun instrument du poste n'est
+    /// cherché ni ouvert. Pendant une feuille, il est dit occupé.
+    pub(crate) fn vue(&self) -> Option<Result<VueSelection, String>> {
+        let demo = self.0.as_ref()?;
+        Some(match demo.try_lock() {
+            Ok(fd9) => Ok(VueSelection::seul(Modele::Fd9, fd9.vue())),
+            Err(_) => Err("refus.occupe.mesure".into()),
+        })
     }
 }
 

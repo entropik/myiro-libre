@@ -374,6 +374,26 @@ pub struct VueSelection {
     pub montrer_liste: bool,
 }
 
+impl VueSelection {
+    /// Un instrument seul, actif, sans annonce : le FD-9 simulé de `--demo`,
+    /// sans aucun instrument du poste.
+    pub fn seul(modele: Modele, instrument: Vue) -> Self {
+        let ligne = Ligne {
+            code: modele.code(),
+            modele: modele.nom().into(),
+            liaison: modele.liaison(),
+            etat: instrument.etat,
+            actif: true,
+        };
+        VueSelection {
+            instrument,
+            instruments: vec![ligne],
+            annonces: Vec::new(),
+            montrer_liste: false,
+        }
+    }
+}
+
 /// L'instrument actif, parmi ceux présents sur le poste.
 pub struct Selection<P: Pont> {
     presents: Vec<Modele>,

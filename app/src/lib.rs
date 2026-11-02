@@ -189,6 +189,9 @@ fn ouvrir(
     instruments: &Instruments,
     dossier: Option<PathBuf>,
 ) -> Result<VueSelection, String> {
+    if let Some(vue) = app.state::<ecran_feuille::DemonstrationFd9>().vue() {
+        return vue;
+    }
     let jeton = instruments
         .occupation
         .commencer(Operation::Recherche)
@@ -260,6 +263,10 @@ fn choisir_instrument(
     code: &str,
 ) -> Result<VueSelection, String> {
     let vers = Modele::depuis_code(code).ok_or_else(|| "refus.absent".to_string())?;
+    // En démonstration, le FD-9 simulé est le seul instrument.
+    if let Some(vue) = app.state::<ecran_feuille::DemonstrationFd9>().vue() {
+        return vue;
+    }
     let jeton = instruments
         .occupation
         .commencer(Operation::Changement)

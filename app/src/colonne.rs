@@ -706,7 +706,7 @@ mod tests {
     }
 
     #[test]
-    fn la_demonstration_montre_trois_conditions_dont_une_vide() {
+    fn la_demonstration_montre_quatre_conditions_dont_deux_vides() {
         let (_dossier, ouverte) = demonstration();
         let branches = ouverte.arborescence("").unwrap();
         let resume: Vec<_> = branches
@@ -719,6 +719,11 @@ mod tests {
                 ("Jet d’encre, brillant 260\u{202f}g", 2),
                 ("Offset, couché mat 150\u{202f}g", 2),
                 ("Sérigraphie, adhésif blanc", 0),
+                // La résolution du parc, où mesurer une feuille au FD-9.
+                (
+                    "Traceur de démonstration · Satiné 260\u{202f}g · 1440 dpi",
+                    0
+                ),
             ]
         );
         assert!(branches
@@ -735,7 +740,7 @@ mod tests {
                     .collect::<Vec<_>>()
             })
             .collect();
-        assert_eq!(fichiers, [vec!["releve-lab.txt"], vec![], vec![]]);
+        assert_eq!(fichiers, [vec!["releve-lab.txt"], vec![], vec![], vec![]]);
         // Assez de plages pour voir le tableau défiler seul (ticket #9).
         assert_eq!(branches[0].importees[0].plages, 36);
     }
@@ -745,7 +750,7 @@ mod tests {
         let dossier = tempfile::tempdir().unwrap();
         drop(BibliothequeOuverte::demonstration(dossier.path()));
         let ouverte = BibliothequeOuverte::demonstration(dossier.path());
-        assert_eq!(ouverte.arborescence("").unwrap().len(), 3);
+        assert_eq!(ouverte.arborescence("").unwrap().len(), 4);
     }
 
     #[test]
