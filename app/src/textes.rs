@@ -1833,11 +1833,11 @@ const FRANCAIS: Catalogue = &[
     ),
     (
         "probleme.connexion_fd9_impossible.cause",
-        "Le FD-9 ne répond pas à la connexion. Il est peut-être éteint, occupé par un autre logiciel, ou à une autre adresse que celle trouvée par la détection.",
+        "Le FD-9 ne répond pas à la connexion. Il est peut-être éteint ou occupé par un autre logiciel, ou un autre appareil du réseau a pris son adresse.",
     ),
     (
         "probleme.connexion_fd9_impossible.action",
-        "Fermez FD-S2w s’il est ouvert, éteignez puis rallumez le FD-9 et vérifiez son câble réseau. S’il ne répond toujours pas, ouvrez la liste des instruments et choisissez «\u{202f}Se connecter par l’adresse\u{202f}» avec l’adresse affichée sur l’écran du FD-9.",
+        "Fermez FD-S2w s’il est ouvert, éteignez puis rallumez le FD-9 et vérifiez son câble réseau. Si un autre appareil a pris son adresse, réservez une adresse au FD-9 dans la box (hors de la plage distribuée automatiquement) et réglez-la sur le FD-9. Puis ouvrez la liste des instruments et choisissez «\u{202f}Se connecter par l’adresse\u{202f}» avec l’adresse affichée sur l’écran du FD-9.",
     ),
     ("cartouche.inconnu", "Inconnu"),
     ("details.mesure", "Mesure"),
@@ -4850,11 +4850,11 @@ const ANGLAIS: Catalogue = &[
     ),
     (
         "probleme.connexion_fd9_impossible.cause",
-        "The FD-9 does not answer the connection. It may be off, used by another program, or at another address than the one found by detection.",
+        "The FD-9 does not answer the connection. It may be off or used by another program, or another device on the network has taken its address.",
     ),
     (
         "probleme.connexion_fd9_impossible.action",
-        "Close FD-S2w if it is open, switch the FD-9 off and on again and check its network cable. If it still does not answer, open the instrument list and choose “Connect by address” with the address shown on the FD-9 screen.",
+        "Close FD-S2w if it is open, switch the FD-9 off and on again and check its network cable. If another device has taken its address, reserve an address for the FD-9 in the router (outside the automatically assigned range) and set it on the FD-9. Then open the instrument list and choose “Connect by address” with the address shown on the FD-9 screen.",
     ),
     ("cartouche.inconnu", "Unknown"),
     ("details.mesure", "Measurement"),
