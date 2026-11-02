@@ -88,6 +88,14 @@ function recevoir(poste) {
   if (poste.montrer_liste) listeOuverte = true;
 }
 
+// Couleur d'une ligne : vert pour l'instrument en service et prêt (détecté pour le FD-9, connecté ou
+// étalonné), rouge s'il n'est pas trouvé, orange sinon (en attente, étalonnage requis).
+function classeLigne(l) {
+  if (l.etat === "non_detecte" || l.etat === "non_trouve") return "state--bad";
+  if (l.actif && ["detecte", "connecte", "etalonne"].includes(l.etat)) return "state--ok";
+  return "state--warn";
+}
+
 // Liste des instruments : une ligne par instrument présent, « Utiliser » sur les autres.
 function remplirListe(section) {
   const lignes = section.querySelector("[data-choix-lignes]");
@@ -96,7 +104,7 @@ function remplirListe(section) {
     const li = document.createElement("li");
     li.classList.toggle("sel", l.actif);
     const etat = document.createElement("span");
-    etat.className = "state " + (l.actif && vueInstrument && vueInstrument.pret ? "state--ok" : "state--warn");
+    etat.className = "state " + classeLigne(l);
     etat.append(document.createElement("i"));
     const texte = document.createElement("span");
     texte.textContent = textes["choix.ligne"]
@@ -249,13 +257,15 @@ function remplirEcran(section) {
   section.querySelector("[data-raison-recherche]").hidden = !occupe;
 }
 
-// Cinq états de la pastille : non détecté, connecté, étalonnage requis, étalonné, en mesure.
-// Un instrument seulement détecté (FD-9) est présent : pastille « connecté », le texte dit « détecté ».
-const PASTILLES = { non_detecte: "non-detecte", etalonnage_requis: "etalonnage-requis", etalonne: "etalonne" };
+// États de la pastille : recherche, non trouvé (rouge), connecté et étalonné (vert : prêt), étalonnage
+// requis (orange), en mesure. Un instrument seulement détecté (FD-9) est présent et prêt : pastille
+// « connecté », le texte dit « détecté ».
+const PASTILLES = { etalonnage_requis: "etalonnage-requis", etalonne: "etalonne" };
 function etatPastille(vue) {
   // L'étalonnage garde l'état de l'instrument (« étalonnage requis ») ; seule la mesure est « en mesure ».
   if (operationEnCours === "mesure") return "en-mesure";
-  if (!vue || !vue.modele) return "non-detecte";
+  if (!vue) return "non-detecte"; // recherche en cours
+  if (vue.etat === "non_detecte" || !vue.modele) return "introuvable";
   return PASTILLES[vue.etat] || "connecte";
 }
 

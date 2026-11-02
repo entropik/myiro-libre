@@ -75,7 +75,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 /* Pastille : seul cercle du système. La couleur double le texte d'état, jamais seule. */
 .pastille { flex: none; width: var(--pastille); height: var(--pastille); border-radius: 50%; background: var(--attenue); border: var(--rule-strong) solid var(--attenue); }
 .pastille--non-detecte { background: transparent; border-color: var(--attenue); }
-.pastille--connecte { background: var(--accent); border-color: var(--accent); }
+.pastille--introuvable { background: var(--hors); border-color: var(--hors); }
+.pastille--connecte { background: var(--conforme); border-color: var(--conforme); }
 .pastille--etalonnage-requis { background: var(--limite); border-color: var(--limite); }
 .pastille--etalonne { background: var(--conforme); border-color: var(--conforme); }
 .pastille--en-mesure { background: transparent; border-color: var(--accent); }

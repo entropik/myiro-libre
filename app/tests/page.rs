@@ -478,12 +478,13 @@ fn chaque_bouton_principal_inactif_dit_pourquoi() {
     assert!(vus >= 4, "boutons principaux inactifs vus : {vus}");
 }
 
-/// La pastille de l'instrument a une règle pour chacun de ses cinq états.
+/// La pastille de l'instrument a une règle pour chacun de ses six états.
 #[test]
-fn la_pastille_connait_les_cinq_etats() {
+fn la_pastille_connait_les_six_etats() {
     let css = composants();
     for etat in [
         "non-detecte",
+        "introuvable",
         "connecte",
         "etalonnage-requis",
         "etalonne",
@@ -499,6 +500,17 @@ fn la_pastille_connait_les_cinq_etats() {
     }
     let script = lire("interface/app.js");
     assert!(script.contains("pastille--"), "app.js ne pose pas l'état");
+    // Prêt en vert, comme un étalonnage fait ; non trouvé en rouge.
+    let vert = |selecteur: &str| {
+        regle(&css, selecteur)
+            .iter()
+            .any(|c| c.contains("var(--conforme)"))
+    };
+    assert!(vert(".pastille--connecte") && vert(".pastille--etalonne"));
+    assert!(regle(&css, ".pastille--introuvable")
+        .iter()
+        .any(|c| c.contains("var(--hors)")));
+    assert!(script.contains("\"state--ok\"") && script.contains("\"state--bad\""));
 }
 
 // ---- Bibliothèque en arbre et vue d'une résolution (ticket #68) ----
