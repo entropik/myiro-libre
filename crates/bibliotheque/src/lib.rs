@@ -733,8 +733,9 @@ impl Bibliotheque {
         })
     }
 
-    /// Le texte d'une mesure importée, tel qu'il a été importé, à l'octet :
-    /// le fichier d'origine, champs inconnus compris.
+    /// Le texte d'une mesure importée, tel qu'il a été rangé : celui du
+    /// fichier d'origine, champs inconnus compris, converti en UTF-8 s'il ne
+    /// l'était pas (un export Windows-1252, par exemple).
     pub fn texte_importee(&self, id: IdMesure) -> Resultat<String> {
         self.base
             .query_row(

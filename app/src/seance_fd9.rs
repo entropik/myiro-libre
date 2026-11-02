@@ -182,6 +182,15 @@ fn definition(plan: &Plan) -> Result<pont_protocole::DefinitionFeuille, ErreurFe
     definition_rgb2520(&mire).map_err(ErreurFeuille::Definition)
 }
 
+/// Une mesure source à ranger, lue dans son texte.
+struct SourceARanger<'a> {
+    fichier: &'a str,
+    texte: &'a str,
+    importee: &'a MesureImportee,
+    origine: OrigineSource,
+    role: RoleSource,
+}
+
 fn role(role: RoleSource) -> Role {
     match role {
         RoleSource::Exemplaire => Role::Exemplaire,
@@ -190,9 +199,10 @@ fn role(role: RoleSource) -> Role {
 }
 
 /// Pourquoi une mesure rangée dans une séance ne fait pas de profil, ni ne
-/// sert de seconde mire : association incertaine, mesure incomplète,
-/// séance en cours, ou résultat d'une séance fermée incomplète. Rien pour
-/// une mesure hors séance, ou utilisable.
+/// sert de seconde mire : mesure écartée par l'opérateur (même la séance
+/// fermée), association incertaine, mesure incomplète, séance en cours, ou
+/// résultat d'une séance fermée incomplète. Rien pour une mesure hors
+/// séance, ou utilisable.
 pub(crate) fn refus_seance(
     b: &Bibliotheque,
     mesure: IdMesure,
@@ -201,7 +211,8 @@ pub(crate) fn refus_seance(
         return Ok(None);
     };
     Ok(match situation.place {
-        PlaceEnSeance::Source { association } => {
+        PlaceEnSeance::Source { retenue: false, .. } => Some("profil.refus.mesure_ecartee"),
+        PlaceEnSeance::Source { association, .. } => {
             match serde_json::from_str::<Association>(&association) {
                 Ok(a) if !a.certaine() => Some("profil.refus.association_incertaine"),
                 Err(_) => Some("profil.refus.association_incertaine"),
@@ -301,32 +312,28 @@ impl BibliothequeOuverte {
     }
 
     /// Range une mesure source dans la séance, avec son association au plan.
-    #[allow(clippy::too_many_arguments)]
     fn ranger_source(
         &self,
         seance: IdSeance,
         plan: &Plan,
-        fichier: &str,
-        texte: &str,
-        importee: &MesureImportee,
-        origine: OrigineSource,
-        role: RoleSource,
+        source: &SourceARanger,
         maintenant: SystemTime,
     ) -> Result<SourceAjoutee, String> {
-        let association = associer(plan, importee);
+        let association = associer(plan, source.importee);
         let mesure = self.avec(|b| {
             b.ajouter_source(
                 seance,
                 &NouvelleSource {
-                    fichier,
-                    texte,
-                    origine,
-                    role,
+                    fichier: source.fichier,
+                    texte: source.texte,
+                    origine: source.origine,
+                    role: source.role,
                     association: &json(&association),
                     horodatage: &instant_utc(maintenant),
                 },
             )
         })?;
+        let fichier = source.fichier;
         Ok(SourceAjoutee {
             mesure,
             fichier: fichier.rsplit(['/', '\\']).next().unwrap_or(fichier).into(),
@@ -370,11 +377,13 @@ impl BibliothequeOuverte {
         let source = self.ranger_source(
             seance,
             &plan,
-            &nom_feuille(&feuille.mesure),
-            &texte,
-            &importee,
-            OrigineSource::Acquisition,
-            RoleSource::Exemplaire,
+            &SourceARanger {
+                fichier: &nom_feuille(&feuille.mesure),
+                texte: &texte,
+                importee: &importee,
+                origine: OrigineSource::Acquisition,
+                role: RoleSource::Exemplaire,
+            },
             SystemTime::now(),
         )?;
         garder_mesure(dossier, source.mesure, &feuille.mesure);
@@ -409,16 +418,19 @@ impl BibliothequeOuverte {
         Ok(self.ranger_source(
             seance,
             &plan,
-            fichier,
-            &texte,
-            &importee,
-            OrigineSource::Import,
-            role,
+            &SourceARanger {
+                fichier,
+                texte: &texte,
+                importee: &importee,
+                origine: OrigineSource::Import,
+                role,
+            },
             maintenant,
         )?)
     }
 
-    /// Le texte d'une mesure source, tel qu'il a été rangé.
+    /// Le texte d'une mesure source, tel qu'il a été rangé : celui du
+    /// fichier, converti en UTF-8 s'il ne l'était pas.
     pub fn original_source(&self, mesure: IdMesure) -> Result<String, String> {
         self.avec(|b| b.texte_importee(mesure))
     }
@@ -450,8 +462,12 @@ impl BibliothequeOuverte {
         Ok(self.avec(|b| b.changer_complements(seance, &json(&complements)))?)
     }
 
-    /// Retient ou écarte une mesure source, par un choix explicite de
-    /// l'opérateur : son motif et l'heure sont gardés avec elle.
+    /// Retient ou écarte un exemplaire, par un choix explicite de
+    /// l'opérateur : son motif et l'heure sont gardés avec lui. Écarter
+    /// demande un motif. Une mesure de complément ne s'écarte pas : elle ne
+    /// sert que par les compléments manuels qui la désignent, et c'est en
+    /// retirant ces compléments ([`Self::completer_seance`]) qu'on cesse
+    /// de s'en servir. Une mesure écartée ne fait jamais de profil.
     pub fn retenir_source(
         &self,
         seance: IdSeance,
@@ -460,6 +476,18 @@ impl BibliothequeOuverte {
         motif: &str,
         maintenant: SystemTime,
     ) -> Result<(), RefusSeance> {
+        if !retenue && motif.trim().is_empty() {
+            return Err("seance.erreur.motif_vide".into());
+        }
+        let (rangee, _) = self.seance_en_cours(seance)?;
+        let source = rangee
+            .sources
+            .iter()
+            .find(|s| s.mesure == mesure)
+            .ok_or("bibliotheque.erreur.autre")?;
+        if source.role == RoleSource::Complement {
+            return Err("seance.erreur.complement_non_ecartable".into());
+        }
         let selection = json(&serde_json::json!({
             "retenue": retenue,
             "motif": motif.trim(),

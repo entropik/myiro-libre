@@ -336,6 +336,10 @@ const FRANCAIS: Catalogue = &[
         "Il manque des plages à cette mesure. Utilisez la mesure moyennée de la séance, une fois toutes les plages mesurées.",
     ),
     (
+        "profil.refus.mesure_ecartee",
+        "Cette mesure a été écartée de sa séance de mesure. Elle ne sert ni pour un profil ni pour une vérification.",
+    ),
+    (
         "profil.refus.seance_en_cours",
         "Cette mesure fait partie d’une séance de mesure en cours. Terminez la séance, puis calculez le profil à partir de son résultat.",
     ),
@@ -3547,6 +3551,10 @@ const ANGLAIS: Catalogue = &[
     (
         "profil.refus.mesure_incomplete",
         "Patches are missing from this measurement. Use the averaged measurement of the session, once all patches are measured.",
+    ),
+    (
+        "profil.refus.mesure_ecartee",
+        "This measurement was set aside from its measuring session. It is used neither for a profile nor for a verification.",
     ),
     (
         "profil.refus.seance_en_cours",

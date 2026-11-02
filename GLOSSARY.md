@@ -31,7 +31,7 @@ Ordre et place de chaque plage d'une mire, page par page, bande par bande. Il es
 _Éviter_ : layout, disposition
 
 **Tirage** :
-Réalisation physique d'une mire, imprimée dans une condition d'impression donnée ; c'est ce que l'instrument mesure. Le tirage rangé dans la bibliothèque à la préparation d'une mire en est la trace (date, mire, nombre de pages), avant même l'impression.
+Réalisation physique d'une mire, imprimée dans une condition d'impression donnée ; c'est ce que l'instrument mesure. Le tirage rangé dans la bibliothèque à la préparation d'une mire en est la trace (date, mire, nombre de pages), avant même l'impression. Un tirage est « mesuré » dès que sa séance de mesure est fermée, terminée ou incomplète : préparer de nouveau la même mire donne alors un nouveau tirage.
 _Éviter_ : épreuve, impression, feuille (au sens d'objet mesuré)
 
 **Mesure** :
@@ -39,7 +39,7 @@ Une passe complète de l'instrument sur un tirage, conservant tous les spectres 
 _Éviter_ : lecture, scan, relevé
 
 **Séance de mesure** :
-Le parcours guidé de la mesure d'un tirage, de la première feuille au résultat. Au départ, la mire, ses plages et la fiche d'impression confirmée sont recopiées et ne changent plus (plan figé). La séance garde chaque mesure validée dès qu'elle est faite : on peut fermer l'application et la reprendre plus tard sans rien perdre.
+Le parcours guidé de la mesure d'un tirage, de la première feuille au résultat. Au départ, la mire, ses plages et la fiche d'impression confirmée sont recopiées et ne changent plus (plan figé). La séance garde chaque mesure validée dès qu'elle est faite : on peut fermer l'application et la reprendre plus tard sans rien perdre. Elle se ferme « terminée », ou « incomplète » par un choix explicite quand des plages manquent ; fermée, elle ne change plus. Pendant la séance, et pour une séance incomplète, ses mesures ne font ni profil ni vérification. Une mesure écartée par l'opérateur l'est avec un motif, et ne sert plus jamais.
 _Éviter_ : session, campagne
 
 **Exemplaire** :

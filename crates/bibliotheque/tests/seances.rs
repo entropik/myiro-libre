@@ -312,7 +312,8 @@ fn la_place_d_une_mesure_dans_une_seance_se_retrouve() {
     assert_eq!(
         situation.place,
         PlaceEnSeance::Source {
-            association: r#"{"certaine":true}"#.into()
+            association: r#"{"certaine":true}"#.into(),
+            retenue: true,
         }
     );
     assert_eq!(banc.b.situation_en_seance(hors_seance).unwrap(), None);
@@ -424,11 +425,21 @@ const FIXTURE_ORGANISATION_7: &str = concat!(
 
 /// A servi une seule fois, avec la bibliothèque de `dev` encore en
 /// organisation 7 (après #41, avant les séances de #35), à produire
-/// `tests/donnees/organisation-7.sqlite`. Ne plus le relancer : il écrirait
-/// une base de l'organisation d'aujourd'hui.
+/// `tests/donnees/organisation-7.sqlite`. Lancé avec le code
+/// d'aujourd'hui, il écrirait une base de l'organisation d'aujourd'hui :
+/// il n'écrit donc jamais la base figée lui-même, seulement le fichier que
+/// nomme la variable `FIXTURE_SORTIE`, et rien sans elle. Pour la
+/// régénérer, sur un code encore en organisation 7 :
+/// `FIXTURE_SORTIE=<fichier> cargo test -p bibliotheque --test seances --
+/// --ignored produire_fixture_organisation_7`, puis copier ce fichier en
+/// `tests/donnees/organisation-7.sqlite`.
 #[test]
 #[ignore]
 fn produire_fixture_organisation_7() {
+    let Some(sortie) = std::env::var_os("FIXTURE_SORTIE") else {
+        eprintln!("FIXTURE_SORTIE absente : rien n'est écrit");
+        return;
+    };
     let dossier = tempfile::tempdir().unwrap();
     let b = Bibliotheque::ouvrir(dossier.path()).unwrap();
     let epson = b.creer_imprimante("Epson SC-P5300").unwrap();
@@ -475,7 +486,105 @@ fn produire_fixture_organisation_7() {
     )
     .unwrap();
     drop(b);
-    let cible = std::path::Path::new(FIXTURE_ORGANISATION_7);
-    std::fs::create_dir_all(cible.parent().unwrap()).unwrap();
-    std::fs::copy(dossier.path().join(bibliotheque::FICHIER_BASE), cible).unwrap();
+    std::fs::copy(dossier.path().join(bibliotheque::FICHIER_BASE), sortie).unwrap();
+}
+
+fn base(banc: &Banc) -> rusqlite::Connection {
+    rusqlite::Connection::open(banc.dossier.path().join(bibliotheque::FICHIER_BASE)).unwrap()
+}
+
+#[test]
+fn la_base_refuse_une_source_ajoutee_a_une_seance_fermee() {
+    let banc = banc();
+    let seance = banc.commencer();
+    let source = banc.ajouter(seance, "feuille.txt", OrigineSource::Acquisition);
+    let autre = banc
+        .b
+        .importer_mesure(banc.condition, "autre.txt", CGATS)
+        .unwrap();
+    banc.b
+        .terminer_seance(seance, &fin(EtatSeance::Terminee, None))
+        .unwrap();
+    let refus = base(&banc)
+        .execute(
+            "INSERT INTO seance_sources (seance, mesure, origine, role, association, horodatage)
+             VALUES (?1, ?2, 'import', 'exemplaire', '{}', '2026-11-02T12:00:00Z')",
+            rusqlite::params![seance.0, autre.0],
+        )
+        .unwrap_err();
+    assert!(refus.to_string().contains("séance fermée"), "{refus}");
+    assert_eq!(
+        banc.b
+            .seance(seance)
+            .unwrap()
+            .sources
+            .iter()
+            .map(|s| s.mesure)
+            .collect::<Vec<_>>(),
+        [source]
+    );
+}
+
+#[test]
+fn deux_seances_en_cours_sur_un_tirage_sont_refusees() {
+    let banc = banc();
+    banc.commencer();
+    let refus = banc
+        .b
+        .creer_seance(&NouvelleSeance {
+            condition: banc.condition,
+            tirage: banc.tirage,
+            plan: "{}",
+            fiche: "{}",
+            horodatage: "2026-11-02T10:00:00Z",
+        })
+        .unwrap_err();
+    assert!(matches!(refus, ErreurBibliotheque::Base(_)), "{refus:?}");
+    assert_eq!(banc.b.seances_en_cours(banc.condition).unwrap().len(), 1);
+}
+
+#[test]
+fn le_plan_la_fiche_et_le_tirage_d_une_seance_ne_changent_jamais() {
+    let banc = banc();
+    let seance = banc.commencer();
+    let (_, autre_tirage) = banc
+        .b
+        .enregistrer_mire_et_tirage(banc.condition, &mire_fd9("fd9-autre"), 1)
+        .unwrap();
+    let base = base(&banc);
+    for (colonne, valeur) in [
+        ("plan", "{}".to_string()),
+        ("fiche", "{}".to_string()),
+        ("tirage", autre_tirage.0.to_string()),
+    ] {
+        let refus = base
+            .execute(
+                &format!("UPDATE seances SET {colonne} = ?1 WHERE id = ?2"),
+                rusqlite::params![valeur, seance.0],
+            )
+            .unwrap_err();
+        assert!(
+            refus.to_string().contains("plan figé"),
+            "{colonne} : {refus}"
+        );
+    }
+    assert_eq!(banc.b.seance(seance).unwrap().plan, r#"{"plan":1}"#);
+}
+
+#[test]
+fn une_source_ecartee_le_dit_dans_sa_situation() {
+    let banc = banc();
+    let seance = banc.commencer();
+    let source = banc.ajouter(seance, "feuille.txt", OrigineSource::Acquisition);
+    banc.b
+        .retenir_source(seance, source, false, Some(r#"{"motif":"froissée"}"#))
+        .unwrap();
+    let situation = banc.b.situation_en_seance(source).unwrap().unwrap();
+    assert_eq!(
+        situation.place,
+        PlaceEnSeance::Source {
+            association: r#"{"certaine":true}"#.into(),
+            retenue: false,
+        }
+    );
 }

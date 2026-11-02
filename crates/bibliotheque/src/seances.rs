@@ -192,8 +192,9 @@ pub struct FinSeance<'a> {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "place", rename_all = "snake_case")]
 pub enum PlaceEnSeance {
-    /// Une mesure source, avec son association au plan (JSON).
-    Source { association: String },
+    /// Une mesure source, avec son association au plan (JSON) ; `retenue`
+    /// faux : écartée par l'opérateur.
+    Source { association: String, retenue: bool },
     /// La mesure moyennée de la séance.
     Resultat,
 }
@@ -402,21 +403,24 @@ impl Bibliotheque {
     /// La séance où la mesure a sa place, comme source ou comme résultat ;
     /// rien pour une mesure hors séance.
     pub fn situation_en_seance(&self, mesure: IdMesure) -> Resultat<Option<SituationSeance>> {
-        let source: Option<(i64, String, String)> = self
+        let source: Option<(i64, String, String, bool)> = self
             .base
             .query_row(
-                "SELECT s.id, s.etat, x.association
+                "SELECT s.id, s.etat, x.association, x.retenue
                  FROM seance_sources x JOIN seances s ON s.id = x.seance
                  WHERE x.mesure = ?1",
                 params![mesure.0],
-                |l| Ok((l.get(0)?, l.get(1)?, l.get(2)?)),
+                |l| Ok((l.get(0)?, l.get(1)?, l.get(2)?, l.get(3)?)),
             )
             .optional()?;
-        if let Some((seance, etat, association)) = source {
+        if let Some((seance, etat, association, retenue)) = source {
             return Ok(Some(SituationSeance {
                 seance: IdSeance(seance),
                 etat: EtatSeance::depuis(&etat)?,
-                place: PlaceEnSeance::Source { association },
+                place: PlaceEnSeance::Source {
+                    association,
+                    retenue,
+                },
             }));
         }
         let resultat: Option<(i64, String)> = self
@@ -440,8 +444,9 @@ impl Bibliotheque {
 
 /// Organisation 8 (ticket #35), par-dessus l'organisation 7 : les séances de
 /// mesure et leurs mesures sources. Rien n'est réécrit ni effacé. Une
-/// séance fermée ne change plus, ni ses sources ; une séance ou une source
-/// ne s'efface pas. Un tirage est « mesuré » dès qu'une séance fermée le
+/// séance fermée ne change plus, ni ses sources, et n'en reçoit plus ; une
+/// séance ou une source ne s'efface pas. Tirage, plan et fiche d'une séance
+/// ne changent jamais, et un tirage n'a qu'une séance en cours à la fois. Un tirage est « mesuré » dès qu'une séance fermée le
 /// mesure ([`Bibliotheque::tirages_prepares`]).
 pub(crate) const ORGANISATION_8: &str = "
 CREATE TABLE seances (
@@ -461,6 +466,8 @@ CREATE TABLE seances (
 );
 CREATE INDEX seances_par_condition ON seances (condition);
 CREATE INDEX seances_par_tirage ON seances (tirage);
+CREATE UNIQUE INDEX une_seance_en_cours_par_tirage ON seances (tirage)
+    WHERE etat = 'en_cours';
 CREATE TABLE seance_sources (
     id INTEGER PRIMARY KEY,
     seance INTEGER NOT NULL REFERENCES seances (id),
@@ -475,8 +482,14 @@ CREATE TABLE seance_sources (
 CREATE INDEX seance_sources_par_seance ON seance_sources (seance);
 CREATE TRIGGER seances_fermees BEFORE UPDATE ON seances WHEN OLD.etat <> 'en_cours'
     BEGIN SELECT RAISE(ABORT, 'séance fermée'); END;
+CREATE TRIGGER seances_plan_fige BEFORE UPDATE OF condition, tirage, plan, fiche, horodatage
+    ON seances
+    BEGIN SELECT RAISE(ABORT, 'plan figé : la séance garde son tirage, son plan et sa fiche'); END;
 CREATE TRIGGER seances_gardees BEFORE DELETE ON seances
     BEGIN SELECT RAISE(ABORT, 'séance gardée'); END;
+CREATE TRIGGER sources_ajoutees_fermees BEFORE INSERT ON seance_sources
+    WHEN (SELECT etat FROM seances WHERE id = NEW.seance) <> 'en_cours'
+    BEGIN SELECT RAISE(ABORT, 'séance fermée'); END;
 CREATE TRIGGER sources_fermees BEFORE UPDATE ON seance_sources
     WHEN (SELECT etat FROM seances WHERE id = OLD.seance) <> 'en_cours'
     BEGIN SELECT RAISE(ABORT, 'séance fermée'); END;

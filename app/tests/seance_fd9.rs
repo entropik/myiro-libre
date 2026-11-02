@@ -15,8 +15,8 @@ use app::instrument::Instrument;
 use app::mesurer_feuille::{EchecFeuille, DOSSIER_MESURES_FD9};
 use app::pont::{Architecture, Panne, Pont};
 use app::seance_fd9::{FinDemandee, RefusSeance, SourceAjoutee};
-use app::verifier::FicheTirage;
-use bibliotheque::{EtatSeance, IdCondition, IdMesure, IdSeance, IdTirage};
+use app::verifier::{DemandeVerification, FicheTirage};
+use bibliotheque::{EtatSeance, IdCondition, IdMesure, IdProfil, IdSeance, IdTirage, IdTolerances};
 use mires::{MireFd9, RGB2520_GEOMETRIE};
 use pont_protocole::{
     Calcul, ConditionMesure, ConditionsCalcul, DefinitionFeuille, DonneesBrutes, Echantillonnage,
@@ -24,9 +24,10 @@ use pont_protocole::{
     InstrumentMesurant, Lab, LectureFeuille, LiaisonFd9, Mesure, Observateur, Palier, Plage,
     Provenance, RemiseAuRepos, Reponse, Requete, Spectre, MODELE_FD9,
 };
-use profilage::{Impression, MoteurSimule, Recette};
+use profilage::{Impression, MoteurSimule, MoteurVerificationSimule, Recette};
 use seance_mesure::{Complement, Role};
 use tempfile::TempDir;
+use verification::{Criteres, Seuils};
 
 const ADRESSE: &str = "192.0.2.40";
 const PLAGES: usize = 2_520;
@@ -416,6 +417,93 @@ impl Banc {
     }
 }
 
+impl Banc {
+    /// Profil calculé depuis une séance close d'une feuille, et un jeu de
+    /// tolérances pour le vérifier.
+    fn profil_et_tolerances(&mut self) -> (IdProfil, IdTolerances) {
+        let seance = self.commencer();
+        self.mesurer(seance).unwrap();
+        let resultat = self.terminer(seance, SANS_CHOIX).unwrap();
+        let profil = self
+            .ouverte
+            .calculer_profil(
+                self.condition,
+                resultat,
+                ConditionMesure::M1,
+                Recette::Rapide,
+                &MoteurSimule::reussit(icc()),
+                maintenant(),
+                &mut |_| {},
+            )
+            .unwrap()
+            .profil;
+        let seuils = Seuils {
+            moyenne: Some(2.0),
+            p95: Some(4.0),
+            max: Some(6.0),
+        };
+        let criteres = Criteres {
+            fidelite: seuils,
+            prediction: seuils,
+            seuil_gamut: 1.0,
+        };
+        let tolerances = self
+            .ouverte
+            .enregistrer_tolerances("Atelier", &criteres, maintenant())
+            .unwrap();
+        (profil, tolerances)
+    }
+
+    /// Un nouveau tirage de la même mire, et sa séance.
+    fn nouvelle_seance(&self) -> IdSeance {
+        let tirage = self
+            .ouverte
+            .preparer_mire_fd9(
+                self.condition,
+                mire(),
+                &self.dossier.path().join("mires"),
+                maintenant(),
+            )
+            .unwrap()
+            .tirage;
+        self.ouverte
+            .commencer_seance_fd9(self.condition, IdTirage(tirage), &fiche(true), maintenant())
+            .unwrap()
+    }
+
+    fn verifier(
+        &self,
+        profil: IdProfil,
+        tolerances: IdTolerances,
+        mesure: IdMesure,
+    ) -> Result<(), &'static str> {
+        self.ouverte
+            .verifier_profil(
+                &DemandeVerification {
+                    profil,
+                    mesure,
+                    mesure_condition: ConditionMesure::M1,
+                    tolerances,
+                    fiche: fiche(true),
+                },
+                &MoteurVerificationSimule::fidele(),
+                maintenant(),
+            )
+            .map(|_| ())
+            .map_err(|e| e.cle)
+    }
+
+    /// Une mesure importée hors séance, comme au ticket #9.
+    fn importer_hors_seance(&self, texte: &str) -> IdMesure {
+        let fichier = self.dossier.path().join("hors seance.txt");
+        std::fs::write(&fichier, texte).unwrap();
+        let apercu = self.ouverte.apercu_cgats(&fichier).unwrap();
+        self.ouverte
+            .ranger_apercu(apercu.numero, self.condition)
+            .unwrap()
+    }
+}
+
 fn icc() -> Vec<u8> {
     let mut octets = vec![0u8; 132];
     octets[0..4].copy_from_slice(&132u32.to_be_bytes());
@@ -536,7 +624,7 @@ fn un_export_fd_s2w_est_garde_tel_quel_et_marque_importe() {
     let etat = b.ouverte.etat_seance(seance).unwrap();
     assert_eq!(etat.sources[0].origine, bibliotheque::OrigineSource::Import);
     assert_eq!(etat.sources[0].fichier, "export FD-S2w.txt");
-    // Le fichier d'origine, champ inconnu compris, est gardé à l'octet.
+    // Le texte d'origine, champ inconnu compris, est gardé tel quel (déjà en UTF-8).
     assert_eq!(b.ouverte.original_source(source.mesure).unwrap(), texte);
 }
 
@@ -827,4 +915,120 @@ fn un_tirage_mesure_se_prepare_de_nouveau_en_un_nouveau_tirage() {
         .commencer_seance_fd9(b.condition, b.tirage, &fiche(true), maintenant())
         .unwrap_err();
     assert_eq!(refus.cle, "seance.erreur.tirage_indisponible");
+}
+
+#[test]
+fn une_mesure_de_seance_en_cours_ne_sert_pas_de_seconde_mire() {
+    let mut b = banc();
+    let (profil, tolerances) = b.profil_et_tolerances();
+    let seance = b.nouvelle_seance();
+    let en_cours = b
+        .importer(seance, &export_fd_s2w(FD9, &lignes(0.0)), Role::Exemplaire)
+        .mesure;
+    assert_eq!(
+        b.verifier(profil, tolerances, en_cours),
+        Err("profil.refus.seance_en_cours")
+    );
+    // Une mesure hors séance reste vérifiable, comme avant.
+    let hors = b.importer_hors_seance(&export_fd_s2w(FD9, &lignes(0.0)));
+    assert_eq!(b.verifier(profil, tolerances, hors), Ok(()));
+}
+
+#[test]
+fn une_mesure_incomplete_ou_incertaine_ne_sert_pas_de_seconde_mire() {
+    let mut b = banc();
+    let (profil, tolerances) = b.profil_et_tolerances();
+    let seance = b.nouvelle_seance();
+    let mut l = lignes(0.0);
+    l.truncate(PLAGES - 1);
+    let incomplete = b.importer(seance, &export_fd_s2w(FD9, &l), Role::Exemplaire);
+    let mut l = lignes(0.0);
+    l[0].rvb = [1.0, 2.0, 3.0];
+    let incertaine = b.importer(seance, &export_fd_s2w(FD9, &l), Role::Exemplaire);
+    assert_eq!(
+        b.verifier(profil, tolerances, incomplete.mesure),
+        Err("profil.refus.mesure_incomplete")
+    );
+    assert_eq!(
+        b.verifier(profil, tolerances, incertaine.mesure),
+        Err("profil.refus.association_incertaine")
+    );
+    // Le résultat d'une séance fermée incomplète non plus.
+    b.ouverte
+        .retenir_source(
+            seance,
+            incertaine.mesure,
+            false,
+            "autre feuille",
+            maintenant(),
+        )
+        .unwrap();
+    let resultat = b
+        .terminer(
+            seance,
+            FinDemandee {
+                incomplet_assume: true,
+                ecarts_vus: false,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        b.verifier(profil, tolerances, resultat),
+        Err("profil.refus.seance_incomplete")
+    );
+}
+
+#[test]
+fn une_source_ecartee_ne_sert_plus_meme_seance_fermee() {
+    let mut b = banc();
+    let (profil, tolerances) = b.profil_et_tolerances();
+    let seance = b.nouvelle_seance();
+    b.mesurer(seance).unwrap();
+    let ecartee = b.mesurer(seance).unwrap().mesure;
+    b.ouverte
+        .retenir_source(seance, ecartee, false, "feuille froissée", maintenant())
+        .unwrap();
+    b.terminer(seance, SANS_CHOIX).unwrap();
+    assert_eq!(
+        b.raison_profil(ecartee),
+        Some("profil.refus.mesure_ecartee")
+    );
+    assert_eq!(b.calculer(ecartee), Err("profil.refus.mesure_ecartee"));
+    assert_eq!(
+        b.verifier(profil, tolerances, ecartee),
+        Err("profil.refus.mesure_ecartee")
+    );
+}
+
+#[test]
+fn ecarter_une_mesure_demande_un_motif() {
+    let mut b = banc();
+    let seance = b.commencer();
+    let source = b.mesurer(seance).unwrap().mesure;
+    let refus = b
+        .ouverte
+        .retenir_source(seance, source, false, "  ", maintenant())
+        .unwrap_err();
+    assert_eq!(refus.cle, "seance.erreur.motif_vide");
+    assert!(b.ouverte.etat_seance(seance).unwrap().sources[0].retenue);
+    // La retenir de nouveau n'en demande pas.
+    b.ouverte
+        .retenir_source(seance, source, true, "", maintenant())
+        .unwrap();
+}
+
+#[test]
+fn un_complement_ne_s_ecarte_pas_comme_un_exemplaire() {
+    let b = banc();
+    let seance = b.commencer();
+    let complement = b.importer(
+        seance,
+        &export_fd_s2w(FD9, &lignes(0.0)[..1]),
+        Role::Complement,
+    );
+    let refus = b
+        .ouverte
+        .retenir_source(seance, complement.mesure, false, "inutile", maintenant())
+        .unwrap_err();
+    assert_eq!(refus.cle, "seance.erreur.complement_non_ecartable");
 }
