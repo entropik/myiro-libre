@@ -1,7 +1,9 @@
 // Vue d'une feuille au FD-9 (ticket #34), deux onglets comme le logiciel du fabricant :
 // « Mire », la mise en page théorique avec les plages dans leurs couleurs de consigne, et
 // « Points mesurés », l'image de la feuille prise par le FD-9 avec un point rouge au centre de chaque
-// plage trouvée. Une seule toile de taille fixe : le zoom et le déplacement changent seulement ce
+// plage trouvée. Pendant la mesure, l'onglet « Mire » voile les plages pas encore mesurées et les
+// rend pleines au fil du compte du FD-9, dans son ordre de lecture (feuille-remplissage.js,
+// ticket n° 103). Une seule toile de taille fixe : le zoom et le déplacement changent seulement ce
 // qu'elle dessine, rien ne bouge autour. Survol ou flèches du clavier : n° de la plage (« 1A1 »,
 // page, colonne en lettres, rangée) et sa couleur de consigne, sur une ligne gardée sous la toile.
 // Pas de correction des points. Utilisé par feuille-fd9.js ; textes par le catalogue (`textes`).
@@ -33,6 +35,8 @@ window.FeuilleVue = (() => {
   let zoom = 0; // rang dans ZOOMS
   let centre = null; // centre de la vue, en 1/100 mm sur la feuille ; null : feuille entière
   let choisie = -1; // plage survolée ou choisie au clavier, rang dans l'ordre de la mire
+  let mesurees = null; // pendant la mesure : plages déjà mesurées selon le FD-9 ; null : mire pleine
+  let lecture = []; // rang de chaque plage (ordre de la mire) dans l'ordre de lecture du FD-9
 
   // ---- Plages de la mire : rang, nom et couleur de consigne ----
   function plages() {
@@ -56,6 +60,7 @@ window.FeuilleVue = (() => {
   const nomPlage = (p) => `${p.zone + 1}${lettres(p.colonne)}${p.rangee + 1}`;
   const rangDe = (zone, rangee, colonne) => liste.findIndex((p) => p.zone === zone && p.rangee === rangee && p.colonne === colonne);
   const couleur = (i) => (mire && mire.couleurs ? mire.couleurs[i] : null);
+
 
   // ---- Toiles hors écran ----
   function dessinerMire() {
@@ -144,6 +149,9 @@ window.FeuilleVue = (() => {
     const source = onglet === "points" ? photo && photo.toile : dessinMire;
     ctx.imageSmoothingEnabled = ZOOMS[zoom] < 3;
     if (source) ctx.drawImage(source, o.x, o.y, e.l * o.s, e.h * o.s);
+    if (onglet === "mire" && dessinMire && mesurees !== null) {
+      window.FeuilleRemplissage.voile(ctx, liste, lecture, mesurees, o, jeton("--fond"));
+    }
     if (onglet === "points" && calage) {
       const rayon = Math.max(2, (pasPlage() / 10) * o.s); // un dixième de plage, 2 px au moins
       ctx.fillStyle = jeton("--point-vise");
@@ -200,7 +208,10 @@ window.FeuilleVue = (() => {
   }
 
   function texteLegende() {
-    if (onglet === "mire") return t(mire ? "feuille_fd9.mire.legende" : "feuille_fd9.mire.absente");
+    if (onglet === "mire") {
+      if (!mire) return t("feuille_fd9.mire.absente");
+      return t(mesurees === null ? "feuille_fd9.mire.legende" : "feuille_fd9.mire.legende.mesure");
+    }
     if (!calage) return t("feuille_fd9.points.vide");
     const mm = (v) => nombre(v / 100);
     const parties = [t("feuille_fd9.points.legende").replace("{dx}", () => mm(calage.decalage[0]))
@@ -329,6 +340,7 @@ window.FeuilleVue = (() => {
       if (JSON.stringify(definition) === JSON.stringify(mire)) return;
       mire = definition;
       liste = plages();
+      lecture = window.FeuilleRemplissage.ordre(mire);
       dessinMire = dessinerMire();
       choisie = -1;
       rafraichir();
@@ -339,6 +351,16 @@ window.FeuilleVue = (() => {
       photo = nouveau ? lirePhoto(image) : null;
       derniere = Boolean(nouveau && ancien);
       rafraichir();
+    },
+    // Plages déjà mesurées pendant la mesure (voilées au-delà), ou null : la mire pleine. Ne
+    // redessine que si le compte change.
+    remplissage: (n) => {
+      const nouveau = Number.isInteger(n) && n >= 0 ? n : null;
+      if (nouveau === mesurees) return;
+      const legendeChange = (nouveau === null) !== (mesurees === null);
+      mesurees = nouveau;
+      if (legendeChange) ecrire();
+      if (onglet === "mire") dessiner();
     },
     montrer: (nom) => choisirOnglet(nom, false),
     ecrire: rafraichir,

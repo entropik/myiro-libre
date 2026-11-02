@@ -124,6 +124,10 @@ window.FeuilleFd9 = (() => {
   function ecrire() {
     ecrireBoutons();
     ecrireEtat();
+    // Onglet « Mire » : plages voilées puis pleines au fil du compte (ticket n° 103). Hors de la mesure
+    // (avant, rangée, échec ou annulation), la mire est pleine.
+    const enMesure = enCours() && (feuille.etape === "mesure_lancee" || feuille.etape === "mesure");
+    vueFeuille.remplissage(enMesure ? feuille.mesurees : null);
   }
 
   // ---- Mire et points mesurés, repliés tant qu'on ne les demande pas ----
