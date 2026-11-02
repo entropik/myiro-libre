@@ -32,10 +32,27 @@ pub const DELAI_FERMETURE: Duration = Duration::from_secs(20);
 pub struct Garde {
     delai: Duration,
     depassement: Box<dyn FnOnce(Option<Reponse>) + Send>,
+    /// Garde de chaque feuille, s'il y en a une.
+    feuille: Option<GardeFeuille>,
+}
+
+/// Chien de garde d'une feuille (`prenumeriser`, `mesurer_feuille`), armé à
+/// chaque feuille, désarmé dès qu'elle a rendu la main. À l'essai E5, la
+/// feuille n'a jamais répondu, ni mesure ni délai : il faut une issue bornée
+/// quoi que fasse la DLL. Si la feuille ne rend pas la main dans `delai`, il
+/// appelle `depassement` avec la réponse due ([`ErreurPont::FeuilleBloquee`]) ;
+/// la boucle n'écrit plus rien pour cette feuille ensuite.
+#[derive(Clone)]
+pub struct GardeFeuille {
+    delai: Duration,
+    depassement: Arc<dyn Fn(Reponse) + Send + Sync>,
 }
 
 /// Code de sortie du pont quand sa fermeture n'a pas rendu la main à temps.
 pub const CODE_FERMETURE_BLOQUEE: u8 = 4;
+
+/// Code de sortie du pont quand une feuille n'a pas rendu la main à temps.
+pub const CODE_FEUILLE_BLOQUEE: u8 = 5;
 
 impl Garde {
     pub fn new(
@@ -45,7 +62,42 @@ impl Garde {
         Garde {
             delai,
             depassement: Box::new(depassement),
+            feuille: None,
         }
+    }
+
+    /// Arme aussi une garde de `delai` sur chaque feuille.
+    pub fn avec_feuille(
+        mut self,
+        delai: Duration,
+        depassement: impl Fn(Reponse) + Send + Sync + 'static,
+    ) -> Self {
+        self.feuille = Some(GardeFeuille {
+            delai,
+            depassement: Arc::new(depassement),
+        });
+        self
+    }
+
+    /// Garde de l'exécutable sur chaque feuille : écrit la réponse due sur la
+    /// sortie standard, note la cause sur la sortie d'erreur, puis arrête le
+    /// processus avec [`CODE_FEUILLE_BLOQUEE`]. Rien n'est appelé dans la DLL.
+    /// Observé une fois, le 2 novembre 2026 (essai E5) : quand le pont a été
+    /// arrêté de force, la connexion fermée, l'écran du FD-9 est revenu
+    /// aussitôt sur « attente de connexion ». L'arrêt forcé est donc une
+    /// issue sûre pour l'appareil.
+    pub fn avec_feuille_processus(self, delai: Duration) -> Self {
+        self.avec_feuille(delai, move |reponse| {
+            let mut sortie = io::stdout().lock();
+            let _ = writeln!(sortie, "{}", ecrire_reponse(&reponse));
+            let _ = sortie.flush();
+            drop(sortie);
+            eprintln!(
+                "pont-fd9 : la feuille n'a pas rendu la main en {} s (appel à la DLL bloqué : mesure, arrêt ou sortie) : arrêt du pont, code {CODE_FEUILLE_BLOQUEE}",
+                delai.as_secs()
+            );
+            terminer(CODE_FEUILLE_BLOQUEE)
+        })
     }
 
     /// Garde de l'exécutable : écrit la réponse due à `fermer` sur la sortie
@@ -110,7 +162,15 @@ pub fn servir<S: SdkFd9>(
     // Le fil s'arrête de lui-même à la fin de l'entrée ou du processus.
     std::thread::spawn(move || lire(entree, envoi, annulation, active));
     let mut garde = Some(garde);
-    let resultat = repondre(session, lignes, sortie, &feuille_active, &mut garde);
+    let garde_feuille = garde.as_mut().and_then(|g| g.feuille.take());
+    let resultat = repondre(
+        session,
+        lignes,
+        sortie,
+        &feuille_active,
+        &mut garde,
+        garde_feuille.as_ref(),
+    );
     // Fin de l'entrée ou erreur : la même garde, sans réponse à écrire. Après
     // `fermer`, la fermeture est déjà faite et n'est pas refaite.
     if let Some(garde) = garde {
@@ -158,6 +218,46 @@ fn fermer_sous_garde<S: SdkFd9>(
         return None;
     }
     Some(fermeture)
+}
+
+/// Fait la feuille pendant que le fil de garde compte le délai. Si la garde
+/// a agi la première, la réponse est déjà donnée : rien n'est rendu.
+fn feuille_sous_garde<S: SdkFd9>(
+    session: &mut Session<S>,
+    garde: &GardeFeuille,
+    faire: impl FnOnce(&mut Session<S>) -> (Option<Reponse>, bool),
+) -> (Option<Reponse>, bool) {
+    // Qui a parlé le premier : la feuille ou la garde. Le premier l'emporte.
+    let tranche = Arc::new(Mutex::new(false));
+    let (fin, attente) = mpsc::channel::<()>();
+    let tranche_garde = tranche.clone();
+    let (delai, depassement) = (garde.delai, garde.depassement.clone());
+    let fil = std::thread::spawn(move || {
+        if attente.recv_timeout(delai) != Err(RecvTimeoutError::Timeout) {
+            return;
+        }
+        let mut tranche = tranche_garde.lock().unwrap_or_else(|e| e.into_inner());
+        if !*tranche {
+            *tranche = true;
+            depassement(Reponse::Erreur {
+                erreur: ErreurPont::FeuilleBloquee {},
+            });
+        }
+    });
+    let (reponse, fin_du_pont) = faire(session);
+    let trop_tard = std::mem::replace(
+        &mut *tranche.lock().unwrap_or_else(|e| e.into_inner()),
+        true,
+    );
+    let _ = fin.send(());
+    let _ = fil.join();
+    if trop_tard {
+        session.journal.push(format!(
+            "feuille rendue après le délai de garde : {reponse:?}, réponse déjà donnée par la garde"
+        ));
+        return (None, fin_du_pont);
+    }
+    (reponse, fin_du_pont)
 }
 
 fn est_une_feuille(requete: &Requete) -> bool {
@@ -209,6 +309,7 @@ fn repondre<S: SdkFd9>(
     sortie: &mut (impl Write + Send),
     feuille_active: &AtomicBool,
     garde: &mut Option<Garde>,
+    garde_feuille: Option<&GardeFeuille>,
 ) -> io::Result<()> {
     let annulation = session.annulation();
     // La dernière feuille s'est-elle terminée par une annulation ?
@@ -227,7 +328,7 @@ fn repondre<S: SdkFd9>(
             Ok(requete) => {
                 let feuille = est_une_feuille(&requete);
                 let (reponse, fin) = if feuille {
-                    traiter_en_suivant(session, requete, garde, sortie)?
+                    traiter_en_suivant(session, requete, garde, garde_feuille, sortie)?
                 } else {
                     traiter(session, requete, garde)
                 };
@@ -267,6 +368,7 @@ fn traiter_en_suivant<S: SdkFd9>(
     session: &mut Session<S>,
     requete: Requete,
     garde: &mut Option<Garde>,
+    garde_feuille: Option<&GardeFeuille>,
     sortie: &mut (impl Write + Send),
 ) -> io::Result<(Option<Reponse>, bool)> {
     std::thread::scope(|portee| {
@@ -283,7 +385,10 @@ fn traiter_en_suivant<S: SdkFd9>(
             Ok(())
         });
         session.suivre(envoi);
-        let resultat = traiter(session, requete, garde);
+        let resultat = match garde_feuille {
+            Some(g) => feuille_sous_garde(session, g, |s| traiter(s, requete, garde)),
+            None => traiter(session, requete, garde),
+        };
         // Le destinataire part avec le suivi : le fil d'écriture finit.
         session.ne_plus_suivre();
         let ecrit = ecrivain

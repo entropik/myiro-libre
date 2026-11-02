@@ -45,6 +45,7 @@ fn toutes_les_erreurs() -> Vec<ErreurPont> {
         },
         ErreurPont::ReponseInattendue { detail: "x".into() },
         ErreurPont::Delai {},
+        ErreurPont::FeuilleBloquee {},
         ErreurPont::InstrumentPerdu {},
         ErreurPont::ReposIncertain {
             remise_au_repos: repos.clone(),
@@ -101,7 +102,7 @@ fn chaque_refus_d_une_feuille_a_sa_cause_et_son_action() {
     cles_vues.push(ErreurFeuille::Definition(String::new()).cle());
     // Repli de la page pour une clé qu'elle ne connaît pas.
     cles_vues.push("feuille_fd9.autre".into());
-    assert_eq!(cles_vues.len(), 28 + 10 + 3);
+    assert_eq!(cles_vues.len(), 29 + 10 + 3);
     for cle in &cles_vues {
         assert!(cle.starts_with("feuille_fd9."), "{cle}");
         for suite in ["cause", "action"] {

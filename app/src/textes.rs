@@ -2815,6 +2815,14 @@ const FRANCAIS: Catalogue = &[
         "Vérifiez que la feuille est sortie du FD-9, puis recommencez.",
     ),
     (
+        "feuille_fd9.feuille_bloquee.cause",
+        "Le FD-9 n’a pas fini la feuille\u{202f}: elle n’est pas rangée.",
+    ),
+    (
+        "feuille_fd9.feuille_bloquee.action",
+        "Éteignez puis rallumez le FD-9, retirez la feuille, puis recommencez.",
+    ),
+    (
         "feuille_fd9.instrument_perdu.cause",
         "La liaison avec le FD-9 a été perdue pendant la feuille\u{202f}: rien n’a été rangé.",
     ),
@@ -5833,6 +5841,14 @@ const ANGLAIS: Catalogue = &[
     (
         "feuille_fd9.delai.action",
         "Check that the sheet came out of the FD-9, then start over.",
+    ),
+    (
+        "feuille_fd9.feuille_bloquee.cause",
+        "The FD-9 did not finish the sheet: it was not filed.",
+    ),
+    (
+        "feuille_fd9.feuille_bloquee.action",
+        "Switch the FD-9 off and on again, remove the sheet, then start over.",
     ),
     (
         "feuille_fd9.instrument_perdu.cause",

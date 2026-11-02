@@ -412,6 +412,11 @@ pub enum ErreurPont {
     ReponseInattendue { detail: String },
     /// L'instrument n'a pas répondu dans le délai prévu.
     Delai {},
+    /// FD-9 : la feuille (mesure, arrêt ou sortie) n'a pas rendu la main
+    /// dans le délai de garde du pont, la DLL bloquée dans un appel. Le pont
+    /// répond quand même, puis s'arrête de force : rien n'est mesuré, et
+    /// l'état de l'instrument n'est pas connu (essai E5).
+    FeuilleBloquee {},
     /// L'instrument s'est déconnecté ou ne répond plus (événement 6). La
     /// session et son étalonnage sont invalidés : toute demande suivante reçoit
     /// cette même erreur, sans appel à la DLL, jusqu'à une nouvelle connexion.

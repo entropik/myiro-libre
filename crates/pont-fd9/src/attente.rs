@@ -51,6 +51,23 @@ impl Default for Delais {
     }
 }
 
+/// Part de la garde d'une feuille au-delà de ses attentes : lecture des
+/// plages, calculs et sortie (2 520 plages lues en peu de temps à l'essai E4,
+/// supposé bien moins de 4 min).
+pub const MARGE_GARDE_FEUILLE: Duration = Duration::from_secs(4 * 60);
+
+impl Delais {
+    /// Délai de la garde d'une feuille (`serveur::Garde::avec_feuille`) :
+    /// attente de la feuille, quatre étapes (engagement, capture,
+    /// reconnaissance, arrêt), mesure, plus [`MARGE_GARDE_FEUILLE`]. Par
+    /// défaut 28 min : moins que les 30 min que l'application laisse à une
+    /// feuille (`DELAI_FEUILLE`), qui reçoit ainsi la réponse de la garde
+    /// avant de couper le pont elle-même.
+    pub fn garde_feuille(&self) -> Duration {
+        self.feuille + self.etape * 4 + self.mesure + MARGE_GARDE_FEUILLE
+    }
+}
+
 /// Demande d'annulation, partagée entre le fil qui lit les requêtes et la
 /// session qui attend l'instrument (ticket #26).
 #[derive(Clone, Debug, Default)]

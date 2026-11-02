@@ -220,6 +220,7 @@ pub fn type_erreur(erreur: &ErreurPont) -> &'static str {
         ErreurPont::MesureAnnulee { .. } => "mesure_annulee",
         ErreurPont::ReponseInattendue { .. } => "reponse_inattendue",
         ErreurPont::Delai {} => "delai",
+        ErreurPont::FeuilleBloquee {} => "feuille_bloquee",
         ErreurPont::InstrumentPerdu {} => "instrument_perdu",
         ErreurPont::ReposIncertain { .. } => "repos_incertain",
         ErreurPont::DeconnexionEchouee { .. } => "deconnexion_echouee",

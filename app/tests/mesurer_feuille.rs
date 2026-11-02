@@ -677,6 +677,44 @@ fn une_feuille_refusee_faute_de_zxing_ne_range_rien_et_dit_le_composant_manquant
     assert!(!b.bibliotheque().join(DOSSIER_MESURES_FD9).exists());
 }
 
+/// Essai E5 : la DLL ne rend plus la main pendant la feuille ; la garde du
+/// pont répond `feuille_bloquee`, puis l'arrête de force. L'opérateur lit
+/// que le FD-9 n'a pas fini, que rien n'est rangé, et qu'il faut éteindre
+/// puis rallumer le FD-9 ; le pont ordinaire est relancé.
+#[test]
+fn une_feuille_bloquee_dit_d_eteindre_le_fd9_et_ne_range_rien() {
+    let mut b = banc();
+    *b.feuille.borrow_mut() = Some(Ok(Reponse::Erreur {
+        erreur: ErreurPont::FeuilleBloquee {},
+    }));
+    let echec = b.mesurer(Ok(mire())).0.unwrap_err();
+    assert_eq!(echec.cle, "feuille_fd9.feuille_bloquee");
+    let texte =
+        |langue, suite| app::textes::texte(langue, &format!("{}.{suite}", echec.cle)).to_string();
+    let cause = texte(app::textes::Langue::Francais, "cause");
+    let action = texte(app::textes::Langue::Francais, "action");
+    assert!(
+        cause.contains("n’a pas fini") && cause.contains("pas rangée"),
+        "{cause}"
+    );
+    assert!(
+        action.contains("Éteignez puis rallumez le FD-9"),
+        "{action}"
+    );
+    assert!(texte(app::textes::Langue::Anglais, "action").contains("Switch the FD-9 off and on"));
+    assert_eq!(
+        b.plafonds(),
+        vec![Palier::Connexion, Palier::Feuille, Palier::Connexion]
+    );
+    assert!(b
+        .ouverte
+        .detail_reglage(b.condition)
+        .unwrap()
+        .importees
+        .is_empty());
+    assert!(!b.bibliotheque().join(DOSSIER_MESURES_FD9).exists());
+}
+
 #[test]
 fn une_feuille_refusee_par_le_pont_ne_range_rien_et_revient_au_plafond_connexion() {
     let mut b = banc();
@@ -715,6 +753,7 @@ fn une_feuille_refusee_par_le_pont_ne_range_rien_et_revient_au_plafond_connexion
             "feuille_fd9.mesure_invraisemblable",
         ),
         (ErreurPont::Delai {}, "feuille_fd9.delai"),
+        (ErreurPont::FeuilleBloquee {}, "feuille_fd9.feuille_bloquee"),
     ] {
         assert_eq!(ErreurFeuille::Feuille(erreur).cle(), cle);
     }

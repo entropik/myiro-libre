@@ -22,7 +22,9 @@
 //! Codes de sortie : 0 fin normale, 1 erreur de lecture ou d'écriture,
 //! 2 arguments refusés, 3 DLL non chargée, 4 fermeture qui n'a pas rendu la
 //! main dans `DELAI_FERMETURE` (`CODE_FERMETURE_BLOQUEE` ; la réponse à
-//! `fermer` est donnée avant).
+//! `fermer` est donnée avant), 5 feuille qui n'a pas rendu la main dans
+//! `Delais::garde_feuille` (`CODE_FEUILLE_BLOQUEE` ; la réponse
+//! `feuille_bloquee` est donnée avant).
 
 use pont_fd9::composants::dossier_de_l_executable;
 use pont_fd9::dll::Fd9Dll;
@@ -171,7 +173,7 @@ fn servir_avec<S: SdkFd9>(sdk: S, arguments: &Arguments, masque: Masque) -> Exit
         &mut session,
         std::io::BufReader::new(std::io::stdin()),
         &mut std::io::stdout(),
-        Garde::processus(DELAI_FERMETURE),
+        Garde::processus(DELAI_FERMETURE).avec_feuille_processus(arguments.delais.garde_feuille()),
     );
     let orphelins = session.rappels_orphelins();
     if orphelins > 0 {

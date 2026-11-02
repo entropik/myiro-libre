@@ -95,6 +95,7 @@ fn une_erreur_sans_detail_s_ecrit_par_son_seul_type() {
     use pont_protocole::{ecrire_reponse, lire_reponse, ErreurPont, Reponse};
     for (erreur, texte) in [
         (ErreurPont::Delai {}, "delai"),
+        (ErreurPont::FeuilleBloquee {}, "feuille_bloquee"),
         (ErreurPont::InstrumentPerdu {}, "instrument_perdu"),
         (ErreurPont::InstrumentInconnu {}, "instrument_inconnu"),
         (ErreurPont::ParametreRefuse {}, "parametre_refuse"),

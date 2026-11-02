@@ -145,6 +145,11 @@ pub struct Fd9Simule {
     /// DLL est restée bloquée dans l'appel). 10 s au plus, pour ne jamais
     /// bloquer un test.
     pub deconnexion_retenue: Option<std::sync::mpsc::Receiver<()>>,
+    /// De même, `FD9_StopMeasurement` puis `FD9_StartMeasurement2` ne
+    /// rendent la main qu'au signal reçu ici (essai E5, supposé : la DLL est
+    /// restée bloquée dans un appel de la feuille). 10 s au plus.
+    pub arret_retenu: Option<std::sync::mpsc::Receiver<()>>,
+    pub mesure_retenue: Option<std::sync::mpsc::Receiver<()>>,
     /// Codes rendus par les prochains `FD9_GetStatus`, dans l'ordre ; puis
     /// le code ordinaire.
     pub codes_statut: VecDeque<i32>,
@@ -611,6 +616,9 @@ impl SdkFd9 for Fd9Simule {
     }
 
     fn arreter(&mut self, feuille_suivante: bool) -> i32 {
+        if let Some(signal) = self.arret_retenu.take() {
+            let _ = signal.recv_timeout(Duration::from_secs(10));
+        }
         if let Some(etat) = self.avant_arret.take() {
             self.rappeler(etat);
         }
@@ -709,6 +717,9 @@ impl SdkFd9 for Fd9Simule {
     }
 
     fn mesurer(&mut self) -> i32 {
+        if let Some(signal) = self.mesure_retenue.take() {
+            let _ = signal.recv_timeout(Duration::from_secs(10));
+        }
         let code = self.appel_admis("FD9_StartMeasurement2", "1 1".into(), |e| e == 7);
         // Sans réaction imposée : mesure, nombre de plages mesurées, fin.
         if code == 0 && !self.reactions.contains_key("FD9_StartMeasurement2") {
