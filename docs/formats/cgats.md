@@ -99,6 +99,7 @@ Les **valeurs RVB** envoyées à l'imprimante (colonnes `RGB_R`, `RGB_G`, `RGB_B
 |---|---|---|---|
 | ArgyllCMS (`.ti3`) | première ligne `CTI3` | 0 à 100 | confirmée (description du format `.ti3`) |
 | myiro-libre (mesure d'une feuille au FD-9) | `MYIRO_LIBRE_FORMAT "myiro-libre/cgats/1"` | 0 à 100 | confirmée : c'est myiro-libre qui les écrit (`ecrire_avec_rvb`), en tête de chaque tableau après `SAMPLE_ID` |
+| myiro-libre (mesure moyennée d'une séance) | `MYIRO_LIBRE_FORMAT "myiro-libre/moyenne/1"` | 0 à 100 | confirmée : ce sont les RVB de la mire, écrits par `ecrire_moyenne` |
 | Export FD-S2w | `FILE_DESCRIPTOR "FD-S2w"` | 0 à 255 | **supposée** : observée sur des exports réels du poste (7 octobre 2026), aucun document du fabricant ne l'affirme |
 | Export MYIROtools | `ORIGINATOR "MYIROtools"` | 0 à 255 | **supposée** : observée sur un export réel d'un imprimeur (26 octobre 2026 : RVB de 0.00 à 255.00 sur 2520 plages, colonnes XYZ et Lab), aucun document du fabricant ne l'affirme |
 | Tout autre fichier | | non établie | inconnue : les RVB restent inconnus |
@@ -110,6 +111,8 @@ Une valeur RVB qui n'est pas un nombre est refusée, comme un Lab illisible. Une
 Plusieurs tableaux doivent porter les mêmes plages, dans le même ordre, avec les mêmes valeurs RVB. Un fichier de myiro-libre d'une autre version (`MYIRO_LIBRE_FORMAT` différent) ou dont la provenance est incomplète est refusé : il ne se relit pas à moitié.
 
 Écrire une mesure puis la relire rend exactement ses spectres, ses Lab et sa provenance (test de la crate).
+
+**La mesure moyennée** (2 novembre 2026, ticket #35). `ecrire_moyenne` écrit le résultat d'une séance de mesure (voir `GLOSSARY.md`) : `MYIRO_LIBRE_FORMAT "myiro-libre/moyenne/1"`, l'empreinte de la mire (`MYIRO_LIBRE_MIRE`) et les numéros des mesures sources dans la bibliothèque (`MYIRO_LIBRE_SOURCES`). Ce n'est pas une mesure attestée par un pont : elle n'a pas de provenance, et `lire` la rend avec une provenance inconnue. Aucun numéro de série n'y est écrit. Une condition supposée n'est écrite que par sa source lumineuse (`MEASUREMENT_SOURCE`) et se relit supposée : l'écriture ne rend jamais une donnée plus sûre qu'elle ne l'était. Écrire puis relire une mesure moyennée rend la même mesure (test de la crate).
 
 À l'écran, « Importer un fichier… » lit le fichier et montre la mesure en aperçu, sans rien ranger ; elle n'entre dans la bibliothèque qu'avec « Ranger dans « … » », dans la condition d'impression choisie. La bibliothèque conserve le texte du fichier tel quel, avec le seul nom du fichier (pas son dossier), et le relit à chaque affichage : la colonne de gauche et le cartouche disent « Importée » et le fichier d'origine, et une valeur absente du fichier s'affiche « inconnue ».
 

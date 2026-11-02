@@ -2,10 +2,12 @@
 
 use std::fmt::Write as _;
 
-use pont_protocole::{ConditionMesure, ConditionsCalcul, Echantillonnage, Info, Mesure, Spectre};
+use pont_protocole::{
+    ConditionMesure, ConditionsCalcul, Echantillonnage, Info, Lab, Mesure, Spectre,
+};
 
 use crate::provenance::{self, PREFIXE};
-use crate::{erreur, ErreurCgats, EMPLACEMENTS, FORMAT_CGATS};
+use crate::{erreur, ErreurCgats, MesureImportee, EMPLACEMENTS, FORMAT_CGATS, FORMAT_MOYENNE};
 
 /// Chaîne CGATS entre guillemets ; un guillemet s'y écrit doublé. Un texte
 /// sur plusieurs lignes ne s'écrit pas en CGATS : il est refusé plutôt que
@@ -164,6 +166,160 @@ fn ecrire_tableaux(mesure: &Mesure, rvb: Option<&[[f64; 3]]>) -> Result<String, 
         s.ligne("END_DATA");
     }
     Ok(s.0)
+}
+
+/// Écrit une **mesure moyennée** (ticket #35) : plusieurs mesures d'une même
+/// mire, composées par myiro-libre, rangées comme une mesure importée. Le
+/// fichier porte `MYIRO_LIBRE_FORMAT "myiro-libre/moyenne/1"`, l'empreinte
+/// de la mire (`MYIRO_LIBRE_MIRE`) et les numéros des mesures sources dans
+/// la bibliothèque (`MYIRO_LIBRE_SOURCES`, séparés par une espace). Aucune
+/// provenance de pont : une moyenne n'est pas une mesure attestée par un
+/// instrument. Aucun numéro de série n'est écrit.
+///
+/// Les RVB sont ceux de la mire : confirmés pour chaque plage, écrits de 0
+/// à 100 et relus confirmés. Une condition confirmée est écrite
+/// (`MEASUREMENT_CONDITION`) ; une condition supposée ne l'est que par sa
+/// source lumineuse, et se relit supposée ; une condition inconnue reste
+/// inconnue. Seuls les emplacements qui ont un Lab ou un spectre sont
+/// écrits. Relue par [`crate::lire`], la mesure est la même.
+///
+/// Refusé en clair : RVB inconnus ou supposés, Lab ou spectre connu sur une
+/// partie des plages seulement d'un emplacement, spectres de longueurs
+/// différentes, condition supposée hors de son emplacement, aucune donnée.
+pub fn ecrire_moyenne(
+    mesure: &MesureImportee,
+    mire: &str,
+    sources: &[&str],
+) -> Result<String, ErreurCgats> {
+    let mut rvb = Vec::with_capacity(mesure.plages.len());
+    for p in &mesure.plages {
+        match &p.rvb {
+            Info::Confirmee(v) => rvb.push(v.map(|c| f64::from(c) * 100.0)),
+            _ => {
+                return erreur(format!(
+                    "plage {} : RVB de la mire inconnus ou supposés",
+                    p.identifiant
+                ))
+            }
+        }
+    }
+    let mut s = Sortie(String::new());
+    let mut premier = true;
+    for (n, emplacement) in EMPLACEMENTS.iter().enumerate() {
+        let labs: Vec<Option<&Lab>> = mesure.plages.iter().map(|p| p.lab[n].valeur()).collect();
+        let spectres: Vec<Option<&Spectre>> = mesure
+            .plages
+            .iter()
+            .map(|p| p.spectres[n].valeur())
+            .collect();
+        let avec_lab = uniforme(&labs, "Lab", emplacement)?;
+        let avec_spectre = uniforme(&spectres, "spectre", emplacement)?;
+        if !avec_lab && !avec_spectre {
+            continue;
+        }
+        let longueur = spectres.iter().flatten().map(|sp| sp.len()).max();
+        if spectres
+            .iter()
+            .flatten()
+            .any(|sp| Some(sp.len()) != longueur)
+        {
+            return erreur(format!("{emplacement} : spectres de longueurs différentes"));
+        }
+        let longueur = longueur.unwrap_or(0);
+
+        s.ligne("CGATS.17");
+        if std::mem::take(&mut premier) {
+            s.mot_cle("ORIGINATOR", "myiro-libre")?;
+            s.mot_cle("FILE_DESCRIPTOR", "Mesure moyennée myiro-libre")?;
+            if let Some(date) = mesure.date.valeur() {
+                s.mot_cle("CREATED", date)?;
+            }
+            if let Some(instrument) = mesure.instrument.valeur() {
+                s.mot_cle("INSTRUMENTATION", instrument)?;
+            }
+            s.mot_cle_declare(&format!("{PREFIXE}FORMAT"), FORMAT_MOYENNE)?;
+            s.mot_cle_declare(&format!("{PREFIXE}MIRE"), mire)?;
+            s.mot_cle_declare(&format!("{PREFIXE}SOURCES"), &sources.join(" "))?;
+        }
+        match &mesure.conditions[n] {
+            Info::Confirmee(c) => {
+                s.mot_cle_declare(&format!("{PREFIXE}SPECTRE"), emplacement)?;
+                s.mot_cle_declare("MEASUREMENT_CONDITION", &format!("{c:?}"))?;
+                s.mot_cle("MEASUREMENT_SOURCE", source(*c))?;
+            }
+            // Relue supposée par sa seule source lumineuse, à son emplacement.
+            Info::Supposee(c) if *c as usize == n => {
+                s.mot_cle("MEASUREMENT_SOURCE", source(*c))?;
+            }
+            Info::Supposee(c) => {
+                return erreur(format!(
+                    "{emplacement} : condition supposée {c:?} hors de son emplacement"
+                ))
+            }
+            Info::Inconnue => s.mot_cle_declare(&format!("{PREFIXE}SPECTRE"), emplacement)?,
+        }
+        let echantillonnage = mesure.longueurs_onde.valeur().copied();
+        let nm =
+            |e: Echantillonnage, i: usize| u64::from(e.debut_nm) + u64::from(e.pas_nm) * i as u64;
+        let mut champs: Vec<String> = ["SAMPLE_ID", "RGB_R", "RGB_G", "RGB_B"]
+            .map(String::from)
+            .into();
+        if avec_lab {
+            champs.extend(["LAB_L".into(), "LAB_A".into(), "LAB_B".into()]);
+        }
+        champs.extend((0..longueur).map(|i| match echantillonnage {
+            Some(e) => format!("SPEC_{}", nm(e, i)),
+            None => format!("{PREFIXE}SPECTRE_{}", i + 1),
+        }));
+        s.ligne(&format!("NUMBER_OF_FIELDS\t{}", champs.len()));
+        s.ligne("BEGIN_DATA_FORMAT");
+        s.ligne(&champs.join("\t"));
+        s.ligne("END_DATA_FORMAT");
+        s.ligne(&format!("NUMBER_OF_SETS\t{}", mesure.plages.len()));
+        s.ligne("BEGIN_DATA");
+        for (rang, p) in mesure.plages.iter().enumerate() {
+            let mut ligne = identifiant(&p.identifiant)?;
+            for v in rvb[rang] {
+                let _ = write!(ligne, "\t{v}");
+            }
+            for v in labs[rang].into_iter().flat_map(|l| l.valeurs()) {
+                let _ = write!(ligne, "\t{v}");
+            }
+            for v in spectres[rang].into_iter().flat_map(|sp| sp.iter()) {
+                let _ = write!(ligne, "\t{}", f64::from(*v) * 100.0);
+            }
+            s.ligne(&ligne);
+        }
+        s.ligne("END_DATA");
+    }
+    if premier {
+        return erreur("aucun Lab ni spectre à écrire");
+    }
+    Ok(s.0)
+}
+
+/// Une donnée connue sur toutes les plages d'un emplacement (`true`), sur
+/// aucune (`false`) ; sur une partie seulement, refusée.
+fn uniforme<T>(valeurs: &[Option<T>], quoi: &str, emplacement: &str) -> Result<bool, ErreurCgats> {
+    let connues = valeurs.iter().filter(|v| v.is_some()).count();
+    if connues != 0 && connues != valeurs.len() {
+        return erreur(format!(
+            "{emplacement} : {quoi} connu sur {connues} plages sur {}",
+            valeurs.len()
+        ));
+    }
+    Ok(connues != 0)
+}
+
+/// Identifiant de plage écrit sans guillemets : il ne doit contenir ni
+/// espace, ni tabulation, ni guillemet.
+fn identifiant(texte: &str) -> Result<String, ErreurCgats> {
+    if texte.is_empty() || texte.chars().any(|c| c.is_whitespace() || c == '"') {
+        return erreur(format!(
+            "identifiant de plage « {texte} » impossible à écrire"
+        ));
+    }
+    Ok(texte.to_string())
 }
 
 /// Source lumineuse de la condition, à la manière des exports CGATS du

@@ -5,7 +5,9 @@ use std::collections::HashMap;
 use pont_protocole::{ConditionMesure, ConditionsCalcul, Echantillonnage, Info, Lab, Spectre};
 
 use crate::provenance::{self, condition_depuis, PREFIXE};
-use crate::{erreur, ErreurCgats, MesureImportee, PlageImportee, EMPLACEMENTS, FORMAT_CGATS};
+use crate::{
+    erreur, ErreurCgats, MesureImportee, PlageImportee, EMPLACEMENTS, FORMAT_CGATS, FORMAT_MOYENNE,
+};
 
 /// Morceau d'une ligne : mot nu ou chaîne entre guillemets.
 #[derive(Debug, PartialEq)]
@@ -198,7 +200,8 @@ fn nombre_f64(texte: &str, quoi: &str) -> Result<f64, ErreurCgats> {
 /// écrit, jamais devinée (`docs/formats/cgats.md`).
 enum EchelleRvb {
     /// Fichier `CTI3` d'ArgyllCMS : 0 à 100, établi par la description du
-    /// format ; fichier de myiro-libre (`ecrire_avec_rvb`) : 0 à 100.
+    /// format ; fichier de myiro-libre (`ecrire_avec_rvb`, `ecrire_moyenne`) :
+    /// 0 à 100.
     Confirmee(f64),
     /// Export FD-S2w ou MYIROtools : 0 à 255, observé sur des exports réels
     /// de FD-S2w et de MYIROtools, sans document du fabricant qui l'affirme.
@@ -208,8 +211,10 @@ enum EchelleRvb {
 
 impl EchelleRvb {
     fn du_fichier(premier: &Tableau) -> Self {
+        let format = premier.mot_cle(&format!("{PREFIXE}FORMAT"));
         if premier.identifiant.as_deref() == Some("CTI3")
-            || premier.mot_cle(&format!("{PREFIXE}FORMAT")) == Some(FORMAT_CGATS)
+            || format == Some(FORMAT_CGATS)
+            || format == Some(FORMAT_MOYENNE)
         {
             EchelleRvb::Confirmee(100.0)
         } else if premier.mot_cle("FILE_DESCRIPTOR") == Some("FD-S2w")
@@ -561,9 +566,11 @@ fn lire_avec(texte: &str, condition_exigee: bool) -> Result<MesureImportee, Erre
     let mots_cles: HashMap<String, String> = premier.mots_cles.iter().cloned().collect();
     let provenance = match mots_cles.get(&format!("{PREFIXE}FORMAT")) {
         Some(f) if f == FORMAT_CGATS => Info::Confirmee(provenance::lire(&mots_cles)?),
+        // Une mesure moyennée n'a pas de provenance de pont.
+        Some(f) if f == FORMAT_MOYENNE => Info::Inconnue,
         Some(f) => {
             return erreur(format!(
-                "fichier myiro-libre « {f} » non pris en charge (attendu {FORMAT_CGATS})"
+                "fichier myiro-libre « {f} » non pris en charge (attendu {FORMAT_CGATS} ou {FORMAT_MOYENNE})"
             ))
         }
         None => Info::Inconnue,
