@@ -149,7 +149,7 @@ Chaque phase a un critère de sortie. Les phases 1 à 3 se font **sans instrumen
 
 *Sortie : fiches et crate `fd9-sys`, avec la question de la clé de licence tranchée.*
 
-La phase 2 se mène **en parallèle** des phases 1, 3 et 4 : MYIRO-1 et FD-9 sont tous deux requis pour la première livraison de profilage RVB vérifié. Chaque instrument conserve ses paliers de sécurité et ses propres mires.
+La phase 2 se mène **en parallèle** des phases 1, 3 et 4. Depuis le 2 novembre 2026, seul le FD-9 est requis pour la première livraison de profilage RVB vérifié ; le MYIRO-1 est optionnel. Chaque instrument conserve ses paliers de sécurité et ses propres mires.
 
 ### Phase 3 — Ponts et banc d'essai sans instrument
 
@@ -203,7 +203,7 @@ Même progression : détection → connexion/infos → reconnaissance d'une mire
 - **Vérification de profil** : seconde mire imprimée manuellement à travers le profil ; résultats distincts de fidélité aux couleurs demandées et d'accord avec la prédiction. Tolérances versionnées choisies avant vérification et rapport inclus dès le premier jalon, sans attendre le contrôle complet.
 - Validation : profil comparé à un profil de référence (par exemple FOGRA39 sur une impression certifiée, ou un profil produit par un autre outil à partir des mêmes mesures).
 
-*Sortie : de la mire au profil vérifié, de bout en bout, à partir de mesures MYIRO-1 et FD-9.*
+*Sortie : de la mire au profil vérifié, de bout en bout, à partir de mesures FD-9 (MYIRO-1 optionnel depuis le 2 novembre 2026).*
 
 ### Phase 8 — Application et livraison
 
@@ -248,7 +248,7 @@ Commence une fois la v1 mesurant par la DLL. Le pilote libre est un adapter de p
 
 ## 6. Décisions à prendre
 
-1. **Priorité d'instrument — révisée par le grill** : MYIRO-1 et FD-9 développés en parallèle et présents dans la première livraison RVB vérifiée ; mires et préréglages propres à chacun.
+1. **Priorité d'instrument — révisée le 2 novembre 2026** : la première livraison RVB vérifiée se finalise avec le **FD-9 seul** ; le MYIRO-1 devient optionnel (pont et mires conservés, mesure dans le parcours de l'application non requise pour publier). Auparavant (grill du 7 octobre) : MYIRO-1 et FD-9 en parallèle, tous deux dans la première livraison.
 2. **Langage — tranché** : Rust ; interface **Tauri 2**, bilingue FR/EN (ADR 0003).
 3. **Usage — tranché le 6 octobre 2026** : projet **libre, open source, non commercial**, destiné aux imprimeurs et utilisateurs privés d'outil par l'arrêt du support Konica. Conséquences :
    - licence recommandée : **GPL-3.0** (ou AGPL-3.0), compatible avec ArgyllCMS appelé en processus externe ou même intégré ;
