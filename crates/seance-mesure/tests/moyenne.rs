@@ -285,6 +285,60 @@ fn deux_fd9_differents_ne_se_melangent_pas() {
 }
 
 #[test]
+fn deux_series_differentes_sont_refusees_meme_apres_une_source_sans_serie() {
+    let mut sans = Export::fd9(lignes(0.0));
+    sans.serie = String::new();
+    let mut autre = Export::fd9(lignes(0.0));
+    autre.serie = "87654321".into();
+    assert_eq!(
+        moyenner(
+            &plan(),
+            &[
+                exemplaire(1, sans.mesure()),
+                exemplaire_decale(2, 0.0),
+                exemplaire(3, autre.mesure())
+            ],
+            &[]
+        )
+        .unwrap_err(),
+        Incompatible::InstrumentsDifferents { source: 3 }
+    );
+}
+
+#[test]
+fn deux_longueurs_d_onde_differentes_sont_refusees_meme_apres_une_source_qui_les_ignore() {
+    let mut sans = Export::fd9(lignes(0.0));
+    sans.spectres = false;
+    let mut autre = Export::fd9(lignes(0.0));
+    autre.debut_nm = 390;
+    assert_eq!(
+        moyenner(
+            &plan(),
+            &[
+                exemplaire(1, sans.mesure()),
+                exemplaire_decale(2, 0.0),
+                exemplaire(3, autre.mesure())
+            ],
+            &[]
+        )
+        .unwrap_err(),
+        Incompatible::LongueursOndeDifferentes { source: 3 }
+    );
+}
+
+#[test]
+fn deux_geometries_differentes_sont_refusees_meme_apres_une_source_qui_les_ignore() {
+    let mut b = exemplaire_decale(2, 0.0);
+    let mut c = exemplaire_decale(3, 0.0);
+    b.mesure.provenance = Info::Confirmee(provenance(Geometrie::Feuille {}));
+    c.mesure.provenance = Info::Confirmee(provenance(Geometrie::Bande { sens: 0 }));
+    assert_eq!(
+        moyenner(&plan(), &[exemplaire_decale(1, 0.0), b, c], &[]).unwrap_err(),
+        Incompatible::GeometriesDifferentes { source: 3 }
+    );
+}
+
+#[test]
 fn sans_condition_commune_rien_n_est_moyenne() {
     let mut m0 = Export::fd9(lignes(0.0));
     m0.source = "A".into();

@@ -153,8 +153,14 @@ pub enum Incompatible {
 /// 4. le modèle d'instrument est connu, le même partout : jamais de
 ///    mélange MYIRO-1/FD-9 ;
 /// 5. même instrument : deux numéros de série connus sont égaux ;
-/// 6. mêmes longueurs d'onde, quand elles sont connues des deux côtés ;
-/// 7. même géométrie de mesure, quand elle est connue des deux côtés ;
+/// 6. mêmes longueurs d'onde ;
+/// 7. même géométrie de mesure.
+///
+/// Numéro de série, longueurs d'onde et géométrie ne se comparent que
+/// lorsqu'ils sont connus des deux côtés : chaque mesure qui les donne est
+/// comparée à la première qui les a donnés, et une mesure qui les ignore ne
+/// refuse rien. Ensuite :
+///
 /// 8. conditions communes : un emplacement de spectre (`m0`, `m1`, `m2`)
 ///    que toutes les mesures donnent doit avoir partout la même condition
 ///    de mesure, sinon refus ; il est gardé. Un emplacement que certaines
@@ -164,7 +170,10 @@ pub enum Incompatible {
 ///    M1, se moyennent sur M1). Aucun emplacement commun : refus ;
 /// 9. chaque complément manuel désigne une plage du plan qu'aucun
 ///    exemplaire ne donne, une seule fois, dans une mesure de rôle
-///    [`Role::Complement`] de la liste qui a cet identifiant une fois ;
+///    [`Role::Complement`] de la liste qui a cet identifiant une fois. Un
+///    complément n'est contrôlé que par cet identifiant : ses RVB ne sont
+///    pas comparés à la mire, c'est l'opérateur qui l'a désigné, et il
+///    reste marqué manuel ;
 /// 10. pour chaque emplacement gardé, toutes les mesures d'une plage ont un
 ///     spectre (de même longueur), ou aucune ; de même pour le Lab. Pas de
 ///     moyenne mêlant des mesures avec et sans spectre.
@@ -184,7 +193,7 @@ pub fn moyenner(
     if !sources.iter().any(|s| s.role == Role::Exemplaire) {
         return Err(Incompatible::AucunExemplaire);
     }
-    let mut apports: Vec<Vec<(usize, usize, bool)>> = vec![Vec::new(); plan.plages.len()];
+    let mut apports: Vec<Vec<Contribution>> = vec![Vec::new(); plan.plages.len()];
     for (n, s) in sources.iter().enumerate() {
         if s.mire != plan.mire.empreinte {
             return Err(Incompatible::AutreMire { source: s.id });
@@ -196,7 +205,11 @@ pub fn moyenner(
             }
             for (i, rang) in association.rangs.iter().enumerate() {
                 if let Some(rang) = rang {
-                    apports[i].push((n, *rang, false));
+                    apports[i].push(Contribution {
+                        source: n,
+                        rang: *rang,
+                        manuel: false,
+                    });
                 }
             }
         }
@@ -216,10 +229,7 @@ pub fn moyenner(
             manquantes.push(attendue.identifiant.clone());
             continue;
         }
-        let mesurees: Vec<&PlageImportee> = apports
-            .iter()
-            .map(|&(n, rang, _)| &sources[n].mesure.plages[rang])
-            .collect();
+        let mesurees: Vec<&PlageImportee> = apports.iter().map(|c| c.plage(sources)).collect();
         let plage = PlageImportee {
             identifiant: attendue.identifiant.clone(),
             spectres: std::array::from_fn(|e| gardee(gardes[e], || moyenne_spectres(&mesurees, e))),
@@ -227,11 +237,11 @@ pub fn moyenner(
             rvb: Info::Confirmee(attendue.rvb.map(|c| (c / 100.0) as f32)),
         };
         if apports.len() > 1 {
-            for (&(n, _, _), mesuree) in apports.iter().zip(&mesurees) {
+            for (c, mesuree) in apports.iter().zip(&mesurees) {
                 let de00 = ecart(mesuree, &plage);
                 ecarts.push(Ecart {
                     plage: attendue.identifiant.clone(),
-                    source: sources[n].id,
+                    source: sources[c.source].id,
                     de00,
                     signale: de00.is_some_and(|d| d > SEUIL_ECART_DE00),
                 });
@@ -241,10 +251,10 @@ pub fn moyenner(
             plage: attendue.identifiant.clone(),
             apports: apports
                 .iter()
-                .map(|&(n, rang, manuel)| Apport {
-                    source: sources[n].id,
-                    identifiant: sources[n].mesure.plages[rang].identifiant.clone(),
-                    manuel,
+                .map(|c| Apport {
+                    source: sources[c.source].id,
+                    identifiant: c.plage(sources).identifiant.clone(),
+                    manuel: c.manuel,
                 })
                 .collect(),
         });
@@ -272,6 +282,23 @@ pub fn moyenner(
         conditions_ecartees,
         ecarts,
     })
+}
+
+/// Une plage d'une mesure qui compte pour une plage du plan.
+#[derive(Clone, Copy, Debug)]
+struct Contribution {
+    /// Rang de la mesure dans la liste des sources.
+    source: usize,
+    /// Rang de la plage dans cette mesure.
+    rang: usize,
+    /// Désignée par un complément manuel.
+    manuel: bool,
+}
+
+impl Contribution {
+    fn plage<'a>(&self, sources: &'a [Source]) -> &'a PlageImportee {
+        &sources[self.source].mesure.plages[self.rang]
+    }
 }
 
 /// La valeur d'un emplacement gardé ; inconnue pour un emplacement écarté.
@@ -326,40 +353,51 @@ fn conditions_communes(
     Ok((gardes, ecartees))
 }
 
-/// Règles 4 à 7 : rend le modèle commun.
-fn meme_instrument(sources: &[Source]) -> Result<String, Incompatible> {
-    let mut modele: Option<String> = None;
-    let premiere = &sources[0].mesure;
-    for s in sources {
-        let m = &s.mesure;
-        let Some(ce_modele) = m.instrument.valeur().and_then(|i| modele_instrument(i)) else {
-            return Err(Incompatible::ModeleInconnu { source: s.id });
-        };
-        match &modele {
-            Some(commun) if *commun != ce_modele => {
-                return Err(Incompatible::ModelesDifferents { source: s.id })
+/// Une valeur que toutes les mesures qui la connaissent doivent partager :
+/// chacune est comparée à la première valeur connue, quelle que soit la
+/// place de la mesure qui l'a donnée.
+struct Commune<T>(Option<T>);
+
+impl<T: PartialEq> Commune<T> {
+    /// `Ok` si `valeur` est inconnue ou égale à la première connue.
+    fn accorder(&mut self, valeur: Option<T>) -> Result<(), ()> {
+        match (&self.0, valeur) {
+            (Some(premiere), Some(v)) if *premiere != v => Err(()),
+            (None, Some(v)) => {
+                self.0 = Some(v);
+                Ok(())
             }
-            _ => modele = Some(ce_modele),
-        }
-        let source = s.id;
-        if let (Some(a), Some(b)) = (premiere.numero_serie.valeur(), m.numero_serie.valeur()) {
-            if a.trim() != b.trim() {
-                return Err(Incompatible::InstrumentsDifferents { source });
-            }
-        }
-        if let (Some(a), Some(b)) = (premiere.longueurs_onde.valeur(), m.longueurs_onde.valeur()) {
-            if a != b {
-                return Err(Incompatible::LongueursOndeDifferentes { source });
-            }
-        }
-        let geometrie = |m: &MesureImportee| m.provenance.valeur().map(|p| p.geometrie.clone());
-        if let (Some(a), Some(b)) = (geometrie(premiere), geometrie(m)) {
-            if a != b {
-                return Err(Incompatible::GeometriesDifferentes { source });
-            }
+            _ => Ok(()),
         }
     }
-    Ok(modele.expect("au moins une source"))
+}
+
+/// Règles 4 à 7 : rend le modèle commun.
+fn meme_instrument(sources: &[Source]) -> Result<String, Incompatible> {
+    let mut modele = Commune(None);
+    let mut serie = Commune(None);
+    let mut longueurs = Commune(None);
+    let mut geometrie = Commune(None);
+    for s in sources {
+        let m = &s.mesure;
+        let source = s.id;
+        let Some(ce_modele) = m.instrument.valeur().and_then(|i| modele_instrument(i)) else {
+            return Err(Incompatible::ModeleInconnu { source });
+        };
+        modele
+            .accorder(Some(ce_modele))
+            .map_err(|()| Incompatible::ModelesDifferents { source })?;
+        serie
+            .accorder(m.numero_serie.valeur().map(|n| n.trim().to_string()))
+            .map_err(|()| Incompatible::InstrumentsDifferents { source })?;
+        longueurs
+            .accorder(m.longueurs_onde.valeur().copied())
+            .map_err(|()| Incompatible::LongueursOndeDifferentes { source })?;
+        geometrie
+            .accorder(m.provenance.valeur().map(|p| p.geometrie.clone()))
+            .map_err(|()| Incompatible::GeometriesDifferentes { source })?;
+    }
+    Ok(modele.0.expect("au moins une source"))
 }
 
 /// Règle 9 : ajoute les compléments manuels aux apports.
@@ -367,7 +405,7 @@ fn completer(
     plan: &Plan,
     sources: &[Source],
     complements: &[Complement],
-    apports: &mut [Vec<(usize, usize, bool)>],
+    apports: &mut [Vec<Contribution>],
 ) -> Result<(), Incompatible> {
     let index: HashMap<&str, usize> = plan
         .plages
@@ -398,7 +436,11 @@ fn completer(
         if !apports[i].is_empty() {
             return Err(invalide());
         }
-        apports[i].push((n, rang, true));
+        apports[i].push(Contribution {
+            source: n,
+            rang,
+            manuel: true,
+        });
     }
     Ok(())
 }
@@ -406,7 +448,7 @@ fn completer(
 /// Règle 10, sur les emplacements gardés, sur toutes les plages.
 fn verifier_melanges(
     sources: &[Source],
-    apports: &[Vec<(usize, usize, bool)>],
+    apports: &[Vec<Contribution>],
     gardes: [bool; 3],
 ) -> Result<(), Incompatible> {
     for (e, nom) in EMPLACEMENTS.iter().enumerate() {
@@ -417,7 +459,7 @@ fn verifier_melanges(
             apports
                 .iter()
                 .flatten()
-                .map(|&(n, rang, _)| (n, &sources[n].mesure.plages[rang]))
+                .map(|c| (c.source, c.plage(sources)))
         };
         let avec_spectre = mesurees()
             .filter(|(_, p)| p.spectres[e].valeur().is_some())
@@ -495,7 +537,7 @@ fn ecart(mesuree: &PlageImportee, moyenne: &PlageImportee) -> Option<f64> {
         .reduce(f64::max)
 }
 
-/// Condition d'un emplacement, la même partout (règle 6) : confirmée si
+/// Condition d'un emplacement, la même partout (règle 8) : confirmée si
 /// toutes les mesures la confirment, supposée sinon.
 fn condition_commune(sources: &[Source], e: usize) -> Info<ConditionMesure> {
     let conditions: Vec<&Info<ConditionMesure>> =

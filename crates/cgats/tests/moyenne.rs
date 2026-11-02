@@ -68,6 +68,29 @@ fn la_mire_et_les_sources_sont_dans_l_en_tete() {
 }
 
 #[test]
+fn l_instrument_ecrit_est_le_seul_modele_jamais_le_numero_de_serie() {
+    let mut m = moyenne(Info::Confirmee(ConditionMesure::M1));
+    m.instrument =
+        Info::Confirmee("KONICA MINOLTA, INC. MYIRO-9 (FD-9), Serial No. 12345678".into());
+    let texte = ecrire_moyenne(&m, "empreinte-fictive", &["12"]).unwrap();
+    assert!(texte.contains("INSTRUMENTATION\t\"FD-9\""), "{texte}");
+    assert!(!texte.contains("12345678"));
+    assert_eq!(
+        lire(&texte).unwrap().instrument,
+        Info::Confirmee("FD-9".into())
+    );
+}
+
+#[test]
+fn un_instrument_sans_modele_connu_n_est_pas_ecrit() {
+    let mut m = moyenne(Info::Confirmee(ConditionMesure::M1));
+    m.instrument = Info::Confirmee("Appareil fictif n° 12345678".into());
+    let texte = ecrire_moyenne(&m, "empreinte-fictive", &["12"]).unwrap();
+    assert!(!texte.contains("INSTRUMENTATION"));
+    assert!(!texte.contains("12345678"));
+}
+
+#[test]
 fn une_moyenne_sans_rvb_est_refusee() {
     let mut m = moyenne(Info::Confirmee(ConditionMesure::M1));
     m.plages[1].rvb = Info::Inconnue;

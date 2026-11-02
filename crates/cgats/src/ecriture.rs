@@ -174,7 +174,8 @@ fn ecrire_tableaux(mesure: &Mesure, rvb: Option<&[[f64; 3]]>) -> Result<String, 
 /// de la mire (`MYIRO_LIBRE_MIRE`) et les numéros des mesures sources dans
 /// la bibliothèque (`MYIRO_LIBRE_SOURCES`, séparés par une espace). Aucune
 /// provenance de pont : une moyenne n'est pas une mesure attestée par un
-/// instrument. Aucun numéro de série n'est écrit.
+/// instrument. Aucun numéro de série n'est écrit : `INSTRUMENTATION` ne
+/// porte que le modèle connu ([`crate::modele_instrument`]), ou rien.
 ///
 /// Les RVB sont ceux de la mire : confirmés pour chaque plage, écrits de 0
 /// à 100 et relus confirmés. Une condition confirmée est écrite
@@ -234,8 +235,14 @@ pub fn ecrire_moyenne(
             if let Some(date) = mesure.date.valeur() {
                 s.mot_cle("CREATED", date)?;
             }
-            if let Some(instrument) = mesure.instrument.valeur() {
-                s.mot_cle("INSTRUMENTATION", instrument)?;
+            // Le modèle seul : jamais le numéro de série qu'une ligne
+            // INSTRUMENTATION de FD-S2w porte ; rien sans modèle connu.
+            if let Some(modele) = mesure
+                .instrument
+                .valeur()
+                .and_then(|i| crate::modele_instrument(i))
+            {
+                s.mot_cle("INSTRUMENTATION", &modele)?;
             }
             s.mot_cle_declare(&format!("{PREFIXE}FORMAT"), FORMAT_MOYENNE)?;
             s.mot_cle_declare(&format!("{PREFIXE}MIRE"), mire)?;
