@@ -1,0 +1,16 @@
+[package]
+name = "seance-mesure"
+version = "0.1.0"
+description = "Séance de mesure d'un tirage : plan figé, association des plages, moyennage et écarts entre exemplaires (ticket #35)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+cgats = { path = "../cgats" }
+colorimetrie = { path = "../colorimetrie" }
+pont-protocole = { path = "../pont-protocole" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }

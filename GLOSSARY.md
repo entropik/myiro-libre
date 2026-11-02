@@ -38,6 +38,26 @@ _Éviter_ : épreuve, impression, feuille (au sens d'objet mesuré)
 Une passe complète de l'instrument sur un tirage, conservant tous les spectres obtenus ; un même tirage peut être mesuré plusieurs fois.
 _Éviter_ : lecture, scan, relevé
 
+**Séance de mesure** :
+Le parcours guidé de la mesure d'un tirage, de la première feuille au résultat. Au départ, la mire, ses plages et la fiche d'impression confirmée sont recopiées et ne changent plus (plan figé). La séance garde chaque mesure validée dès qu'elle est faite : on peut fermer l'application et la reprendre plus tard sans rien perdre.
+_Éviter_ : session, campagne
+
+**Exemplaire** :
+Une feuille imprimée de la mire, parmi plusieurs feuilles identiques du même tirage. Mesurer plusieurs exemplaires permet d'en faire la moyenne.
+_Éviter_ : copie, échantillon
+
+**Mesure source** :
+Une mesure rangée dans une séance : celle d'un exemplaire, faite au FD-9 ou importée d'un fichier (FD-S2w par exemple). Elle est gardée telle quelle, fichier d'origine compris ; la mesure moyennée dit de quelles mesures sources elle vient.
+_Éviter_ : lecture source, relevé
+
+**Mesure moyennée** :
+Le résultat d'une séance : pour chaque plage, la moyenne des mesures sources qui la donnent. Elle n'est faite qu'entre mesures d'une même mire, au même instrument et dans les mêmes conditions ; sinon elle est refusée, en disant pourquoi. Les écarts entre mesures sont montrés avant de l'accepter, et aucune mesure n'en est retirée d'office.
+_Éviter_ : mesure fusionnée, mesure combinée
+
+**Complément manuel** :
+Une plage qui manque dans les exemplaires, que l'opérateur prend lui-même dans une autre mesure en désignant la plage à utiliser. Elle reste marquée « manuelle » dans le résultat : on voit toujours ce qui vient de l'instrument et ce qui a été choisi à la main.
+_Éviter_ : correction, saisie
+
 **Mesure ponctuelle** :
 Mesure d'une seule plage ou couleur, hors mire.
 _Éviter_ : spot, mesure spot
