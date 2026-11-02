@@ -196,15 +196,11 @@ window.RapportImage = (() => {
     if (!ouverte) return;
     const nom = el("b", "", vue.saisi.nom || t("rapport.atelier_vide"));
     const contenu = [nom];
-    if (vue.logo) {
-      const octets = await invoke("atelier_logo").catch(() => null);
-      if (octets && ouverte) {
-        if (ouverte.logo) URL.revokeObjectURL(ouverte.logo);
-        ouverte.logo = URL.createObjectURL(new Blob([octets], { type: "image/png" }));
-        const img = el("img", "fenetre-rapport__logo");
-        [img.src, img.alt] = [ouverte.logo, t("rapport.logo")];
-        contenu.unshift(img);
-      }
+    // Le logo est peint dans un canvas (CSP `img-src 'self'`, ADR 0003) : jamais d'adresse `blob:`.
+    if (vue.logo && window.Atelier) {
+      const image = await window.Atelier.decoderLogo();
+      if (image && ouverte) contenu.unshift(window.Atelier.peindreLogo(image, "fenetre-rapport__logo"));
+      image?.close();
     }
     zone.replaceChildren(...contenu);
   }
@@ -213,7 +209,7 @@ window.RapportImage = (() => {
     fermer();
     const dialogue = el("dialog", "fenetre-rapport");
     dialogue.setAttribute("aria-labelledby", "fenetre-rapport-titre");
-    ouverte = { dialogue, logo: null };
+    ouverte = { dialogue };
     const titre = el("h2", "titre", t("rapport.fenetre.titre"));
     titre.id = "fenetre-rapport-titre";
 
@@ -304,9 +300,8 @@ window.RapportImage = (() => {
   // La fenêtre disparaît, le focus revient au bouton « Rapport PDF… ».
   function rendre() {
     if (!ouverte) return;
-    const { dialogue, logo } = ouverte;
+    const { dialogue } = ouverte;
     ouverte = null;
-    if (logo) URL.revokeObjectURL(logo);
     dialogue.remove();
     if (bouton && bouton.isConnected) bouton.focus();
   }

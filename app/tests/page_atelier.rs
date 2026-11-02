@@ -35,23 +35,30 @@ fn le_formulaire_a_ses_champs_et_un_seul_bouton_principal() {
     let script = lire("interface/atelier.js");
     assert!(script.contains("window.Atelier = "));
     assert!(script.lines().count() < 400);
-    let ouvrir = corps(&script, "function ouvrir(apres, premiere = false) {");
-    assert_eq!(ouvrir.matches("btn--primary").count(), 1, "{ouvrir}");
+    let formulaire = corps(&script, "function formulaire({");
+    assert_eq!(
+        formulaire.matches("btn--primary").count(),
+        1,
+        "{formulaire}"
+    );
     for attendu in [
-        "t(\"atelier.enregistrer\")",
-        "t(\"atelier.choisir_logo\")",
-        "t(\"atelier.retirer_logo\")",
-        "t(\"atelier.premiere\")",
+        "\"atelier.enregistrer\")",
+        "\"atelier.choisir_logo\")",
+        "\"atelier.retirer_logo\")",
+        "\"atelier.premiere\")",
         "el(\"textarea\", \"input\")",
-        "showModal()",
     ] {
-        assert!(ouvrir.contains(attendu), "{attendu} :\n{ouvrir}");
+        assert!(formulaire.contains(attendu), "{attendu} :\n{formulaire}");
     }
+    // En fenêtre (depuis le rapport) comme en page (vue « Réglages »), le même formulaire.
+    let ouvrir = corps(&script, "function ouvrir(apres, premiere = false) {");
+    assert!(ouvrir.contains("formulaire({") && ouvrir.contains("showModal()"));
+    assert!(script.contains("formulaire({ prefixe: \"reglages-atelier-\" })"));
     for champ in ["nom", "adresse", "courriel", "telephone", "site"] {
         assert!(script.contains(&format!("\"{champ}\"")), "{champ}");
     }
     // Retirer le logo, inactif sans logo, dit pourquoi.
-    assert!(script.contains("t(\"atelier.retirer_logo.raison\")"));
+    assert!(script.contains("\"atelier.retirer_logo.raison\""));
     for commande in [
         "atelier_lire",
         "atelier_logo",
@@ -85,10 +92,86 @@ fn l_apercu_du_cartouche_suit_la_frappe() {
     assert!(lire("../design-system/ui-kit.html").contains("class=\"cartouche-rapport\""));
 }
 
+/// Le logo est peint dans un canvas : une image chargée par une adresse
+/// `blob:` ou `data:` est refusée par la CSP (`img-src 'self'`, ADR 0003),
+/// et l'aperçu montrait une image cassée. Même règle dans la fenêtre du
+/// rapport.
+#[test]
+fn le_logo_est_peint_dans_un_canvas_sans_adresse_blob() {
+    for fichier in ["interface/atelier.js", "interface/rapport-image.js"] {
+        let script = lire(fichier);
+        for interdit in ["createObjectURL", "el(\"img\"", "data:image"] {
+            assert!(!script.contains(interdit), "{fichier} : {interdit}");
+        }
+    }
+    let script = lire("interface/atelier.js");
+    let peindre = corps(&script, "function peindreLogo(image, classe) {");
+    assert!(peindre.contains("el(\"canvas\", classe)") && peindre.contains("drawImage(image"));
+    assert!(peindre.contains("\"role\", \"img\"") && peindre.contains("t(\"rapport.logo\")"));
+    assert!(script.contains("createImageBitmap("));
+    assert!(lire("interface/rapport-image.js")
+        .contains("window.Atelier.peindreLogo(image, \"fenetre-rapport__logo\")"));
+    let conf: serde_json::Value = serde_json::from_str(&lire("tauri.conf.json")).unwrap();
+    let csp = conf["app"]["security"]["csp"].as_str().unwrap();
+    assert!(csp.contains("img-src 'self';"), "{csp}");
+}
+
+/// « Réglages » est le dernier onglet de la barre du haut, même style que
+/// les tâches ; sa vue porte le formulaire « Atelier » en page. Les textes
+/// de page passent par `data-t`, repris sur place au changement de langue.
+#[test]
+fn la_vue_reglages_porte_l_atelier_en_page() {
+    let page = lire("interface/index.html");
+    let nav = page
+        .split("<nav class=\"taches\"")
+        .nth(1)
+        .and_then(|n| n.split("</nav>").next())
+        .unwrap();
+    let dernier = nav.rsplit("<button").next().unwrap();
+    assert!(
+        dernier.contains("class=\"tache\" data-tache=\"reglages\""),
+        "{dernier}"
+    );
+    assert!(dernier.contains("<svg") && dernier.contains("data-t=\"tache.reglages\""));
+    let vue = page
+        .split("<section data-vue=\"reglages\"")
+        .nth(1)
+        .and_then(|v| v.split("</section>").next())
+        .expect("vue reglages");
+    for attendu in [
+        "data-t=\"tache.reglages\"",
+        "data-t=\"reglages.atelier\"",
+        "data-t=\"reglages.atelier.aide\"",
+        "data-reglages-atelier",
+    ] {
+        assert!(vue.contains(attendu), "{attendu}");
+    }
+    assert!(
+        lire("interface/app.js").contains("\"reglages\"]"),
+        "Réglages sans instrument"
+    );
+    let script = lire("interface/atelier.js");
+    assert!(script.contains("e.detail !== \"reglages\""));
+    // Posé une fois, puis relu sur place : jamais redessiné à chaque visite.
+    assert!(script.contains("if (!enPage) {") && script.contains("enPage.relire()"));
+    let formulaire = corps(&script, "function formulaire({");
+    assert!(formulaire.contains("e.dataset.t = cle") || script.contains("e.dataset.t = cle"));
+    use app::textes::{texte, Langue};
+    for cle in [
+        "tache.reglages",
+        "reglages.atelier",
+        "reglages.atelier.aide",
+    ] {
+        for langue in [Langue::Francais, Langue::Anglais] {
+            assert_ne!(texte(langue, cle), cle, "{cle}");
+        }
+    }
+}
+
 #[test]
 fn une_erreur_est_dite_sous_son_champ() {
     let script = lire("interface/atelier.js");
-    let erreur = corps(&script, "function montrerErreur(refus) {");
+    let erreur = corps(&script, "function montrerErreur(erreurs, refus) {");
     assert!(erreur.contains("erreurs[refus.champ]"), "{erreur}");
     // Chaque champ a sa ligne d'erreur, à une place gardée.
     assert!(script.contains("el(\"p\", \"why fenetre-atelier__erreur\")"));
@@ -101,12 +184,13 @@ fn les_textes_de_l_atelier_existent_en_deux_langues() {
     use app::textes::{texte, Langue};
     let script = lire("interface/atelier.js");
     let mut cles = Vec::new();
-    for prefixe in ["t(\"atelier.", "t(\"rapport."] {
+    // Toute clé écrite entre guillemets : `t("…")`, `txt(…, "…")` ou `dataset.t = "…"`.
+    for prefixe in ["\"atelier.", "\"rapport.", "\"cartouche_rapport."] {
         for morceau in script.split(prefixe).skip(1) {
             let fin = morceau.find('"').unwrap();
             let suite = &morceau[..fin];
             if !suite.ends_with('.') {
-                cles.push(format!("{}{suite}", &prefixe[3..]));
+                cles.push(format!("{}{suite}", &prefixe[1..]));
             }
         }
     }
