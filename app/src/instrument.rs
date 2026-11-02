@@ -292,6 +292,10 @@ pub enum Probleme {
     DetectionImpossible { detail: String },
     /// L'instrument détecté a refusé la connexion ou ne répond pas.
     ConnexionImpossible { detail: String },
+    /// Le FD-9 ne répond pas à la connexion de la feuille, à l'adresse
+    /// détectée ou saisie : « Se connecter par l'adresse » est proposé
+    /// (ticket #98).
+    ConnexionFd9Impossible { detail: String },
     /// L'instrument a refusé ou raté l'étalonnage (événement d'échec, refus) :
     /// il reste connecté, l'étalonnage est à refaire. Le message suppose que
     /// l'instrument était mal posé ; l'événement 9 sans capuchon n'a pas été
@@ -347,6 +351,7 @@ impl Probleme {
             | Probleme::PareFeuFerme { .. }
             | Probleme::DetectionImpossible { .. }
             | Probleme::ConnexionImpossible { .. }
+            | Probleme::ConnexionFd9Impossible { .. }
             | Probleme::InstrumentPerdu { .. } => Ecran::NonDetecte,
             Probleme::ReposIncertain { .. }
             | Probleme::MesureEchouee { .. }
@@ -388,6 +393,7 @@ impl Probleme {
             Probleme::PareFeuFerme { .. } => "pare_feu_ferme",
             Probleme::DetectionImpossible { .. } => "detection_impossible",
             Probleme::ConnexionImpossible { .. } => "connexion_impossible",
+            Probleme::ConnexionFd9Impossible { .. } => "connexion_fd9_impossible",
             Probleme::EtalonnageEchoue { .. } => "etalonnage_echoue",
             Probleme::EtalonnageDelai { .. } => "etalonnage_delai",
             Probleme::InstrumentPerdu { .. } => "instrument_perdu",
@@ -415,6 +421,7 @@ impl Probleme {
             | Probleme::PareFeuFerme { detail: d }
             | Probleme::DetectionImpossible { detail: d }
             | Probleme::ConnexionImpossible { detail: d }
+            | Probleme::ConnexionFd9Impossible { detail: d }
             | Probleme::EtalonnageEchoue { detail: d }
             | Probleme::EtalonnageDelai { detail: d }
             | Probleme::ReposIncertain { detail: d }
@@ -823,6 +830,8 @@ impl<P: Pont> Instrument<P> {
     pub fn vue(&self) -> Vue {
         let (etat, modele) = match &self.etat {
             Etat::NonDetecte => ("non_detecte", None),
+            // L'adresse saisie n'a pas été vue par une détection : dit tel quel.
+            Etat::Detecte { modele, .. } if self.fd9_par_adresse() => ("adresse", Some(modele)),
             Etat::Detecte { modele, .. } => ("detecte", Some(modele)),
             Etat::Connecte(f) => ("connecte", Some(&f.modele)),
             Etat::EtalonnageRequis(f) => ("etalonnage_requis", Some(&f.modele)),

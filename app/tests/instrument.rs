@@ -577,6 +577,7 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
         Probleme::DeclenchementRefuse { detail: d() },
         Probleme::MesureDelaiAutomatique { detail: d() },
         Probleme::ComposantQrIntrouvable { detail: d() },
+        Probleme::ConnexionFd9Impossible { detail: d() },
     ];
     // Garde : ajouter une variante à `Probleme` casse la compilation ici ;
     // on lui donne alors un numéro, et l'assertion exige qu'elle soit listée.
@@ -602,13 +603,14 @@ fn chaque_probleme_a_sa_cause_et_son_action_dans_les_deux_langues() {
             Probleme::DeclenchementRefuse { .. } => 17,
             Probleme::MesureDelaiAutomatique { .. } => 18,
             Probleme::ComposantQrIntrouvable { .. } => 19,
+            Probleme::ConnexionFd9Impossible { .. } => 20,
         }
     }
     let mut numeros: Vec<usize> = tous.iter().map(numero).collect();
     numeros.sort();
     assert_eq!(
         numeros,
-        (0..20).collect::<Vec<_>>(),
+        (0..21).collect::<Vec<_>>(),
         "chaque problème est listé une fois"
     );
     for probleme in tous {

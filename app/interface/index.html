@@ -93,6 +93,12 @@
       <h2 class="empty__text" data-t="choix.titre"></h2>
       <p class="prose" data-t="choix.aide"></p>
       <ol class="instruments" data-choix-lignes></ol>
+      <!-- FD-9 non trouvé, ou sans réponse à la feuille : son adresse, pour la séance seulement (ticket #98). -->
+      <form class="field" data-choix-adresse hidden>
+        <label class="label" for="adresse-fd9" data-t="choix.adresse.titre"></label>
+        <p data-t="choix.adresse.aide"></p>
+        <div class="actions"><input class="input" id="adresse-fd9" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" maxlength="23" data-t-aria="choix.adresse.libelle" data-choix-adresse-texte><button class="btn" type="submit" data-t="choix.adresse.bouton"></button></div>
+      </form>
       <div class="notice" data-choix-annonce hidden><div data-annonce-textes></div></div>
       <p class="why" data-choix-refus hidden></p>
       <div class="actions"><button class="btn" data-choix-fermer data-t="choix.fermer"></button></div>

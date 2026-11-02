@@ -172,6 +172,18 @@ impl<L, F: PareFeu> Ouverture<'_, L, F> {
         }
     }
 
+    fn ouvrir_fd9_adresse<P: Pont>(&mut self, adresse: &str) -> Instrument<P>
+    where
+        L: FnMut(&Path, &Path, Palier) -> Result<P, Panne>,
+    {
+        Instrument::ouvrir_fd9_adresse(
+            self.fd9.emplacements,
+            self.fd9.ponts,
+            &mut self.lancer,
+            adresse,
+        )
+    }
+
     /// Instruments dont le logiciel du fabricant est trouvé sur le poste,
     /// sans rien lancer : la DLL seule compte.
     fn presents(&self) -> Vec<Modele> {
@@ -372,6 +384,9 @@ pub struct VueSelection {
     pub annonces: Vec<VueAnnonce>,
     /// Ouvrir la liste d'elle-même : l'annonce doit être vue.
     pub montrer_liste: bool,
+    /// Proposer « Se connecter par l'adresse » : le FD-9 n'est pas trouvé,
+    /// ou la dernière feuille n'a pas pu s'y connecter (ticket #98).
+    pub proposer_adresse: bool,
 }
 
 impl VueSelection {
@@ -390,6 +405,7 @@ impl VueSelection {
             instruments: vec![ligne],
             annonces: Vec::new(),
             montrer_liste: false,
+            proposer_adresse: false,
         }
     }
 }
@@ -507,6 +523,46 @@ impl<P: Pont> Selection<P> {
         Ok(())
     }
 
+    /// Passe au FD-9 à l'adresse saisie par l'opérateur, sans détection
+    /// (ticket #98) : ferme le pont en cours, puis lance celui du FD-9. Le
+    /// FD-9 est retenu comme choix ; l'adresse ne vit que pour la séance.
+    pub fn connecter_par_adresse<L, F>(
+        &mut self,
+        _jeton: &Jeton,
+        adresse: &str,
+        o: &mut Ouverture<'_, L, F>,
+    ) -> Result<(), Refus>
+    where
+        L: FnMut(&Path, &Path, Palier) -> Result<P, Panne>,
+        F: PareFeu,
+    {
+        self.presents = o.presents();
+        if !self.presents.contains(&Modele::Fd9) {
+            return Err(Refus::Absent(Modele::Fd9));
+        }
+        let ancien = self.actif;
+        let ancien_trouve = self.instrument.etat != Etat::NonDetecte;
+        self.annonces = self
+            .instrument
+            .fermer()
+            .map(|fermeture| Annonce::Ferme {
+                modele: ancien,
+                fermeture,
+            })
+            .into_iter()
+            .collect();
+        self.non_trouves
+            .retain(|m| *m != Modele::Fd9 && *m != ancien);
+        if ancien != Modele::Fd9 && !ancien_trouve {
+            self.non_trouves.push(ancien);
+        }
+        self.choisi = Some(Modele::Fd9);
+        self.montrer_liste = false;
+        self.actif = Modele::Fd9;
+        self.instrument = o.ouvrir_fd9_adresse(adresse);
+        Ok(())
+    }
+
     /// Rouvre l'instrument (« Réessayer », dossier choisi, pare-feu) : celui
     /// qui est actif si l'opérateur a fait un choix, sinon comme au lancement
     /// sans choix retenu. Le pont en cours est d'abord fermé.
@@ -596,11 +652,17 @@ impl<P: Pont> Selection<P> {
                 }
             })
             .collect();
+        let fd9_absent = if self.actif == Modele::Fd9 {
+            self.instrument.etat == Etat::NonDetecte || self.instrument.connexion_fd9_echouee()
+        } else {
+            self.non_trouves.contains(&Modele::Fd9)
+        };
         VueSelection {
             instrument,
             instruments,
             annonces: self.annonces.iter().map(vue_annonce).collect(),
             montrer_liste: self.montrer_liste,
+            proposer_adresse: self.presents.contains(&Modele::Fd9) && fd9_absent,
         }
     }
 }

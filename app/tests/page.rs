@@ -2793,3 +2793,22 @@ fn la_pastille_choisie_garde_sa_largeur() {
         }
     }
 }
+
+/// « Se connecter par l'adresse » (ticket #98) : un champ dans la liste des
+/// instruments, montré quand le module le propose ; l'adresse part au module
+/// et n'est gardée nulle part dans la page.
+#[test]
+fn l_adresse_du_fd9_se_tape_dans_la_liste_et_n_est_pas_gardee() {
+    let page = lire("interface/index.html");
+    assert!(page.contains("data-choix-adresse hidden"));
+    assert!(page.contains("data-choix-adresse-texte"));
+    let script = lire("interface/app.js");
+    assert!(script.contains("vuePoste.proposer_adresse"));
+    assert!(script.contains("invoke(\"connecter_fd9_adresse\", { adresse })"));
+    for interdit in ["localStorage", "memoriser(", "sessionStorage"] {
+        let ligne = script
+            .lines()
+            .find(|l| l.contains(interdit) && l.contains("adresse"));
+        assert!(ligne.is_none(), "{ligne:?}");
+    }
+}

@@ -1703,6 +1703,7 @@ const FRANCAIS: Catalogue = &[
     ("instrument.recherche", "Recherche de l’instrument…"),
     ("instrument.barre", "{modele}, {etat}"),
     ("instrument.etat.detecte", "détecté"),
+    ("instrument.etat.adresse", "à l’adresse saisie"),
     ("instrument.etat.connecte", "connecté"),
     ("instrument.etat.etalonnage_requis", "étalonnage requis"),
     ("instrument.etat.etalonne", "étalonné"),
@@ -1830,6 +1831,14 @@ const FRANCAIS: Catalogue = &[
         "probleme.connexion_impossible.action",
         "Fermez les autres logiciels de mesure, débranchez puis rebranchez l’instrument, et réessayez.",
     ),
+    (
+        "probleme.connexion_fd9_impossible.cause",
+        "Le FD-9 ne répond pas à la connexion. Il est peut-être éteint, occupé par un autre logiciel, ou à une autre adresse que celle trouvée par la détection.",
+    ),
+    (
+        "probleme.connexion_fd9_impossible.action",
+        "Fermez FD-S2w s’il est ouvert, éteignez puis rallumez le FD-9 et vérifiez son câble réseau. S’il ne répond toujours pas, ouvrez la liste des instruments et choisissez «\u{202f}Se connecter par l’adresse\u{202f}» avec l’adresse affichée sur l’écran du FD-9.",
+    ),
     ("cartouche.inconnu", "Inconnu"),
     ("details.mesure", "Mesure"),
     ("details.condition", "Condition d’impression"),
@@ -1892,6 +1901,18 @@ const FRANCAIS: Catalogue = &[
     ("choix.etat.non_trouve", "non trouvé la dernière fois"),
     ("choix.en_service", "En service"),
     ("choix.choisi", "Choisi"),
+    ("choix.etat.adresse", "à l’adresse saisie"),
+    ("choix.adresse.titre", "Se connecter par l’adresse"),
+    (
+        "choix.adresse.aide",
+        "La détection n’a pas vu le FD-9, ou il n’a pas répondu à cette adresse. Cela arrive quand l’ordinateur a plusieurs cartes réseau, dont des cartes virtuelles\u{202f}: l’appel de détection part par la mauvaise. Tapez l’adresse affichée sur l’écran du FD-9. Elle sert pour cette séance seulement et n’est enregistrée nulle part.",
+    ),
+    ("choix.adresse.libelle", "Adresse du FD-9"),
+    ("choix.adresse.bouton", "Se connecter par l’adresse"),
+    (
+        "refus.adresse_fd9",
+        "Adresse non valable\u{202f}: tapez celle affichée sur l’écran du FD-9 (chiffres et points, 23 caractères au plus).",
+    ),
     ("choix.utiliser", "Utiliser"),
     ("choix.fermer", "Fermer la liste"),
     (
@@ -4702,6 +4723,7 @@ const ANGLAIS: Catalogue = &[
     ("instrument.recherche", "Looking for the instrument…"),
     ("instrument.barre", "{modele}, {etat}"),
     ("instrument.etat.detecte", "detected"),
+    ("instrument.etat.adresse", "at the typed address"),
     ("instrument.etat.connecte", "connected"),
     ("instrument.etat.etalonnage_requis", "calibration required"),
     ("instrument.etat.etalonne", "calibrated"),
@@ -4826,6 +4848,14 @@ const ANGLAIS: Catalogue = &[
         "probleme.connexion_impossible.action",
         "Close other measuring software, unplug and replug the instrument, then try again.",
     ),
+    (
+        "probleme.connexion_fd9_impossible.cause",
+        "The FD-9 does not answer the connection. It may be off, used by another program, or at another address than the one found by detection.",
+    ),
+    (
+        "probleme.connexion_fd9_impossible.action",
+        "Close FD-S2w if it is open, switch the FD-9 off and on again and check its network cable. If it still does not answer, open the instrument list and choose “Connect by address” with the address shown on the FD-9 screen.",
+    ),
     ("cartouche.inconnu", "Unknown"),
     ("details.mesure", "Measurement"),
     ("details.condition", "Printing condition"),
@@ -4891,6 +4921,18 @@ const ANGLAIS: Catalogue = &[
     ("choix.etat.non_trouve", "not found last time"),
     ("choix.en_service", "In use"),
     ("choix.choisi", "Selected"),
+    ("choix.etat.adresse", "at the typed address"),
+    ("choix.adresse.titre", "Connect by address"),
+    (
+        "choix.adresse.aide",
+        "Detection did not see the FD-9, or it did not answer at that address. This happens when the computer has several network cards, including virtual ones: the detection call goes out through the wrong one. Type the address shown on the FD-9 screen. It is used for this session only and is saved nowhere.",
+    ),
+    ("choix.adresse.libelle", "FD-9 address"),
+    ("choix.adresse.bouton", "Connect by address"),
+    (
+        "refus.adresse_fd9",
+        "Address not valid: type the one shown on the FD-9 screen (digits and dots, 23 characters at most).",
+    ),
     ("choix.utiliser", "Use"),
     ("choix.fermer", "Close the list"),
     (
@@ -6103,7 +6145,13 @@ mod tests {
                 reste.split('"').next().map(String::from)
             })
             .collect();
-        for etat in ["detecte", "connecte", "etalonnage_requis", "etalonne"] {
+        for etat in [
+            "detecte",
+            "adresse",
+            "connecte",
+            "etalonnage_requis",
+            "etalonne",
+        ] {
             demandees.push(format!("instrument.etat.{etat}"));
         }
         demandees.extend(

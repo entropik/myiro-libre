@@ -253,6 +253,44 @@ fn choisir_dossier(
     ouvrir(&app, &instruments, Some(dossier)).map(Some)
 }
 
+/// « Se connecter par l'adresse » (ticket #98) : le FD-9 que la détection ne
+/// voit pas, à l'adresse saisie. Elle ne vit qu'en mémoire, pour la séance :
+/// jamais écrite, ni journalisée, ni retenue pour le lancement suivant (seul
+/// le choix du FD-9 l'est). Un refus rend la clé du catalogue.
+#[tauri::command(async)]
+fn connecter_fd9_adresse(
+    app: AppHandle,
+    instruments: State<'_, Instruments>,
+    adresse: String,
+) -> Result<VueSelection, String> {
+    // Le refus cite l'adresse : seule la clé part, sans elle.
+    let adresse = pont_protocole::AdresseReseau::new(adresse.trim())
+        .map_err(|_| "refus.adresse_fd9".to_string())?;
+    if let Some(vue) = app.state::<ecran_feuille::DemonstrationFd9>().vue() {
+        return vue;
+    }
+    let jeton = instruments
+        .occupation
+        .commencer(Operation::Changement)
+        .map_err(|refus| refus.cle())?;
+    let mut courant = instruments
+        .selection
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let selection = courant
+        .as_mut()
+        .ok_or_else(|| "refus.occupe.recherche".to_string())?;
+    avec_ouverture(&app, None, |o| {
+        selection.connecter_par_adresse(&jeton, adresse.texte(), o)
+    })
+    .map_err(|refus| refus.cle())?;
+    match fichier_choix(&app) {
+        Some(fichier) => selection.retenir(&fichier),
+        None => selection.retenir(Path::new("")),
+    }
+    Ok(vue_retenue(&app, selection))
+}
+
 /// Liste des instruments : l'opérateur choisit `code` (`myiro1`, `fd9`). Le
 /// pont en cours est fermé, l'autre ouvert, et le choix retenu pour le
 /// lancement suivant. Un refus rend la clé du catalogue qui l'explique.
@@ -664,6 +702,7 @@ pub fn lancer() {
             autoriser_pare_feu_fd9,
             choisir_dossier,
             choisir_instrument,
+            connecter_fd9_adresse,
             colonne::version_application,
             colonne::bibliotheque_demonstration,
             colonne::bibliotheque_arborescence,

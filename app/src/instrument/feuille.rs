@@ -275,6 +275,13 @@ impl<P: Pont> Instrument<P> {
         let annulation = self.annulation.clone();
         *self = Self::relancer_fd9(&lance, lancer);
         self.annulation = annulation;
+        if let (
+            Err(ErreurFeuille::Instrument(Probleme::ConnexionFd9Impossible { .. })),
+            Some(fd9),
+        ) = (&resultat, self.fd9.as_mut())
+        {
+            fd9.connexion_echouee = true;
+        }
         resultat
     }
 }
@@ -344,14 +351,15 @@ fn connecter(pont: &mut impl Pont, adresse: &str) -> Result<(), ErreurFeuille> {
         Ok(autre) => return Err(probleme(inattendue(autre))),
         Err(panne) => return Err(probleme(panne.into())),
     }
-    let adresse = AdresseReseau::new(adresse).map_err(|detail| {
-        probleme(Probleme::ConnexionImpossible {
-            detail: format!("adresse du FD-9 : {detail}"),
+    // Le refus cite l'adresse : il n'est pas repris, elle n'est jamais écrite.
+    let adresse = AdresseReseau::new(adresse).map_err(|_| {
+        probleme(Probleme::ConnexionFd9Impossible {
+            detail: "adresse du FD-9 refusée : vide, trop longue ou caractères interdits".into(),
         })
     })?;
     match pont.demander(&Requete::ConnecterAdresse { adresse }) {
         Ok(Reponse::Connecte { .. }) => Ok(()),
-        Ok(Reponse::Erreur { erreur }) => Err(probleme(Probleme::ConnexionImpossible {
+        Ok(Reponse::Erreur { erreur }) => Err(probleme(Probleme::ConnexionFd9Impossible {
             detail: format!("connexion au FD-9 : {erreur:?}"),
         })),
         Ok(autre) => Err(probleme(inattendue(autre))),

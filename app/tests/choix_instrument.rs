@@ -788,3 +788,68 @@ fn reessayer_sans_choix_cherche_comme_au_lancement() {
     assert_eq!(selection.actif(), Modele::Fd9);
     assert_eq!(selection.vue().instrument.etat, "detecte");
 }
+
+// ---- Se connecter par l'adresse (ticket #98) ----
+
+/// Adresse tapée par l'opérateur dans ces tests : fictive, autre que celle de
+/// la détection simulée.
+const ADRESSE_SAISIE: &str = "192.0.2.41";
+
+/// FD-9 non trouvé : la liste propose son adresse ; une fois tapée, le FD-9
+/// est en service à cette adresse, sans détection ni connexion, et retenu.
+#[test]
+fn un_fd9_non_trouve_se_prend_a_l_adresse_tapee() {
+    let mut poste = Poste::deux_instruments("adresse-fd9");
+    poste.fd9_allume = false;
+    let mut selection = lancer(&mut poste, Some(Modele::Fd9));
+    assert!(selection.vue().proposer_adresse);
+    poste.vider_journal();
+
+    let occupation = Occupation::default();
+    let jeton = occupation.commencer(Operation::Changement).unwrap();
+    selection
+        .connecter_par_adresse(&jeton, ADRESSE_SAISIE, &mut poste.ouverture())
+        .unwrap();
+
+    assert_eq!(selection.actif(), Modele::Fd9);
+    assert_eq!(selection.choisi(), Some(Modele::Fd9));
+    assert!(selection.instrument().feuille_possible());
+    assert!(selection.instrument().fd9_par_adresse());
+    let vue = selection.vue();
+    assert_eq!(vue.instrument.etat, "adresse");
+    assert!(!vue.proposer_adresse);
+    assert!(ligne(&selection, Langue::Francais, Modele::Fd9).ends_with("à l’adresse saisie"));
+    // Le pont du MYIRO-1 est fermé, celui du FD-9 lancé : la version
+    // seulement, ni détection ni connexion.
+    let fd9: Vec<_> = poste
+        .requetes()
+        .into_iter()
+        .filter(|(nom, _)| *nom == "fd9")
+        .map(|(_, r)| r)
+        .collect();
+    assert_eq!(fd9, [Requete::Version {}]);
+}
+
+/// FD-9 trouvé et en service : rien n'est proposé.
+#[test]
+fn un_fd9_trouve_ne_propose_pas_d_adresse() {
+    let mut poste = Poste::deux_instruments("adresse-inutile");
+    let selection = lancer(&mut poste, Some(Modele::Fd9));
+    assert_eq!(selection.vue().instrument.etat, "detecte");
+    assert!(!selection.vue().proposer_adresse);
+}
+
+/// Sans le logiciel du FD-9 sur le poste, l'adresse ne sert à rien : refus.
+#[test]
+fn sans_logiciel_du_fd9_l_adresse_est_refusee() {
+    let mut poste = Poste::myiro1_seul("adresse-sans-fd9");
+    let mut selection = lancer(&mut poste, None);
+    assert!(!selection.vue().proposer_adresse);
+    let occupation = Occupation::default();
+    let jeton = occupation.commencer(Operation::Changement).unwrap();
+    assert_eq!(
+        selection.connecter_par_adresse(&jeton, ADRESSE_SAISIE, &mut poste.ouverture()),
+        Err(Refus::Absent(Modele::Fd9))
+    );
+    assert_eq!(selection.actif(), Modele::Myiro1);
+}

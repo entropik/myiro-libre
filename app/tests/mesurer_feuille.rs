@@ -157,6 +157,8 @@ struct PontFeuilleSimule {
     /// Lignes d'avancement écrites avant la réponse de la feuille ; vide :
     /// un pont d'avant le ticket #34.
     avancements: Vec<AvancementFeuille>,
+    /// Seule adresse où le FD-9 répond ; `None` : toutes.
+    joignable: Option<String>,
     arrete: bool,
 }
 
@@ -204,6 +206,17 @@ impl Pont for PontFeuilleSimule {
                     identifiant: Info::Supposee("12345678".into()),
                 }],
             },
+            Requete::ConnecterAdresse { adresse }
+                if self
+                    .joignable
+                    .as_deref()
+                    .is_some_and(|j| j != adresse.texte()) =>
+            {
+                // Rien n'écoute à cette adresse : `connect` échoue (1003).
+                Reponse::Erreur {
+                    erreur: ErreurPont::Sdk { code: 1003 },
+                }
+            }
             Requete::ConnecterAdresse { .. } => Reponse::Connecte {
                 identite: Identite {
                     numero_serie: 12_345_678,
@@ -260,8 +273,12 @@ struct Banc {
     feuille: Feuille,
     /// Avancement écrit par les ponts lancés ensuite.
     avancements: Avancements,
+    /// Seule adresse où le FD-9 répond aux ponts lancés ensuite.
+    joignable: Joignable,
     instrument: Instrument<PontFeuilleSimule>,
 }
+
+type Joignable = Rc<RefCell<Option<String>>>;
 
 type Avancements = Rc<RefCell<Vec<AvancementFeuille>>>;
 
@@ -281,6 +298,7 @@ fn banc() -> Banc {
     let journal = Journal::default();
     let feuille = Rc::new(RefCell::new(None));
     let avancements = Avancements::default();
+    let joignable = Joignable::default();
     let mut autorisation = AutorisationPareFeu::new(PareFeuSimule {
         regle: Some(PathBuf::from("pont-fd9-x86.exe")),
         ..Default::default()
@@ -288,7 +306,7 @@ fn banc() -> Banc {
     let instrument = Instrument::ouvrir_fd9(
         &[sdk],
         &[(Architecture::X86, PathBuf::from("pont-fd9-x86.exe"))],
-        lanceur(&journal, &feuille, &avancements),
+        lanceur(&journal, &feuille, &avancements, &joignable),
         &mut autorisation,
     );
     Banc {
@@ -298,6 +316,7 @@ fn banc() -> Banc {
         journal,
         feuille,
         avancements,
+        joignable,
         instrument,
     }
 }
@@ -306,14 +325,21 @@ fn lanceur(
     journal: &Journal,
     feuille: &Feuille,
     avancements: &Avancements,
+    joignable: &Joignable,
 ) -> impl FnMut(&Path, &Path, Palier) -> Result<PontFeuilleSimule, Panne> {
-    let (journal, feuille, avancements) = (journal.clone(), feuille.clone(), avancements.clone());
+    let (journal, feuille, avancements, joignable) = (
+        journal.clone(),
+        feuille.clone(),
+        avancements.clone(),
+        joignable.clone(),
+    );
     move |_, _, plafond| {
         Ok(PontFeuilleSimule {
             plafond,
             journal: journal.clone(),
             feuille: feuille.borrow().clone(),
             avancements: avancements.borrow().clone(),
+            joignable: joignable.borrow().clone(),
             arrete: false,
         })
     }
@@ -340,7 +366,12 @@ impl Banc {
             &mut self.instrument,
             mire,
             &dossier,
-            &mut lanceur(&self.journal, &self.feuille, &self.avancements),
+            &mut lanceur(
+                &self.journal,
+                &self.feuille,
+                &self.avancements,
+                &self.joignable,
+            ),
             &mut |etape| etapes.push(etape),
         );
         (resultat, etapes)
@@ -698,6 +729,70 @@ fn une_feuille_refusee_par_le_pont_ne_range_rien_et_revient_au_plafond_connexion
         .unwrap()
         .importees
         .is_empty());
+}
+
+// ---- Connexion à l'adresse tapée (ticket #98) ----
+
+/// Adresse fictive où le FD-9 répond vraiment, autre que celle annoncée par
+/// sa détection ([`ADRESSE`]).
+const ADRESSE_JOIGNABLE: &str = "192.0.2.41";
+
+/// Essai E5 : la détection annonce une adresse où le FD-9 ne répond pas.
+/// La feuille dit « FD-9 » (et non « MYIRO-1 ») ; le FD-9 revient détecté,
+/// et « Se connecter par l'adresse » est proposé.
+#[test]
+fn une_connexion_refusee_dit_le_fd9_et_propose_l_adresse() {
+    let mut b = banc();
+    *b.joignable.borrow_mut() = Some(ADRESSE_JOIGNABLE.into());
+    let echec = b.mesurer(Ok(mire())).0.unwrap_err();
+    assert_eq!(echec.cle, "probleme.connexion_fd9_impossible");
+    assert_eq!(
+        echec.detail.as_deref(),
+        Some("connexion au FD-9 : Sdk { code: 1003 }")
+    );
+    for (langue, suite) in [
+        (app::textes::Langue::Francais, "cause"),
+        (app::textes::Langue::Francais, "action"),
+        (app::textes::Langue::Anglais, "cause"),
+        (app::textes::Langue::Anglais, "action"),
+    ] {
+        let cle = format!("{}.{suite}", echec.cle);
+        let texte = app::textes::texte(langue, &cle);
+        assert!(
+            texte.contains("FD-9") && !texte.contains("MYIRO-1"),
+            "{texte}"
+        );
+    }
+    assert!(b.instrument.feuille_possible());
+    assert!(b.instrument.connexion_fd9_echouee());
+}
+
+/// À l'adresse tapée, la feuille s'y connecte, et le pont ordinaire relancé
+/// la garde sans redétecter.
+#[test]
+fn a_l_adresse_tapee_la_feuille_se_connecte_et_l_adresse_reste() {
+    let mut b = banc();
+    *b.joignable.borrow_mut() = Some(ADRESSE_JOIGNABLE.into());
+    let sdk = b.dossier.path().join("FD-S2w");
+    b.instrument = Instrument::ouvrir_fd9_adresse(
+        &[sdk],
+        &[(Architecture::X86, PathBuf::from("pont-fd9-x86.exe"))],
+        lanceur(&b.journal, &b.feuille, &b.avancements, &b.joignable),
+        ADRESSE_JOIGNABLE,
+    );
+    b.journal.borrow_mut().clear();
+    assert!(b.instrument.fd9_par_adresse());
+    b.mesurer(Ok(mire())).0.unwrap();
+    let journal = b.journal.borrow().clone();
+    assert!(journal.iter().any(|(_, r)| matches!(
+        r,
+        Requete::ConnecterAdresse { adresse } if adresse.texte() == ADRESSE_JOIGNABLE
+    )));
+    assert!(!journal
+        .iter()
+        .any(|(_, r)| matches!(r, Requete::Detecter {})));
+    assert!(b.instrument.fd9_par_adresse());
+    assert!(!b.instrument.connexion_fd9_echouee());
 }
 
 // ---- Avancement de la feuille et calage (ticket #34) ----

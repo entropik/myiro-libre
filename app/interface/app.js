@@ -89,10 +89,11 @@ function recevoir(poste) {
 }
 
 // Couleur d'une ligne : vert pour l'instrument en service et prêt (détecté pour le FD-9, connecté ou
-// étalonné), rouge s'il n'est pas trouvé, orange sinon (en attente, étalonnage requis).
+// étalonné, ou à l'adresse saisie), rouge s'il n'est pas trouvé, orange sinon (en attente,
+// étalonnage requis).
 function classeLigne(l) {
   if (l.etat === "non_detecte" || l.etat === "non_trouve") return "state--bad";
-  if (l.actif && ["detecte", "connecte", "etalonne"].includes(l.etat)) return "state--ok";
+  if (l.actif && ["detecte", "adresse", "connecte", "etalonne"].includes(l.etat)) return "state--ok";
   return "state--warn";
 }
 
@@ -130,6 +131,11 @@ function remplirListe(section) {
     }
     lignes.append(li);
   }
+  // « Se connecter par l'adresse » : proposé par le module quand le FD-9 n'est pas trouvé ou n'a pas
+  // répondu à la feuille. L'adresse tapée reste dans le champ, jamais ailleurs.
+  const adresse = section.querySelector("[data-choix-adresse]");
+  adresse.hidden = !(vuePoste && vuePoste.proposer_adresse);
+  adresse.querySelector("button").disabled = occupe;
   remplirAnnonces(section.querySelector("[data-choix-annonce]"));
   // Vues dans la liste : l'avis de la feuille ne les répète pas.
   annoncesLues = signatureAnnonces();
@@ -188,6 +194,25 @@ async function choisirInstrument(code) {
   listeOuverte = true;
   afficherInstrument();
 }
+
+// Le FD-9 à l'adresse tapée : le module ferme le pont en cours et lance celui du FD-9, ou refuse.
+async function connecterParAdresse(adresse) {
+  occupe = true;
+  refusChoix = null;
+  afficherInstrument();
+  try {
+    recevoir(await invoke("connecter_fd9_adresse", { adresse }));
+  } catch (cle) {
+    refusChoix = String(cle);
+  }
+  occupe = false;
+  listeOuverte = true;
+  afficherInstrument();
+}
+document.querySelector("[data-choix-adresse]").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (!occupe) connecterParAdresse(e.target.querySelector("[data-choix-adresse-texte]").value);
+});
 
 // L'écran d'étalonnage ne s'ouvre que sur demande de l'opérateur (bouton « Étalonner »).
 // Un problème de mesure s'affiche sur la feuille Mesurer elle-même (mesurer.js).
