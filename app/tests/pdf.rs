@@ -50,7 +50,7 @@ fn un_document_devient_un_pdf_ou_une_erreur_du_moteur() {
         sections: vec![rapport::Section {
             titre: "x".into(),
             blocs: vec![rapport::Bloc::Images(vec![rapport::Figure {
-                png: b"pas une image".to_vec(),
+                image: b"pas une image".to_vec(),
                 legende: String::new(),
                 largeur_mm: 50.0,
             }])],

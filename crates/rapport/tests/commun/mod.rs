@@ -68,8 +68,8 @@ pub fn document_complet() -> Document {
             titre: "Image".into(),
             blocs: vec![
                 Bloc::Images(vec![
-                    Figure { png: PNG_1X1.to_vec(), legende: "Photo".into(), largeur_mm: 80.0 },
-                    Figure { png: PNG_1X1.to_vec(), legende: "Surimpression".into(), largeur_mm: 80.0 },
+                    Figure { image: PNG_1X1.to_vec(), legende: "Photo".into(), largeur_mm: 80.0 },
+                    Figure { image: PNG_1X1.to_vec(), legende: "Surimpression".into(), largeur_mm: 80.0 },
                 ]),
                 Bloc::Paires(vec![PaireCouleurs {
                     image: "#c03020".into(),

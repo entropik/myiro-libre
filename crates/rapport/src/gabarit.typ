@@ -15,61 +15,63 @@
 
 #let etiquette(t) = text(size: 5.5pt, weight: 600, tracking: 0.1em, fill: gris, upper(t))
 
-// Une case du cartouche : son texte se resserre (7 pt, puis 6,2, 5,5 et
-// 5 pt) pour tenir dans la hauteur de la case au lieu d'être rogné.
-#let ajuste(contenu) = layout(place => {
-  let tailles = (7pt, 6.2pt, 5.5pt, 5pt)
-  let choisie = none
-  for taille in tailles {
-    if choisie == none {
-      let h = measure(block(width: place.width, { set text(size: taille); contenu })).height
-      if h <= 31mm { choisie = taille }
-    }
-  }
-  set text(size: if choisie == none { tailles.last() } else { choisie })
-  contenu
-})
+// Traits haut et bas du cartouche, épais comme sur un cartouche d'architecte.
+#let filet-epais = 2pt + black
 
-// Le cartouche d'architecte : hauteur fixe, jamais sur le contenu de la
-// page ; ce qui ne tiendrait pas, même resserré, est rogné.
-#let cartouche(a, client, objet, details, numero, titre, l) = block(width: 100%, height: 36mm, clip: true, breakable: false, {
-  set text(size: 7pt)
-  set par(leading: 0.45em, spacing: 0.6em)
-  let numero-page = l.page.replace("{n}", str(counter(page).get().first())).replace("{total}", str(counter(page).final().first()))
+// Le cartouche d'architecte, en pied de chaque page. Il prend la hauteur de
+// son texte : rien n'est jamais rogné ni caché. Les mots se coupent (césure
+// de la langue du rapport) et les noms longs passent à la ligne à leurs
+// séparateurs, où le document a posé des espaces sans chasse. La marge du
+// bas de la page est mesurée sur lui (`#show` du document) : il ne recouvre
+// jamais le contenu. `numero-page` : « Page 1 / 2 ».
+#let cartouche(a, client, objet, details, numero, titre, l, numero-page) = block(width: 100%, breakable: false, {
+  set text(size: 6.5pt, hyphenate: true)
+  set par(leading: 0.4em, spacing: 0.55em, justify: false)
   let cellules = ()
   if a.logo != none {
-    cellules.push(align(center + horizon, image(a.logo, width: 24mm, height: 28mm, fit: "contain")))
+    cellules.push(image(a.logo, width: 100%, height: 16mm, fit: "contain"))
   }
   let contacts = (a.courriel, a.telephone, a.site).filter(c => c != "")
-  cellules.push(ajuste({
+  cellules.push({
     etiquette(l.atelier)
     parbreak()
-    text(size: 8pt, weight: 600, a.nom)
+    text(size: 7.5pt, weight: 600, a.nom)
     if a.adresse != "" { linebreak(); multiligne(a.adresse) }
     for c in contacts { linebreak(); c }
-  }))
-  cellules.push(ajuste({
+  })
+  cellules.push({
     etiquette(l.client)
     parbreak()
     text(weight: 600, client)
-    v(2mm)
+    v(1.2mm)
     etiquette(l.objet)
     parbreak()
     objet
-  }))
-  cellules.push(ajuste(grid(columns: (auto, 1fr), column-gutter: 2mm, row-gutter: 1.4mm,
-    ..details.map(((k, v)) => (etiquette(k), v)).flatten())))
+  })
+  // Les détails (date, seuil, profil, papier, image…) sur deux colonnes,
+  // l'étiquette au-dessus de sa valeur : la largeur sert, la hauteur reste basse.
+  cellules.push(grid(columns: (1fr, 1fr), column-gutter: 3mm, row-gutter: 1.6mm,
+    ..details.map(((k, v)) => stack(spacing: 0.9mm, etiquette(k), v))))
   cellules.push({
     etiquette(l.numero)
     parbreak()
-    text(size: 11pt, weight: 600, numero)
+    text(size: 10pt, weight: 600, numero)
     parbreak()
     titre
-    place(bottom + left, numero-page)
+    parbreak()
+    text(fill: gris, numero-page)
   })
-  let colonnes = (1.25fr, 1fr, 1.15fr, 34mm)
-  if a.logo != none { colonnes.insert(0, 30mm) }
-  table(columns: colonnes, rows: (36mm,), inset: 2.2mm, stroke: filet, ..cellules)
+  let colonnes = (1fr, 0.85fr, 2fr, 30mm)
+  if a.logo != none { colonnes.insert(0, 22mm) }
+  let dernier = colonnes.len() - 1
+  table(columns: colonnes, inset: (x: 2mm, y: 1.8mm),
+    stroke: (x, y) => (
+      top: filet-epais,
+      bottom: filet-epais,
+      left: if x == 0 { filet } else { 0.5pt + black },
+      right: if x == dernier { filet } else { none },
+    ),
+    ..cellules)
 })
 
 #let titre-document(t) = block(below: 6mm, text(size: 15pt, weight: 600, t))
@@ -116,7 +118,7 @@
 #let graphique(chemin, l) = block(breakable: false, width: 100%, {
   layout(taille => {
     let img = image(chemin, width: taille.width)
-    if measure(img).height > 110mm { image(chemin, height: 110mm) } else { img }
+    if measure(img).height > 190mm { image(chemin, height: 190mm) } else { img }
   })
   v(1.5mm)
   legende(l)

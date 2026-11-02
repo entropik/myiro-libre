@@ -15,8 +15,9 @@ fn un_document_devient_un_pdf_a4_portrait() {
     let p = rendre(&document_complet());
     assert!(p.octets.starts_with(b"%PDF-"));
     assert!(p.octets.trim_ascii_end().ends_with(b"%%EOF"));
-    // Les deux photos de 80 mm et le graphique remplissent la première page.
-    assert_eq!(p.pages.len(), 2);
+    // Cartouche compact (2 novembre 2026) : les deux photos de 80 mm et le
+    // graphique tiennent sur une page.
+    assert_eq!(p.pages.len(), 1);
     for page in &p.pages {
         assert!((page.largeur_mm - 210.0).abs() < 0.1, "{}", page.largeur_mm);
         assert!((page.hauteur_mm - 297.0).abs() < 0.1, "{}", page.hauteur_mm);
@@ -37,8 +38,7 @@ fn les_textes_attendus_sont_dans_le_pdf() {
         "Photo",
         "Surimpression",
         "812 000",
-        "Page 1 / 2",
-        "Page 2 / 2",
+        "Page 1 / 1",
         "ligne 2",
     ] {
         assert!(texte.contains(attendu), "{attendu} absent de\n{texte}");
@@ -123,7 +123,7 @@ fn une_image_illisible_est_refusee_sans_arret() {
     let d = document(vec![Section {
         titre: "x".into(),
         blocs: vec![Bloc::Images(vec![Figure {
-            png: b"pas une image".to_vec(),
+            image: b"pas une image".to_vec(),
             legende: "x".into(),
             largeur_mm: 50.0,
         }])],
@@ -160,8 +160,8 @@ fn ecrire_apercu() {
 }
 
 /// Avec un logo et des noms longs, toutes les lignes du cartouche restent
-/// dans sa boîte de 36 mm (bas de page à 297 − 14 mm) : le texte se resserre
-/// au lieu d'être rogné, et la date reste lisible.
+/// dans le cartouche, au-dessus du bas de page (297 − 10 mm) : le texte passe
+/// à la ligne au lieu d'être rogné, et la date reste lisible.
 #[test]
 fn le_cartouche_garde_toutes_ses_lignes_avec_des_noms_longs() {
     let p = rendre(&cartouche_long());
@@ -173,9 +173,117 @@ fn le_cartouche_garde_toutes_ses_lignes_avec_des_noms_longs() {
         .expect("date présente");
     let bas = page.lignes.iter().map(|(y, _)| *y).fold(0.0, f64::max);
     assert!(
-        bas < 297.0 - 14.0,
+        bas < 297.0 - 10.0,
         "ligne la plus basse à {bas:.1} mm : {date:?}"
     );
+}
+
+/// Les morceaux de texte du cartouche : sous le haut de sa première étiquette
+/// (« ATELIER »), à 2 mm près.
+fn morceaux_cartouche(page: &PagePdf) -> Vec<&Morceau> {
+    let haut = page
+        .morceaux
+        .iter()
+        .find(|m| m.texte == "ATELIER")
+        .expect("étiquette Atelier")
+        .y_mm
+        - 2.0;
+    page.morceaux.iter().filter(|m| m.y_mm >= haut).collect()
+}
+
+/// Rien ne déborde ni ne se chevauche dans le cartouche (mainteneur,
+/// 2 novembre 2026 : le nom du profil chevauchait « Rapport d'image ») :
+/// chaque morceau reste dans la page, deux morceaux d'une même ligne ne se
+/// recouvrent pas, et le texte des détails s'arrête avant la case du numéro.
+/// Un nom sans espace ni séparateur passe aussi à la ligne.
+#[test]
+fn le_cartouche_ne_deborde_ni_ne_chevauche_jamais() {
+    let mut d = cartouche_long();
+    d.cartouche.lignes.push((
+        "Note".into(),
+        "ProfilSansAucuneSeparationNiEspaceQuiNeFinitJamaisVraimentPasDuTout".into(),
+    ));
+    d.cartouche.atelier.adresse = "Bâtiment B, 2e étage\n12 rue des Presses\n75011 Paris".into();
+    d.cartouche.atelier.courriel = "contact-tirages-fine-art@atelier-exemple-et-associes.fr".into();
+    let p = rendre(&d);
+    let page = &p.pages[0];
+    let morceaux = morceaux_cartouche(page);
+    let numero = morceaux
+        .iter()
+        .find(|m| m.texte == "2026-0001")
+        .expect("numéro");
+    for m in &morceaux {
+        assert!(
+            m.x_mm >= 15.0 - 0.1 && m.x_mm + m.largeur_mm <= 195.0 + 0.1,
+            "{m:?}"
+        );
+        if m.x_mm < numero.x_mm {
+            assert!(
+                m.x_mm + m.largeur_mm < numero.x_mm - 1.0,
+                "déborde sur le numéro : {m:?}"
+            );
+        }
+        for autre in &morceaux {
+            let meme_ligne = (m.y_mm - autre.y_mm).abs() < 0.5;
+            let recouvre = m.x_mm < autre.x_mm + autre.largeur_mm - 0.1
+                && autre.x_mm < m.x_mm + m.largeur_mm - 0.1;
+            assert!(
+                std::ptr::eq(*m, *autre) || !(meme_ligne && recouvre),
+                "{m:?} chevauche {autre:?}"
+            );
+        }
+    }
+    // Tout le texte est là, coupé en plusieurs lignes au besoin (une césure
+    // laisse un trait d'union conditionnel en fin de morceau).
+    let tout: String = morceaux
+        .iter()
+        .map(|m| m.texte.replace('\u{ad}', ""))
+        .collect();
+    for attendu in [
+        "Canon-PRO-4100_Hahnemuhle-Photo-Rag-Baryta-315_2400-dpi_2026-10-28.icc",
+        "ProfilSansAucuneSeparationNiEspaceQuiNeFinitJamaisVraimentPasDuTout",
+        "contact-tirages-fine-art@atelier-exemple-et-associes.fr",
+        "Bâtiment B, 2e étage",
+    ] {
+        let sans_tirets = |t: &str| t.replace(['-', '\u{2010}', ' '], "");
+        assert!(
+            sans_tirets(&tout).contains(&sans_tirets(attendu)),
+            "{attendu} absent de {tout}"
+        );
+    }
+    let bas = morceaux.iter().map(|m| m.y_mm).fold(0.0, f64::max);
+    assert!(bas < 297.0 - 10.0, "ligne la plus basse à {bas:.1} mm");
+}
+
+/// Le cartouche est plus compact qu'avant (36 mm de haut fixes, 1/5 de la
+/// page) : il prend la hauteur de son texte, moins de 28 mm pour un
+/// cartouche courant, et le contenu de la page s'arrête au-dessus de lui.
+#[test]
+fn le_cartouche_courant_est_compact_et_sous_le_contenu() {
+    let mut d = document(vec![Section {
+        titre: "Long".into(),
+        blocs: (0..80)
+            .map(|i| Bloc::Paragraphe(format!("Paragraphe {i}")))
+            .collect(),
+    }]);
+    d.cartouche.atelier.logo_png = Some(PNG_1X1.to_vec());
+    let p = rendre(&d);
+    let page = &p.pages[0];
+    let morceaux = morceaux_cartouche(page);
+    let haut = morceaux.iter().map(|m| m.y_mm).fold(f64::MAX, f64::min);
+    let bas = morceaux.iter().map(|m| m.y_mm).fold(0.0, f64::max);
+    assert!(bas - haut < 24.0, "cartouche de {:.1} mm", bas - haut);
+    let dernier = page
+        .morceaux
+        .iter()
+        .filter(|m| m.texte.starts_with("Paragraphe"))
+        .map(|m| m.y_mm)
+        .fold(0.0, f64::max);
+    assert!(
+        dernier < haut - 4.0,
+        "contenu à {dernier:.1}, cartouche à {haut:.1}"
+    );
+    assert!(dernier > 297.0 - 70.0, "page mal remplie : {dernier:.1}");
 }
 
 /// Un cartouche avec logo et noms longs.

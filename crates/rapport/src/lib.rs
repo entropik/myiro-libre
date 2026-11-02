@@ -15,8 +15,8 @@ mod pdf;
 mod source;
 mod svg;
 
-pub use pdf::{pdf, ErreurRapport, PagePdf, Pdf};
-pub use source::{chaine_typst, source_typst, SourceTypst};
+pub use pdf::{pdf, ErreurRapport, Morceau, PagePdf, Pdf};
+pub use source::{chaine_typst, coupable, source_typst, SourceTypst};
 pub use svg::{nettoyer_svg, RefusSvg};
 
 /// Coordonnées de l'atelier, reprises dans le cartouche de chaque rapport.
@@ -105,10 +105,11 @@ pub enum Bloc {
     Pre(String),
 }
 
-/// Une image PNG et sa légende.
+/// Une image PNG ou JPEG (reconnue à ses premiers octets) et sa légende.
+/// Une photo part en JPEG : en PNG, elle alourdit le PDF de plusieurs Mo.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Figure {
-    pub png: Vec<u8>,
+    pub image: Vec<u8>,
     pub legende: String,
     /// Largeur sur la page, bornée de 10 à 180 mm.
     pub largeur_mm: f32,

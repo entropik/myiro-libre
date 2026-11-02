@@ -48,14 +48,15 @@ fn la_source_n_appelle_aucun_fichier_hors_des_siens() {
 fn les_textes_saisis_sont_echappes() {
     let mut d = document(vec![]);
     d.cartouche.client = "<script>&\"' \\ \") #panic(\"x\") [*gras*] $x$ #let".into();
-    let s = texte(&d);
+    // Les coupures permises (espaces sans chasse) ne changent rien à l'échappement.
+    let s = texte(&d).replace('\u{200b}', "");
     assert!(s.contains(r#""<script>&\"' \\ \") #panic(\"x\") [*gras*] $x$ #let""#));
     assert_eq!(chaine_typst("a\"b\\c\nd\te\u{0}f\r"), r#""a\"b\\c\nd\tef""#);
 }
 
 #[test]
 fn le_cartouche_porte_atelier_client_numero() {
-    let s = texte(&document(vec![]));
+    let s = texte(&document(vec![])).replace('\u{200b}', "");
     for attendu in [
         "\"Atelier Exemple\"",
         "\"12 rue des Presses\\n75011 Paris\"",
@@ -92,8 +93,8 @@ fn le_logo_est_une_image_png_fournie() {
 #[test]
 fn le_cartouche_est_en_pied_de_chaque_page() {
     let s = texte(&document(vec![]));
-    assert!(s.contains("#set page(paper: \"a4\""));
-    assert!(s.contains("footer: context cartouche("));
+    assert!(s.contains("set page(paper: \"a4\""));
+    assert!(s.contains("footer: context cartouche-document("));
     assert!(s.contains("counter(page).final()"));
 }
 
@@ -116,9 +117,42 @@ fn les_blocs_ne_se_coupent_pas_et_le_pied_garde_sa_place() {
         let def = def.split("\n#let ").next().unwrap();
         assert!(def.contains("breakable: false"), "{f} sécable");
     }
-    // Le cartouche a une hauteur fixe, rognée, dans la marge du bas.
+    // Le cartouche prend la hauteur de son texte, jamais rogné ; la marge du
+    // bas est mesurée sur lui : il ne recouvre jamais le contenu. Traits haut
+    // et bas épais, césure des mots.
     let def = gabarit(&s).split("#let cartouche(").nth(1).unwrap();
-    assert!(def.contains("clip: true"));
+    let def = def.split("\n#let ").next().unwrap();
+    assert!(
+        !def.contains("clip") && !def.contains("height: 36mm"),
+        "{def}"
+    );
+    for attendu in ["hyphenate: true", "top: filet-epais", "bottom: filet-epais"] {
+        assert!(def.contains(attendu), "{attendu}");
+    }
+    assert!(gabarit(&s).contains("#let filet-epais = 2pt + black"));
+    assert!(corps(&s).contains("measure(block(width: 180mm, cartouche-document("));
+    assert!(corps(&s).contains("bottom: haut + 18mm"));
+    // Un graphique prend toute la largeur utile ; sa hauteur n'est bornée
+    // qu'à 190 mm : une coupe carrée garde ses 180 mm de large (elle n'en
+    // avait que 110, mainteneur, 2 novembre 2026).
+    let graphique = gabarit(&s).split("#let graphique(").nth(1).unwrap();
+    assert!(graphique.contains("image(chemin, width: taille.width)"));
+    assert!(graphique.contains("> 190mm { image(chemin, height: 190mm) }"));
+}
+
+/// Un nom long passe à la ligne : une coupure permise, invisible, après
+/// chaque séparateur et toutes les 16 lettres ou chiffres d'affilée.
+#[test]
+fn un_nom_long_est_coupable() {
+    let z = '\u{200b}';
+    assert_eq!(coupable("a_b-c.d"), format!("\"a_{z}b-{z}c.{z}d\""));
+    assert_eq!(coupable("Galerie Dupont"), "\"Galerie Dupont\"");
+    let long = "A".repeat(40);
+    let coupe = coupable(&long);
+    assert_eq!(coupe.matches(z).count(), 2, "{coupe}");
+    assert_eq!(coupe.replace(z, ""), format!("\"{long}\""));
+    // Toujours un littéral échappé.
+    assert_eq!(coupable("a\"b"), "\"a\\\"b\"");
 }
 
 #[test]

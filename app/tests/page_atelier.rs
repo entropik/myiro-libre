@@ -90,6 +90,13 @@ fn l_apercu_du_cartouche_suit_la_frappe() {
         assert!(cartouche.contains(attendu), "{attendu} : {cartouche}");
     }
     assert!(lire("../design-system/ui-kit.html").contains("class=\"cartouche-rapport\""));
+    // Rien de rogné ni de caché (mainteneur, 2 novembre 2026) : les cases
+    // prennent la hauteur de leur texte et coupent les mots longs ; traits
+    // haut et bas épais, comme dans le PDF.
+    let cellule = ligne_css(&css, ".cartouche-rapport__cellule {");
+    assert!(!cellule.contains("overflow: hidden") && !cellule.contains(" height:"));
+    assert!(cellule.contains("overflow-wrap: anywhere;"), "{cellule}");
+    assert!(cartouche.contains("border-block-width: calc(var(--rule-strong) * 2);"));
 }
 
 /// Le logo est peint dans un canvas : une image chargée par une adresse

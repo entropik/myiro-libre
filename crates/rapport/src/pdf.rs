@@ -63,6 +63,20 @@ pub struct PagePdf {
     /// Les mêmes morceaux, chacun avec la hauteur de sa ligne de base depuis
     /// le haut de la page, en mm : un texte rogné garde sa place réelle.
     pub lignes: Vec<(f64, String)>,
+    /// Les mêmes morceaux avec leur place en largeur : de quoi vérifier
+    /// qu'aucun texte ne déborde de sa case ni n'en chevauche un autre.
+    pub morceaux: Vec<Morceau>,
+}
+
+/// Un morceau de texte posé sur la page, en mm depuis le coin haut gauche.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Morceau {
+    pub x_mm: f64,
+    /// Ligne de base.
+    pub y_mm: f64,
+    pub largeur_mm: f64,
+    /// Sans les espaces sans chasse qui permettent de couper un nom long.
+    pub texte: String,
 }
 
 /// Un rapport en PDF.
@@ -129,14 +143,19 @@ fn messages(diagnostics: &[SourceDiagnostic]) -> String {
         .join(" ; ")
 }
 
-/// Le texte d'un cadre et de ses sous-cadres, avec la hauteur de chaque
-/// ligne de base depuis le haut de la page, en mm.
-fn textes(frame: &Frame, haut: Abs, sortie: &mut Vec<(f64, String)>) {
+/// Le texte d'un cadre et de ses sous-cadres, chaque morceau à sa place
+/// depuis le coin haut gauche de la page, en mm.
+fn textes(frame: &Frame, gauche: Abs, haut: Abs, sortie: &mut Vec<Morceau>) {
     for (position, item) in frame.items() {
-        let y = haut + position.y;
+        let (x, y) = (gauche + position.x, haut + position.y);
         match item {
-            FrameItem::Group(groupe) => textes(&groupe.frame, y, sortie),
-            FrameItem::Text(t) => sortie.push((y.to_mm(), t.text.to_string())),
+            FrameItem::Group(groupe) => textes(&groupe.frame, x, y, sortie),
+            FrameItem::Text(t) => sortie.push(Morceau {
+                x_mm: x.to_mm(),
+                y_mm: y.to_mm(),
+                largeur_mm: t.width().to_mm(),
+                texte: t.text.as_str().replace('\u{200b}', ""),
+            }),
             _ => {}
         }
     }
@@ -171,14 +190,15 @@ pub fn pdf(d: &Document) -> Result<Pdf, ErreurRapport> {
                 .pages()
                 .iter()
                 .map(|p| {
-                    let mut lignes = Vec::new();
-                    textes(&p.frame, Abs::zero(), &mut lignes);
-                    let texte: Vec<&str> = lignes.iter().map(|(_, t)| t.as_str()).collect();
+                    let mut morceaux = Vec::new();
+                    textes(&p.frame, Abs::zero(), Abs::zero(), &mut morceaux);
+                    let texte: Vec<&str> = morceaux.iter().map(|m| m.texte.as_str()).collect();
                     PagePdf {
                         largeur_mm: millimetres(p.frame.size().x),
                         hauteur_mm: millimetres(p.frame.size().y),
                         texte: texte.join("\n"),
-                        lignes,
+                        lignes: morceaux.iter().map(|m| (m.y_mm, m.texte.clone())).collect(),
+                        morceaux,
                     }
                 })
                 .collect();

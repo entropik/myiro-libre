@@ -39,6 +39,41 @@ pub fn chaine_typst(t: &str) -> String {
     s
 }
 
+/// Espace sans chasse : une coupure de ligne permise, invisible.
+const COUPURE: char = '\u{200b}';
+/// Lettres et chiffres d'affilée au-delà desquels une coupure est posée.
+const SUITE_MAX: usize = 16;
+
+/// Un texte du cartouche en littéral Typst, avec une coupure permise après
+/// chaque séparateur d'un nom de fichier, d'une adresse électronique ou
+/// d'un site (`_ - . / \ @ › + = &`), et toutes les 16 lettres ou chiffres
+/// d'affilée sans séparateur : un nom long passe à la ligne au lieu de
+/// déborder de sa case. Rien n'est ajouté de visible.
+pub fn coupable(t: &str) -> String {
+    let mut sortie = String::with_capacity(t.len() + t.len() / 8);
+    let mut suite = 0;
+    for c in t.chars() {
+        if c.is_alphanumeric() {
+            if suite == SUITE_MAX {
+                sortie.push(COUPURE);
+                suite = 0;
+            }
+            suite += 1;
+            sortie.push(c);
+        } else {
+            suite = 0;
+            sortie.push(c);
+            if matches!(
+                c,
+                '_' | '-' | '.' | '/' | '\\' | '@' | '›' | '+' | '=' | '&'
+            ) {
+                sortie.push(COUPURE);
+            }
+        }
+    }
+    chaine_typst(&sortie)
+}
+
 /// Une liste Typst : `()` vide, sinon chaque élément suivi d'une virgule.
 fn liste<T>(elements: &[T], ecrire: impl Fn(&T) -> String) -> String {
     if elements.is_empty() {
@@ -137,7 +172,12 @@ fn bloc(s: &mut String, b: &Bloc, fichiers: &mut Fichiers) {
         Bloc::Images(figures) => {
             let mut appels = Vec::new();
             for f in figures {
-                let chemin = fichiers.ajouter("png", f.png.clone());
+                let extension = if f.image.starts_with(&[0xff, 0xd8, 0xff]) {
+                    "jpg"
+                } else {
+                    "png"
+                };
+                let chemin = fichiers.ajouter(extension, f.image.clone());
                 let largeur = if f.largeur_mm.is_finite() {
                     f.largeur_mm.clamp(10.0, 180.0)
                 } else {
@@ -201,36 +241,48 @@ pub fn source_typst(d: &Document) -> SourceTypst {
         chaine_typst(&format!("{} {}", c.titre, c.numero))
     );
     let _ = writeln!(s, "#set text(lang: \"{langue}\")");
-    let _ = writeln!(
-        s,
-        "#set page(paper: \"a4\", margin: (top: 15mm, x: 15mm, bottom: 56mm), footer-descent: 6mm, footer: context cartouche("
-    );
+    // Le cartouche du document, avec le numéro de page qu'on lui donne.
+    let _ = writeln!(s, "#let cartouche-document(numero-page) = cartouche(");
     let _ = writeln!(
         s,
         "  (nom: {}, adresse: {}, courriel: {}, telephone: {}, site: {}, logo: {logo}),",
-        chaine_typst(&a.nom),
-        chaine_typst(&a.adresse),
-        chaine_typst(&a.courriel),
-        chaine_typst(&a.telephone),
-        chaine_typst(&a.site),
+        coupable(&a.nom),
+        coupable(&a.adresse),
+        coupable(&a.courriel),
+        coupable(&a.telephone),
+        coupable(&a.site),
     );
     let _ = writeln!(
         s,
         "  {}, {}, {}, {}, {},",
-        chaine_typst(&c.client),
-        chaine_typst(&c.objet),
-        liste(&c.lignes, couple),
+        coupable(&c.client),
+        coupable(&c.objet),
+        liste(&c.lignes, |(k, v)| format!(
+            "({}, {})",
+            chaine_typst(k),
+            coupable(v)
+        )),
         chaine_typst(&c.numero),
-        chaine_typst(&c.titre),
+        coupable(&c.titre),
     );
     let _ = writeln!(
         s,
-        "  (page: {}, atelier: {}, client: {}, objet: {}, numero: {}),\n))",
-        chaine_typst(&l.page),
+        "  (atelier: {}, client: {}, objet: {}, numero: {}),\n  numero-page)",
         chaine_typst(&l.atelier),
         chaine_typst(&l.client),
         chaine_typst(&l.objet),
         chaine_typst(&l.numero),
+    );
+    // La marge du bas est la hauteur du cartouche, mesurée avec le plus long
+    // numéro de page plausible, plus 6 mm au-dessus de lui et 12 mm sous lui.
+    let page = chaine_typst(&l.page);
+    let _ = writeln!(
+        s,
+        "#show: corps => context {{\n  \
+         let haut = measure(block(width: 180mm, cartouche-document({page}.replace(\"{{n}}\", \"999\").replace(\"{{total}}\", \"999\")))).height\n  \
+         set page(paper: \"a4\", margin: (top: 15mm, x: 15mm, bottom: haut + 18mm), footer-descent: 6mm,\n    \
+         footer: context cartouche-document({page}.replace(\"{{n}}\", str(counter(page).get().first())).replace(\"{{total}}\", str(counter(page).final().first()))))\n  \
+         corps\n}}"
     );
     let _ = writeln!(s, "#titre-document({})", chaine_typst(&c.titre));
     for sec in &d.sections {
